@@ -1,0 +1,132 @@
+{
+  "project_name": "Espace Maxo",
+  "theme_strategy": "Dark Mode (Cyberpunk/Neon Gaming Aesthetic)",
+  "design_philosophy": {
+    "core_concept": "Immersive Digital Playground",
+    "visual_style": "High-contrast dark mode with neon accents, glassmorphism, and smooth motion.",
+    "emotional_tone": "Energetic, Futuristic, Premium, Appetizing",
+    "key_principles": [
+      "Dark by Default: No light mode toggles. The atmosphere is always 'Night'.",
+      "Neon Guiding Lines: Use colored borders and glows to guide the eye.",
+      "Appetizing Darkness: Food photos must pop against matte black backgrounds.",
+      "Motion is Feedback: Interactive elements must glow or scale on hover."
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Orbitron, sans-serif",
+      "body": "Outfit, sans-serif",
+      "accents": "Rajdhani, sans-serif"
+    },
+    "installation_instructions": "Import fonts from Google Fonts: https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Outfit:wght@300;400;500;700&family=Rajdhani:wght@500;600;700&display=swap",
+    "usage_rules": {
+      "headings": "Use 'Orbitron' for H1-H3. Uppercase for H1. Tracking-wide for 'Espace Maxo'.",
+      "body": "Use 'Outfit' for all paragraphs, menu descriptions, and form inputs.",
+      "ui_labels": "Use 'Rajdhani' for buttons, badges, and pricing.",
+      "scale": {
+        "h1": "text-4xl md:text-6xl font-black tracking-tight",
+        "h2": "text-3xl md:text-5xl font-bold",
+        "h3": "text-2xl font-bold text-primary",
+        "body": "text-base md:text-lg text-gray-300"
+      }
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": "#050505",
+      "surface": "#121212",
+      "surface_highlight": "#1E1E1E",
+      "primary": "#00f0ff",
+      "secondary": "#ff003c",
+      "accent_food": "#ffbf00",
+      "text_main": "#ffffff",
+      "text_muted": "#9ca3af",
+      "border_subtle": "#333333",
+      "border_glow": "rgba(0, 240, 255, 0.5)"
+    },
+    "tailwind_extension": {
+      "colors": {
+        "neon-blue": "#00f0ff",
+        "neon-red": "#ff003c",
+        "neon-purple": "#bc13fe",
+        "food-gold": "#ffbf00",
+        "dark-bg": "#050505",
+        "dark-card": "#121212"
+      }
+    }
+  },
+  "layout_strategies": {
+    "spacing": "Generous. Use p-8 to p-12 for section padding. Gap-6 or Gap-8 for grids.",
+    "containers": "Max-width-7xl for main content. Full width for Hero sections.",
+    "grids": {
+      "menu": "Grid-cols-1 md:grid-cols-2 lg:grid-cols-3. Cards with image top, text bottom.",
+      "games": "Asymmetric bento grid. One large feature (VR), two smaller (Simulators)."
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-neon-blue text-black font-bold hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all uppercase font-rajdhani rounded-none skew-x-[-10deg]",
+      "secondary": "border border-neon-blue text-neon-blue hover:bg-neon-blue/10 transition-all uppercase font-rajdhani rounded-none skew-x-[-10deg]",
+      "booking": "bg-neon-red text-white font-bold hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] transition-all uppercase rounded-md"
+    },
+    "cards": {
+      "style": "bg-dark-card border border-white/10 hover:border-neon-blue/50 transition-colors duration-300",
+      "glass": "bg-black/40 backdrop-blur-md border border-white/10"
+    },
+    "inputs": {
+      "style": "bg-black/50 border-white/20 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder:text-gray-600 rounded-md"
+    }
+  },
+  "visual_enhancers": {
+    "gradients": "Use radial gradients for background glow: 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neon-blue/20 via-transparent to-transparent'",
+    "borders": "1px solid with low opacity white. Active states get neon color.",
+    "shadows": "Colored shadows for neon effect: 'shadow-[0_0_15px_rgba(0,240,255,0.3)]'",
+    "motion": {
+      "hover": "Scale 1.02 + Brightness 1.1",
+      "entrance": "Fade in Up with stagger for lists."
+    }
+  },
+  "image_urls": {
+    "hero": {
+      "url": "https://images.pexels.com/photos/7773978/pexels-photo-7773978.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Immersive VR Experience at Espace Maxo",
+      "desc": "Main hero background, dark overlay needed."
+    },
+    "games": {
+      "vr_main": "https://images.pexels.com/photos/8728558/pexels-photo-8728558.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "racing_sim": "https://images.pexels.com/photos/13251222/pexels-photo-13251222.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "racing_action": "https://images.pexels.com/photos/28993071/pexels-photo-28993071.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "vr_action": "https://images.unsplash.com/photo-1621886289714-384b89bcff3c?crop=entropy&cs=srgb&fm=jpg"
+    },
+    "food": {
+      "burger_hero": "https://images.pexels.com/photos/35832466/pexels-photo-35832466.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "burger_plate": "https://images.unsplash.com/photo-1662452883375-9226ea22c765?crop=entropy&cs=srgb&fm=jpg",
+      "cocktail_neon": "https://images.pexels.com/photos/33826046/pexels-photo-33826046.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "cocktail_red": "https://images.unsplash.com/photo-1570204865352-934c744d682c?crop=entropy&cs=srgb&fm=jpg"
+    }
+  },
+  "navigation_structure": [
+    { "label": "Accueil", "path": "/" },
+    { "label": "Menu", "path": "/menu" },
+    { "label": "Jeux & VR", "path": "/games" },
+    { "label": "Réserver", "path": "/booking", "highlight": true }
+  ],
+  "technical_instructions": {
+    "images": "Use the 'object-cover' class for all images. Ensure aspect ratios are consistent (e.g., aspect-video for games, aspect-square for food).",
+    "mobile": "Ensure the booking form is fully usable on mobile (no small touch targets). Use a sticky bottom bar for the 'Book Now' CTA on mobile.",
+    "testing": "All interactive elements must have 'data-testid' attributes."
+  },
+  "universal_guidelines": {
+    "do_not": [
+      "Use white backgrounds.",
+      "Use generic 'Inter' font for headings.",
+      "Use default browser scrollbars (customize them to be thin and dark).",
+      "Use standard 'blue' link colors."
+    ],
+    "must": [
+      "Use a global dark background class on the body tag.",
+      "Ensure text contrast meets accessibility standards (light grey on black).",
+      "Add hover states to ALL interactive elements."
+    ]
+  }
+}
