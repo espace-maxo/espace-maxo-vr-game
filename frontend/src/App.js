@@ -9,6 +9,7 @@ import GamesPage from "@/pages/GamesPage";
 import BookingPage from "@/pages/BookingPage";
 import ConfirmationPage from "@/pages/ConfirmationPage";
 import AdminPage from "@/pages/AdminPage";
+import TestimonialsPage from "@/pages/TestimonialsPage";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/booking/confirmation" element={<ConfirmationPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/avis" element={<TestimonialsPage />} />
           </Routes>
         </main>
         <Footer />
