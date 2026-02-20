@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { 
   BarChart3, Calendar, Users, CreditCard, Clock, 
   Phone, Gamepad2, CheckCircle, XCircle, AlertCircle,
-  RefreshCw, Filter, MessageCircle, TrendingUp
+  RefreshCw, Filter, MessageCircle, TrendingUp, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +17,25 @@ import { toast } from "sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const AdminPage = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
+
+  // Check authentication
+  useEffect(() => {
+    const isAuth = sessionStorage.getItem("adminAuth");
+    if (!isAuth) {
+      navigate("/admin");
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("adminAuth");
+    toast.success("Déconnexion réussie");
+    navigate("/admin");
+  };
 
   useEffect(() => {
     fetchData();
