@@ -313,7 +313,7 @@ class EspaceMaxoAPITester:
         return all(results)
 
     def test_whatsapp_links(self):
-        """Test WhatsApp link generation"""
+        """Test WhatsApp link generation with updated number"""
         if not self.booking_id:
             print("❌ Cannot test WhatsApp links - no booking ID available")
             return False
@@ -323,22 +323,28 @@ class EspaceMaxoAPITester:
         if success and whatsapp_data:
             customer_link = whatsapp_data.get('customer_link')
             admin_link = whatsapp_data.get('admin_notification_link')
-            whatsapp_numbers = whatsapp_data.get('whatsapp_numbers', [])
+            whatsapp_number = whatsapp_data.get('whatsapp_number')
             
             print(f"   💬 Customer WhatsApp link: {'Generated' if customer_link else 'Missing'}")
             print(f"   📱 Admin notification link: {'Generated' if admin_link else 'Missing'}")
-            print(f"   📞 WhatsApp numbers: {whatsapp_numbers}")
+            print(f"   📞 WhatsApp number: {whatsapp_number}")
             
-            # Validate WhatsApp link format
-            if customer_link and 'wa.me' in customer_link:
-                print(f"   ✅ Customer link format is correct")
+            # Validate WhatsApp number is updated to new number
+            if whatsapp_number == "22901414700":
+                print(f"   ✅ WhatsApp number updated correctly to: {whatsapp_number}")
             else:
-                print(f"   ⚠️  Customer link format may be incorrect")
+                print(f"   ❌ WhatsApp number incorrect! Expected: 22901414700, Got: {whatsapp_number}")
+            
+            # Validate WhatsApp link format and contains correct number
+            if customer_link and 'wa.me/22901414700' in customer_link:
+                print(f"   ✅ Customer link format and number correct")
+            else:
+                print(f"   ⚠️  Customer link format or number may be incorrect")
                 
-            if admin_link and 'wa.me' in admin_link:
-                print(f"   ✅ Admin link format is correct")
+            if admin_link and 'wa.me/22901414700' in admin_link:
+                print(f"   ✅ Admin link format and number correct")
             else:
-                print(f"   ⚠️  Admin link format may be incorrect")
+                print(f"   ⚠️  Admin link format or number may be incorrect")
         
         return success
 
