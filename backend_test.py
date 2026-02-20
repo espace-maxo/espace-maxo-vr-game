@@ -216,6 +216,132 @@ class EspaceMaxoAPITester:
         
         return all(results)
 
+    def test_admin_endpoints(self):
+        """Test admin dashboard endpoints"""
+        results = []
+        
+        # Test get admin statistics
+        success, stats_data = self.run_test("Get Admin Stats", "GET", "admin/stats", 200)
+        results.append(success)
+        
+        if success and stats_data:
+            print(f"   📊 Stats retrieved successfully")
+            required_fields = ['total_bookings', 'today_bookings', 'paid_bookings', 
+                             'pending_bookings', 'total_revenue', 'bookings_by_game']
+            missing_fields = [f for f in required_fields if f not in stats_data]
+            if missing_fields:
+                print(f"   ⚠️  Missing fields in stats: {missing_fields}")
+            else:
+                print(f"   ✅ Stats structure is correct")
+                print(f"      - Total bookings: {stats_data.get('total_bookings', 0)}")
+                print(f"      - Paid bookings: {stats_data.get('paid_bookings', 0)}")
+                print(f"      - Total revenue: {stats_data.get('total_revenue', 0)} FCFA")
+        
+        # Test get admin bookings (all)
+        success, bookings_data = self.run_test("Get Admin Bookings", "GET", "admin/bookings", 200)
+        results.append(success)
+        
+        if success and bookings_data:
+            bookings = bookings_data.get('bookings', [])
+            print(f"   📋 Found {len(bookings)} bookings in admin view")
+            print(f"   📊 Total count: {bookings_data.get('total', 0)}")
+        
+        # Test get admin bookings with filters
+        success, filtered_data = self.run_test("Get Admin Bookings (Pending)", "GET", "admin/bookings?status=pending", 200)
+        results.append(success)
+        
+        if success and filtered_data:
+            pending_bookings = filtered_data.get('bookings', [])
+            print(f"   ⏳ Found {len(pending_bookings)} pending bookings")
+        
+        # Test update booking status (if we have a booking)
+        if self.booking_id:
+            update_data = {"booking_status": "completed"}
+            success, updated_booking = self.run_test("Update Booking Status", "PUT", f"admin/bookings/{self.booking_id}", 200, update_data)
+            results.append(success)
+            
+            if success and updated_booking:
+                new_status = updated_booking.get('booking_status')
+                print(f"   ✅ Updated booking status to: {new_status}")
+        
+        # Test admin reseed menu endpoint
+        success, reseed_response = self.run_test("Admin Reseed Menu", "POST", "admin/reseed-menu", 200)
+        results.append(success)
+        
+        if success and reseed_response:
+            items_count = reseed_response.get('items_count', 0)
+            games_count = reseed_response.get('games_count', 0)
+            print(f"   🔄 Reseeded {items_count} menu items and {games_count} games")
+        
+        return all(results)
+
+    def test_whatsapp_links(self):
+        """Test WhatsApp link generation"""
+        if not self.booking_id:
+            print("❌ Cannot test WhatsApp links - no booking ID available")
+            return False
+        
+        success, whatsapp_data = self.run_test("Get WhatsApp Links", "GET", f"whatsapp/booking/{self.booking_id}", 200)
+        
+        if success and whatsapp_data:
+            customer_link = whatsapp_data.get('customer_link')
+            admin_link = whatsapp_data.get('admin_notification_link')
+            whatsapp_numbers = whatsapp_data.get('whatsapp_numbers', [])
+            
+            print(f"   💬 Customer WhatsApp link: {'Generated' if customer_link else 'Missing'}")
+            print(f"   📱 Admin notification link: {'Generated' if admin_link else 'Missing'}")
+            print(f"   📞 WhatsApp numbers: {whatsapp_numbers}")
+            
+            # Validate WhatsApp link format
+            if customer_link and 'wa.me' in customer_link:
+                print(f"   ✅ Customer link format is correct")
+            else:
+                print(f"   ⚠️  Customer link format may be incorrect")
+                
+            if admin_link and 'wa.me' in admin_link:
+                print(f"   ✅ Admin link format is correct")
+            else:
+                print(f"   ⚠️  Admin link format may be incorrect")
+        
+        return success
+
+    def test_menu_combos(self):
+        """Test menu combos with specific pricing"""
+        success, menu_data = self.run_test("Get Menu for Combo Validation", "GET", "menu", 200)
+        
+        if success and menu_data:
+            combos = [item for item in menu_data if item.get('is_combo', False)]
+            print(f"   🍽️  Found {len(combos)} combo items")
+            
+            # Expected combo prices
+            expected_combos = {
+                "combo-solo": 3500,
+                "combo-2p-eco": 6000,
+                "combo-2p-premium": 9000,
+                "combo-4p": 16000
+            }
+            
+            for combo in combos:
+                combo_id = combo.get('id')
+                price = combo.get('price')
+                original_price = combo.get('original_price')
+                persons = combo.get('persons')
+                
+                print(f"   🎯 {combo.get('name', 'Unknown')}: {price} FCFA")
+                if combo_id in expected_combos:
+                    if price == expected_combos[combo_id]:
+                        print(f"      ✅ Price matches expected: {price} FCFA")
+                    else:
+                        print(f"      ❌ Price mismatch! Expected: {expected_combos[combo_id]}, Got: {price}")
+                
+                if original_price:
+                    print(f"      💸 Original price (strikethrough): {original_price} FCFA")
+                
+                if persons:
+                    print(f"      👥 Persons: {persons}")
+        
+        return success
+
     def test_error_handling(self):
         """Test error handling"""
         results = []
