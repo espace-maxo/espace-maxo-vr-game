@@ -185,26 +185,30 @@ const HomePage = () => {
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {[
-              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/xp3vbhr5_IMG_8872.jpeg",
-              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/5hl3uu83_IMG_8873.jpeg",
-              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/ngci0xn4_IMG_8871.jpeg",
-              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/u6mhfjga_IMG_8870.jpeg",
-              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/o2ezqt66_IMG_8869.jpeg"
-            ].map((img, index) => (
-              <div 
-                key={index} 
-                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 hover:border-food-gold/50 transition-all duration-300"
+            {INTERIOR_IMAGES.map((img, index) => (
+              <button
+                key={index}
+                onClick={() => openLightbox(index)}
+                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 hover:border-food-gold/50 transition-all duration-300 cursor-pointer"
+                data-testid={`gallery-image-${index}`}
               >
                 <img
                   src={img}
                   alt={`Intérieur Espace Maxo ${index + 1}`}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark-bg/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-dark-bg/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span className="bg-food-gold/90 text-black px-3 py-1 rounded-full text-sm font-outfit font-semibold transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                    Voir
+                  </span>
+                </div>
+              </button>
             ))}
           </div>
+          
+          <p className="text-center text-gray-500 text-sm mt-4 font-outfit">
+            Cliquez sur une image pour l'agrandir
+          </p>
         </div>
       </section>
 
