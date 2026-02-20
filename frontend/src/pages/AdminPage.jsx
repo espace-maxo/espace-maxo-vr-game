@@ -129,9 +129,19 @@ const AdminPage = () => {
               disabled={loading}
               data-testid="refresh-button"
             >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Actualiser
-          </Button>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Actualiser
+            </Button>
+            <Button 
+              onClick={handleLogout}
+              variant="outline"
+              className="border-neon-red text-neon-red hover:bg-neon-red/10 font-rajdhani font-bold"
+              data-testid="logout-button"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Déconnexion
+            </Button>
+          </div>
         </div>
       </section>
 
