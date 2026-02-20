@@ -87,7 +87,7 @@ const Navbar = () => {
                 </Button>
               </Link>
               <a
-                href="https://wa.me/22901414700"
+                href="https://wa.me/2290141470000"
                 className="flex items-center gap-2 text-green-500 font-rajdhani font-semibold"
                 data-testid="mobile-whatsapp-link"
               >

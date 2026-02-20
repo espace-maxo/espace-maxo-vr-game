@@ -23,7 +23,7 @@ const Footer = () => {
             <h3 className="font-orbitron font-bold text-lg text-neon-blue uppercase">Contact</h3>
             <div className="space-y-3">
               <a
-                href="tel:+22901414700"
+                href="tel:+2290141470000"
                 className="flex items-center gap-3 text-gray-300 hover:text-neon-blue transition-colors"
                 data-testid="footer-phone-1"
               >
@@ -31,7 +31,7 @@ const Footer = () => {
                 <span className="font-outfit">01 41 47 00 00</span>
               </a>
               <a
-                href="https://wa.me/22901414700"
+                href="https://wa.me/2290141470000"
                 className="flex items-center gap-3 text-gray-300 hover:text-green-500 transition-colors"
                 data-testid="footer-whatsapp"
               >

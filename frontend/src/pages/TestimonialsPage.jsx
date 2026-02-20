@@ -204,7 +204,7 @@ const TestimonialsPage = () => {
                 Réserver maintenant
               </Button>
             </a>
-            <a href="https://wa.me/22901414700">
+            <a href="https://wa.me/2290141470000">
               <Button variant="outline" className="border-white text-white font-rajdhani font-bold px-8 py-6 text-lg hover:bg-white/10">
                 Nous contacter
               </Button>

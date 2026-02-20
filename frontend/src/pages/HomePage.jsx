@@ -237,7 +237,7 @@ const HomePage = () => {
                 Réserver une session
               </Button>
             </Link>
-            <a href="https://wa.me/22901414700" data-testid="cta-whatsapp-button">
+            <a href="https://wa.me/2290141470000" data-testid="cta-whatsapp-button">
               <Button
                 size="lg"
                 variant="outline"
@@ -292,7 +292,7 @@ const HomePage = () => {
                   Itinéraire
                 </a>
                 <a 
-                  href="https://wa.me/22901414700"
+                  href="https://wa.me/2290141470000"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-rajdhani font-bold hover:bg-green-500 transition-all"
