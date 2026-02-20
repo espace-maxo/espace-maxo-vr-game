@@ -213,6 +213,9 @@ const HomePage = () => {
         </div>
       </section>
 
+      {/* Testimonials Section */}
+      <TestimonialsSection />
+
       {/* CTA Section */}
       <section className="py-20 px-4 bg-gradient-radial-red" data-testid="cta-section">
         <div className="max-w-4xl mx-auto text-center">
