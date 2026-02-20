@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Gamepad2, UtensilsCrossed, Calendar, Phone, ChevronRight } from "lucide-react";
 import ImageLightbox from "@/components/ImageLightbox";
+import { TestimonialsSection } from "@/pages/TestimonialsPage";
 
 const INTERIOR_IMAGES = [
   "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/xp3vbhr5_IMG_8872.jpeg",
