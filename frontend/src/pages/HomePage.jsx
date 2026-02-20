@@ -264,7 +264,8 @@ const HomePage = () => {
               <div className="space-y-4 text-gray-300 font-outfit">
                 <p className="text-lg">
                   <span className="text-neon-blue font-semibold">Adresse:</span><br />
-                  Rue allant à la pharmacie Fidjrossè Plage, Cotonou
+                  Fidjrossè Plage, non loin de la salle des fêtes Majesctic<br />
+                  Rue en face de l'EPP Jacquot - Cotonou, Bénin
                 </p>
                 <p className="text-lg">
                   <span className="text-neon-blue font-semibold">Téléphone:</span><br />
@@ -275,13 +276,50 @@ const HomePage = () => {
                   9h - 23h (Tous les jours)
                 </p>
               </div>
+              
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 mt-6">
+                <a 
+                  href="https://maps.google.com/?q=Fidjrosse+Plage+Cotonou+Benin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-neon-blue text-black px-4 py-2 rounded-lg font-rajdhani font-bold hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all"
+                  data-testid="open-google-maps"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                  Itinéraire
+                </a>
+                <a 
+                  href="https://wa.me/22901414700"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-rajdhani font-bold hover:bg-green-500 transition-all"
+                  data-testid="contact-whatsapp"
+                >
+                  <Phone className="w-5 h-5" />
+                  WhatsApp
+                </a>
+              </div>
             </div>
+            
+            {/* Google Maps Embed */}
             <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1621886289714-384b89bcff3c?crop=entropy&cs=srgb&fm=jpg"
-                alt="VR Experience"
-                className="rounded-lg shadow-2xl w-full aspect-video object-cover"
-              />
+              <div className="rounded-xl overflow-hidden border-2 border-white/10 shadow-2xl">
+                <iframe
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3965.5!2d2.3833!3d6.3667!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNsKwMjInMDAuMSJOIDLCsDIzJzAwLjAiRQ!5e0!3m2!1sfr!2sbj!4v1700000000000!5m2!1sfr!2sbj"
+                  width="100%"
+                  height="350"
+                  style={{ border: 0 }}
+                  allowFullScreen=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  title="Espace Maxo - Fidjrossè Plage, Cotonou"
+                  className="grayscale hover:grayscale-0 transition-all duration-500"
+                  data-testid="google-map-embed"
+                ></iframe>
+              </div>
               <div className="absolute -bottom-4 -right-4 bg-neon-blue text-black p-4 rounded-lg font-rajdhani font-bold">
                 <span className="text-2xl">1.500 FCFA</span>
                 <span className="block text-sm">par partie</span>
