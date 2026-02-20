@@ -87,11 +87,11 @@ const Navbar = () => {
               </Link>
               <a
                 href="https://wa.me/22901414700"
-                className="flex items-center gap-2 text-neon-blue font-rajdhani font-semibold"
+                className="flex items-center gap-2 text-green-500 font-rajdhani font-semibold"
                 data-testid="mobile-whatsapp-link"
               >
                 <Phone className="w-5 h-5" />
-                WhatsApp: 0141470000
+                WhatsApp: 01 41 47 00 00
               </a>
             </div>
           </div>
