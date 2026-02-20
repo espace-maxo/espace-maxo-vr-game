@@ -8,6 +8,7 @@ import MenuPage from "@/pages/MenuPage";
 import GamesPage from "@/pages/GamesPage";
 import BookingPage from "@/pages/BookingPage";
 import ConfirmationPage from "@/pages/ConfirmationPage";
+import AdminPage from "@/pages/AdminPage";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="/games" element={<GamesPage />} />
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/booking/confirmation" element={<ConfirmationPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
         <Footer />
