@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
-import { CheckCircle, XCircle, Loader2, Calendar, Clock, Gamepad2, Phone, Home } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Calendar, Clock, Gamepad2, Phone, Home, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -11,8 +11,9 @@ const ConfirmationPage = () => {
   const sessionId = searchParams.get("session_id");
   const bookingId = searchParams.get("booking_id");
   
-  const [status, setStatus] = useState("loading"); // loading, success, error
+  const [status, setStatus] = useState("loading");
   const [booking, setBooking] = useState(null);
+  const [whatsappLink, setWhatsappLink] = useState(null);
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 10;
 
@@ -33,15 +34,16 @@ const ConfirmationPage = () => {
       
       if (response.data.payment_status === "paid") {
         setStatus("success");
-        // Fetch booking details
+        setWhatsappLink(response.data.whatsapp_link);
+        
         if (response.data.booking_id) {
           const bookingRes = await axios.get(`${API}/bookings/${response.data.booking_id}`);
           setBooking(bookingRes.data);
+          setWhatsappLink(bookingRes.data.whatsapp_link);
         }
       } else if (response.data.status === "expired") {
         setStatus("error");
       } else {
-        // Continue polling
         setAttempts(prev => prev + 1);
         setTimeout(pollPaymentStatus, 2000);
       }
@@ -153,6 +155,29 @@ const ConfirmationPage = () => {
               </div>
             )}
 
+            {/* WhatsApp Confirmation */}
+            {whatsappLink && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 mb-8" data-testid="whatsapp-section">
+                <div className="flex items-center gap-3 mb-4">
+                  <MessageCircle className="w-8 h-8 text-green-500" />
+                  <div className="text-left">
+                    <h3 className="font-orbitron font-bold text-lg text-white">
+                      Confirmez sur WhatsApp
+                    </h3>
+                    <p className="text-gray-400 font-outfit text-sm">
+                      Cliquez pour envoyer une confirmation au restaurant
+                    </p>
+                  </div>
+                </div>
+                <a href={whatsappLink} target="_blank" rel="noopener noreferrer" data-testid="whatsapp-confirm-btn">
+                  <Button className="w-full bg-green-500 hover:bg-green-600 text-white font-rajdhani font-bold uppercase py-4">
+                    <MessageCircle className="w-5 h-5 mr-2" />
+                    Confirmer sur WhatsApp
+                  </Button>
+                </a>
+              </div>
+            )}
+
             <div className="bg-dark-card rounded-xl p-6 border border-white/10 mb-8">
               <h3 className="font-orbitron font-bold text-lg text-white mb-4">
                 Informations Importantes
@@ -161,6 +186,7 @@ const ConfirmationPage = () => {
                 <li>• Présentez-vous 10 minutes avant votre créneau</li>
                 <li>• Le reste du montant sera payé sur place</li>
                 <li>• En cas d'annulation, contactez-nous par WhatsApp</li>
+                <li>• Adresse: Fidjrossè Plage, rue en face de l'EPP Jacquot</li>
               </ul>
             </div>
 
@@ -172,9 +198,9 @@ const ConfirmationPage = () => {
                 </Button>
               </Link>
               <a href="https://wa.me/22901414700" data-testid="whatsapp-button">
-                <Button variant="outline" className="border-white/20 text-white font-rajdhani font-bold uppercase px-6 py-3 hover:bg-white/10">
+                <Button variant="outline" className="border-green-500 text-green-500 font-rajdhani font-bold uppercase px-6 py-3 hover:bg-green-500/10">
                   <Phone className="w-5 h-5 mr-2" />
-                  WhatsApp
+                  +229 01 41 47 00 00
                 </Button>
               </a>
             </div>
