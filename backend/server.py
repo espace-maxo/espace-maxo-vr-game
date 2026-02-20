@@ -185,7 +185,7 @@ MENU_ITEMS = [
         "description": "Viande de boeuf grillée façon tchoukouya avec riz parfumé et sauce",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://images.pexels.com/photos/17199062/pexels-photo-17199062.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "is_available": True
     },
     {
@@ -194,25 +194,25 @@ MENU_ITEMS = [
         "description": "Cuisse de poulet grillée accompagnée de riz et sauce tomate",
         "price": 3000,
         "category": "Plats",
-        "image_url": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://images.pexels.com/photos/32986476/pexels-photo-32986476.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "is_available": True
     },
     {
-        "id": "menu-escargot",
-        "name": "Escargot + Atièkè",
-        "description": "Escargots braisés servis avec atièkè (semoule de manioc)",
-        "price": 4000,
+        "id": "menu-pizza",
+        "name": "Pizza Maxi",
+        "description": "Grande pizza généreuse avec pepperoni, fromage fondu et sauce tomate",
+        "price": 5500,
         "category": "Plats",
-        "image_url": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://images.unsplash.com/photo-1692737580547-b45bb4a02356?crop=entropy&cs=srgb&fm=jpg",
         "is_available": True
     },
     {
         "id": "menu-aileron",
         "name": "Ailerons de Poulet",
-        "description": "Ailerons de poulet grillés avec sauce pimentée",
+        "description": "Ailerons de poulet croustillants dorés avec sauce pimentée",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://images.unsplash.com/photo-1608039829572-9f7b0ca93af8?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://images.pexels.com/photos/33037756/pexels-photo-33037756.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "is_available": True
     },
     {
