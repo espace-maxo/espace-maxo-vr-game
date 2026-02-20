@@ -122,12 +122,13 @@ const AdminPage = () => {
             </h1>
             <p className="text-gray-400 font-outfit mt-1">Gérez vos réservations et suivez vos performances</p>
           </div>
-          <Button 
-            onClick={fetchData} 
-            className="bg-neon-blue text-black font-rajdhani font-bold"
-            disabled={loading}
-            data-testid="refresh-button"
-          >
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={fetchData} 
+              className="bg-neon-blue text-black font-rajdhani font-bold"
+              disabled={loading}
+              data-testid="refresh-button"
+            >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Actualiser
           </Button>
