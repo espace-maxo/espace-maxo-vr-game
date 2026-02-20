@@ -29,6 +29,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Mode sandbox activé (en attente activation compte)
 - [x] Numéro WhatsApp unique: 01 41 47 00 00
 
+### Phase 4 - Galerie & Mises à jour (20 Feb 2026)
+- [x] Galerie d'images intérieures du restaurant (5 photos)
+- [x] Mise à jour des heures d'ouverture: 9h - 23h tous les jours
+
 ### APIs Backend
 - GET /api/menu - Liste des plats et combos
 - GET /api/games - Liste des jeux
