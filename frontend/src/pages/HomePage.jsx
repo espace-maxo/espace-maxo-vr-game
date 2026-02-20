@@ -239,7 +239,7 @@ const HomePage = () => {
                 </p>
                 <p className="text-lg">
                   <span className="text-neon-blue font-semibold">Horaires:</span><br />
-                  Tous les jours de 10h à 22h
+                  9h - 23h (Tous les jours)
                 </p>
               </div>
             </div>
