@@ -200,10 +200,10 @@ MENU_ITEMS = [
     {
         "id": "menu-pizza",
         "name": "Pizza Maxi",
-        "description": "Grande pizza généreuse avec pepperoni, fromage fondu et sauce tomate",
+        "description": "Grande pizza généreuse avec fromage fondu, olives, oignons et sauce tomate",
         "price": 5500,
         "category": "Plats",
-        "image_url": "https://images.unsplash.com/photo-1692737580547-b45bb4a02356?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/4loxglzc_PIZZA.JPG",
         "is_available": True
     },
     {
