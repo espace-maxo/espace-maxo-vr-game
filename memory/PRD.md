@@ -33,6 +33,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Galerie d'images intérieures du restaurant (5 photos)
 - [x] Mise à jour des heures d'ouverture: 9h - 23h tous les jours
 - [x] Lightbox interactif (zoom, navigation flèches, miniatures)
+- [x] Page témoignages clients (/avis) avec 6 avis exemples
+- [x] Section témoignages sur la page d'accueil (3 avis + statistiques)
 
 ### APIs Backend
 - GET /api/menu - Liste des plats et combos
