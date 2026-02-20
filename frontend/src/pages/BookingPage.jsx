@@ -123,50 +123,61 @@ const BookingPage = () => {
 
   // Open Kkiapay widget
   const openPaymentWidget = (bookingId) => {
+    // Check if Kkiapay is loaded
     if (typeof window.openKkiapayWidget !== "function") {
       toast.error("Le module de paiement n'est pas chargé. Veuillez rafraîchir la page.");
       setLoading(false);
       return;
     }
 
-    // Set up success listener
-    window.addSuccessListener = window.addSuccessListener || function(){};
-    const successCallback = (response) => {
-      handlePaymentSuccess(response.transactionId, bookingId);
-    };
-    
-    // For sandbox mode without real keys, simulate success
-    if (paymentConfig?.sandbox && !paymentConfig?.public_key) {
-      // Simulate payment for demo
-      setTimeout(() => {
-        handlePaymentSuccess("DEMO_TX_" + Date.now(), bookingId);
-      }, 2000);
+    // Check if we have a valid public key
+    if (!paymentConfig?.public_key) {
+      toast.error("Configuration de paiement manquante");
+      setLoading(false);
       return;
     }
 
     try {
+      // Open the Kkiapay widget
       window.openKkiapayWidget({
-        amount: 500, // Reservation fee in FCFA
-        api_key: paymentConfig?.public_key || "demo_public_key",
-        sandbox: paymentConfig?.sandbox ?? true,
-        phone: formData.customerPhone,
+        amount: 500,
+        api_key: paymentConfig.public_key,
+        sandbox: paymentConfig.sandbox || false,
+        phone: formData.customerPhone.replace(/\s/g, ''),
         name: formData.customerName,
         reason: `Réservation Espace Maxo - ${formData.gameType === "VR_360" ? "VR 360°" : "Simulateur"}`,
-        data: bookingId,
-        callback: window.location.origin + "/booking/confirmation"
+        data: bookingId
       });
 
-      // Listen for success
+      // Set up success listener
       if (typeof window.addSuccessListener === "function") {
-        window.addSuccessListener(successCallback);
+        window.addSuccessListener((response) => {
+          console.log("Payment success:", response);
+          handlePaymentSuccess(response.transactionId, bookingId);
+        });
       }
+
+      // Set up failed listener
+      if (typeof window.addFailedListener === "function") {
+        window.addFailedListener((error) => {
+          console.error("Payment failed:", error);
+          toast.error("Le paiement a échoué. Veuillez réessayer.");
+          setLoading(false);
+        });
+      }
+
+      // Set up close listener
+      if (typeof window.addKkiapayCloseListener === "function") {
+        window.addKkiapayCloseListener(() => {
+          console.log("Payment widget closed");
+          setLoading(false);
+        });
+      }
+
     } catch (error) {
       console.error("Kkiapay widget error:", error);
-      // Fallback to demo mode
-      toast.info("Mode démo activé - Simulation du paiement...");
-      setTimeout(() => {
-        handlePaymentSuccess("DEMO_TX_" + Date.now(), bookingId);
-      }, 2000);
+      toast.error("Erreur lors de l'ouverture du paiement. Veuillez réessayer.");
+      setLoading(false);
     }
   };
 
