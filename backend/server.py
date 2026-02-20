@@ -327,7 +327,7 @@ Merci!"""
 - *Total:* {int(booking["total_amount"])} FCFA"""
     
     encoded_message = quote(message)
-    return f"https://wa.me/{WHATSAPP_NUMBERS[0]}?text={encoded_message}"
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text={encoded_message}"
 
 def generate_admin_whatsapp_notification(booking: dict) -> str:
     """Generate WhatsApp notification link for admin"""
@@ -343,7 +343,28 @@ def generate_admin_whatsapp_notification(booking: dict) -> str:
 ✅ *Frais réservation payés:* {int(booking["reservation_fee"])} FCFA"""
     
     encoded_message = quote(message)
-    return f"https://wa.me/{WHATSAPP_NUMBERS[0]}?text={encoded_message}"
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text={encoded_message}"
+
+async def verify_kkiapay_transaction(transaction_id: str) -> dict:
+    """Verify a Kkiapay transaction"""
+    if not KKIAPAY_PRIVATE_KEY:
+        # Sandbox mode - simulate success
+        return {"status": "SUCCESS", "amount": 500, "transactionId": transaction_id}
+    
+    url = "https://api.kkiapay.me/api/v1/transactions/status"
+    headers = {
+        "x-private-key": KKIAPAY_PRIVATE_KEY,
+        "x-secret-key": KKIAPAY_SECRET,
+        "Content-Type": "application/json"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json={"transactionId": transaction_id}, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.error(f"Kkiapay verification failed: {response.text}")
+            return {"status": "FAILED", "error": response.text}
 
 # ============== ROUTES ==============
 
