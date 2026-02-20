@@ -48,8 +48,8 @@ const Footer = () => {
               <div className="flex items-start gap-3 text-gray-300">
                 <MapPin className="w-5 h-5 text-neon-blue flex-shrink-0 mt-1" />
                 <span className="font-outfit">
-                  Fidjrossè Plage, non loin de la salle des fêtes Majesctic<br />
-                  Rue en face de l'EPP Jacquot - Cotonou, Bénin
+                  À côté de la Pharmacie Fidjrossè Plage<br />
+                  Cotonou, Bénin
                 </span>
               </div>
               <div className="flex items-center gap-3 text-gray-300">
