@@ -10,8 +10,8 @@ const HomePage = () => {
         {/* Background Image */}
         <div className="absolute inset-0">
           <img
-            src="https://images.pexels.com/photos/7773978/pexels-photo-7773978.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-            alt="VR Experience"
+            src="https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/caxe4zas_52ccd1b2-bdd5-4dc7-835c-75cef471dbeb%202.JPG"
+            alt="Espace Maxo VR Gaming"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-dark-bg/80 via-dark-bg/60 to-dark-bg"></div>
