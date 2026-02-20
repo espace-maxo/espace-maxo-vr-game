@@ -287,11 +287,11 @@ GAMES = [
     },
     {
         "id": "game-racing",
-        "name": "Simulateur Course SONY",
-        "description": "Vivez l'adrénaline de la course automobile avec notre simulateur SONY professionnel. Volant, pédales et siège baquet pour une expérience ultra-réaliste!",
+        "name": "Simulateur Course",
+        "description": "Vivez l'adrénaline de la course automobile avec notre simulateur professionnel. Volant, pédales et siège baquet pour une expérience ultra-réaliste!",
         "game_type": "RACING_SIMULATOR",
         "price_per_game": 1500,
-        "image_url": "https://images.pexels.com/photos/13251222/pexels-photo-13251222.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/zovejuia_Combo%204.JPG",
         "duration_minutes": 15
     }
 ]
