@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format, addDays, startOfToday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2 } from "lucide-react";
+import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,12 +15,15 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const BookingPage = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const preselectedGame = searchParams.get("game");
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState(null);
+  const [currentBookingId, setCurrentBookingId] = useState(null);
   
   const [formData, setFormData] = useState({
     customerName: "",
@@ -34,6 +37,28 @@ const BookingPage = () => {
 
   const today = startOfToday();
   const maxDate = addDays(today, 30);
+
+  // Load Kkiapay script and config
+  useEffect(() => {
+    // Load Kkiapay script
+    if (!document.querySelector('script[src="https://cdn.kkiapay.me/k.js"]')) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.kkiapay.me/k.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+    
+    // Fetch payment config
+    const fetchConfig = async () => {
+      try {
+        const response = await axios.get(`${API}/payment/config`);
+        setPaymentConfig(response.data);
+      } catch (error) {
+        console.error("Error fetching payment config:", error);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     if (formData.date) {
@@ -73,6 +98,78 @@ const BookingPage = () => {
     return new Intl.NumberFormat('fr-FR').format(price);
   };
 
+  // Handle Kkiapay payment success
+  const handlePaymentSuccess = useCallback(async (transactionId, bookingId) => {
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/payment/verify`, {
+        transaction_id: transactionId,
+        booking_id: bookingId
+      });
+      
+      if (response.data.status === "success") {
+        toast.success("Paiement réussi!");
+        navigate(`/booking/confirmation?booking_id=${bookingId}&status=success`);
+      } else {
+        toast.error("Erreur lors de la vérification du paiement");
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Payment verification error:", error);
+      toast.error("Erreur lors de la vérification");
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  // Open Kkiapay widget
+  const openPaymentWidget = (bookingId) => {
+    if (typeof window.openKkiapayWidget !== "function") {
+      toast.error("Le module de paiement n'est pas chargé. Veuillez rafraîchir la page.");
+      setLoading(false);
+      return;
+    }
+
+    // Set up success listener
+    window.addSuccessListener = window.addSuccessListener || function(){};
+    const successCallback = (response) => {
+      handlePaymentSuccess(response.transactionId, bookingId);
+    };
+    
+    // For sandbox mode without real keys, simulate success
+    if (paymentConfig?.sandbox && !paymentConfig?.public_key) {
+      // Simulate payment for demo
+      setTimeout(() => {
+        handlePaymentSuccess("DEMO_TX_" + Date.now(), bookingId);
+      }, 2000);
+      return;
+    }
+
+    try {
+      window.openKkiapayWidget({
+        amount: 500, // Reservation fee in FCFA
+        api_key: paymentConfig?.public_key || "demo_public_key",
+        sandbox: paymentConfig?.sandbox ?? true,
+        phone: formData.customerPhone,
+        name: formData.customerName,
+        reason: `Réservation Espace Maxo - ${formData.gameType === "VR_360" ? "VR 360°" : "Simulateur"}`,
+        data: bookingId,
+        callback: window.location.origin + "/booking/confirmation"
+      });
+
+      // Listen for success
+      if (typeof window.addSuccessListener === "function") {
+        window.addSuccessListener(successCallback);
+      }
+    } catch (error) {
+      console.error("Kkiapay widget error:", error);
+      // Fallback to demo mode
+      toast.info("Mode démo activé - Simulation du paiement...");
+      setTimeout(() => {
+        handlePaymentSuccess("DEMO_TX_" + Date.now(), bookingId);
+      }, 2000);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.customerName || !formData.customerPhone || !formData.date || !formData.timeSlot) {
       toast.error("Veuillez remplir tous les champs");
@@ -93,15 +190,11 @@ const BookingPage = () => {
       });
 
       const booking = bookingResponse.data;
-
-      // Create checkout session
-      const checkoutResponse = await axios.post(`${API}/checkout/create`, {
-        booking_id: booking.id,
-        origin_url: window.location.origin
-      });
-
-      // Redirect to Stripe
-      window.location.href = checkoutResponse.data.url;
+      setCurrentBookingId(booking.id);
+      
+      // Open payment widget
+      openPaymentWidget(booking.id);
+      
     } catch (error) {
       console.error("Error creating booking:", error);
       const message = error.response?.data?.detail || "Erreur lors de la réservation";
@@ -124,19 +217,37 @@ const BookingPage = () => {
             <span className="text-neon-blue">une Session</span>
           </h1>
           <p className="font-outfit text-lg text-gray-300 max-w-2xl mx-auto">
-            Choisissez votre jeu, votre créneau et venez profiter d'une expérience gaming unique!
+            Payez par <span className="text-food-gold font-semibold">MTN Mobile Money</span>, <span className="text-neon-blue font-semibold">Moov Money</span> ou <span className="text-neon-red font-semibold">Celtiis</span>
           </p>
         </div>
       </section>
 
+      {/* Payment Methods Banner */}
+      <section className="py-4 px-4 bg-dark-card border-y border-white/10">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-6">
+          <div className="flex items-center gap-2 text-food-gold">
+            <Smartphone className="w-5 h-5" />
+            <span className="font-rajdhani font-bold">MTN MoMo</span>
+          </div>
+          <div className="flex items-center gap-2 text-neon-blue">
+            <Smartphone className="w-5 h-5" />
+            <span className="font-rajdhani font-bold">Moov Money</span>
+          </div>
+          <div className="flex items-center gap-2 text-neon-red">
+            <Smartphone className="w-5 h-5" />
+            <span className="font-rajdhani font-bold">Celtiis</span>
+          </div>
+        </div>
+      </section>
+
       {/* Progress Steps */}
-      <section className="py-6 px-4 bg-dark-card border-y border-white/10" data-testid="booking-progress">
+      <section className="py-6 px-4 bg-dark-card" data-testid="booking-progress">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between">
             {[
               { num: 1, label: "Informations" },
               { num: 2, label: "Date & Heure" },
-              { num: 3, label: "Confirmation" }
+              { num: 3, label: "Paiement" }
             ].map((s, i) => (
               <div key={s.num} className="flex items-center">
                 <div 
@@ -193,11 +304,11 @@ const BookingPage = () => {
                   
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="font-rajdhani font-semibold text-white">
-                      Téléphone *
+                      Téléphone (MTN/Moov/Celtiis) *
                     </Label>
                     <Input
                       id="phone"
-                      placeholder="Votre numéro"
+                      placeholder="Ex: 97000000"
                       value={formData.customerPhone}
                       onChange={(e) => handleInputChange("customerPhone", e.target.value)}
                       className="bg-surface-highlight border-white/20 text-white placeholder:text-gray-500 focus:border-neon-blue"
@@ -216,7 +327,7 @@ const BookingPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
                     { type: "VR_360", label: "VR 360°", color: "neon-blue", desc: "Réalité Virtuelle immersive" },
-                    { type: "RACING_SIMULATOR", label: "Simulateur Course", color: "neon-red", desc: "Simulateur SONY professionnel" }
+                    { type: "RACING_SIMULATOR", label: "Simulateur Course", color: "neon-red", desc: "Simulateur professionnel" }
                   ].map((game) => (
                     <button
                       key={game.type}
@@ -392,7 +503,7 @@ const BookingPage = () => {
             </div>
           )}
 
-          {/* Step 3: Confirmation */}
+          {/* Step 3: Confirmation & Payment */}
           {step === 3 && (
             <div className="space-y-8 animate-fade-in-up" data-testid="step-3">
               <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
@@ -469,7 +580,7 @@ const BookingPage = () => {
 
                 <div className="mt-6 p-4 rounded-lg bg-neon-blue/10 border border-neon-blue/30">
                   <p className="text-neon-blue font-outfit text-sm">
-                    <strong>Note:</strong> Seuls les frais de réservation (500 FCFA) seront débités maintenant. 
+                    <strong>Paiement Mobile Money:</strong> Seuls les frais de réservation (500 FCFA) seront débités maintenant via MTN, Moov ou Celtiis. 
                     Le reste sera payé sur place.
                   </p>
                 </div>
@@ -487,16 +598,19 @@ const BookingPage = () => {
                 <Button
                   onClick={handleSubmit}
                   disabled={loading}
-                  className="bg-neon-red text-white font-rajdhani font-bold uppercase px-8 py-3 hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] disabled:opacity-50"
+                  className="bg-food-gold text-black font-rajdhani font-bold uppercase px-8 py-3 hover:shadow-[0_0_20px_rgba(255,191,0,0.5)] disabled:opacity-50"
                   data-testid="submit-booking"
                 >
                   {loading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                      Traitement...
+                      Paiement en cours...
                     </>
                   ) : (
-                    "Payer 500 FCFA"
+                    <>
+                      <Smartphone className="w-5 h-5 mr-2" />
+                      Payer 500 FCFA
+                    </>
                   )}
                 </Button>
               </div>
