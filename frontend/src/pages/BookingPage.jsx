@@ -1,0 +1,511 @@
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import axios from "axios";
+import { format, addDays, startOfToday } from "date-fns";
+import { fr } from "date-fns/locale";
+import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Calendar as CalendarUI } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const BookingPage = () => {
+  const [searchParams] = useSearchParams();
+  const preselectedGame = searchParams.get("game");
+  
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    customerName: "",
+    customerPhone: "",
+    gameType: preselectedGame || "VR_360",
+    date: null,
+    timeSlot: "",
+    numberOfPlayers: 1,
+    numberOfGames: 1
+  });
+
+  const today = startOfToday();
+  const maxDate = addDays(today, 30);
+
+  useEffect(() => {
+    if (formData.date) {
+      fetchSlots(format(formData.date, "yyyy-MM-dd"));
+    }
+  }, [formData.date]);
+
+  const fetchSlots = async (date) => {
+    setSlotsLoading(true);
+    try {
+      const response = await axios.get(`${API}/slots/${date}`);
+      setSlots(response.data.slots);
+    } catch (error) {
+      console.error("Error fetching slots:", error);
+      toast.error("Erreur lors du chargement des créneaux");
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const calculateTotal = () => {
+    const gamePrice = 1500;
+    const reservationFee = 500;
+    const totalGames = formData.numberOfPlayers * formData.numberOfGames;
+    return {
+      gamesPrice: totalGames * gamePrice,
+      reservationFee,
+      total: (totalGames * gamePrice) + reservationFee
+    };
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('fr-FR').format(price);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.customerName || !formData.customerPhone || !formData.date || !formData.timeSlot) {
+      toast.error("Veuillez remplir tous les champs");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create booking
+      const bookingResponse = await axios.post(`${API}/bookings`, {
+        customer_name: formData.customerName,
+        customer_phone: formData.customerPhone,
+        game_type: formData.gameType,
+        date: format(formData.date, "yyyy-MM-dd"),
+        time_slot: formData.timeSlot,
+        number_of_players: formData.numberOfPlayers,
+        number_of_games: formData.numberOfGames
+      });
+
+      const booking = bookingResponse.data;
+
+      // Create checkout session
+      const checkoutResponse = await axios.post(`${API}/checkout/create`, {
+        booking_id: booking.id,
+        origin_url: window.location.origin
+      });
+
+      // Redirect to Stripe
+      window.location.href = checkoutResponse.data.url;
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      const message = error.response?.data?.detail || "Erreur lors de la réservation";
+      toast.error(message);
+      setLoading(false);
+    }
+  };
+
+  const canProceedToStep2 = formData.customerName && formData.customerPhone;
+  const canProceedToStep3 = formData.date && formData.timeSlot;
+
+  return (
+    <div className="min-h-screen pt-20 bg-dark-bg" data-testid="booking-page">
+      {/* Hero */}
+      <section className="py-12 px-4 bg-gradient-radial-blue" data-testid="booking-hero">
+        <div className="max-w-7xl mx-auto text-center">
+          <Calendar className="w-12 h-12 text-neon-blue mx-auto mb-4" />
+          <h1 className="font-orbitron font-black text-4xl sm:text-5xl uppercase tracking-tight mb-4">
+            <span className="text-white">Réserver</span>{" "}
+            <span className="text-neon-blue">une Session</span>
+          </h1>
+          <p className="font-outfit text-lg text-gray-300 max-w-2xl mx-auto">
+            Choisissez votre jeu, votre créneau et venez profiter d'une expérience gaming unique!
+          </p>
+        </div>
+      </section>
+
+      {/* Progress Steps */}
+      <section className="py-6 px-4 bg-dark-card border-y border-white/10" data-testid="booking-progress">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex items-center justify-between">
+            {[
+              { num: 1, label: "Informations" },
+              { num: 2, label: "Date & Heure" },
+              { num: 3, label: "Confirmation" }
+            ].map((s, i) => (
+              <div key={s.num} className="flex items-center">
+                <div 
+                  className={`flex items-center justify-center w-10 h-10 rounded-full font-rajdhani font-bold transition-all ${
+                    step >= s.num 
+                      ? "bg-neon-blue text-black" 
+                      : "bg-surface-highlight text-gray-400"
+                  }`}
+                >
+                  {s.num}
+                </div>
+                <span className={`ml-2 font-outfit text-sm hidden sm:inline ${
+                  step >= s.num ? "text-white" : "text-gray-400"
+                }`}>
+                  {s.label}
+                </span>
+                {i < 2 && (
+                  <div className={`w-12 sm:w-20 h-0.5 mx-4 ${
+                    step > s.num ? "bg-neon-blue" : "bg-surface-highlight"
+                  }`}></div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Form */}
+      <section className="py-12 px-4" data-testid="booking-form">
+        <div className="max-w-4xl mx-auto">
+          {/* Step 1: Personal Info */}
+          {step === 1 && (
+            <div className="space-y-8 animate-fade-in-up" data-testid="step-1">
+              <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Vos Informations
+                </h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="font-rajdhani font-semibold text-white">
+                      Nom complet *
+                    </Label>
+                    <Input
+                      id="name"
+                      placeholder="Votre nom"
+                      value={formData.customerName}
+                      onChange={(e) => handleInputChange("customerName", e.target.value)}
+                      className="bg-surface-highlight border-white/20 text-white placeholder:text-gray-500 focus:border-neon-blue"
+                      data-testid="input-name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="font-rajdhani font-semibold text-white">
+                      Téléphone *
+                    </Label>
+                    <Input
+                      id="phone"
+                      placeholder="Votre numéro"
+                      value={formData.customerPhone}
+                      onChange={(e) => handleInputChange("customerPhone", e.target.value)}
+                      className="bg-surface-highlight border-white/20 text-white placeholder:text-gray-500 focus:border-neon-blue"
+                      data-testid="input-phone"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                  <Gamepad2 className="w-5 h-5" />
+                  Type de Jeu
+                </h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { type: "VR_360", label: "VR 360°", color: "neon-blue", desc: "Réalité Virtuelle immersive" },
+                    { type: "RACING_SIMULATOR", label: "Simulateur Course", color: "neon-red", desc: "Simulateur SONY professionnel" }
+                  ].map((game) => (
+                    <button
+                      key={game.type}
+                      onClick={() => handleInputChange("gameType", game.type)}
+                      className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        formData.gameType === game.type
+                          ? game.color === "neon-blue"
+                            ? "border-neon-blue bg-neon-blue/10"
+                            : "border-neon-red bg-neon-red/10"
+                          : "border-white/10 hover:border-white/30"
+                      }`}
+                      data-testid={`game-${game.type.toLowerCase()}`}
+                    >
+                      <div className={`font-orbitron font-bold text-lg ${
+                        formData.gameType === game.type 
+                          ? game.color === "neon-blue" ? "text-neon-blue" : "text-neon-red"
+                          : "text-white"
+                      }`}>
+                        {game.label}
+                      </div>
+                      <div className="text-gray-400 font-outfit text-sm mt-1">
+                        {game.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Nombre de Joueurs & Parties
+                </h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-rajdhani font-semibold text-white">
+                      Nombre de joueurs
+                    </Label>
+                    <Select 
+                      value={formData.numberOfPlayers.toString()} 
+                      onValueChange={(v) => handleInputChange("numberOfPlayers", parseInt(v))}
+                    >
+                      <SelectTrigger className="bg-surface-highlight border-white/20 text-white" data-testid="select-players">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-dark-card border-white/20">
+                        {[1, 2, 3, 4].map((n) => (
+                          <SelectItem key={n} value={n.toString()} className="text-white hover:bg-surface-highlight">
+                            {n} joueur{n > 1 ? "s" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="font-rajdhani font-semibold text-white">
+                      Parties par joueur
+                    </Label>
+                    <Select 
+                      value={formData.numberOfGames.toString()} 
+                      onValueChange={(v) => handleInputChange("numberOfGames", parseInt(v))}
+                    >
+                      <SelectTrigger className="bg-surface-highlight border-white/20 text-white" data-testid="select-games">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-dark-card border-white/20">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <SelectItem key={n} value={n.toString()} className="text-white hover:bg-surface-highlight">
+                            {n} partie{n > 1 ? "s" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => setStep(2)}
+                  disabled={!canProceedToStep2}
+                  className="bg-neon-blue text-black font-rajdhani font-bold uppercase px-8 py-3 hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="next-step-1"
+                >
+                  Continuer
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Date & Time */}
+          {step === 2 && (
+            <div className="space-y-8 animate-fade-in-up" data-testid="step-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                  <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    Choisir une Date
+                  </h2>
+                  
+                  <div className="flex justify-center">
+                    <CalendarUI
+                      mode="single"
+                      selected={formData.date}
+                      onSelect={(date) => handleInputChange("date", date)}
+                      disabled={(date) => date < today || date > maxDate}
+                      locale={fr}
+                      className="rounded-lg border border-white/10"
+                      data-testid="calendar"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                  <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Choisir un Créneau
+                  </h2>
+                  
+                  {!formData.date ? (
+                    <div className="text-center py-12 text-gray-400 font-outfit">
+                      Sélectionnez d'abord une date
+                    </div>
+                  ) : slotsLoading ? (
+                    <div className="text-center py-12">
+                      <Loader2 className="w-8 h-8 text-neon-blue animate-spin mx-auto" />
+                      <p className="text-gray-400 mt-4 font-outfit">Chargement...</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2 max-h-80 overflow-y-auto" data-testid="time-slots">
+                      {slots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          onClick={() => slot.available && handleInputChange("timeSlot", slot.time)}
+                          disabled={!slot.available}
+                          className={`py-2 px-3 rounded-lg font-rajdhani font-semibold text-sm transition-all ${
+                            formData.timeSlot === slot.time
+                              ? "bg-neon-blue text-black"
+                              : slot.available
+                              ? "bg-surface-highlight text-white hover:bg-neon-blue/20 hover:text-neon-blue"
+                              : "bg-surface-highlight/50 text-gray-600 cursor-not-allowed line-through"
+                          }`}
+                          data-testid={`slot-${slot.time.replace(":", "")}`}
+                        >
+                          {slot.time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-between">
+                <Button
+                  onClick={() => setStep(1)}
+                  variant="outline"
+                  className="border-white/20 text-white font-rajdhani font-bold uppercase px-8 py-3 hover:bg-white/10"
+                  data-testid="back-step-2"
+                >
+                  Retour
+                </Button>
+                <Button
+                  onClick={() => setStep(3)}
+                  disabled={!canProceedToStep3}
+                  className="bg-neon-blue text-black font-rajdhani font-bold uppercase px-8 py-3 hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-testid="next-step-2"
+                >
+                  Continuer
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Confirmation */}
+          {step === 3 && (
+            <div className="space-y-8 animate-fade-in-up" data-testid="step-3">
+              <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
+                <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Récapitulatif
+                </h2>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Nom</span>
+                    <span className="text-white font-outfit font-semibold">{formData.customerName}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Téléphone</span>
+                    <span className="text-white font-outfit font-semibold">{formData.customerPhone}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Type de jeu</span>
+                    <span className="text-white font-outfit font-semibold">
+                      {formData.gameType === "VR_360" ? "VR 360°" : "Simulateur Course"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Date</span>
+                    <span className="text-white font-outfit font-semibold">
+                      {formData.date && format(formData.date, "EEEE d MMMM yyyy", { locale: fr })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Heure</span>
+                    <span className="text-white font-outfit font-semibold">{formData.timeSlot}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Joueurs</span>
+                    <span className="text-white font-outfit font-semibold">{formData.numberOfPlayers}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-white/10">
+                    <span className="text-gray-400 font-outfit">Parties par joueur</span>
+                    <span className="text-white font-outfit font-semibold">{formData.numberOfGames}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-neon-blue/30">
+                <h2 className="font-orbitron font-bold text-xl text-food-gold mb-6">
+                  Détails du Paiement
+                </h2>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 font-outfit">
+                      {formData.numberOfPlayers} joueur(s) x {formData.numberOfGames} partie(s) x 1.500 FCFA
+                    </span>
+                    <span className="text-white font-rajdhani font-bold">
+                      {formatPrice(calculateTotal().gamesPrice)} FCFA
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 font-outfit">Frais de réservation</span>
+                    <span className="text-white font-rajdhani font-bold">
+                      {formatPrice(calculateTotal().reservationFee)} FCFA
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3 mt-3">
+                    <div className="flex justify-between">
+                      <span className="text-white font-outfit font-semibold">Total</span>
+                      <span className="text-food-gold font-rajdhani font-bold text-2xl">
+                        {formatPrice(calculateTotal().total)} FCFA
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 rounded-lg bg-neon-blue/10 border border-neon-blue/30">
+                  <p className="text-neon-blue font-outfit text-sm">
+                    <strong>Note:</strong> Seuls les frais de réservation (500 FCFA) seront débités maintenant. 
+                    Le reste sera payé sur place.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-between">
+                <Button
+                  onClick={() => setStep(2)}
+                  variant="outline"
+                  className="border-white/20 text-white font-rajdhani font-bold uppercase px-8 py-3 hover:bg-white/10"
+                  data-testid="back-step-3"
+                >
+                  Retour
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="bg-neon-red text-white font-rajdhani font-bold uppercase px-8 py-3 hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] disabled:opacity-50"
+                  data-testid="submit-booking"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Traitement...
+                    </>
+                  ) : (
+                    "Payer 500 FCFA"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default BookingPage;
