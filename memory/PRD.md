@@ -35,6 +35,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Lightbox interactif (zoom, navigation flèches, miniatures)
 - [x] Page témoignages clients (/avis) avec 6 avis exemples
 - [x] Section témoignages sur la page d'accueil (3 avis + statistiques)
+- [x] Intégration Google Maps (section "Trouvez-nous à Cotonou")
+- [x] Boutons "Itinéraire" et "WhatsApp" rapides
 
 ### APIs Backend
 - GET /api/menu - Liste des plats et combos
