@@ -185,7 +185,7 @@ MENU_ITEMS = [
         "description": "Viande de boeuf grillée façon tchoukouya avec riz parfumé et sauce",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://images.pexels.com/photos/17199062/pexels-photo-17199062.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/14jckjxv_tchoukouya.JPG",
         "is_available": True
     },
     {
@@ -194,7 +194,7 @@ MENU_ITEMS = [
         "description": "Cuisse de poulet grillée accompagnée de riz et sauce tomate",
         "price": 3000,
         "category": "Plats",
-        "image_url": "https://images.pexels.com/photos/32986476/pexels-photo-32986476.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/ayg60vco_e9788b87-62c9-4840-bdd3-5badadfd9845.JPG",
         "is_available": True
     },
     {
@@ -209,10 +209,10 @@ MENU_ITEMS = [
     {
         "id": "menu-aileron",
         "name": "Ailerons de Poulet",
-        "description": "Ailerons de poulet croustillants dorés avec sauce pimentée",
+        "description": "Ailerons de poulet croustillants dorés avec frites et crudités",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://images.pexels.com/photos/33037756/pexels-photo-33037756.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/oc9w07e7_ailerons.jpg",
         "is_available": True
     },
     {
