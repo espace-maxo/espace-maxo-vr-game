@@ -10,12 +10,7 @@ from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout, 
-    CheckoutSessionResponse, 
-    CheckoutStatusResponse, 
-    CheckoutSessionRequest
-)
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,11 +20,14 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Stripe
-stripe_api_key = os.environ.get('STRIPE_API_KEY')
+# Kkiapay configuration (MTN, Moov, Celtiis)
+KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
+KKIAPAY_PRIVATE_KEY = os.environ.get('KKIAPAY_PRIVATE_KEY', '')
+KKIAPAY_SECRET = os.environ.get('KKIAPAY_SECRET', '')
+KKIAPAY_SANDBOX = os.environ.get('KKIAPAY_SANDBOX', 'true').lower() == 'true'
 
-# WhatsApp numbers for Espace Maxo
-WHATSAPP_NUMBERS = ["22901414700", "22901623962"]
+# WhatsApp number for Espace Maxo
+WHATSAPP_NUMBER = "22901414700"
 
 # Create the main app without a prefix
 app = FastAPI()
