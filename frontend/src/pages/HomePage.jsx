@@ -126,8 +126,8 @@ const HomePage = () => {
             <div className="group relative overflow-hidden rounded-lg bg-dark-card border border-white/10 hover:border-food-gold/50 transition-all duration-500 hover-scale" data-testid="feature-restaurant">
               <div className="aspect-video overflow-hidden">
                 <img
-                  src="https://images.unsplash.com/photo-1662452883375-9226ea22c765?crop=entropy&cs=srgb&fm=jpg"
-                  alt="Restaurant"
+                  src="https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/pegoox6o_Combo1.JPG"
+                  alt="Restaurant Espace Maxo"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
               </div>
