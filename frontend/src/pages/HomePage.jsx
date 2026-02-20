@@ -320,10 +320,6 @@ const HomePage = () => {
                   data-testid="google-map-embed"
                 ></iframe>
               </div>
-              <div className="absolute -bottom-4 -right-4 bg-neon-blue text-black p-4 rounded-lg font-rajdhani font-bold">
-                <span className="text-2xl">1.500 FCFA</span>
-                <span className="block text-sm">par partie</span>
-              </div>
             </div>
           </div>
         </div>
