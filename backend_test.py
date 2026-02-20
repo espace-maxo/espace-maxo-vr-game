@@ -410,6 +410,15 @@ def main():
     print("\n💳 Testing Checkout Flow...")
     all_tests_passed &= tester.test_checkout_flow()
     
+    print("\n👨‍💼 Testing Admin Endpoints...")
+    all_tests_passed &= tester.test_admin_endpoints()
+    
+    print("\n💬 Testing WhatsApp Links...")
+    all_tests_passed &= tester.test_whatsapp_links()
+    
+    print("\n🍽️  Testing Menu Combos...")
+    all_tests_passed &= tester.test_menu_combos()
+    
     print("\n🚫 Testing Error Handling...")
     all_tests_passed &= tester.test_error_handling()
     
