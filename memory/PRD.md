@@ -70,4 +70,4 @@ Variables d'environnement à remplir après activation:
 ## Contact
 - WhatsApp: +229 01 41 47 00 00
 - Adresse: Fidjrossè Plage, rue EPP Jacquot, Cotonou
-- Horaires: 10h-22h tous les jours
+- Horaires: 9h - 23h tous les jours
