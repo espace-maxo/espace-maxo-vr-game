@@ -199,7 +199,7 @@ MENU_ITEMS = [
     },
     {
         "id": "menu-pizza",
-        "name": "Pizza Maxi",
+        "name": "Pizza Maxo",
         "description": "Grande pizza généreuse avec fromage fondu, olives, oignons et sauce tomate",
         "price": 5500,
         "category": "Plats",
