@@ -164,41 +164,60 @@ const BookingPage = () => {
       return;
     }
 
+    // Clean phone number
+    const cleanPhone = formData.customerPhone.replace(/\s/g, '').replace(/^\+229/, '');
+
     try {
+      // Remove any existing Kkiapay listeners first
+      if (typeof window.removeKkiapayListener === "function") {
+        try { window.removeKkiapayListener("success"); } catch(e) {}
+        try { window.removeKkiapayListener("failed"); } catch(e) {}
+      }
+
       // Open the Kkiapay widget
       window.openKkiapayWidget({
         amount: 500,
         api_key: paymentConfig.public_key,
         sandbox: paymentConfig.sandbox || false,
-        phone: formData.customerPhone.replace(/\s/g, ''),
+        phone: cleanPhone,
         name: formData.customerName,
-        reason: `Réservation Espace Maxo - ${formData.gameType === "VR_360" ? "VR 360°" : "Simulateur"}`,
-        data: bookingId
+        reason: `Reservation Espace Maxo`,
+        data: bookingId,
+        theme: "#00f0ff",
+        partnerId: bookingId
       });
 
       // Set up success listener
-      if (typeof window.addSuccessListener === "function") {
-        window.addSuccessListener((response) => {
-          console.log("Payment success:", response);
+      const handleSuccess = (response) => {
+        console.log("Payment success:", response);
+        if (response && response.transactionId) {
           handlePaymentSuccess(response.transactionId, bookingId);
-        });
-      }
+        }
+      };
 
-      // Set up failed listener
+      const handleFailed = (error) => {
+        console.error("Payment failed:", error);
+        toast.error("Le paiement a échoué. Veuillez réessayer.");
+        setLoading(false);
+      };
+
+      const handleClose = () => {
+        console.log("Payment widget closed");
+        // Only reset loading if payment wasn't successful
+        setTimeout(() => {
+          setLoading(false);
+        }, 500);
+      };
+
+      // Add listeners safely
+      if (typeof window.addSuccessListener === "function") {
+        window.addSuccessListener(handleSuccess);
+      }
       if (typeof window.addFailedListener === "function") {
-        window.addFailedListener((error) => {
-          console.error("Payment failed:", error);
-          toast.error("Le paiement a échoué. Veuillez réessayer.");
-          setLoading(false);
-        });
+        window.addFailedListener(handleFailed);
       }
-
-      // Set up close listener
       if (typeof window.addKkiapayCloseListener === "function") {
-        window.addKkiapayCloseListener(() => {
-          console.log("Payment widget closed");
-          setLoading(false);
-        });
+        window.addKkiapayCloseListener(handleClose);
       }
 
     } catch (error) {
