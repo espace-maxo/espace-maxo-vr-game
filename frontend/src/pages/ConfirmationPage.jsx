@@ -1,27 +1,47 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
-import { CheckCircle, XCircle, Loader2, Calendar, Clock, Gamepad2, Phone, Home, MessageCircle } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Calendar, Clock, Gamepad2, Phone, Home, MessageCircle, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const ConfirmationPage = () => {
   const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get("session_id");
   const bookingId = searchParams.get("booking_id");
+  const paymentStatus = searchParams.get("status");
   
-  const [status, setStatus] = useState("loading");
+  const [status, setStatus] = useState(paymentStatus === "success" ? "success" : "loading");
   const [booking, setBooking] = useState(null);
   const [whatsappLink, setWhatsappLink] = useState(null);
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 10;
 
   useEffect(() => {
-    if (sessionId) {
-      pollPaymentStatus();
+    if (bookingId) {
+      fetchBookingDetails();
     }
-  }, [sessionId]);
+  }, [bookingId]);
+
+  const fetchBookingDetails = async () => {
+    try {
+      const response = await axios.get(`${API}/bookings/${bookingId}`);
+      setBooking(response.data);
+      setWhatsappLink(response.data.whatsapp_link);
+      
+      if (response.data.payment_status === "paid") {
+        setStatus("success");
+      } else if (paymentStatus !== "success") {
+        // Poll for payment status
+        pollPaymentStatus();
+      } else {
+        setStatus("success");
+      }
+    } catch (error) {
+      console.error("Error fetching booking:", error);
+      setStatus("error");
+    }
+  };
 
   const pollPaymentStatus = async () => {
     if (attempts >= maxAttempts) {
@@ -30,25 +50,17 @@ const ConfirmationPage = () => {
     }
 
     try {
-      const response = await axios.get(`${API}/checkout/status/${sessionId}`);
+      const response = await axios.get(`${API}/payment/status/${bookingId}`);
       
       if (response.data.payment_status === "paid") {
         setStatus("success");
         setWhatsappLink(response.data.whatsapp_link);
-        
-        if (response.data.booking_id) {
-          const bookingRes = await axios.get(`${API}/bookings/${response.data.booking_id}`);
-          setBooking(bookingRes.data);
-          setWhatsappLink(bookingRes.data.whatsapp_link);
-        }
-      } else if (response.data.status === "expired") {
-        setStatus("error");
       } else {
         setAttempts(prev => prev + 1);
         setTimeout(pollPaymentStatus, 2000);
       }
     } catch (error) {
-      console.error("Error checking payment status:", error);
+      console.error("Error polling payment status:", error);
       setAttempts(prev => prev + 1);
       if (attempts < maxAttempts - 1) {
         setTimeout(pollPaymentStatus, 2000);
@@ -74,7 +86,7 @@ const ConfirmationPage = () => {
               Vérification du paiement...
             </h1>
             <p className="text-gray-400 font-outfit">
-              Veuillez patienter pendant que nous confirmons votre paiement.
+              Veuillez patienter pendant que nous confirmons votre paiement Mobile Money.
             </p>
           </div>
         )}
@@ -178,6 +190,14 @@ const ConfirmationPage = () => {
               </div>
             )}
 
+            {/* Payment Method Info */}
+            <div className="bg-food-gold/10 border border-food-gold/30 rounded-xl p-4 mb-8">
+              <div className="flex items-center gap-2 text-food-gold">
+                <Smartphone className="w-5 h-5" />
+                <span className="font-rajdhani font-bold">Paiement effectué via Mobile Money</span>
+              </div>
+            </div>
+
             <div className="bg-dark-card rounded-xl p-6 border border-white/10 mb-8">
               <h3 className="font-orbitron font-bold text-lg text-white mb-4">
                 Informations Importantes
@@ -216,7 +236,7 @@ const ConfirmationPage = () => {
               Paiement Non Confirmé
             </h1>
             <p className="text-gray-300 font-outfit mb-8">
-              Nous n'avons pas pu confirmer votre paiement. 
+              Nous n'avons pas pu confirmer votre paiement Mobile Money. 
               Si vous avez été débité, veuillez nous contacter par WhatsApp.
             </p>
 
