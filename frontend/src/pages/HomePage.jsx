@@ -264,8 +264,8 @@ const HomePage = () => {
               <div className="space-y-4 text-gray-300 font-outfit">
                 <p className="text-lg">
                   <span className="text-neon-blue font-semibold">Adresse:</span><br />
-                  Fidjrossè Plage, non loin de la salle des fêtes Majesctic<br />
-                  Rue en face de l'EPP Jacquot - Cotonou, Bénin
+                  À côté de la Pharmacie Fidjrossè Plage<br />
+                  Cotonou, Bénin
                 </p>
                 <p className="text-lg">
                   <span className="text-neon-blue font-semibold">Téléphone:</span><br />
