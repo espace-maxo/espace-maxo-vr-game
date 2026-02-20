@@ -80,8 +80,8 @@ const HomePage = () => {
             <div className="group relative overflow-hidden rounded-lg bg-dark-card border border-white/10 hover:border-neon-blue/50 transition-all duration-500 hover-scale" data-testid="feature-vr">
               <div className="aspect-video overflow-hidden">
                 <img
-                  src="https://images.pexels.com/photos/8728558/pexels-photo-8728558.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-                  alt="VR Gaming"
+                  src="https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/caxe4zas_52ccd1b2-bdd5-4dc7-835c-75cef471dbeb%202.JPG"
+                  alt="VR Gaming Espace Maxo"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
               </div>
