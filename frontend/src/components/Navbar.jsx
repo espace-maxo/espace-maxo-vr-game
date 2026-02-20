@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Gamepad2, Phone } from "lucide-react";
+import { Menu, X, Gamepad2, Phone, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -12,9 +12,10 @@ const Navbar = () => {
     { label: "Menu", path: "/menu" },
     { label: "Jeux & VR", path: "/games" },
     { label: "Avis", path: "/avis" },
+    { label: "Admin", path: "/admin" },
   ];
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-card" data-testid="navbar">
@@ -34,11 +35,12 @@ const Navbar = () => {
               <Link
                 key={link.path}
                 to={link.path}
-                className={`font-rajdhani font-semibold text-lg uppercase tracking-wide transition-all duration-300 hover:text-neon-blue ${
+                className={`font-rajdhani font-semibold text-lg uppercase tracking-wide transition-all duration-300 hover:text-neon-blue flex items-center gap-1 ${
                   isActive(link.path) ? "text-neon-blue text-glow-blue" : "text-gray-300"
                 }`}
                 data-testid={`nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
+                {link.label === "Admin" && <Lock className="w-4 h-4" />}
                 {link.label}
               </Link>
             ))}
@@ -69,12 +71,13 @@ const Navbar = () => {
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`font-rajdhani font-semibold text-lg uppercase tracking-wide py-2 transition-all ${
+                  className={`font-rajdhani font-semibold text-lg uppercase tracking-wide py-2 transition-all flex items-center gap-2 ${
                     isActive(link.path) ? "text-neon-blue" : "text-gray-300"
                   }`}
                   onClick={() => setIsOpen(false)}
                   data-testid={`mobile-nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
+                  {link.label === "Admin" && <Lock className="w-4 h-4" />}
                   {link.label}
                 </Link>
               ))}
