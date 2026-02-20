@@ -148,6 +148,41 @@ const HomePage = () => {
         </div>
       </section>
 
+      {/* Gallery Section - Restaurant Interior */}
+      <section className="py-20 px-4 bg-dark-card" data-testid="gallery-section">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="font-orbitron font-bold text-3xl md:text-5xl text-center mb-4">
+            <span className="text-white">Notre</span>{" "}
+            <span className="text-food-gold">Espace</span>
+          </h2>
+          <p className="text-gray-400 text-center font-outfit text-lg mb-12 max-w-2xl mx-auto">
+            Un cadre élégant et chaleureux pour vos repas et moments gaming
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {[
+              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/xp3vbhr5_IMG_8872.jpeg",
+              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/5hl3uu83_IMG_8873.jpeg",
+              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/ngci0xn4_IMG_8871.jpeg",
+              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/u6mhfjga_IMG_8870.jpeg",
+              "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/o2ezqt66_IMG_8869.jpeg"
+            ].map((img, index) => (
+              <div 
+                key={index} 
+                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 hover:border-food-gold/50 transition-all duration-300"
+              >
+                <img
+                  src={img}
+                  alt={`Intérieur Espace Maxo ${index + 1}`}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-dark-bg/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-20 px-4 bg-gradient-radial-red" data-testid="cta-section">
         <div className="max-w-4xl mx-auto text-center">
