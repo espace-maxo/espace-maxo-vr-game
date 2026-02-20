@@ -185,7 +185,7 @@ MENU_ITEMS = [
         "description": "Viande de boeuf grillée façon tchoukouya avec riz parfumé et sauce",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/14jckjxv_tchoukouya.JPG",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/zkga8jv7_tchoukouya.JPG",
         "is_available": True
     },
     {
@@ -194,7 +194,7 @@ MENU_ITEMS = [
         "description": "Cuisse de poulet grillée accompagnée de riz et sauce tomate",
         "price": 3000,
         "category": "Plats",
-        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/ayg60vco_e9788b87-62c9-4840-bdd3-5badadfd9845.JPG",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/0ma3ucad_e9788b87-62c9-4840-bdd3-5badadfd9845.JPG",
         "is_available": True
     },
     {
@@ -212,7 +212,7 @@ MENU_ITEMS = [
         "description": "Ailerons de poulet croustillants dorés avec frites et crudités",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/oc9w07e7_ailerons.jpg",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/lf2x1p6q_ailerons.jpg",
         "is_available": True
     },
     {
