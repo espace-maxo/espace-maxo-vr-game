@@ -632,65 +632,90 @@ async def get_whatsapp_links(booking_id: str):
     return {
         "customer_link": generate_whatsapp_link(booking, for_customer=True),
         "admin_notification_link": generate_admin_whatsapp_notification(booking),
-        "whatsapp_numbers": WHATSAPP_NUMBERS
+        "whatsapp_number": WHATSAPP_NUMBER
     }
 
-# Payment routes
-@api_router.post("/checkout/create")
-async def create_checkout_session(request: Request, checkout_data: CheckoutRequest):
-    """Create Stripe checkout session"""
-    booking = await db.bookings.find_one({"id": checkout_data.booking_id}, {"_id": 0})
+# Kkiapay configuration endpoint
+@api_router.get("/payment/config")
+async def get_payment_config():
+    """Get Kkiapay configuration for frontend"""
+    return {
+        "public_key": KKIAPAY_PUBLIC_KEY,
+        "sandbox": KKIAPAY_SANDBOX,
+        "whatsapp_number": WHATSAPP_NUMBER
+    }
+
+# Kkiapay payment verification
+@api_router.post("/payment/verify")
+async def verify_payment(request: Request):
+    """Verify Kkiapay payment and update booking"""
+    data = await request.json()
+    transaction_id = data.get("transaction_id")
+    booking_id = data.get("booking_id")
+    
+    if not transaction_id or not booking_id:
+        raise HTTPException(status_code=400, detail="transaction_id et booking_id requis")
+    
+    booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
         raise HTTPException(status_code=404, detail="Réservation non trouvée")
     
-    if booking.get("payment_status") in ["completed", "paid"]:
-        raise HTTPException(status_code=400, detail="Cette réservation est déjà payée")
+    # Verify with Kkiapay
+    verification = await verify_kkiapay_transaction(transaction_id)
     
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-    
-    success_url = f"{checkout_data.origin_url}/booking/confirmation?session_id={{CHECKOUT_SESSION_ID}}&booking_id={checkout_data.booking_id}"
-    cancel_url = f"{checkout_data.origin_url}/booking?cancelled=true"
-    
-    amount_in_usd = float(booking["reservation_fee"]) / 600.0
-    
-    checkout_request = CheckoutSessionRequest(
-        amount=round(amount_in_usd, 2),
-        currency="usd",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "booking_id": checkout_data.booking_id,
-            "customer_name": booking["customer_name"],
-            "customer_phone": booking["customer_phone"],
-            "game_type": booking["game_type"],
-            "date": booking["date"],
-            "time_slot": booking["time_slot"]
+    if verification.get("status") == "SUCCESS":
+        # Update booking
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {
+                "payment_status": "paid",
+                "payment_session_id": transaction_id
+            }}
+        )
+        
+        # Create transaction record
+        transaction = PaymentTransaction(
+            booking_id=booking_id,
+            session_id=transaction_id,
+            amount=booking["reservation_fee"],
+            currency="XOF",
+            payment_status="paid",
+            metadata={
+                "booking_id": booking_id,
+                "kkiapay_transaction_id": transaction_id,
+                "payment_method": "mobile_money"
+            }
+        )
+        await db.payment_transactions.insert_one(transaction.model_dump())
+        
+        # Get updated booking
+        updated_booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        
+        return {
+            "status": "success",
+            "message": "Paiement vérifié avec succès",
+            "booking": updated_booking,
+            "whatsapp_link": generate_whatsapp_link(updated_booking)
         }
-    )
-    
-    session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
-    
-    transaction = PaymentTransaction(
-        booking_id=checkout_data.booking_id,
-        session_id=session.session_id,
-        amount=booking["reservation_fee"],
-        currency="XOF",
-        payment_status="initiated",
-        metadata={
-            "booking_id": checkout_data.booking_id,
-            "stripe_session_id": session.session_id
+    else:
+        return {
+            "status": "failed",
+            "message": "Le paiement n'a pas pu être vérifié",
+            "details": verification
         }
-    )
-    await db.payment_transactions.insert_one(transaction.model_dump())
+
+@api_router.get("/payment/status/{booking_id}")
+async def get_payment_status(booking_id: str):
+    """Get payment status for a booking"""
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
     
-    await db.bookings.update_one(
-        {"id": checkout_data.booking_id},
-        {"$set": {"payment_session_id": session.session_id}}
-    )
-    
-    return {"url": session.url, "session_id": session.session_id}
+    return {
+        "booking_id": booking_id,
+        "payment_status": booking.get("payment_status", "pending"),
+        "whatsapp_link": generate_whatsapp_link(booking) if booking.get("payment_status") == "paid" else None
+    }
 
 @api_router.get("/checkout/status/{session_id}")
 async def get_checkout_status(request: Request, session_id: str):
