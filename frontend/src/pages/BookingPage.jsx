@@ -38,36 +38,8 @@ const BookingPage = () => {
   const today = startOfToday();
   const maxDate = addDays(today, 30);
 
-  // Load Kkiapay script and config
+  // Load payment config on mount
   useEffect(() => {
-    // Load Kkiapay script properly
-    const loadKkiapayScript = () => {
-      return new Promise((resolve, reject) => {
-        if (window.openKkiapayWidget) {
-          resolve();
-          return;
-        }
-
-        const existingScript = document.querySelector('script[src*="kkiapay"]');
-        if (existingScript) {
-          existingScript.onload = resolve;
-          return;
-        }
-
-        const script = document.createElement("script");
-        script.src = "https://cdn.kkiapay.me/k.js";
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    };
-
-    loadKkiapayScript()
-      .then(() => console.log("Kkiapay script loaded"))
-      .catch((err) => console.error("Failed to load Kkiapay:", err));
-    
-    // Fetch payment config
     const fetchConfig = async () => {
       try {
         const response = await axios.get(`${API}/payment/config`);
@@ -77,15 +49,28 @@ const BookingPage = () => {
       }
     };
     fetchConfig();
-
-    // Cleanup
-    return () => {
-      // Remove listeners on unmount
-      if (typeof window.removeKkiapayListener === "function") {
-        window.removeKkiapayListener();
-      }
-    };
   }, []);
+
+  // Load Kkiapay script only when reaching step 3
+  useEffect(() => {
+    if (step === 3) {
+      const loadKkiapayScript = () => {
+        if (window.openKkiapayWidget) return;
+
+        const existingScript = document.querySelector('script[src*="kkiapay"]');
+        if (existingScript) return;
+
+        const script = document.createElement("script");
+        script.src = "https://cdn.kkiapay.me/k.js";
+        script.async = true;
+        script.onload = () => console.log("Kkiapay script loaded");
+        script.onerror = (err) => console.error("Failed to load Kkiapay:", err);
+        document.head.appendChild(script);
+      };
+
+      loadKkiapayScript();
+    }
+  }, [step]);
 
   useEffect(() => {
     if (formData.date) {
