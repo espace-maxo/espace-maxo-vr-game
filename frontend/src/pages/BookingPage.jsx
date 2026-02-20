@@ -40,13 +40,32 @@ const BookingPage = () => {
 
   // Load Kkiapay script and config
   useEffect(() => {
-    // Load Kkiapay script
-    if (!document.querySelector('script[src="https://cdn.kkiapay.me/k.js"]')) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.kkiapay.me/k.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    // Load Kkiapay script properly
+    const loadKkiapayScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.openKkiapayWidget) {
+          resolve();
+          return;
+        }
+
+        const existingScript = document.querySelector('script[src*="kkiapay"]');
+        if (existingScript) {
+          existingScript.onload = resolve;
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src = "https://cdn.kkiapay.me/k.js";
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    };
+
+    loadKkiapayScript()
+      .then(() => console.log("Kkiapay script loaded"))
+      .catch((err) => console.error("Failed to load Kkiapay:", err));
     
     // Fetch payment config
     const fetchConfig = async () => {
@@ -58,6 +77,14 @@ const BookingPage = () => {
       }
     };
     fetchConfig();
+
+    // Cleanup
+    return () => {
+      // Remove listeners on unmount
+      if (typeof window.removeKkiapayListener === "function") {
+        window.removeKkiapayListener();
+      }
+    };
   }, []);
 
   useEffect(() => {
