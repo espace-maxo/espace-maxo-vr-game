@@ -181,38 +181,75 @@ class EspaceMaxoAPITester:
             
         return all(results)
 
-    def test_checkout_flow(self):
-        """Test checkout/payment flow"""
-        if not self.booking_id:
-            print("❌ Cannot test checkout - no booking ID available")
-            return False
-        
+    def test_kkiapay_payment_flow(self):
+        """Test Kkiapay payment configuration and flow"""
         results = []
         
-        # Test create checkout session
-        checkout_data = {
-            "booking_id": self.booking_id,
-            "origin_url": "https://vr-gaming-hub-1.preview.emergentagent.com"
-        }
-        
-        success, checkout_response = self.run_test("Create Checkout Session", "POST", "checkout/create", 200, checkout_data)
+        # Test payment configuration endpoint
+        success, config_data = self.run_test("Get Payment Config", "GET", "payment/config", 200)
         results.append(success)
         
-        session_id = None
-        if success and checkout_response:
-            session_id = checkout_response.get('session_id')
-            stripe_url = checkout_response.get('url')
-            print(f"   💳 Created checkout session: {session_id}")
-            print(f"   🔗 Stripe URL generated: {'Yes' if stripe_url else 'No'}")
+        if success and config_data:
+            sandbox_mode = config_data.get('sandbox')
+            whatsapp_number = config_data.get('whatsapp_number')
+            public_key = config_data.get('public_key')
             
-            # Test get checkout status
-            if session_id:
-                success, status_response = self.run_test("Get Checkout Status", "GET", f"checkout/status/{session_id}", 200)
-                results.append(success)
-                
-                if success and status_response:
-                    payment_status = status_response.get('payment_status')
-                    print(f"   📊 Payment status: {payment_status}")
+            print(f"   🏖️  Sandbox mode: {sandbox_mode}")
+            print(f"   📱 WhatsApp number: {whatsapp_number}")
+            print(f"   🔑 Public key present: {'Yes' if public_key else 'No (Demo mode)'}")
+            
+            # Validate WhatsApp number is correct
+            if whatsapp_number == "22901414700":
+                print(f"   ✅ WhatsApp number is correct: {whatsapp_number}")
+            else:
+                print(f"   ❌ WhatsApp number incorrect! Expected: 22901414700, Got: {whatsapp_number}")
+            
+            # Validate sandbox mode
+            if sandbox_mode is True:
+                print(f"   ✅ Sandbox mode enabled correctly")
+            else:
+                print(f"   ⚠️  Sandbox mode: {sandbox_mode}")
+        
+        if not self.booking_id:
+            print("   ⚠️  Cannot test payment verification - no booking ID available")
+            return all(results)
+        
+        # Test payment status endpoint
+        success, status_response = self.run_test("Get Payment Status", "GET", f"payment/status/{self.booking_id}", 200)
+        results.append(success)
+        
+        if success and status_response:
+            payment_status = status_response.get('payment_status')
+            booking_id = status_response.get('booking_id')
+            print(f"   📊 Payment status for booking {booking_id}: {payment_status}")
+            
+            if payment_status == "pending":
+                print(f"   ✅ Initial payment status is pending (expected)")
+            
+        # Test payment verification (simulate success)
+        verify_data = {
+            "transaction_id": f"TEST_TX_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "booking_id": self.booking_id
+        }
+        
+        success, verify_response = self.run_test("Verify Payment", "POST", "payment/verify", 200, verify_data)
+        results.append(success)
+        
+        if success and verify_response:
+            verify_status = verify_response.get('status')
+            message = verify_response.get('message')
+            print(f"   ✅ Payment verification status: {verify_status}")
+            print(f"   📝 Message: {message}")
+            
+            # Check if booking was updated
+            if verify_status == "success":
+                # Recheck payment status
+                success2, status_response2 = self.run_test("Get Updated Payment Status", "GET", f"payment/status/{self.booking_id}", 200)
+                if success2 and status_response2:
+                    updated_status = status_response2.get('payment_status')
+                    print(f"   🔄 Updated payment status: {updated_status}")
+                    if updated_status == "paid":
+                        print(f"   ✅ Payment status updated correctly to 'paid'")
         
         return all(results)
 
