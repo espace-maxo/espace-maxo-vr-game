@@ -8,6 +8,7 @@ import MenuPage from "@/pages/MenuPage";
 import GamesPage from "@/pages/GamesPage";
 import BookingPage from "@/pages/BookingPage";
 import ConfirmationPage from "@/pages/ConfirmationPage";
+import AdminLoginPage from "@/pages/AdminLoginPage";
 import AdminPage from "@/pages/AdminPage";
 import TestimonialsPage from "@/pages/TestimonialsPage";
 
@@ -23,7 +24,8 @@ function App() {
             <Route path="/games" element={<GamesPage />} />
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/booking/confirmation" element={<ConfirmationPage />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={<AdminLoginPage />} />
+            <Route path="/admin/dashboard" element={<AdminPage />} />
             <Route path="/avis" element={<TestimonialsPage />} />
           </Routes>
         </main>
