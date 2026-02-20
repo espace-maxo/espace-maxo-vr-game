@@ -257,7 +257,7 @@ MENU_ITEMS = [
         "id": "menu-soda",
         "name": "Soda",
         "description": "Coca-Cola, Fanta, Sprite ou Fifa",
-        "price": 500,
+        "price": 1000,
         "category": "Boissons",
         "image_url": "https://images.unsplash.com/photo-1581636625402-29b2a704ef13?crop=entropy&cs=srgb&fm=jpg",
         "is_available": True
@@ -266,7 +266,7 @@ MENU_ITEMS = [
         "id": "menu-eau",
         "name": "Eau Minérale",
         "description": "Eau minérale fraîche (1.5L)",
-        "price": 500,
+        "price": 1000,
         "category": "Boissons",
         "image_url": "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?crop=entropy&cs=srgb&fm=jpg",
         "is_available": True
