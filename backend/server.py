@@ -263,6 +263,15 @@ MENU_ITEMS = [
         "is_available": True
     },
     {
+        "id": "menu-cocktail-fruits",
+        "name": "Cocktail de Fruits",
+        "description": "Délicieux mélange de fruits frais de saison servi dans un verre élégant",
+        "price": 2000,
+        "category": "Boissons",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/vd62gmoj_COCKTAIL%20DE%20FRUITS.JPG",
+        "is_available": True
+    },
+    {
         "id": "menu-eau",
         "name": "Eau Minérale",
         "description": "Eau minérale fraîche (1.5L)",
