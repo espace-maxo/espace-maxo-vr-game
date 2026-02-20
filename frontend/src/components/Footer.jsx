@@ -31,12 +31,12 @@ const Footer = () => {
                 <span className="font-outfit">01 41 47 00 00</span>
               </a>
               <a
-                href="https://wa.me/22901623962"
-                className="flex items-center gap-3 text-gray-300 hover:text-neon-blue transition-colors"
+                href="https://wa.me/22901414700"
+                className="flex items-center gap-3 text-gray-300 hover:text-green-500 transition-colors"
                 data-testid="footer-whatsapp"
               >
-                <Phone className="w-5 h-5 text-neon-red" />
-                <span className="font-outfit">01 62 39 62 39 (WhatsApp)</span>
+                <Phone className="w-5 h-5 text-green-500" />
+                <span className="font-outfit">WhatsApp: 01 41 47 00 00</span>
               </a>
             </div>
           </div>
