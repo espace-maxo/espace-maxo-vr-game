@@ -228,10 +228,10 @@ MENU_ITEMS = [
     {
         "id": "menu-burger",
         "name": "Burger Maxo",
-        "description": "Burger maison avec steak haché, salade, tomate et sauce spéciale",
+        "description": "Burger maison avec steak haché, cheddar, salade, tomate et frites",
         "price": 2500,
         "category": "Burgers",
-        "image_url": "https://images.unsplash.com/photo-1662452883375-9226ea22c765?crop=entropy&cs=srgb&fm=jpg",
+        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/phwdbby5_BURGER.JPG",
         "is_available": True
     },
     {
