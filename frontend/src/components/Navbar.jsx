@@ -1,0 +1,104 @@
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Menu, X, Gamepad2, Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const Navbar = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  const navLinks = [
+    { label: "Accueil", path: "/" },
+    { label: "Menu", path: "/menu" },
+    { label: "Jeux & VR", path: "/games" },
+  ];
+
+  const isActive = (path) => location.pathname === path;
+
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 glass-card" data-testid="navbar">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 md:h-20">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2" data-testid="logo-link">
+            <Gamepad2 className="w-8 h-8 text-neon-blue" />
+            <span className="font-orbitron font-bold text-xl md:text-2xl tracking-wider text-white">
+              ESPACE <span className="text-neon-blue">MAXO</span>
+            </span>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`font-rajdhani font-semibold text-lg uppercase tracking-wide transition-all duration-300 hover:text-neon-blue ${
+                  isActive(link.path) ? "text-neon-blue text-glow-blue" : "text-gray-300"
+                }`}
+                data-testid={`nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                {link.label}
+              </Link>
+            ))}
+            <Link to="/booking" data-testid="nav-reserver">
+              <Button
+                className="bg-neon-red text-white font-rajdhani font-bold uppercase px-6 py-2 hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] transition-all"
+              >
+                Réserver
+              </Button>
+            </Link>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            className="md:hidden text-white p-2"
+            onClick={() => setIsOpen(!isOpen)}
+            data-testid="mobile-menu-button"
+          >
+            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+
+        {/* Mobile Navigation */}
+        {isOpen && (
+          <div className="md:hidden py-4 border-t border-white/10" data-testid="mobile-menu">
+            <div className="flex flex-col gap-4">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`font-rajdhani font-semibold text-lg uppercase tracking-wide py-2 transition-all ${
+                    isActive(link.path) ? "text-neon-blue" : "text-gray-300"
+                  }`}
+                  onClick={() => setIsOpen(false)}
+                  data-testid={`mobile-nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <Link to="/booking" onClick={() => setIsOpen(false)}>
+                <Button
+                  className="w-full bg-neon-red text-white font-rajdhani font-bold uppercase py-3"
+                  data-testid="mobile-nav-reserver"
+                >
+                  Réserver
+                </Button>
+              </Link>
+              <a
+                href="https://wa.me/22901414700"
+                className="flex items-center gap-2 text-neon-blue font-rajdhani font-semibold"
+                data-testid="mobile-whatsapp-link"
+              >
+                <Phone className="w-5 h-5" />
+                WhatsApp: 0141470000
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;
