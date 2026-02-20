@@ -6,11 +6,11 @@ import ImageLightbox from "@/components/ImageLightbox";
 import { TestimonialsSection } from "@/pages/TestimonialsPage";
 
 const INTERIOR_IMAGES = [
-  "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/xp3vbhr5_IMG_8872.jpeg",
-  "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/5hl3uu83_IMG_8873.jpeg",
-  "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/ngci0xn4_IMG_8871.jpeg",
-  "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/u6mhfjga_IMG_8870.jpeg",
-  "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/o2ezqt66_IMG_8869.jpeg"
+  "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/ix3jsee6_1af7712a-41b2-40d6-a148-c77efdf0a6c4.JPG",
+  "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/gt7oeau2_79d4d024-7727-410a-8ffa-edf40a5ed487.JPG",
+  "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/ny131v5d_JARDIN.jpeg",
+  "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/enmaq6ni_JARDIN%202.JPG",
+  "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/lpfcw0g6_Espace%20Maxo.jpeg"
 ];
 
 const HomePage = () => {
