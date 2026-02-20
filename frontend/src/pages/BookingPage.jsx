@@ -459,25 +459,61 @@ const BookingPage = () => {
                       <p className="text-gray-400 mt-4 font-outfit">Chargement...</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2 max-h-80 overflow-y-auto" data-testid="time-slots">
-                      {slots.map((slot) => (
-                        <button
-                          key={slot.time}
-                          onClick={() => slot.available && handleInputChange("timeSlot", slot.time)}
-                          disabled={!slot.available}
-                          className={`py-2 px-3 rounded-lg font-rajdhani font-semibold text-sm transition-all ${
-                            formData.timeSlot === slot.time
-                              ? "bg-neon-blue text-black"
-                              : slot.available
-                              ? "bg-surface-highlight text-white hover:bg-neon-blue/20 hover:text-neon-blue"
-                              : "bg-surface-highlight/50 text-gray-600 cursor-not-allowed line-through"
-                          }`}
-                          data-testid={`slot-${slot.time.replace(":", "")}`}
-                        >
-                          {slot.time}
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      {/* Legend */}
+                      <div className="flex flex-wrap gap-4 mb-4 text-sm font-outfit">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-surface-highlight border border-white/20"></div>
+                          <span className="text-gray-400">Disponible</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-neon-red/30 border border-neon-red"></div>
+                          <span className="text-gray-400">Réservé</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-neon-blue"></div>
+                          <span className="text-gray-400">Sélectionné</span>
+                        </div>
+                      </div>
+                      
+                      {/* Available count */}
+                      <div className="mb-4 p-3 rounded-lg bg-surface-highlight/50">
+                        <p className="text-sm font-outfit">
+                          <span className="text-green-400 font-semibold">{slots.filter(s => s.available).length}</span>
+                          <span className="text-gray-400"> créneaux disponibles</span>
+                          {slots.filter(s => !s.available).length > 0 && (
+                            <>
+                              <span className="text-gray-500"> • </span>
+                              <span className="text-neon-red font-semibold">{slots.filter(s => !s.available).length}</span>
+                              <span className="text-gray-400"> réservés</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-80 overflow-y-auto" data-testid="time-slots">
+                        {slots.map((slot) => (
+                          <button
+                            key={slot.time}
+                            onClick={() => slot.available && handleInputChange("timeSlot", slot.time)}
+                            disabled={!slot.available}
+                            className={`py-3 px-3 rounded-lg font-rajdhani font-semibold text-sm transition-all relative ${
+                              formData.timeSlot === slot.time
+                                ? "bg-neon-blue text-black ring-2 ring-neon-blue ring-offset-2 ring-offset-dark-bg"
+                                : slot.available
+                                ? "bg-surface-highlight text-white hover:bg-neon-blue/20 hover:text-neon-blue border border-white/10"
+                                : "bg-neon-red/20 text-neon-red/60 cursor-not-allowed border border-neon-red/30"
+                            }`}
+                            data-testid={`slot-${slot.time.replace(":", "")}`}
+                          >
+                            {slot.time}
+                            {!slot.available && (
+                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-neon-red rounded-full"></span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
