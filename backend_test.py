@@ -450,8 +450,8 @@ def main():
     print("\n📝 Testing Booking Flow...")
     all_tests_passed &= tester.test_booking_flow()
     
-    print("\n💳 Testing Checkout Flow...")
-    all_tests_passed &= tester.test_checkout_flow()
+    print("\n💳 Testing Kkiapay Payment Flow...")
+    all_tests_passed &= tester.test_kkiapay_payment_flow()
     
     print("\n👨‍💼 Testing Admin Endpoints...")
     all_tests_passed &= tester.test_admin_endpoints()
