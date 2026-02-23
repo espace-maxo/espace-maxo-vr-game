@@ -85,6 +85,8 @@ const AdminPage = () => {
       ]);
       setStats(statsRes.data);
       setBookings(bookingsRes.data.bookings);
+      setLoyaltyAccounts(loyaltyRes.data.accounts || []);
+      setLoyaltyStats(loyaltyRes.data.stats || {});
     } catch (error) {
       console.error("Error fetching admin data:", error);
       if (error.response?.status === 401) {
