@@ -817,6 +817,54 @@ async def verify_payment(request: Request):
         )
         await db.payment_transactions.insert_one(transaction.model_dump())
         
+        # Add loyalty points automatically
+        try:
+            phone = booking["customer_phone"].replace(" ", "").replace("+229", "")
+            customer_name = booking["customer_name"]
+            total_games = booking["number_of_players"] * booking["number_of_games"]
+            points_earned = total_games * 1  # 1 point per game
+            
+            account = await db.loyalty_accounts.find_one({"phone": phone})
+            if account:
+                new_total = account.get("total_points", 0) + points_earned
+                new_available = account.get("available_points", 0) + points_earned
+                new_games_played = account.get("total_games_played", 0) + total_games
+                old_free_games = account.get("available_points", 0) // 10
+                new_free_games = new_available // 10
+                additional_free_games = new_free_games - old_free_games
+                
+                await db.loyalty_accounts.update_one(
+                    {"phone": phone},
+                    {"$set": {
+                        "customer_name": customer_name,
+                        "total_points": new_total,
+                        "available_points": new_available,
+                        "total_games_played": new_games_played,
+                        "free_games_earned": account.get("free_games_earned", 0) + additional_free_games,
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+            else:
+                free_games = points_earned // 10
+                new_account = LoyaltyAccount(
+                    phone=phone,
+                    customer_name=customer_name,
+                    total_points=points_earned,
+                    available_points=points_earned,
+                    total_games_played=total_games,
+                    free_games_earned=free_games
+                )
+                await db.loyalty_accounts.insert_one(new_account.model_dump())
+            
+            # Mark booking
+            await db.bookings.update_one(
+                {"id": booking_id},
+                {"$set": {"loyalty_points_added": True, "loyalty_points_earned": points_earned}}
+            )
+            logger.info(f"Loyalty points added: {points_earned} for phone {phone}")
+        except Exception as e:
+            logger.error(f"Error adding loyalty points: {e}")
+        
         # Get updated booking
         updated_booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         
