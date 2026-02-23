@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format } from "date-fns";
@@ -16,6 +16,23 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("adminToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Helper to check if token is expired
+const isTokenValid = () => {
+  const token = localStorage.getItem("adminToken");
+  const expiresAt = localStorage.getItem("adminTokenExpires");
+  
+  if (!token || !expiresAt) return false;
+  
+  const expirationDate = new Date(expiresAt);
+  return expirationDate > new Date();
+};
+
 const AdminPage = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
@@ -25,28 +42,34 @@ const AdminPage = () => {
 
   // Check authentication
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("adminAuth");
-    if (!isAuth) {
+    if (!isTokenValid()) {
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("adminTokenExpires");
+      toast.error("Session expirée. Veuillez vous reconnecter.");
       navigate("/admin");
     }
   }, [navigate]);
 
   const handleLogout = () => {
-    sessionStorage.removeItem("adminAuth");
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminTokenExpires");
     toast.success("Déconnexion réussie");
     navigate("/admin");
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [filter]);
+  const fetchData = useCallback(async () => {
+    if (!isTokenValid()) {
+      navigate("/admin");
+      return;
+    }
 
-  const fetchData = async () => {
     setLoading(true);
     try {
+      const headers = getAuthHeaders();
       const [statsRes, bookingsRes] = await Promise.all([
-        axios.get(`${API}/admin/stats`),
+        axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, {
+          headers,
           params: {
             status: filter.status !== "all" ? filter.status : undefined,
             booking_status: filter.booking_status !== "all" ? filter.booking_status : undefined,
@@ -58,21 +81,37 @@ const AdminPage = () => {
       setBookings(bookingsRes.data.bookings);
     } catch (error) {
       console.error("Error fetching admin data:", error);
-      toast.error("Erreur lors du chargement des données");
+      if (error.response?.status === 401) {
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminTokenExpires");
+        toast.error("Session expirée. Veuillez vous reconnecter.");
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors du chargement des données");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, navigate]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const updateBookingStatus = async (bookingId, newStatus) => {
     try {
+      const headers = getAuthHeaders();
       await axios.put(`${API}/admin/bookings/${bookingId}`, {
         booking_status: newStatus
-      });
+      }, { headers });
       toast.success("Statut mis à jour");
       fetchData();
     } catch (error) {
-      toast.error("Erreur lors de la mise à jour");
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la mise à jour");
+      }
     }
   };
 
@@ -80,11 +119,16 @@ const AdminPage = () => {
     if (!window.confirm("Êtes-vous sûr de vouloir annuler cette réservation?")) return;
     
     try {
-      await axios.delete(`${API}/admin/bookings/${bookingId}`);
+      const headers = getAuthHeaders();
+      await axios.delete(`${API}/admin/bookings/${bookingId}`, { headers });
       toast.success("Réservation annulée");
       fetchData();
     } catch (error) {
-      toast.error("Erreur lors de l'annulation");
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de l'annulation");
+      }
     }
   };
 
