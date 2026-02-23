@@ -7,7 +7,7 @@ import {
   BarChart3, Calendar, Users, CreditCard, Clock, 
   Phone, Gamepad2, CheckCircle, XCircle, AlertCircle,
   RefreshCw, Filter, MessageCircle, TrendingUp, LogOut,
-  Star, Gift, Trophy
+  Star, Gift, Trophy, MessageSquare, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +41,8 @@ const AdminPage = () => {
   const [bookings, setBookings] = useState([]);
   const [loyaltyAccounts, setLoyaltyAccounts] = useState([]);
   const [loyaltyStats, setLoyaltyStats] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [reviewStats, setReviewStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
   const [activeTab, setActiveTab] = useState("bookings");
