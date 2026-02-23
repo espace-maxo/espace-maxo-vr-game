@@ -377,7 +377,7 @@ const AdminPage = () => {
         </section>
       )}
 
-      {/* Tabs for Bookings and Loyalty */}
+      {/* Tabs for Bookings, Loyalty and Reviews */}
       <section className="px-4 pb-4">
         <div className="max-w-7xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
