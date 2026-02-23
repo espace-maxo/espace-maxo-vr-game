@@ -7,6 +7,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Prix: 1.500 FCFA/partie, 500 FCFA frais de réservation
 - Paiement Mobile Money (MTN, Moov, Celtiis) via Kkiapay
 - Dashboard admin sécurisé pour gestion des réservations
+- Programme de fidélité automatique
 - Notifications WhatsApp automatiques
 
 ## What's Been Implemented
@@ -50,6 +51,21 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
   - Indicateur visuel de validation (vert=valide, jaune=invalide)
   - Blocage du bouton "Continuer" si format invalide
 
+### Phase 6 - Programme de Fidélité (23 Feb 2026)
+- [x] **Système de points automatique**
+  - 1 partie jouée = 1 point de fidélité
+  - 10 points = 1 partie gratuite
+  - Basé sur le numéro de téléphone (pas de compte requis)
+- [x] **Carte de fidélité sur la page de réservation**
+  - Affiche les points actuels du client
+  - Progression vers la prochaine partie gratuite
+  - Nombre de parties gratuites disponibles
+  - Message d'accueil pour les nouveaux clients
+- [x] **Onglet Fidélité dans le dashboard admin**
+  - Liste de tous les membres fidélité
+  - Statistiques: membres, points distribués, parties gratuites
+  - Vue détaillée de chaque compte
+
 ### APIs Backend
 - GET /api/menu - Liste des plats et combos
 - GET /api/games - Liste des jeux
@@ -57,14 +73,18 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - POST /api/bookings - Créer réservation
 - GET /api/bookings/{id} - Détails avec lien WhatsApp
 - GET /api/payment/config - Config Kkiapay
-- POST /api/payment/verify - Vérifier paiement
+- POST /api/payment/verify - Vérifier paiement (+ ajout points fidélité)
 - GET /api/payment/status/{id} - Statut paiement
-- **POST /api/auth/admin-login - Authentification admin (retourne JWT)**
-- **GET /api/auth/verify - Vérifier validité du token**
-- GET /api/admin/stats - Statistiques dashboard (protégé JWT)
-- GET /api/admin/bookings - Toutes les réservations (protégé JWT)
-- PUT /api/admin/bookings/{id} - Modifier réservation (protégé JWT)
-- DELETE /api/admin/bookings/{id} - Annuler réservation (protégé JWT)
+- POST /api/auth/admin-login - Authentification admin (JWT)
+- GET /api/auth/verify - Vérifier validité du token
+- GET /api/admin/stats - Statistiques dashboard (protégé)
+- GET /api/admin/bookings - Toutes les réservations (protégé)
+- PUT /api/admin/bookings/{id} - Modifier réservation (protégé)
+- DELETE /api/admin/bookings/{id} - Annuler réservation (protégé)
+- **GET /api/loyalty/{phone} - Statut fidélité par téléphone**
+- **POST /api/loyalty/add-points - Ajouter points manuellement**
+- **POST /api/loyalty/redeem - Utiliser partie gratuite**
+- **GET /api/admin/loyalty/accounts - Liste membres fidélité (protégé)**
 
 ## Configuration
 
@@ -79,12 +99,17 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - JWT_SECRET_KEY: Clé secrète pour tokens JWT
 - Password: Nikeland2016
 
+### Programme Fidélité
+- POINTS_PER_GAME: 1 (1 partie = 1 point)
+- POINTS_FOR_FREE_GAME: 10 (10 points = 1 partie gratuite)
+
 ## Prioritized Backlog
 
 ### P0 (Completed) ✅
 - [x] MVP + Admin Dashboard + Kkiapay production
 - [x] Sécurité admin (JWT backend)
 - [x] Format téléphone 10 chiffres
+- [x] Programme de fidélité
 
 ### P1 (Blocked - User Action Required)
 - [ ] Domaine personnalisé (www.espacemaxo.com) - DNS à configurer
@@ -92,8 +117,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 
 ### P2 (Future)
 - [ ] Section "À propos" de Espace Maxo
+- [ ] Interface pour utiliser les parties gratuites lors de la réservation
 - [ ] Notifications SMS automatiques
-- [ ] Programme fidélité
 - [ ] Multi-langue
 
 ## Contact
