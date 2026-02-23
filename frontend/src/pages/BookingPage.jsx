@@ -349,12 +349,29 @@ const BookingPage = () => {
                     </Label>
                     <Input
                       id="phone"
-                      placeholder="Ex: 97000000"
+                      placeholder="Ex: 0197000000"
                       value={formData.customerPhone}
-                      onChange={(e) => handleInputChange("customerPhone", e.target.value)}
+                      onChange={(e) => {
+                        // Only allow digits and limit to 10 characters
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        handleInputChange("customerPhone", value);
+                      }}
+                      maxLength={10}
                       className="bg-surface-highlight border-white/20 text-white placeholder:text-gray-500 focus:border-neon-blue"
                       data-testid="input-phone"
                     />
+                    {formData.customerPhone && formData.customerPhone.length > 0 && (
+                      <p className={`text-xs ${
+                        formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01')
+                          ? 'text-green-500'
+                          : 'text-yellow-500'
+                      }`}>
+                        {formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01')
+                          ? 'Format valide'
+                          : `Format requis: 01XXXXXXXX (${formData.customerPhone.length}/10 chiffres)`
+                        }
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
