@@ -912,6 +912,88 @@ async def get_payment_status(booking_id: str):
         "whatsapp_link": generate_whatsapp_link(booking) if booking.get("payment_status") == "paid" else None
     }
 
+# ============== REVIEWS ROUTES ==============
+
+@api_router.post("/reviews", response_model=Review)
+async def create_review(review_data: ReviewCreate):
+    """Submit a new review (pending approval)"""
+    if not review_data.customer_name or not review_data.comment:
+        raise HTTPException(status_code=400, detail="Nom et commentaire requis")
+    
+    if review_data.rating < 1 or review_data.rating > 5:
+        raise HTTPException(status_code=400, detail="Note entre 1 et 5 requise")
+    
+    review = Review(
+        customer_name=review_data.customer_name,
+        rating=review_data.rating,
+        comment=review_data.comment,
+        status="pending"
+    )
+    
+    await db.reviews.insert_one(review.model_dump())
+    return review
+
+@api_router.get("/reviews")
+async def get_approved_reviews():
+    """Get all approved reviews for public display"""
+    reviews = await db.reviews.find({"status": "approved"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"reviews": reviews}
+
+@api_router.get("/admin/reviews")
+async def get_all_reviews(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected"),
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Get all reviews for admin (protected)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Count by status
+    pending_count = await db.reviews.count_documents({"status": "pending"})
+    approved_count = await db.reviews.count_documents({"status": "approved"})
+    rejected_count = await db.reviews.count_documents({"status": "rejected"})
+    
+    return {
+        "reviews": reviews,
+        "stats": {
+            "pending": pending_count,
+            "approved": approved_count,
+            "rejected": rejected_count,
+            "total": pending_count + approved_count + rejected_count
+        }
+    }
+
+@api_router.put("/admin/reviews/{review_id}")
+async def update_review_status(review_id: str, update_data: ReviewUpdate, is_admin: bool = Depends(get_current_admin)):
+    """Approve or reject a review (protected)"""
+    if update_data.status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Statut invalide. Utilisez 'approved' ou 'rejected'")
+    
+    review = await db.reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Avis non trouvé")
+    
+    await db.reviews.update_one(
+        {"id": review_id},
+        {"$set": {"status": update_data.status}}
+    )
+    
+    updated = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/admin/reviews/{review_id}")
+async def delete_review(review_id: str, is_admin: bool = Depends(get_current_admin)):
+    """Delete a review (protected)"""
+    review = await db.reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Avis non trouvé")
+    
+    await db.reviews.delete_one({"id": review_id})
+    return {"message": "Avis supprimé", "review_id": review_id}
+
 # Reseed menu data
 @api_router.post("/admin/reseed-menu")
 async def reseed_menu(is_admin: bool = Depends(get_current_admin)):
