@@ -324,6 +324,45 @@ GAMES = [
 
 # ============== HELPER FUNCTIONS ==============
 
+def create_admin_token() -> tuple[str, datetime]:
+    """Create a JWT token for admin access"""
+    expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    payload = {
+        "role": "admin",
+        "exp": expiration,
+        "iat": datetime.now(timezone.utc)
+    }
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return token, expiration
+
+def verify_admin_token(token: str) -> bool:
+    """Verify a JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload.get("role") == "admin"
+    except jwt.ExpiredSignatureError:
+        return False
+    except jwt.InvalidTokenError:
+        return False
+
+def verify_admin_password(password: str) -> bool:
+    """Verify the admin password against the stored hash"""
+    if not ADMIN_PASSWORD_HASH:
+        # Fallback for backwards compatibility - hash of "Nikeland2016"
+        default_hash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4Y5yw3hPmF2LqxGe"
+        return bcrypt.checkpw(password.encode('utf-8'), default_hash.encode('utf-8'))
+    return bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH.encode('utf-8'))
+
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
+    """Dependency to verify admin authentication"""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentification requise")
+    
+    if not verify_admin_token(credentials.credentials):
+        raise HTTPException(status_code=401, detail="Token invalide ou expiré")
+    
+    return True
+
 def generate_whatsapp_link(booking: dict, for_customer: bool = True) -> str:
     """Generate WhatsApp click-to-chat link for booking confirmation"""
     game_type_label = "VR 360°" if booking["game_type"] == "VR_360" else "Simulateur Course"
