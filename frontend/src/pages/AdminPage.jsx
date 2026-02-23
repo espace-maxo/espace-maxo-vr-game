@@ -390,6 +390,15 @@ const AdminPage = () => {
                 <Star className="w-4 h-4 mr-2" />
                 Fidélité
               </TabsTrigger>
+              <TabsTrigger value="reviews" className="data-[state=active]:bg-neon-purple data-[state=active]:text-white font-rajdhani font-bold relative">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Avis
+                {reviewStats && reviewStats.pending > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-red text-white text-xs rounded-full flex items-center justify-center">
+                    {reviewStats.pending}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings">
