@@ -6,12 +6,14 @@ import { fr } from "date-fns/locale";
 import { 
   BarChart3, Calendar, Users, CreditCard, Clock, 
   Phone, Gamepad2, CheckCircle, XCircle, AlertCircle,
-  RefreshCw, Filter, MessageCircle, TrendingUp, LogOut
+  RefreshCw, Filter, MessageCircle, TrendingUp, LogOut,
+  Star, Gift, Trophy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
