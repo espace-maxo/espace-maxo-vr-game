@@ -608,7 +608,8 @@ async def get_all_bookings(
     booking_status: Optional[str] = Query(None, description="Filter by booking_status"),
     date: Optional[str] = Query(None, description="Filter by date"),
     limit: int = Query(50, ge=1, le=200),
-    skip: int = Query(0, ge=0)
+    skip: int = Query(0, ge=0),
+    is_admin: bool = Depends(get_current_admin)
 ):
     """Get all bookings for admin dashboard"""
     query = {}
