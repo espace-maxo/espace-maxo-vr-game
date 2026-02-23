@@ -584,6 +584,24 @@ async def get_booking(booking_id: str):
 
 # ============== ADMIN ROUTES ==============
 
+# Admin authentication
+@api_router.post("/auth/admin-login", response_model=AdminLoginResponse)
+async def admin_login(request: AdminLoginRequest):
+    """Authenticate admin and return JWT token"""
+    if not verify_admin_password(request.password):
+        raise HTTPException(status_code=401, detail="Mot de passe incorrect")
+    
+    token, expiration = create_admin_token()
+    return AdminLoginResponse(
+        token=token,
+        expires_at=expiration.isoformat()
+    )
+
+@api_router.get("/auth/verify")
+async def verify_auth(is_admin: bool = Depends(get_current_admin)):
+    """Verify if the current token is valid"""
+    return {"valid": True, "role": "admin"}
+
 @api_router.get("/admin/bookings")
 async def get_all_bookings(
     status: Optional[str] = Query(None, description="Filter by payment_status"),
