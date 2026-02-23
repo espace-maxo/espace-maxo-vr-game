@@ -378,6 +378,16 @@ const BookingPage = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Loyalty Card */}
+                {formData.customerPhone && formData.customerPhone.length === 10 && (
+                  <div className="mt-6">
+                    <LoyaltyCard 
+                      phone={formData.customerPhone} 
+                      onFreeGamesAvailable={setFreeGamesAvailable}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="bg-dark-card rounded-xl p-6 md:p-8 border border-white/10">
