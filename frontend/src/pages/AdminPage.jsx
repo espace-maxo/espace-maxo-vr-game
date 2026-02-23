@@ -614,6 +614,120 @@ const AdminPage = () => {
                 )}
               </div>
             </TabsContent>
+
+            {/* Reviews Tab */}
+            <TabsContent value="reviews">
+              <div data-testid="reviews-section">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-orbitron font-bold text-xl text-white flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-neon-purple" />
+                    Gestion des Avis ({reviews.length})
+                  </h2>
+                  {reviewStats && (
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-yellow-500">{reviewStats.pending} en attente</span>
+                      <span className="text-green-500">{reviewStats.approved} approuvés</span>
+                      <span className="text-red-500">{reviewStats.rejected} rejetés</span>
+                    </div>
+                  )}
+                </div>
+
+                {loading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-8 h-8 text-neon-purple animate-spin mx-auto" />
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MessageSquare className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400 font-outfit">Aucun avis pour le moment</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <Card 
+                        key={review.id}
+                        className={`bg-dark-card border-white/10 hover:border-neon-purple/30 transition-colors ${
+                          review.status === "pending" ? "border-l-4 border-l-yellow-500" : ""
+                        }`}
+                        data-testid={`review-${review.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-outfit font-semibold text-white">{review.customer_name}</span>
+                                <Badge className={`${
+                                  review.status === "pending" ? "bg-yellow-500" :
+                                  review.status === "approved" ? "bg-green-500" : "bg-red-500"
+                                } text-white`}>
+                                  {review.status === "pending" ? "En attente" :
+                                   review.status === "approved" ? "Approuvé" : "Rejeté"}
+                                </Badge>
+                              </div>
+                              
+                              {/* Stars */}
+                              <div className="flex gap-1 mb-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`w-4 h-4 ${
+                                      star <= review.rating ? "text-food-gold fill-food-gold" : "text-gray-600"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+
+                              <p className="text-gray-300 font-outfit">"{review.comment}"</p>
+                              
+                              <p className="text-gray-600 text-xs mt-2">
+                                {new Date(review.created_at).toLocaleDateString("fr-FR", { 
+                                  day: "numeric", month: "long", year: "numeric" 
+                                })}
+                              </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-2">
+                              {review.status === "pending" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateReviewStatus(review.id, "approved")}
+                                    className="bg-green-600 hover:bg-green-700"
+                                    data-testid={`approve-${review.id}`}
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    Approuver
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => updateReviewStatus(review.id, "rejected")}
+                                    data-testid={`reject-${review.id}`}
+                                  >
+                                    <XCircle className="w-4 h-4 mr-1" />
+                                    Rejeter
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => deleteReview(review.id)}
+                                className="border-red-500/50 text-red-500 hover:bg-red-500/10"
+                                data-testid={`delete-${review.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
       </section>
