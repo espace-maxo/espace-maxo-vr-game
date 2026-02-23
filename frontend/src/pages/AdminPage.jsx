@@ -145,6 +145,38 @@ const AdminPage = () => {
     }
   };
 
+  const updateReviewStatus = async (reviewId, status) => {
+    try {
+      const headers = getAuthHeaders();
+      await axios.put(`${API}/admin/reviews/${reviewId}`, { status }, { headers });
+      toast.success(status === "approved" ? "Avis approuvé !" : "Avis rejeté");
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la mise à jour");
+      }
+    }
+  };
+
+  const deleteReview = async (reviewId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet avis?")) return;
+    
+    try {
+      const headers = getAuthHeaders();
+      await axios.delete(`${API}/admin/reviews/${reviewId}`, { headers });
+      toast.success("Avis supprimé");
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la suppression");
+      }
+    }
+  };
+
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
   const getStatusBadge = (status) => {
