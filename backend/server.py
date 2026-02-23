@@ -718,7 +718,7 @@ async def update_booking(booking_id: str, update_data: BookingUpdate, is_admin: 
     return updated
 
 @api_router.delete("/admin/bookings/{booking_id}")
-async def cancel_booking(booking_id: str):
+async def cancel_booking(booking_id: str, is_admin: bool = Depends(get_current_admin)):
     """Cancel a booking (soft delete)"""
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
