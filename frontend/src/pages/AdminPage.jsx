@@ -73,7 +73,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsRes, bookingsRes, loyaltyRes] = await Promise.all([
+      const [statsRes, bookingsRes, loyaltyRes, reviewsRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, {
           headers,
@@ -83,12 +83,15 @@ const AdminPage = () => {
             limit: 100
           }
         }),
-        axios.get(`${API}/admin/loyalty/accounts`, { headers }).catch(() => ({ data: { accounts: [], stats: {} } }))
+        axios.get(`${API}/admin/loyalty/accounts`, { headers }).catch(() => ({ data: { accounts: [], stats: {} } })),
+        axios.get(`${API}/admin/reviews`, { headers }).catch(() => ({ data: { reviews: [], stats: {} } }))
       ]);
       setStats(statsRes.data);
       setBookings(bookingsRes.data.bookings);
       setLoyaltyAccounts(loyaltyRes.data.accounts || []);
       setLoyaltyStats(loyaltyRes.data.stats || {});
+      setReviews(reviewsRes.data.reviews || []);
+      setReviewStats(reviewsRes.data.stats || {});
     } catch (error) {
       console.error("Error fetching admin data:", error);
       if (error.response?.status === 401) {
