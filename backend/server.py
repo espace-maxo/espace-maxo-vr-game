@@ -699,7 +699,7 @@ async def get_admin_stats(is_admin: bool = Depends(get_current_admin)):
     }
 
 @api_router.put("/admin/bookings/{booking_id}")
-async def update_booking(booking_id: str, update_data: BookingUpdate):
+async def update_booking(booking_id: str, update_data: BookingUpdate, is_admin: bool = Depends(get_current_admin)):
     """Update booking status (admin only)"""
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
