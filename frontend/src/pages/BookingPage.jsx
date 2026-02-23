@@ -512,6 +512,10 @@ const BookingPage = () => {
                           <span className="text-gray-400">Réservé</span>
                         </div>
                         <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded bg-gray-700 border border-gray-600"></div>
+                          <span className="text-gray-400">Passé</span>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <div className="w-4 h-4 rounded bg-neon-blue"></div>
                           <span className="text-gray-400">Sélectionné</span>
                         </div>
@@ -522,11 +526,18 @@ const BookingPage = () => {
                         <p className="text-sm font-outfit">
                           <span className="text-green-400 font-semibold">{slots.filter(s => s.available).length}</span>
                           <span className="text-gray-400"> créneaux disponibles</span>
-                          {slots.filter(s => !s.available).length > 0 && (
+                          {slots.filter(s => !s.available && !s.is_past).length > 0 && (
                             <>
                               <span className="text-gray-500"> • </span>
-                              <span className="text-neon-red font-semibold">{slots.filter(s => !s.available).length}</span>
+                              <span className="text-neon-red font-semibold">{slots.filter(s => !s.available && !s.is_past).length}</span>
                               <span className="text-gray-400"> réservés</span>
+                            </>
+                          )}
+                          {slots.filter(s => s.is_past).length > 0 && (
+                            <>
+                              <span className="text-gray-500"> • </span>
+                              <span className="text-gray-500 font-semibold">{slots.filter(s => s.is_past).length}</span>
+                              <span className="text-gray-400"> passés</span>
                             </>
                           )}
                         </p>
@@ -543,12 +554,14 @@ const BookingPage = () => {
                                 ? "bg-neon-blue text-black ring-2 ring-neon-blue ring-offset-2 ring-offset-dark-bg"
                                 : slot.available
                                 ? "bg-surface-highlight text-white hover:bg-neon-blue/20 hover:text-neon-blue border border-white/10"
+                                : slot.is_past
+                                ? "bg-gray-800/50 text-gray-600 cursor-not-allowed border border-gray-700 line-through"
                                 : "bg-neon-red/20 text-neon-red/60 cursor-not-allowed border border-neon-red/30"
                             }`}
                             data-testid={`slot-${slot.time.replace(":", "")}`}
                           >
                             {slot.time}
-                            {!slot.available && (
+                            {!slot.available && !slot.is_past && (
                               <span className="absolute -top-1 -right-1 w-3 h-3 bg-neon-red rounded-full"></span>
                             )}
                           </button>
