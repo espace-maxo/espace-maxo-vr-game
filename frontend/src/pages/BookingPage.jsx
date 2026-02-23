@@ -139,30 +139,30 @@ const BookingPage = () => {
 
   // Open Kkiapay widget
   const openPaymentWidget = (bookingId) => {
-    // Check if Kkiapay is loaded
-    if (typeof window.openKkiapayWidget !== "function") {
-      toast.error("Le module de paiement n'est pas chargé. Veuillez rafraîchir la page.");
+    console.log("Opening payment widget for booking:", bookingId);
+    console.log("Payment config:", paymentConfig);
+    
+    // Check if we have a valid public key
+    if (!paymentConfig || !paymentConfig.public_key) {
+      console.error("Payment config missing:", paymentConfig);
+      toast.error("Configuration de paiement manquante. Veuillez rafraîchir la page.");
       setLoading(false);
       return;
     }
 
-    // Check if we have a valid public key
-    if (!paymentConfig?.public_key) {
-      toast.error("Configuration de paiement manquante");
+    // Check if Kkiapay is loaded
+    if (typeof window.openKkiapayWidget !== "function") {
+      console.error("Kkiapay widget not loaded");
+      toast.error("Le module de paiement n'est pas chargé. Veuillez rafraîchir la page.");
       setLoading(false);
       return;
     }
 
     // Clean phone number
     const cleanPhone = formData.customerPhone.replace(/\s/g, '').replace(/^\+229/, '');
+    console.log("Clean phone:", cleanPhone);
 
     try {
-      // Remove any existing Kkiapay listeners first
-      if (typeof window.removeKkiapayListener === "function") {
-        try { window.removeKkiapayListener("success"); } catch(e) {}
-        try { window.removeKkiapayListener("failed"); } catch(e) {}
-      }
-
       // Open the Kkiapay widget
       window.openKkiapayWidget({
         amount: 500,
@@ -170,43 +170,38 @@ const BookingPage = () => {
         sandbox: paymentConfig.sandbox || false,
         phone: cleanPhone,
         name: formData.customerName,
-        reason: `Reservation Espace Maxo`,
+        reason: "Reservation Espace Maxo",
         data: bookingId,
-        theme: "#00f0ff",
-        partnerId: bookingId
+        theme: "#00f0ff"
       });
 
+      console.log("Kkiapay widget opened");
+
       // Set up success listener
-      const handleSuccess = (response) => {
-        console.log("Payment success:", response);
-        if (response && response.transactionId) {
-          handlePaymentSuccess(response.transactionId, bookingId);
-        }
-      };
-
-      const handleFailed = (error) => {
-        console.error("Payment failed:", error);
-        toast.error("Le paiement a échoué. Veuillez réessayer.");
-        setLoading(false);
-      };
-
-      const handleClose = () => {
-        console.log("Payment widget closed");
-        // Only reset loading if payment wasn't successful
-        setTimeout(() => {
-          setLoading(false);
-        }, 500);
-      };
-
-      // Add listeners safely
       if (typeof window.addSuccessListener === "function") {
-        window.addSuccessListener(handleSuccess);
+        window.addSuccessListener((response) => {
+          console.log("Payment success:", response);
+          if (response && response.transactionId) {
+            handlePaymentSuccess(response.transactionId, bookingId);
+          }
+        });
       }
+
+      // Set up failed listener
       if (typeof window.addFailedListener === "function") {
-        window.addFailedListener(handleFailed);
+        window.addFailedListener((error) => {
+          console.error("Payment failed:", error);
+          toast.error("Le paiement a échoué. Veuillez réessayer.");
+          setLoading(false);
+        });
       }
+
+      // Set up close listener
       if (typeof window.addKkiapayCloseListener === "function") {
-        window.addKkiapayCloseListener(handleClose);
+        window.addKkiapayCloseListener(() => {
+          console.log("Payment widget closed");
+          setTimeout(() => setLoading(false), 500);
+        });
       }
 
     } catch (error) {
