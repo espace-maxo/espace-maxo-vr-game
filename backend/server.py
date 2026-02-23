@@ -32,6 +32,15 @@ KKIAPAY_SANDBOX = os.environ.get('KKIAPAY_SANDBOX', 'true').lower() == 'true'
 # WhatsApp number for Espace Maxo
 WHATSAPP_NUMBER = "22901414700"
 
+# Admin authentication configuration
+ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', '')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'espace-maxo-secret-key-change-in-production')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Security bearer
+security = HTTPBearer(auto_error=False)
+
 # Create the main app without a prefix
 app = FastAPI()
 
