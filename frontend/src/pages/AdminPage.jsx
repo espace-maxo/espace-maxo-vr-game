@@ -374,50 +374,48 @@ const AdminPage = () => {
                   </SelectContent>
                 </Select>
 
-          <Select value={filter.booking_status} onValueChange={(v) => setFilter(f => ({...f, booking_status: v}))}>
-            <SelectTrigger className="w-40 bg-surface-highlight border-white/20 text-white" data-testid="filter-booking">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent className="bg-dark-card border-white/20">
-              <SelectItem value="all" className="text-white">Tous</SelectItem>
-              <SelectItem value="active" className="text-white">Actif</SelectItem>
-              <SelectItem value="completed" className="text-white">Terminé</SelectItem>
-              <SelectItem value="cancelled" className="text-white">Annulé</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </section>
+                <Select value={filter.booking_status} onValueChange={(v) => setFilter(f => ({...f, booking_status: v}))}>
+                  <SelectTrigger className="w-40 bg-surface-highlight border-white/20 text-white" data-testid="filter-booking">
+                    <SelectValue placeholder="Statut" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-dark-card border-white/20">
+                    <SelectItem value="all" className="text-white">Tous</SelectItem>
+                    <SelectItem value="active" className="text-white">Actif</SelectItem>
+                    <SelectItem value="completed" className="text-white">Terminé</SelectItem>
+                    <SelectItem value="cancelled" className="text-white">Annulé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-      {/* Bookings Table */}
-      <section className="px-4 pb-12" data-testid="bookings-section">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="font-orbitron font-bold text-xl text-white mb-4">
-            Réservations ({bookings.length})
-          </h2>
-          
-          {loading ? (
-            <div className="text-center py-12">
-              <RefreshCw className="w-8 h-8 text-neon-blue animate-spin mx-auto" />
-            </div>
-          ) : bookings.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              Aucune réservation trouvée
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {bookings.map((booking) => (
-                <Card 
-                  key={booking.id} 
-                  className="bg-dark-card border-white/10 hover:border-neon-blue/30 transition-colors"
-                  data-testid={`booking-${booking.id}`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      {/* Customer Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Users className="w-4 h-4 text-neon-blue" />
-                          <span className="font-outfit font-semibold text-white">{booking.customer_name}</span>
+              {/* Bookings List */}
+              <div data-testid="bookings-section">
+                <h2 className="font-orbitron font-bold text-xl text-white mb-4">
+                  Réservations ({bookings.length})
+                </h2>
+                
+                {loading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-8 h-8 text-neon-blue animate-spin mx-auto" />
+                  </div>
+                ) : bookings.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    Aucune réservation trouvée
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {bookings.map((booking) => (
+                      <Card 
+                        key={booking.id} 
+                        className="bg-dark-card border-white/10 hover:border-neon-blue/30 transition-colors"
+                        data-testid={`booking-${booking.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            {/* Customer Info */}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Users className="w-4 h-4 text-neon-blue" />
+                                <span className="font-outfit font-semibold text-white">{booking.customer_name}</span>
                           {getStatusBadge(booking.payment_status)}
                           {getBookingStatusBadge(booking.booking_status)}
                         </div>
