@@ -912,6 +912,33 @@ async def get_payment_status(booking_id: str):
         "whatsapp_link": generate_whatsapp_link(booking) if booking.get("payment_status") == "paid" else None
     }
 
+# ============== WHATSAPP NOTIFICATION ==============
+
+CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
+ADMIN_WHATSAPP_NUMBER = "22901414700"  # Format: country code + number without spaces
+
+async def send_whatsapp_notification(message: str):
+    """Send WhatsApp notification via CallMeBot"""
+    if not CALLMEBOT_API_KEY:
+        logger.warning("CallMeBot API key not configured, skipping WhatsApp notification")
+        return False
+    
+    try:
+        encoded_message = quote(message)
+        url = f"https://api.callmebot.com/whatsapp.php?phone={ADMIN_WHATSAPP_NUMBER}&text={encoded_message}&apikey={CALLMEBOT_API_KEY}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10)
+            if response.status_code == 200:
+                logger.info(f"WhatsApp notification sent successfully")
+                return True
+            else:
+                logger.error(f"WhatsApp notification failed: {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp notification: {e}")
+        return False
+
 # ============== REVIEWS ROUTES ==============
 
 @api_router.post("/reviews", response_model=Review)
@@ -931,6 +958,20 @@ async def create_review(review_data: ReviewCreate):
     )
     
     await db.reviews.insert_one(review.model_dump())
+    
+    # Send WhatsApp notification to admin
+    stars = "⭐" * review_data.rating
+    notification_message = f"""🆕 *Nouvel avis reçu!*
+
+👤 *{review_data.customer_name}*
+{stars} ({review_data.rating}/5)
+
+💬 "{review_data.comment[:100]}{'...' if len(review_data.comment) > 100 else ''}"
+
+👉 Connectez-vous à l'admin pour approuver ou rejeter cet avis."""
+
+    await send_whatsapp_notification(notification_message)
+    
     return review
 
 @api_router.get("/reviews")
