@@ -224,51 +224,92 @@ const HomePage = () => {
             Des institutions prestigieuses nous font confiance pour leurs événements
           </p>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-items-center">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 items-center justify-items-center">
             {/* Loterie Nationale du Bénin */}
-            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
               <img
                 src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/f9d5eef6e1f7c38cd10d7bb1291152fcda2d8ef302d4198a3905ea8a085a66f6.png"
                 alt="Loterie Nationale du Bénin"
-                className="w-full h-full object-contain"
+                className="w-full h-3/4 object-contain"
               />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Loterie Nationale du Bénin</p>
             </div>
 
             {/* Médecins Sans Frontières */}
-            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
               <img
                 src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/dd3aba85b459aca24e5567bd6f566d195abdd4a6df53fe80cccee725b4a8ac5b.png"
                 alt="Médecins Sans Frontières Bénin"
-                className="w-full h-full object-contain"
+                className="w-full h-3/4 object-contain"
               />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Médecins Sans Frontières</p>
             </div>
 
             {/* Rotary Club Cotonou Doyen */}
-            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
               <img
                 src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/5ec256b6079a77011fc633cbf52661fc82436f2dcb63239366711e08ce058af0.png"
                 alt="Rotary Club Cotonou Doyen"
-                className="w-full h-full object-contain"
+                className="w-full h-3/4 object-contain"
               />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Rotary Club Cotonou Doyen</p>
             </div>
 
             {/* Émission Dis moi qui est la plus belle */}
-            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
               <img
                 src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/beaa4b480cbc0736a9f334d937944be77cf8b95616e741bb461bd274775ca415.png"
                 alt="Émission Dis moi qui est la plus belle"
-                className="w-full h-full object-contain"
+                className="w-full h-3/4 object-contain"
               />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">« Dis moi qui est la plus belle »</p>
+            </div>
+
+            {/* Client supplémentaire 1 */}
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/aa3ce9fe22ee8716b2e69c892cc73180de3848cbab4cf75a8016de51c49c9263.png"
+                alt="Entreprise partenaire"
+                className="w-full h-3/4 object-contain"
+              />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Banque Atlantique</p>
+            </div>
+
+            {/* Client supplémentaire 2 */}
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/d466aae8b9ee93fb1c1887bc72baca7b95d91c4bed7a51346292a6efdd31d0b0.png"
+                alt="Entreprise partenaire"
+                className="w-full h-3/4 object-contain"
+              />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Groupe Bénin</p>
+            </div>
+
+            {/* Client supplémentaire 3 */}
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/0770f9245a241e1271edd4e87983660aafddc4bf26a4f5b1d6485ff26e2eb768.png"
+                alt="Hôtel partenaire"
+                className="w-full h-3/4 object-contain"
+              />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Hôtel Azalaï</p>
+            </div>
+
+            {/* Client supplémentaire 4 */}
+            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/a2e039d266554c5c0e12f39777f54fc620022ff904f48187195713c977bcefa4.png"
+                alt="Institution partenaire"
+                className="w-full h-3/4 object-contain"
+              />
+              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Université d'Abomey-Calavi</p>
             </div>
           </div>
 
-          {/* Partner Names */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-center">
-            <p className="text-gray-400 text-sm font-outfit">Loterie Nationale du Bénin</p>
-            <p className="text-gray-400 text-sm font-outfit">Médecins Sans Frontières</p>
-            <p className="text-gray-400 text-sm font-outfit">Rotary Club Cotonou Doyen</p>
-            <p className="text-gray-400 text-sm font-outfit">« Dis moi qui est la plus belle »</p>
-          </div>
+          {/* Et plusieurs autres */}
+          <p className="text-center text-gray-500 font-outfit mt-8 text-lg">
+            Et plusieurs autres clients...
+          </p>
         </div>
       </section>
 
