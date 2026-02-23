@@ -3,13 +3,14 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format, addDays, startOfToday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2, Smartphone } from "lucide-react";
+import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2, Smartphone, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import LoyaltyCard from "@/components/LoyaltyCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -17,6 +18,8 @@ const BookingPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const preselectedGame = searchParams.get("game");
+  const [freeGamesAvailable, setFreeGamesAvailable] = useState(0);
+  const [useFreeGame, setUseFreeGame] = useState(false);
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
