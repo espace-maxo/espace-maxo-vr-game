@@ -860,6 +860,185 @@ async def reseed_menu(is_admin: bool = Depends(get_current_admin)):
     
     return {"message": "Menu et jeux mis à jour", "items_count": len(MENU_ITEMS), "games_count": len(GAMES)}
 
+# ============== LOYALTY PROGRAM ROUTES ==============
+
+POINTS_PER_GAME = 1  # 1 game = 1 point
+POINTS_FOR_FREE_GAME = 10  # 10 points = 1 free game
+
+@api_router.get("/loyalty/{phone}")
+async def get_loyalty_status(phone: str):
+    """Get loyalty account status by phone number"""
+    # Clean phone number
+    clean_phone = phone.replace(" ", "").replace("+229", "")
+    
+    account = await db.loyalty_accounts.find_one({"phone": clean_phone}, {"_id": 0})
+    
+    if not account:
+        return {
+            "exists": False,
+            "phone": clean_phone,
+            "total_points": 0,
+            "available_points": 0,
+            "free_games_available": 0,
+            "games_until_free": POINTS_FOR_FREE_GAME,
+            "message": "Aucun compte fidélité trouvé. Il sera créé automatiquement lors de votre première réservation payée."
+        }
+    
+    free_games_available = account.get("free_games_earned", 0) - account.get("free_games_used", 0)
+    games_until_free = POINTS_FOR_FREE_GAME - (account.get("available_points", 0) % POINTS_FOR_FREE_GAME)
+    if games_until_free == POINTS_FOR_FREE_GAME and account.get("available_points", 0) > 0:
+        games_until_free = 0
+    
+    return {
+        "exists": True,
+        "phone": clean_phone,
+        "customer_name": account.get("customer_name", ""),
+        "total_points": account.get("total_points", 0),
+        "available_points": account.get("available_points", 0),
+        "redeemed_points": account.get("redeemed_points", 0),
+        "total_games_played": account.get("total_games_played", 0),
+        "free_games_earned": account.get("free_games_earned", 0),
+        "free_games_used": account.get("free_games_used", 0),
+        "free_games_available": free_games_available,
+        "games_until_free": games_until_free,
+        "points_per_game": POINTS_PER_GAME,
+        "points_for_free_game": POINTS_FOR_FREE_GAME
+    }
+
+@api_router.post("/loyalty/add-points")
+async def add_loyalty_points(booking_id: str):
+    """Add loyalty points after successful payment (called automatically)"""
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
+    
+    if booking.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="La réservation n'est pas payée")
+    
+    # Check if points already added for this booking
+    if booking.get("loyalty_points_added"):
+        return {"message": "Points déjà ajoutés pour cette réservation"}
+    
+    phone = booking["customer_phone"].replace(" ", "").replace("+229", "")
+    customer_name = booking["customer_name"]
+    total_games = booking["number_of_players"] * booking["number_of_games"]
+    points_earned = total_games * POINTS_PER_GAME
+    
+    # Find or create loyalty account
+    account = await db.loyalty_accounts.find_one({"phone": phone})
+    
+    if account:
+        new_total = account.get("total_points", 0) + points_earned
+        new_available = account.get("available_points", 0) + points_earned
+        new_games_played = account.get("total_games_played", 0) + total_games
+        
+        # Calculate free games earned
+        old_free_games = account.get("available_points", 0) // POINTS_FOR_FREE_GAME
+        new_free_games = new_available // POINTS_FOR_FREE_GAME
+        additional_free_games = new_free_games - old_free_games
+        
+        await db.loyalty_accounts.update_one(
+            {"phone": phone},
+            {"$set": {
+                "customer_name": customer_name,
+                "total_points": new_total,
+                "available_points": new_available,
+                "total_games_played": new_games_played,
+                "free_games_earned": account.get("free_games_earned", 0) + additional_free_games,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # Create new account
+        free_games = points_earned // POINTS_FOR_FREE_GAME
+        new_account = LoyaltyAccount(
+            phone=phone,
+            customer_name=customer_name,
+            total_points=points_earned,
+            available_points=points_earned,
+            total_games_played=total_games,
+            free_games_earned=free_games
+        )
+        await db.loyalty_accounts.insert_one(new_account.model_dump())
+    
+    # Mark booking as loyalty points added
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"loyalty_points_added": True, "loyalty_points_earned": points_earned}}
+    )
+    
+    # Get updated account
+    updated_account = await db.loyalty_accounts.find_one({"phone": phone}, {"_id": 0})
+    free_games_available = updated_account.get("free_games_earned", 0) - updated_account.get("free_games_used", 0)
+    
+    return {
+        "message": f"🎉 {points_earned} point(s) fidélité ajouté(s) !",
+        "points_earned": points_earned,
+        "total_points": updated_account.get("total_points", 0),
+        "available_points": updated_account.get("available_points", 0),
+        "free_games_available": free_games_available,
+        "games_until_free": POINTS_FOR_FREE_GAME - (updated_account.get("available_points", 0) % POINTS_FOR_FREE_GAME)
+    }
+
+@api_router.post("/loyalty/redeem")
+async def redeem_free_game(redemption: LoyaltyRedemption):
+    """Redeem points for a free game"""
+    phone = redemption.phone.replace(" ", "").replace("+229", "")
+    
+    account = await db.loyalty_accounts.find_one({"phone": phone})
+    if not account:
+        raise HTTPException(status_code=404, detail="Aucun compte fidélité trouvé")
+    
+    free_games_available = account.get("free_games_earned", 0) - account.get("free_games_used", 0)
+    
+    if free_games_available < redemption.free_games_to_use:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Pas assez de parties gratuites. Disponibles: {free_games_available}"
+        )
+    
+    # Update account
+    points_to_redeem = redemption.free_games_to_use * POINTS_FOR_FREE_GAME
+    await db.loyalty_accounts.update_one(
+        {"phone": phone},
+        {"$set": {
+            "free_games_used": account.get("free_games_used", 0) + redemption.free_games_to_use,
+            "redeemed_points": account.get("redeemed_points", 0) + points_to_redeem,
+            "available_points": account.get("available_points", 0) - points_to_redeem,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": f"🎁 {redemption.free_games_to_use} partie(s) gratuite(s) utilisée(s) !",
+        "free_games_redeemed": redemption.free_games_to_use,
+        "free_games_remaining": free_games_available - redemption.free_games_to_use
+    }
+
+@api_router.get("/admin/loyalty/accounts")
+async def get_all_loyalty_accounts(
+    limit: int = Query(50, ge=1, le=200),
+    skip: int = Query(0, ge=0),
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Get all loyalty accounts (admin only)"""
+    accounts = await db.loyalty_accounts.find({}, {"_id": 0}).sort("total_points", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.loyalty_accounts.count_documents({})
+    
+    # Calculate stats
+    total_points_issued = sum(a.get("total_points", 0) for a in accounts)
+    total_free_games = sum(a.get("free_games_earned", 0) for a in accounts)
+    
+    return {
+        "accounts": accounts,
+        "total": total,
+        "stats": {
+            "total_accounts": total,
+            "total_points_issued": total_points_issued,
+            "total_free_games_earned": total_free_games
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
