@@ -39,8 +39,11 @@ const AdminPage = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [loyaltyAccounts, setLoyaltyAccounts] = useState([]);
+  const [loyaltyStats, setLoyaltyStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
+  const [activeTab, setActiveTab] = useState("bookings");
 
   // Check authentication
   useEffect(() => {
@@ -68,7 +71,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsRes, bookingsRes] = await Promise.all([
+      const [statsRes, bookingsRes, loyaltyRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, {
           headers,
@@ -77,7 +80,8 @@ const AdminPage = () => {
             booking_status: filter.booking_status !== "all" ? filter.booking_status : undefined,
             limit: 100
           }
-        })
+        }),
+        axios.get(`${API}/admin/loyalty/accounts`, { headers }).catch(() => ({ data: { accounts: [], stats: {} } }))
       ]);
       setStats(statsRes.data);
       setBookings(bookingsRes.data.bookings);
