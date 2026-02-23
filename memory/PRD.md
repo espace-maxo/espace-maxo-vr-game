@@ -6,10 +6,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Réserver des parties de jeux VR 360° et Simulateur Course
 - Prix: 1.500 FCFA/partie, 500 FCFA frais de réservation
 - Paiement Mobile Money (MTN, Moov, Celtiis) via Kkiapay
-- Dashboard admin pour gestion des réservations
+- Dashboard admin sécurisé pour gestion des réservations
 - Notifications WhatsApp automatiques
 
-## What's Been Implemented (Février 2026)
+## What's Been Implemented
 
 ### Phase 1 - MVP Initial
 - [x] Menu complet avec catégories et vraies photos
@@ -26,7 +26,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 ### Phase 3 - Paiements Mobile Money
 - [x] Intégration Kkiapay (MTN MoMo, Moov Money, Celtiis)
 - [x] Widget de paiement mobile money
-- [x] Mode sandbox activé (en attente activation compte)
+- [x] Clés de production configurées
 - [x] Numéro WhatsApp unique: 01 41 47 00 00
 
 ### Phase 4 - Galerie & Mises à jour (20 Feb 2026)
@@ -37,6 +37,18 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Section témoignages sur la page d'accueil (3 avis + statistiques)
 - [x] Intégration Google Maps (section "Trouvez-nous à Cotonou")
 - [x] Boutons "Itinéraire" et "WhatsApp" rapides
+- [x] Blocage des créneaux horaires passés sur la page de réservation
+
+### Phase 5 - Sécurité & Validation (23 Feb 2026)
+- [x] **Authentification admin sécurisée via JWT** 
+  - Mot de passe hashé avec bcrypt stocké en backend (.env)
+  - Génération de tokens JWT avec expiration 24h
+  - Protection de toutes les routes admin avec middleware
+  - Déconnexion avec suppression du token
+- [x] **Validation du format téléphone**
+  - Format requis: 01XXXXXXXX (10 chiffres commençant par 01)
+  - Indicateur visuel de validation (vert=valide, jaune=invalide)
+  - Blocage du bouton "Continuer" si format invalide
 
 ### APIs Backend
 - GET /api/menu - Liste des plats et combos
@@ -47,27 +59,39 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - GET /api/payment/config - Config Kkiapay
 - POST /api/payment/verify - Vérifier paiement
 - GET /api/payment/status/{id} - Statut paiement
-- GET /api/admin/stats - Statistiques dashboard
-- GET /api/admin/bookings - Toutes les réservations
+- **POST /api/auth/admin-login - Authentification admin (retourne JWT)**
+- **GET /api/auth/verify - Vérifier validité du token**
+- GET /api/admin/stats - Statistiques dashboard (protégé JWT)
+- GET /api/admin/bookings - Toutes les réservations (protégé JWT)
+- PUT /api/admin/bookings/{id} - Modifier réservation (protégé JWT)
+- DELETE /api/admin/bookings/{id} - Annuler réservation (protégé JWT)
 
-## Configuration Kkiapay
-Variables d'environnement à remplir après activation:
-- KKIAPAY_PUBLIC_KEY
-- KKIAPAY_PRIVATE_KEY
-- KKIAPAY_SECRET
-- KKIAPAY_SANDBOX=false (passer à false en production)
+## Configuration
+
+### Kkiapay (Production)
+- KKIAPAY_PUBLIC_KEY: Configuré
+- KKIAPAY_PRIVATE_KEY: Configuré
+- KKIAPAY_SECRET: Configuré
+- KKIAPAY_SANDBOX: false
+
+### Admin Authentication
+- ADMIN_PASSWORD_HASH: bcrypt hash du mot de passe
+- JWT_SECRET_KEY: Clé secrète pour tokens JWT
+- Password: Nikeland2016
 
 ## Prioritized Backlog
 
-### P0 (Déployé) ✅
-- MVP + Admin Dashboard + Kkiapay (sandbox)
+### P0 (Completed) ✅
+- [x] MVP + Admin Dashboard + Kkiapay production
+- [x] Sécurité admin (JWT backend)
+- [x] Format téléphone 10 chiffres
 
-### P1 (Quand compte Kkiapay activé)
-- [ ] Ajouter les clés API Kkiapay de production
-- [ ] Passer KKIAPAY_SANDBOX à false
-- [ ] Tester un vrai paiement
+### P1 (Blocked - User Action Required)
+- [ ] Domaine personnalisé (www.espacemaxo.com) - DNS à configurer
+- [ ] Déploiement production - Cliquer sur "Deploy"
 
-### P2 (Futur)
+### P2 (Future)
+- [ ] Section "À propos" de Espace Maxo
 - [ ] Notifications SMS automatiques
 - [ ] Programme fidélité
 - [ ] Multi-langue
