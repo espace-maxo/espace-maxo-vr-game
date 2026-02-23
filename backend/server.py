@@ -223,7 +223,7 @@ MENU_ITEMS = [
         "description": "Viande de boeuf grillée façon tchoukouya avec riz parfumé et sauce",
         "price": 3500,
         "category": "Plats",
-        "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/zkga8jv7_tchoukouya.JPG",
+        "image_url": "https://customer-assets.emergentagent.com/job_b1e2bc04-e6b7-4a48-a3cc-c08b10f16c04/artifacts/29w643ay_00e90209-d838-44b8-9eae-d41b695f844f%202.JPG",
         "is_available": True
     },
     {
