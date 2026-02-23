@@ -213,6 +213,65 @@ const HomePage = () => {
         </div>
       </section>
 
+      {/* Partners Section - Ils nous ont fait confiance */}
+      <section className="py-16 px-4 bg-dark-bg" data-testid="partners-section">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="font-orbitron font-bold text-2xl md:text-4xl text-center mb-4">
+            <span className="text-white">NOUS ONT FAIT</span>{" "}
+            <span className="text-neon-blue">CONFIANCE</span>
+          </h2>
+          <p className="text-gray-400 text-center font-outfit text-lg mb-12 max-w-2xl mx-auto">
+            Des institutions prestigieuses nous font confiance pour leurs événements
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-items-center">
+            {/* Loterie Nationale du Bénin */}
+            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/f9d5eef6e1f7c38cd10d7bb1291152fcda2d8ef302d4198a3905ea8a085a66f6.png"
+                alt="Loterie Nationale du Bénin"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Médecins Sans Frontières */}
+            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/dd3aba85b459aca24e5567bd6f566d195abdd4a6df53fe80cccee725b4a8ac5b.png"
+                alt="Médecins Sans Frontières Bénin"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Rotary Club Cotonou Doyen */}
+            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/5ec256b6079a77011fc633cbf52661fc82436f2dcb63239366711e08ce058af0.png"
+                alt="Rotary Club Cotonou Doyen"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Émission Dis moi qui est la plus belle */}
+            <div className="bg-white rounded-xl p-6 w-full max-w-[200px] aspect-square flex items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
+              <img
+                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/beaa4b480cbc0736a9f334d937944be77cf8b95616e741bb461bd274775ca415.png"
+                alt="Émission Dis moi qui est la plus belle"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+
+          {/* Partner Names */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-center">
+            <p className="text-gray-400 text-sm font-outfit">Loterie Nationale du Bénin</p>
+            <p className="text-gray-400 text-sm font-outfit">Médecins Sans Frontières</p>
+            <p className="text-gray-400 text-sm font-outfit">Rotary Club Cotonou Doyen</p>
+            <p className="text-gray-400 text-sm font-outfit">« Dis moi qui est la plus belle »</p>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials Section */}
       <TestimonialsSection />
 
