@@ -296,27 +296,83 @@ const AdminPage = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Loyalty Stats */}
+          {loyaltyStats && loyaltyStats.total_accounts > 0 && (
+            <div className="max-w-7xl mx-auto mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-r from-food-gold/10 to-neon-purple/10 border-food-gold/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-outfit text-gray-400 flex items-center gap-2">
+                    <Star className="w-4 h-4 text-food-gold" />
+                    Membres Fidélité
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-rajdhani font-bold text-food-gold">{loyaltyStats.total_accounts}</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-r from-food-gold/10 to-neon-purple/10 border-food-gold/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-outfit text-gray-400 flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-neon-purple" />
+                    Points Distribués
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-rajdhani font-bold text-neon-purple">{loyaltyStats.total_points_issued}</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-r from-food-gold/10 to-neon-purple/10 border-food-gold/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-outfit text-gray-400 flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-green-400" />
+                    Parties Gratuites
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-rajdhani font-bold text-green-400">{loyaltyStats.total_free_games_earned}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </section>
       )}
 
-      {/* Filters */}
-      <section className="px-4 pb-4" data-testid="filters-section">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-4 bg-dark-card p-4 rounded-lg border border-white/10">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-400 font-outfit text-sm">Filtres:</span>
-          </div>
-          
-          <Select value={filter.status} onValueChange={(v) => setFilter(f => ({...f, status: v}))}>
-            <SelectTrigger className="w-40 bg-surface-highlight border-white/20 text-white" data-testid="filter-payment">
-              <SelectValue placeholder="Paiement" />
-            </SelectTrigger>
-            <SelectContent className="bg-dark-card border-white/20">
-              <SelectItem value="all" className="text-white">Tous</SelectItem>
-              <SelectItem value="paid" className="text-white">Payé</SelectItem>
-              <SelectItem value="pending" className="text-white">En attente</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Tabs for Bookings and Loyalty */}
+      <section className="px-4 pb-4">
+        <div className="max-w-7xl mx-auto">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="bg-dark-card border border-white/10 mb-4">
+              <TabsTrigger value="bookings" className="data-[state=active]:bg-neon-blue data-[state=active]:text-black font-rajdhani font-bold">
+                <Calendar className="w-4 h-4 mr-2" />
+                Réservations
+              </TabsTrigger>
+              <TabsTrigger value="loyalty" className="data-[state=active]:bg-food-gold data-[state=active]:text-black font-rajdhani font-bold">
+                <Star className="w-4 h-4 mr-2" />
+                Fidélité
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bookings">
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-4 bg-dark-card p-4 rounded-lg border border-white/10 mb-4" data-testid="filters-section">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-400 font-outfit text-sm">Filtres:</span>
+                </div>
+                
+                <Select value={filter.status} onValueChange={(v) => setFilter(f => ({...f, status: v}))}>
+                  <SelectTrigger className="w-40 bg-surface-highlight border-white/20 text-white" data-testid="filter-payment">
+                    <SelectValue placeholder="Paiement" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-dark-card border-white/20">
+                    <SelectItem value="all" className="text-white">Tous</SelectItem>
+                    <SelectItem value="paid" className="text-white">Payé</SelectItem>
+                    <SelectItem value="pending" className="text-white">En attente</SelectItem>
+                  </SelectContent>
+                </Select>
 
           <Select value={filter.booking_status} onValueChange={(v) => setFilter(f => ({...f, booking_status: v}))}>
             <SelectTrigger className="w-40 bg-surface-highlight border-white/20 text-white" data-testid="filter-booking">
