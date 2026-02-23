@@ -145,6 +145,25 @@ class AdminLoginResponse(BaseModel):
     token: str
     expires_at: str
 
+# Loyalty Program Models
+class LoyaltyAccount(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    phone: str
+    customer_name: str
+    total_points: int = 0
+    redeemed_points: int = 0
+    available_points: int = 0
+    total_games_played: int = 0
+    free_games_earned: int = 0
+    free_games_used: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class LoyaltyRedemption(BaseModel):
+    phone: str
+    free_games_to_use: int = 1
+
 # ============== SEED DATA ==============
 
 MENU_ITEMS = [
