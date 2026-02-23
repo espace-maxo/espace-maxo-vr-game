@@ -635,7 +635,7 @@ async def get_all_bookings(
     }
 
 @api_router.get("/admin/stats")
-async def get_admin_stats():
+async def get_admin_stats(is_admin: bool = Depends(get_current_admin)):
     """Get statistics for admin dashboard"""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
