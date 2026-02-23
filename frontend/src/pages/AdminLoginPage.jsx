@@ -4,8 +4,9 @@ import { Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import axios from "axios";
 
-const ADMIN_PASSWORD = "Nikeland2016";
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const AdminLoginPage = () => {
   const [password, setPassword] = useState("");
@@ -13,20 +14,32 @@ const AdminLoginPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    setTimeout(() => {
-      if (password === ADMIN_PASSWORD) {
-        sessionStorage.setItem("adminAuth", "true");
+    try {
+      const response = await axios.post(`${API}/auth/admin-login`, {
+        password: password
+      });
+
+      if (response.data.token) {
+        // Store the JWT token securely
+        localStorage.setItem("adminToken", response.data.token);
+        localStorage.setItem("adminTokenExpires", response.data.expires_at);
         toast.success("Connexion réussie !");
         navigate("/admin/dashboard");
-      } else {
-        toast.error("Mot de passe incorrect");
       }
+    } catch (error) {
+      console.error("Login error:", error);
+      if (error.response?.status === 401) {
+        toast.error("Mot de passe incorrect");
+      } else {
+        toast.error("Erreur de connexion. Veuillez réessayer.");
+      }
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   return (
