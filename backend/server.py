@@ -145,6 +145,24 @@ class AdminLoginResponse(BaseModel):
     token: str
     expires_at: str
 
+# Review Models
+class ReviewCreate(BaseModel):
+    customer_name: str
+    rating: int = Field(ge=1, le=5)
+    comment: str
+
+class Review(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_name: str
+    rating: int
+    comment: str
+    status: str = "pending"  # pending, approved, rejected
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ReviewUpdate(BaseModel):
+    status: str  # approved or rejected
+
 # Loyalty Program Models
 class LoyaltyAccount(BaseModel):
     model_config = ConfigDict(extra="ignore")
