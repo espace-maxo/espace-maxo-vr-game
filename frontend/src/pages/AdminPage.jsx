@@ -488,9 +488,87 @@ const AdminPage = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Loyalty Tab */}
+            <TabsContent value="loyalty">
+              <div data-testid="loyalty-section">
+                <h2 className="font-orbitron font-bold text-xl text-white mb-4 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-food-gold" />
+                  Membres Fidélité ({loyaltyAccounts.length})
+                </h2>
+                
+                {loading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-8 h-8 text-food-gold animate-spin mx-auto" />
+                  </div>
+                ) : loyaltyAccounts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Gift className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400 font-outfit">Aucun membre fidélité pour le moment</p>
+                    <p className="text-gray-500 font-outfit text-sm mt-2">
+                      Les clients reçoivent 1 point par partie jouée. 10 points = 1 partie gratuite!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {loyaltyAccounts.map((account) => {
+                      const freeGamesAvailable = (account.free_games_earned || 0) - (account.free_games_used || 0);
+                      return (
+                        <Card 
+                          key={account.id} 
+                          className="bg-dark-card border-white/10 hover:border-food-gold/30 transition-colors"
+                          data-testid={`loyalty-${account.id}`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Star className="w-4 h-4 text-food-gold" />
+                                  <span className="font-outfit font-semibold text-white">{account.customer_name}</span>
+                                  {freeGamesAvailable > 0 && (
+                                    <Badge className="bg-green-500 text-white">
+                                      <Gift className="w-3 h-3 mr-1" />
+                                      {freeGamesAvailable} gratuite(s)
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                                  <span className="flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    {account.phone}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Gamepad2 className="w-3 h-3" />
+                                    {account.total_games_played} parties
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-6">
+                                <div className="text-center">
+                                  <p className="text-2xl font-rajdhani font-bold text-food-gold">{account.available_points}</p>
+                                  <p className="text-xs text-gray-500">Points</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-2xl font-rajdhani font-bold text-green-400">{freeGamesAvailable}</p>
+                                  <p className="text-xs text-gray-500">Gratuites</p>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </section>
     </div>
