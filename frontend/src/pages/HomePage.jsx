@@ -224,7 +224,7 @@ const HomePage = () => {
             Des institutions prestigieuses nous font confiance pour leurs événements
           </p>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 items-center justify-items-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-center justify-items-center">
             {/* Loterie Nationale du Bénin */}
             <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
               <img
@@ -263,46 +263,6 @@ const HomePage = () => {
                 className="w-full h-3/4 object-contain"
               />
               <p className="text-gray-700 text-xs font-outfit mt-2 text-center">« Dis moi qui est la plus belle »</p>
-            </div>
-
-            {/* Client supplémentaire 1 */}
-            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
-              <img
-                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/aa3ce9fe22ee8716b2e69c892cc73180de3848cbab4cf75a8016de51c49c9263.png"
-                alt="Entreprise partenaire"
-                className="w-full h-3/4 object-contain"
-              />
-              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Banque Atlantique</p>
-            </div>
-
-            {/* Client supplémentaire 2 */}
-            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
-              <img
-                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/d466aae8b9ee93fb1c1887bc72baca7b95d91c4bed7a51346292a6efdd31d0b0.png"
-                alt="Entreprise partenaire"
-                className="w-full h-3/4 object-contain"
-              />
-              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Groupe Bénin</p>
-            </div>
-
-            {/* Client supplémentaire 3 */}
-            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
-              <img
-                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/0770f9245a241e1271edd4e87983660aafddc4bf26a4f5b1d6485ff26e2eb768.png"
-                alt="Hôtel partenaire"
-                className="w-full h-3/4 object-contain"
-              />
-              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Hôtel Azalaï</p>
-            </div>
-
-            {/* Client supplémentaire 4 */}
-            <div className="bg-white rounded-xl p-4 w-full max-w-[180px] aspect-square flex flex-col items-center justify-center hover:shadow-[0_0_30px_rgba(0,240,255,0.3)] transition-all">
-              <img
-                src="https://static.prod-images.emergentagent.com/jobs/ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/images/a2e039d266554c5c0e12f39777f54fc620022ff904f48187195713c977bcefa4.png"
-                alt="Institution partenaire"
-                className="w-full h-3/4 object-contain"
-              />
-              <p className="text-gray-700 text-xs font-outfit mt-2 text-center">Université d'Abomey-Calavi</p>
             </div>
           </div>
 
