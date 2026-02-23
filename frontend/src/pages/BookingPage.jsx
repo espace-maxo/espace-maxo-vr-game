@@ -244,7 +244,8 @@ const BookingPage = () => {
     }
   };
 
-  const canProceedToStep2 = formData.customerName && formData.customerPhone;
+  const isPhoneValid = formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01');
+  const canProceedToStep2 = formData.customerName && isPhoneValid;
   const canProceedToStep3 = formData.date && formData.timeSlot;
 
   return (
