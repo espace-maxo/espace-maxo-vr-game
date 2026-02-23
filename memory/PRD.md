@@ -9,6 +9,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Dashboard admin sécurisé pour gestion des réservations
 - Programme de fidélité automatique
 - Système d'avis clients avec validation admin
+- Notifications WhatsApp automatiques
 
 ## What's Been Implemented
 
@@ -31,24 +32,29 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Onglet Fidélité dans l'admin dashboard
 
 ### Phase 7 - Système d'Avis (23 Feb 2026) ✅
-- **Formulaire "Laissez votre avis"** sur la page /avis
-  - Champs: Nom, Note (étoiles), Commentaire
-  - Soumission avec validation
-- **Gestion admin des avis**
-  - Onglet "Avis" dans le dashboard admin
-  - Badge notification pour avis en attente
-  - Boutons Approuver / Rejeter / Supprimer
-  - Statistiques en temps réel
-- **Affichage public**
-  - Seuls les avis approuvés sont visibles
-  - Témoignages par défaut si aucun avis approuvé
+- Formulaire "Laissez votre avis" sur la page /avis
+- Gestion admin des avis (approuver/rejeter/supprimer)
+- Badge notification pour avis en attente
+- **Notification WhatsApp automatique** via CallMeBot
+  - Envoi instantané à chaque nouvel avis soumis
+  - Message formaté avec nom, note, commentaire
 
-### APIs Backend - Avis
-- POST /api/reviews - Soumettre un avis (status: pending)
-- GET /api/reviews - Récupérer les avis approuvés (public)
-- GET /api/admin/reviews - Tous les avis (protégé)
-- PUT /api/admin/reviews/{id} - Approuver/Rejeter (protégé)
-- DELETE /api/admin/reviews/{id} - Supprimer (protégé)
+## Configuration
+
+### CallMeBot WhatsApp
+- CALLMEBOT_API_KEY: Configuré
+- Numéro admin: 01 41 47 00 00
+
+### Kkiapay (Production)
+- KKIAPAY_PUBLIC_KEY: Configuré
+- KKIAPAY_PRIVATE_KEY: Configuré
+- KKIAPAY_SECRET: Configuré
+- KKIAPAY_SANDBOX: false
+
+### Admin Authentication
+- ADMIN_PASSWORD_HASH: bcrypt hash
+- JWT_SECRET_KEY: Configuré
+- Password: Nikeland2016
 
 ## Prioritized Backlog
 
@@ -57,6 +63,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Sécurité admin (JWT backend)
 - [x] Programme de fidélité
 - [x] Système d'avis avec validation
+- [x] Notifications WhatsApp pour nouveaux avis
 
 ### P1 (Blocked - User Action Required)
 - [ ] Domaine personnalisé (www.espacemaxo.com) - DNS à configurer
@@ -64,8 +71,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 
 ### P2 (Future)
 - [ ] Section "À propos" de Espace Maxo
-- [ ] Interface pour utiliser les parties gratuites lors de la réservation
-- [ ] Notifications SMS automatiques
+- [ ] Interface pour utiliser les parties gratuites
+- [ ] Notifications WhatsApp pour nouvelles réservations
 
 ## Contact
 - WhatsApp: +229 01 41 47 00 00
