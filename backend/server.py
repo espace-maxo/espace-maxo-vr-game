@@ -138,6 +138,13 @@ class CheckoutRequest(BaseModel):
     booking_id: str
     origin_url: str
 
+class AdminLoginRequest(BaseModel):
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    token: str
+    expires_at: str
+
 # ============== SEED DATA ==============
 
 MENU_ITEMS = [
