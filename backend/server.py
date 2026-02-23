@@ -829,7 +829,7 @@ async def get_payment_status(booking_id: str):
 
 # Reseed menu data
 @api_router.post("/admin/reseed-menu")
-async def reseed_menu():
+async def reseed_menu(is_admin: bool = Depends(get_current_admin)):
     """Reseed menu with updated items (admin only)"""
     await db.menu_items.delete_many({})
     for item in MENU_ITEMS:
