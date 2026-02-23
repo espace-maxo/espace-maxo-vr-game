@@ -436,18 +436,42 @@ async def get_game(game_id: str):
 async def get_available_slots(date: str):
     """Get available time slots for a date"""
     slots = []
+    
+    # Get current time in Benin timezone (UTC+1)
+    now = datetime.now(timezone.utc) + timedelta(hours=1)
+    current_date = now.strftime("%Y-%m-%d")
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    is_today = date == current_date
+    
     for hour in range(10, 22):
         for minute in [0, 30]:
             time_str = f"{hour:02d}:{minute:02d}"
+            
+            # Check if slot is in the past (only for today)
+            is_past = False
+            if is_today:
+                if hour < current_hour:
+                    is_past = True
+                elif hour == current_hour and minute <= current_minute:
+                    is_past = True
+            
+            # Check if slot is already booked
             booking = await db.bookings.find_one({
                 "date": date, 
                 "time_slot": time_str,
                 "payment_status": {"$in": ["completed", "paid"]},
                 "booking_status": {"$ne": "cancelled"}
             })
+            
+            # Slot is unavailable if it's booked OR if it's in the past
+            is_available = booking is None and not is_past
+            
             slots.append({
                 "time": time_str,
-                "available": booking is None
+                "available": is_available,
+                "is_past": is_past
             })
     return {"date": date, "slots": slots}
 
