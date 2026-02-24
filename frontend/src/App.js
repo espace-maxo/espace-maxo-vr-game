@@ -13,6 +13,7 @@ import AdminPage from "@/pages/AdminPage";
 import TestimonialsPage from "@/pages/TestimonialsPage";
 import LocationPage from "@/pages/LocationPage";
 import ReschedulePage from "@/pages/ReschedulePage";
+import WalletPage from "@/pages/WalletPage";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             <Route path="/avis" element={<TestimonialsPage />} />
             <Route path="/location" element={<LocationPage />} />
             <Route path="/reprogrammer" element={<ReschedulePage />} />
+            <Route path="/provision" element={<WalletPage />} />
           </Routes>
         </main>
         <Footer />
