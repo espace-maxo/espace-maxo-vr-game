@@ -12,6 +12,7 @@ import AdminLoginPage from "@/pages/AdminLoginPage";
 import AdminPage from "@/pages/AdminPage";
 import TestimonialsPage from "@/pages/TestimonialsPage";
 import LocationPage from "@/pages/LocationPage";
+import ReschedulePage from "@/pages/ReschedulePage";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
             <Route path="/admin/dashboard" element={<AdminPage />} />
             <Route path="/avis" element={<TestimonialsPage />} />
             <Route path="/location" element={<LocationPage />} />
+            <Route path="/reschedule/:bookingId" element={<ReschedulePage />} />
           </Routes>
         </main>
         <Footer />
