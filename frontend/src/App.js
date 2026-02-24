@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import HelpButton from "@/components/HelpButton";
 import HomePage from "@/pages/HomePage";
 import MenuPage from "@/pages/MenuPage";
 import GamesPage from "@/pages/GamesPage";
@@ -36,6 +37,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <HelpButton />
         <Toaster position="top-right" richColors />
       </BrowserRouter>
     </div>
