@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Wallet, Phone, User, Plus, History, CreditCard, Loader2, ArrowDownLeft, ArrowUpRight, Smartphone } from "lucide-react";
+import { Wallet, Phone, User, Plus, History, CreditCard, Loader2, ArrowDownLeft, ArrowUpRight, Smartphone, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,14 +10,17 @@ import { toast } from "sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const WalletPage = () => {
-  const [step, setStep] = useState(1); // 1: search, 2: wallet view
+  const [step, setStep] = useState(1); // 1: phone input, 2: OTP verification, 3: wallet view
   const [loading, setLoading] = useState(false);
   const [topupLoading, setTopupLoading] = useState(false);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [otp, setOtp] = useState("");
+  const [sessionToken, setSessionToken] = useState("");
   const [walletData, setWalletData] = useState(null);
   const [topupAmount, setTopupAmount] = useState("");
   const [paymentConfig, setPaymentConfig] = useState(null);
+  const [otpSent, setOtpSent] = useState(false);
 
   // Load payment config
   useEffect(() => {
@@ -44,35 +47,69 @@ const WalletPage = () => {
     loadKkiapayScript();
   }, []);
 
-  const searchWallet = async () => {
+  const sendOTP = async () => {
     if (!phone || phone.length < 10) {
-      toast.error("Veuillez entrer un numéro de téléphone valide");
+      toast.error("Veuillez entrer un numéro de téléphone valide (10 chiffres)");
       return;
     }
 
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/wallet/${phone}`);
+      const response = await axios.post(`${API}/wallet/send-otp`, { 
+        phone, 
+        name: name || undefined 
+      });
       
-      if (!response.data.exists) {
-        // Create wallet if doesn't exist
-        if (!name) {
-          toast.error("Veuillez entrer votre nom pour créer un portefeuille");
-          setLoading(false);
-          return;
-        }
-        await axios.post(`${API}/wallet/create`, { phone, name });
-        const newResponse = await axios.get(`${API}/wallet/${phone}`);
-        setWalletData(newResponse.data);
-        toast.success("Portefeuille créé avec succès!");
-      } else {
-        setWalletData(response.data);
-      }
+      setOtpSent(true);
       setStep(2);
+      toast.success("Code de vérification envoyé par WhatsApp!");
+      
+      // Show hint in development
+      if (response.data.hint) {
+        toast.info(response.data.hint, { duration: 10000 });
+      }
     } catch (error) {
-      toast.error("Erreur lors de la recherche du portefeuille");
+      toast.error(error.response?.data?.detail || "Erreur lors de l'envoi du code");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyOTP = async () => {
+    if (!otp || otp.length !== 6) {
+      toast.error("Veuillez entrer le code à 6 chiffres");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/wallet/verify-otp`, { 
+        phone, 
+        otp 
+      });
+      
+      setSessionToken(response.data.session_token);
+      setWalletData(response.data.wallet);
+      setStep(3);
+      toast.success("Vérification réussie!");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Code incorrect");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshWallet = async () => {
+    if (!sessionToken) return;
+    
+    try {
+      const response = await axios.get(`${API}/wallet/${phone}/secure?token=${sessionToken}`);
+      setWalletData(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        toast.error("Session expirée. Veuillez vous reconnecter.");
+        resetToStart();
+      }
     }
   };
 
@@ -86,8 +123,7 @@ const WalletPage = () => {
       });
       
       // Refresh wallet data
-      const response = await axios.get(`${API}/wallet/${phone}`);
-      setWalletData(response.data);
+      await refreshWallet();
       setTopupAmount("");
       toast.success(`Recharge de ${topupAmount} FCFA effectuée avec succès!`);
     } catch (error) {
@@ -141,6 +177,14 @@ const WalletPage = () => {
     }
   };
 
+  const resetToStart = () => {
+    setStep(1);
+    setOtp("");
+    setOtpSent(false);
+    setSessionToken("");
+    setWalletData(null);
+  };
+
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
   const predefinedAmounts = [1000, 2000, 5000, 10000, 20000];
@@ -161,8 +205,16 @@ const WalletPage = () => {
         </div>
       </section>
 
+      {/* Security Notice */}
+      <section className="py-4 px-4 bg-green-500/10 border-y border-green-500/30">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3 text-green-400">
+          <ShieldCheck className="w-5 h-5" />
+          <span className="font-outfit text-sm">Accès sécurisé par code WhatsApp</span>
+        </div>
+      </section>
+
       {/* Payment Methods */}
-      <section className="py-4 px-4 bg-dark-card border-y border-white/10">
+      <section className="py-4 px-4 bg-dark-card border-b border-white/10">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-6">
           <div className="flex items-center gap-2 text-food-gold">
             <Smartphone className="w-5 h-5" />
@@ -181,7 +233,8 @@ const WalletPage = () => {
 
       <section className="py-12 px-4">
         <div className="max-w-xl mx-auto">
-          {/* Step 1: Search/Create Wallet */}
+          
+          {/* Step 1: Phone Input */}
           {step === 1 && (
             <Card className="bg-dark-card border-white/10">
               <CardHeader>
@@ -191,6 +244,12 @@ const WalletPage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                  <p className="text-green-400 font-outfit text-sm">
+                    🔐 Un code de vérification sera envoyé sur votre WhatsApp pour sécuriser l'accès à votre provision.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="phone" className="text-gray-300 font-outfit">
                     Numéro de téléphone *
@@ -201,8 +260,9 @@ const WalletPage = () => {
                     placeholder="01 XX XX XX XX"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    className="bg-surface-highlight border-white/20 text-white"
+                    className="bg-surface-highlight border-white/20 text-white text-lg tracking-wider"
                   />
+                  <p className="text-gray-500 text-xs">Format: 10 chiffres commençant par 01</p>
                 </div>
 
                 <div className="space-y-2">
@@ -220,27 +280,95 @@ const WalletPage = () => {
                 </div>
 
                 <Button
-                  onClick={searchWallet}
+                  onClick={sendOTP}
                   disabled={loading || phone.length < 10}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-rajdhani font-bold uppercase py-6"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   ) : (
-                    <Wallet className="w-5 h-5 mr-2" />
+                    <KeyRound className="w-5 h-5 mr-2" />
                   )}
-                  Accéder à ma provision
+                  Recevoir le code par WhatsApp
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Step 2: Wallet View */}
-          {step === 2 && walletData && (
+          {/* Step 2: OTP Verification */}
+          {step === 2 && (
+            <Card className="bg-dark-card border-green-500/30">
+              <CardHeader>
+                <CardTitle className="font-orbitron text-lg text-green-500 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5" />
+                  Vérification du code
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-surface-highlight rounded-lg p-4 text-center">
+                  <p className="text-gray-400 font-outfit text-sm mb-1">Code envoyé au numéro</p>
+                  <p className="text-white font-rajdhani font-bold text-xl tracking-wider">{phone}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="otp" className="text-gray-300 font-outfit">
+                    Entrez le code à 6 chiffres
+                  </Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    placeholder="• • • • • •"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="bg-surface-highlight border-white/20 text-white text-center text-2xl tracking-[0.5em] font-mono"
+                    maxLength={6}
+                  />
+                </div>
+
+                <Button
+                  onClick={verifyOTP}
+                  disabled={loading || otp.length !== 6}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-rajdhani font-bold uppercase py-6"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 mr-2" />
+                  )}
+                  Vérifier le code
+                </Button>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={sendOTP}
+                    disabled={loading}
+                    className="flex-1 border-white/20 text-gray-400"
+                  >
+                    Renvoyer le code
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={resetToStart}
+                    className="flex-1 border-white/20 text-gray-400"
+                  >
+                    Changer de numéro
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 3: Wallet View */}
+          {step === 3 && walletData && (
             <div className="space-y-6">
               {/* Balance Card */}
               <Card className="bg-gradient-to-br from-green-900/30 to-green-600/10 border-green-500/30">
                 <CardContent className="p-6 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <ShieldCheck className="w-5 h-5 text-green-500" />
+                    <span className="text-green-400 font-outfit text-sm">Accès vérifié</span>
+                  </div>
                   <p className="text-gray-400 font-outfit mb-2">Solde disponible</p>
                   <p className="font-orbitron font-black text-4xl text-green-400">
                     {formatPrice(walletData.balance)} <span className="text-xl">FCFA</span>
@@ -352,16 +480,13 @@ const WalletPage = () => {
                 </Card>
               )}
 
-              {/* Back Button */}
+              {/* Logout Button */}
               <Button
                 variant="outline"
-                onClick={() => {
-                  setStep(1);
-                  setWalletData(null);
-                }}
+                onClick={resetToStart}
                 className="w-full border-white/20 text-gray-400"
               >
-                Changer de numéro
+                Se déconnecter
               </Button>
             </div>
           )}
