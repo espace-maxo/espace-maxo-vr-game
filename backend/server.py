@@ -880,6 +880,36 @@ async def get_wallet_secure(phone: str, token: str = Query(...)):
     
     wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
     
+    # Get loyalty points
+    loyalty = await db.loyalty_accounts.find_one({"phone_number": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    loyalty_points = loyalty.get("points", 0) if loyalty else 0
+    free_games = loyalty_points // 100
+    
+    if not wallet:
+        return {
+            "exists": False, 
+            "balance": 0, 
+            "phone": clean_phone,
+            "loyalty": {
+                "points": loyalty_points,
+                "free_games_available": free_games
+            }
+        }
+    
+    return {
+        "exists": True,
+        "balance": wallet.get("balance", 0),
+        "phone": wallet.get("phone"),
+        "name": wallet.get("name"),
+        "transactions": wallet.get("transactions", [])[-10:],
+        "loyalty": {
+            "points": loyalty_points,
+            "free_games_available": free_games
+        }
+    }
+    
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    
     if not wallet:
         return {"exists": False, "balance": 0, "phone": clean_phone}
     
