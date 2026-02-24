@@ -35,8 +35,14 @@ const BookingPage = () => {
     date: null,
     timeSlot: "",
     numberOfPlayers: 1,
-    numberOfGames: 1
+    numberOfGames: 1,
+    payFullAmount: false,
+    useWallet: false
   });
+  
+  // Wallet state
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletExists, setWalletExists] = useState(false);
 
   const today = startOfToday();
   const maxDate = addDays(today, 30);
