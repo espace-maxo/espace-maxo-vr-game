@@ -190,6 +190,7 @@ const WalletPage = () => {
     setOtpSent(false);
     setSessionToken("");
     setWalletData(null);
+    setLoyaltyData(null);
   };
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
