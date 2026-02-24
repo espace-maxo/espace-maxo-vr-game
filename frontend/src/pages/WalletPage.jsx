@@ -62,11 +62,15 @@ const WalletPage = () => {
       
       setOtpSent(true);
       setStep(2);
-      toast.success("Code de vérification envoyé par WhatsApp!");
       
-      // Show hint in development
-      if (response.data.hint) {
-        toast.info(response.data.hint, { duration: 10000 });
+      // Si le code est retourné (WhatsApp indisponible), l'afficher
+      if (response.data.otp_code) {
+        toast.success(`Votre code de vérification: ${response.data.otp_code}`, { 
+          duration: 30000,
+          description: response.data.note || "Entrez ce code ci-dessous"
+        });
+      } else {
+        toast.success("Code de vérification envoyé par WhatsApp!");
       }
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de l'envoi du code");
