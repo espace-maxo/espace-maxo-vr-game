@@ -18,6 +18,7 @@ const WalletPage = () => {
   const [otp, setOtp] = useState("");
   const [sessionToken, setSessionToken] = useState("");
   const [walletData, setWalletData] = useState(null);
+  const [loyaltyData, setLoyaltyData] = useState(null);
   const [topupAmount, setTopupAmount] = useState("");
   const [paymentConfig, setPaymentConfig] = useState(null);
   const [otpSent, setOtpSent] = useState(false);
