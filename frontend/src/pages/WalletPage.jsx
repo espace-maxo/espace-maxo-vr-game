@@ -95,6 +95,7 @@ const WalletPage = () => {
       
       setSessionToken(response.data.session_token);
       setWalletData(response.data.wallet);
+      setLoyaltyData(response.data.loyalty);
       setStep(3);
       toast.success("Vérification réussie!");
     } catch (error) {
