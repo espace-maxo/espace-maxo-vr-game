@@ -206,10 +206,43 @@ const BookingPage = () => {
     const cleanPhone = formData.customerPhone.replace(/\s/g, '').replace(/^\+229/, '');
     console.log("Clean phone:", cleanPhone);
 
+    // Calculate the amount to pay
+    const { amountToPay, walletUsed } = calculateTotal();
+    
+    // If wallet covers everything, skip Kkiapay
+    if (amountToPay === 0 && walletUsed > 0) {
+      // Process wallet payment directly
+      try {
+        // Use wallet balance
+        await axios.post(`${API}/wallet/use`, {
+          phone: cleanPhone,
+          amount: walletUsed,
+          service_type: "games",
+          description: `Réservation ${formData.gameType === "VR_360" ? "VR 360°" : "Simulateur"} - ${formData.date ? format(formData.date, "dd/MM/yyyy") : ""}`
+        });
+        
+        // Mark booking as paid
+        await axios.post(`${API}/payment/verify`, {
+          transaction_id: `WALLET-${Date.now()}`,
+          booking_id: bookingId,
+          wallet_payment: true,
+          wallet_amount: walletUsed
+        });
+        
+        toast.success("Paiement par provision effectué!");
+        navigate(`/booking/confirmation?booking_id=${bookingId}`);
+      } catch (error) {
+        console.error("Wallet payment error:", error);
+        toast.error("Erreur lors du paiement par provision");
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
-      // Open the Kkiapay widget
+      // Open the Kkiapay widget with calculated amount
       window.openKkiapayWidget({
-        amount: 500,
+        amount: amountToPay,
         api_key: paymentConfig.public_key,
         sandbox: paymentConfig.sandbox || false,
         phone: cleanPhone,
@@ -219,7 +252,7 @@ const BookingPage = () => {
         theme: "#00f0ff"
       });
 
-      console.log("Kkiapay widget opened");
+      console.log("Kkiapay widget opened with amount:", amountToPay);
 
       // Set up success listener
       if (typeof window.addSuccessListener === "function") {
