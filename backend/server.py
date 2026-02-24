@@ -710,6 +710,142 @@ def check_reschedule_fee_required(booking: dict) -> tuple:
         logger.error(f"Error checking reschedule fee: {e}")
         return False, 0, None
 
+@api_router.post("/bookings/find-for-reschedule")
+async def find_booking_for_reschedule(request_data: FindBookingRequest):
+    """Find a booking by phone and name for rescheduling"""
+    # Clean phone number
+    phone = request_data.phone.replace(" ", "").replace("+229", "")
+    name = request_data.name.strip()
+    
+    # Search for booking with exact phone and name (case insensitive)
+    booking = await db.bookings.find_one({
+        "customer_phone": {"$regex": f".*{phone}$", "$options": "i"},
+        "customer_name": {"$regex": f"^{name}$", "$options": "i"},
+        "payment_status": "paid",
+        "booking_status": "active",
+        "has_been_rescheduled": {"$ne": True}
+    }, {"_id": 0})
+    
+    if not booking:
+        # Try to find any booking to give more specific error
+        any_booking = await db.bookings.find_one({
+            "customer_phone": {"$regex": f".*{phone}$", "$options": "i"},
+            "customer_name": {"$regex": f"^{name}$", "$options": "i"}
+        })
+        
+        if any_booking:
+            if any_booking.get("payment_status") != "paid":
+                raise HTTPException(status_code=400, detail="Cette réservation n'est pas encore payée")
+            if any_booking.get("booking_status") == "cancelled":
+                raise HTTPException(status_code=400, detail="Cette réservation a été annulée")
+            if any_booking.get("booking_status") == "completed":
+                raise HTTPException(status_code=400, detail="Cette réservation est déjà terminée")
+            if any_booking.get("has_been_rescheduled"):
+                raise HTTPException(status_code=400, detail="Cette réservation a déjà été reprogrammée une fois. Les frais de réservation ne sont pas remboursables.")
+        
+        raise HTTPException(status_code=404, detail="Aucune réservation trouvée avec ce nom et numéro de téléphone")
+    
+    fee_required, fee_amount, minutes_until = check_reschedule_fee_required(booking)
+    
+    return {
+        "booking": {
+            "id": booking["id"],
+            "customer_name": booking["customer_name"],
+            "customer_phone": booking["customer_phone"],
+            "game_type": booking["game_type"],
+            "date": booking["date"],
+            "time_slot": booking["time_slot"],
+            "number_of_players": booking["number_of_players"],
+            "number_of_games": booking["number_of_games"]
+        },
+        "can_reschedule": True,
+        "fee_required": fee_required,
+        "fee_amount": fee_amount,
+        "minutes_until_session": minutes_until,
+        "warning_message": "⚠️ Attention: Vous ne pouvez reprogrammer qu'une seule fois. Après cette reprogrammation, les frais de réservation ne seront pas remboursables." if not fee_required else "⚠️ Attention: La session commence dans moins de 15 minutes. Des frais de 500 FCFA seront appliqués. Vous ne pouvez reprogrammer qu'une seule fois."
+    }
+
+@api_router.post("/bookings/{booking_id}/reschedule-by-client")
+async def reschedule_booking_by_phone_name(
+    booking_id: str, 
+    reschedule_data: RescheduleByClientRequest
+):
+    """Client reschedules their booking using phone and name verification"""
+    # Clean phone number
+    phone = reschedule_data.phone.replace(" ", "").replace("+229", "")
+    name = reschedule_data.name.strip()
+    
+    booking = await db.bookings.find_one({"id": booking_id})
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
+    
+    # Verify phone and name match
+    booking_phone = booking.get("customer_phone", "").replace(" ", "").replace("+229", "")
+    if not booking_phone.endswith(phone) or booking.get("customer_name", "").lower() != name.lower():
+        raise HTTPException(status_code=403, detail="Les informations ne correspondent pas à cette réservation")
+    
+    if booking.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Seules les réservations payées peuvent être reprogrammées")
+    
+    if booking.get("booking_status") in ["cancelled", "completed"]:
+        raise HTTPException(status_code=400, detail="Cette réservation ne peut plus être modifiée")
+    
+    if booking.get("has_been_rescheduled"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Cette réservation a déjà été reprogrammée. Les frais de réservation ne sont pas remboursables."
+        )
+    
+    # Check if new slot is available
+    existing = await db.bookings.find_one({
+        "date": reschedule_data.new_date,
+        "time_slot": reschedule_data.new_time_slot,
+        "payment_status": {"$in": ["completed", "paid"]},
+        "booking_status": {"$ne": "cancelled"},
+        "id": {"$ne": booking_id}
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Ce créneau est déjà réservé")
+    
+    fee_required, fee_amount, _ = check_reschedule_fee_required(booking)
+    
+    # Update booking
+    update_data = {
+        "original_date": booking["date"],
+        "original_time_slot": booking["time_slot"],
+        "date": reschedule_data.new_date,
+        "time_slot": reschedule_data.new_time_slot,
+        "has_been_rescheduled": True,
+        "rescheduled_at": datetime.now(timezone.utc).isoformat(),
+        "reschedule_fee_paid": fee_amount if fee_required else 0,
+        "rescheduled_by": "client"
+    }
+    
+    await db.bookings.update_one({"id": booking_id}, {"$set": update_data})
+    
+    # Send WhatsApp notification to admin
+    game_type_label = "VR 360°" if booking.get("game_type") == "VR_360" else "Simulateur"
+    admin_notification = (
+        f"📅 REPROGRAMMATION CLIENT\n\n"
+        f"👤 {booking['customer_name']}\n"
+        f"📱 {booking['customer_phone']}\n"
+        f"🎯 {game_type_label}\n\n"
+        f"❌ Ancienne date: {booking['date']} à {booking['time_slot']}\n"
+        f"✅ Nouvelle date: {reschedule_data.new_date} à {reschedule_data.new_time_slot}\n"
+        f"{'💰 Frais: 500 FCFA' if fee_required else '✨ Gratuit (> 15 min avant)'}"
+    )
+    await send_whatsapp_notification(admin_notification)
+    
+    return {
+        "status": "success",
+        "message": "Réservation reprogrammée avec succès",
+        "fee_charged": fee_amount if fee_required else 0,
+        "new_date": reschedule_data.new_date,
+        "new_time_slot": reschedule_data.new_time_slot,
+        "warning": "⚠️ Cette réservation ne peut plus être reprogrammée. Les frais de réservation ne sont pas remboursables."
+    }
+
 @api_router.get("/bookings/{booking_id}/reschedule-info")
 async def get_reschedule_info(booking_id: str, token: str = Query(...)):
     """Get booking info for rescheduling (client access via token)"""
