@@ -183,6 +183,24 @@ const AdminPage = () => {
     }
   };
 
+  const updateLocationStatus = async (requestId, newStatus) => {
+    try {
+      const headers = getAuthHeaders();
+      await axios.put(`${API}/admin/location-requests/${requestId}?status=${newStatus}`, {}, { headers });
+      toast.success(
+        newStatus === "confirmed" ? "Demande confirmée !" : 
+        newStatus === "rejected" ? "Demande rejetée" : "Statut mis à jour"
+      );
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la mise à jour");
+      }
+    }
+  };
+
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
   const getStatusBadge = (status) => {
