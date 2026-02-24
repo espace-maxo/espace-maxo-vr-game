@@ -410,6 +410,15 @@ const AdminPage = () => {
                 <Calendar className="w-4 h-4 mr-2" />
                 Réservations
               </TabsTrigger>
+              <TabsTrigger value="location" className="data-[state=active]:bg-neon-red data-[state=active]:text-white font-rajdhani font-bold relative">
+                <PartyPopper className="w-4 h-4 mr-2" />
+                Location
+                {locationStats && locationStats.pending > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-food-gold text-black text-xs rounded-full flex items-center justify-center">
+                    {locationStats.pending}
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="loyalty" className="data-[state=active]:bg-food-gold data-[state=active]:text-black font-rajdhani font-bold">
                 <Star className="w-4 h-4 mr-2" />
                 Fidélité
