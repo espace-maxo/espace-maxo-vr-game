@@ -52,6 +52,13 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
   const [activeTab, setActiveTab] = useState("bookings");
+  
+  // Reschedule modal state
+  const [rescheduleModal, setRescheduleModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   // Check authentication
   useEffect(() => {
