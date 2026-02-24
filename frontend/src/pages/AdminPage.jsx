@@ -59,6 +59,11 @@ const AdminPage = () => {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
+  
+  // Delete modal state
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Check authentication
   useEffect(() => {
