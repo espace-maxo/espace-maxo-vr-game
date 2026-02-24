@@ -30,7 +30,7 @@ function App() {
             <Route path="/admin/dashboard" element={<AdminPage />} />
             <Route path="/avis" element={<TestimonialsPage />} />
             <Route path="/location" element={<LocationPage />} />
-            <Route path="/reschedule/:bookingId" element={<ReschedulePage />} />
+            <Route path="/reprogrammer" element={<ReschedulePage />} />
           </Routes>
         </main>
         <Footer />
