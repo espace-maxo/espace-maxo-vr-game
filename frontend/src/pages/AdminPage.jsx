@@ -161,6 +161,23 @@ const AdminPage = () => {
     }
   };
 
+  const deleteBookingPermanently = async (bookingId, customerName) => {
+    if (!window.confirm(`⚠️ ATTENTION: Voulez-vous SUPPRIMER DÉFINITIVEMENT la réservation de "${customerName}"?\n\nCette action est IRRÉVERSIBLE!`)) return;
+    
+    try {
+      const headers = getAuthHeaders();
+      await axios.delete(`${API}/admin/bookings/${bookingId}/permanent`, { headers });
+      toast.success("Réservation supprimée définitivement");
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la suppression");
+      }
+    }
+  };
+
   const updateReviewStatus = async (reviewId, status) => {
     try {
       const headers = getAuthHeaders();
