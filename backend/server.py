@@ -633,6 +633,9 @@ async def create_booking(booking_data: BookingCreate):
     reservation_fee = 500.0
     total_amount = total_game_price + reservation_fee
     
+    # Generate unique reschedule token
+    reschedule_token = str(uuid.uuid4())[:8].upper()
+    
     booking = Booking(
         customer_name=booking_data.customer_name,
         customer_phone=booking_data.customer_phone,
@@ -643,7 +646,8 @@ async def create_booking(booking_data: BookingCreate):
         number_of_games=booking_data.number_of_games,
         total_game_price=total_game_price,
         reservation_fee=reservation_fee,
-        total_amount=total_amount
+        total_amount=total_amount,
+        reschedule_token=reschedule_token
     )
     
     booking_dict = booking.model_dump()
