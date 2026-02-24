@@ -117,6 +117,16 @@ class Booking(BaseModel):
     payment_session_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     whatsapp_link: Optional[str] = None
+    # Rescheduling fields
+    reschedule_token: Optional[str] = None
+    has_been_rescheduled: bool = False
+    original_date: Optional[str] = None
+    original_time_slot: Optional[str] = None
+    rescheduled_at: Optional[str] = None
+
+class RescheduleRequest(BaseModel):
+    new_date: str
+    new_time_slot: str
 
 class BookingUpdate(BaseModel):
     booking_status: Optional[str] = None
