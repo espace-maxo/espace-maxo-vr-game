@@ -387,6 +387,54 @@ const WalletPage = () => {
                 </CardContent>
               </Card>
 
+              {/* Loyalty Points Card */}
+              {loyaltyData && (
+                <Card className="bg-gradient-to-br from-food-gold/20 to-yellow-600/10 border-food-gold/30">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-food-gold/20 flex items-center justify-center">
+                          <Trophy className="w-6 h-6 text-food-gold" />
+                        </div>
+                        <div>
+                          <p className="text-gray-400 font-outfit text-sm">Points de fidélité</p>
+                          <p className="font-orbitron font-bold text-2xl text-food-gold">
+                            {loyaltyData.points} <span className="text-sm">points</span>
+                          </p>
+                        </div>
+                      </div>
+                      {loyaltyData.free_games_available > 0 && (
+                        <div className="text-right bg-food-gold/20 rounded-lg px-4 py-2">
+                          <p className="text-food-gold font-rajdhani font-bold text-lg">
+                            {loyaltyData.free_games_available}
+                          </p>
+                          <p className="text-food-gold/80 font-outfit text-xs">
+                            partie{loyaltyData.free_games_available > 1 ? 's' : ''} gratuite{loyaltyData.free_games_available > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-food-gold/20">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400 font-outfit">Prochain bonus</span>
+                        <span className="text-food-gold font-rajdhani font-bold">
+                          {100 - (loyaltyData.points % 100)} points restants
+                        </span>
+                      </div>
+                      <div className="w-full bg-dark-bg rounded-full h-2 mt-2">
+                        <div 
+                          className="bg-food-gold h-2 rounded-full transition-all"
+                          style={{ width: `${(loyaltyData.points % 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-gray-500 font-outfit text-xs mt-2 text-center">
+                        100 points = 1 partie gratuite • Gagnez 10 points par partie
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Topup Card */}
               <Card className="bg-dark-card border-white/10">
                 <CardHeader>
