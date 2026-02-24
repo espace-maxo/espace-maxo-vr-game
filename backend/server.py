@@ -14,6 +14,7 @@ from urllib.parse import quote
 import httpx
 import bcrypt
 import jwt
+from twilio.rest import Client as TwilioClient
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
