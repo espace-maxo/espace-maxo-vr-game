@@ -587,6 +587,11 @@ const AdminPage = () => {
                         <p className="text-xs text-gray-500">
                           {booking.number_of_players} joueur(s) x {booking.number_of_games} partie(s)
                         </p>
+                        {booking.has_been_rescheduled && (
+                          <Badge className="bg-orange-500/20 text-orange-400 text-xs mt-1">
+                            Reprogrammée
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Actions */}
@@ -602,6 +607,21 @@ const AdminPage = () => {
                               <MessageCircle className="w-4 h-4" />
                             </Button>
                           </a>
+                        )}
+                        
+                        {/* Reschedule button - only for paid, active bookings that haven't been rescheduled */}
+                        {booking.payment_status === "paid" && 
+                         booking.booking_status === "active" && 
+                         !booking.has_been_rescheduled && (
+                          <Button 
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRescheduleModal(booking)}
+                            className="border-neon-blue text-neon-blue hover:bg-neon-blue/10"
+                            data-testid={`reschedule-${booking.id}`}
+                          >
+                            <CalendarClock className="w-4 h-4" />
+                          </Button>
                         )}
                         
                         {booking.booking_status === "active" && (
