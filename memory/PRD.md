@@ -66,12 +66,21 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Onglet admin "Location" pour gérer les demandes de location (Dec 2025)
 - [x] Notifications WhatsApp pour les réservations payées (Dec 2025)
 - [x] Reprogrammation des réservations (Dec 2025)
-  - Page `/reprogrammer` accessible depuis le footer
+  - Page `/reprogrammer` accessible depuis navbar et footer
   - Client entre son numéro de téléphone + nom exact pour trouver sa réservation
   - Admin peut aussi reprogrammer via dashboard
   - Gratuit si > 15 min avant session, sinon 500 FCFA
   - 1 seule reprogrammation par réservation
   - Notifications WhatsApp à l'admin quand un client reprogramme
+- [x] Bouton suppression définitive réservations avec modal de confirmation (Dec 2025)
+- [x] Système de Provision/Portefeuille (Dec 2025)
+  - Page `/provision` pour gérer son portefeuille
+  - Recharge via MTN MoMo, Moov Money, Celtiis
+  - Historique des transactions
+  - Utilisation pour payer jeux, menus, événements
+- [x] Option paiement total en ligne (Dec 2025)
+  - Checkbox "Payer le montant total en ligne" sur page réservation
+  - Option utiliser solde provision
 
 ### P1 (User Action Required)
 - [ ] Domaine (www.espacemaxo.com) - Configurer DNS
