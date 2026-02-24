@@ -1,10 +1,11 @@
-import { Phone, MapPin, Clock, Gamepad2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Phone, MapPin, Clock, Gamepad2, CalendarClock } from "lucide-react";
 
 const Footer = () => {
   return (
     <footer className="bg-dark-card border-t border-white/10 py-12" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -16,6 +17,29 @@ const Footer = () => {
             <p className="text-gray-400 font-outfit">
               Restaurant et centre de jeux VR à Cotonou. Vivez une expérience unique!
             </p>
+          </div>
+
+          {/* Quick Links */}
+          <div className="space-y-4">
+            <h3 className="font-orbitron font-bold text-lg text-neon-blue uppercase">Liens utiles</h3>
+            <div className="space-y-3">
+              <Link
+                to="/reprogrammer"
+                className="flex items-center gap-3 text-gray-300 hover:text-neon-blue transition-colors"
+                data-testid="footer-reschedule"
+              >
+                <CalendarClock className="w-5 h-5 text-neon-blue" />
+                <span className="font-outfit">Reprogrammer ma réservation</span>
+              </Link>
+              <Link
+                to="/location"
+                className="flex items-center gap-3 text-gray-300 hover:text-food-gold transition-colors"
+                data-testid="footer-location"
+              >
+                <Gamepad2 className="w-5 h-5 text-food-gold" />
+                <span className="font-outfit">Location événementielle</span>
+              </Link>
+            </div>
           </div>
 
           {/* Contact */}
