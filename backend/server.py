@@ -128,6 +128,16 @@ class RescheduleRequest(BaseModel):
     new_date: str
     new_time_slot: str
 
+class RescheduleByClientRequest(BaseModel):
+    new_date: str
+    new_time_slot: str
+    phone: str
+    name: str
+
+class FindBookingRequest(BaseModel):
+    phone: str
+    name: str
+
 class BookingUpdate(BaseModel):
     booking_status: Optional[str] = None
     payment_status: Optional[str] = None
