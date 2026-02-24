@@ -261,7 +261,7 @@ const WalletPage = () => {
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="bg-surface-highlight border-white/20 text-white text-lg tracking-wider"
                   />
-                  <p className="text-gray-500 text-xs">Format: 10 chiffres commençant par 01</p>
+                  <p className="text-gray-500 text-xs">Format: 8 chiffres (ex: 97123456)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -280,7 +280,7 @@ const WalletPage = () => {
 
                 <Button
                   onClick={sendOTP}
-                  disabled={loading || phone.length < 10}
+                  disabled={loading || phone.length < 8}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-rajdhani font-bold uppercase py-6"
                 >
                   {loading ? (
