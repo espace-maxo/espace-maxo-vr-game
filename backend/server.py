@@ -98,6 +98,8 @@ class BookingCreate(BaseModel):
     time_slot: str
     number_of_players: int
     number_of_games: int = 1
+    pay_full_amount: bool = False  # Option to pay total amount instead of just reservation fee
+    use_wallet: bool = False  # Option to use wallet balance
 
 class Booking(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -112,9 +114,12 @@ class Booking(BaseModel):
     total_game_price: float
     reservation_fee: float = 500.0
     total_amount: float
+    amount_to_pay: float = 500.0  # Amount to pay online (can be reservation_fee or total_amount)
+    payment_type: str = "reservation_only"  # reservation_only or full_payment
     payment_status: str = "pending"
     booking_status: str = "active"  # active, completed, cancelled
     payment_session_id: Optional[str] = None
+    wallet_amount_used: float = 0.0  # Amount paid from wallet
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     whatsapp_link: Optional[str] = None
     # Rescheduling fields
@@ -123,6 +128,22 @@ class Booking(BaseModel):
     original_date: Optional[str] = None
     original_time_slot: Optional[str] = None
     rescheduled_at: Optional[str] = None
+
+# Wallet/Provision Models
+class WalletCreate(BaseModel):
+    phone: str
+    name: str
+
+class WalletTopUp(BaseModel):
+    phone: str
+    amount: float
+    transaction_id: str
+
+class WalletUse(BaseModel):
+    phone: str
+    amount: float
+    service_type: str  # games, menu, event, reservation
+    description: str
 
 class RescheduleRequest(BaseModel):
     new_date: str
