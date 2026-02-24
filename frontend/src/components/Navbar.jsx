@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Gamepad2, Phone, Lock } from "lucide-react";
+import { Menu, X, Gamepad2, Phone, Lock, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -44,13 +44,24 @@ const Navbar = () => {
                 {link.label}
               </Link>
             ))}
-            <Link to="/booking" data-testid="nav-reserver">
-              <Button
-                className="bg-neon-red text-white font-rajdhani font-bold uppercase px-6 py-2 hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] transition-all"
-              >
-                Réserver
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link to="/reprogrammer" data-testid="nav-reprogrammer">
+                <Button
+                  variant="outline"
+                  className="border-neon-blue text-neon-blue font-rajdhani font-bold uppercase px-4 py-2 hover:bg-neon-blue/10 transition-all flex items-center gap-2"
+                >
+                  <CalendarClock className="w-4 h-4" />
+                  Reprogrammer
+                </Button>
+              </Link>
+              <Link to="/booking" data-testid="nav-reserver">
+                <Button
+                  className="bg-neon-red text-white font-rajdhani font-bold uppercase px-6 py-2 hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] transition-all"
+                >
+                  Réserver
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
