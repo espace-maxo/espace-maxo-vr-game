@@ -727,10 +727,147 @@ async def get_booking(booking_id: str):
 
 # ============== WALLET/PROVISION ROUTES ==============
 
-@api_router.get("/wallet/{phone}")
-async def get_wallet(phone: str):
-    """Get wallet balance by phone number"""
+import random
+
+# Store OTPs temporarily (in production, use Redis with TTL)
+wallet_otps = {}
+
+class WalletOTPRequest(BaseModel):
+    phone: str
+    name: Optional[str] = None
+
+class WalletOTPVerify(BaseModel):
+    phone: str
+    otp: str
+
+@api_router.post("/wallet/send-otp")
+async def send_wallet_otp(request: WalletOTPRequest):
+    """Send OTP to phone via WhatsApp for wallet access"""
+    clean_phone = request.phone.replace(" ", "").replace("+229", "")
+    
+    # Generate 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+    
+    # Store OTP with timestamp (expires in 5 minutes)
+    wallet_otps[clean_phone] = {
+        "otp": otp,
+        "created_at": datetime.now(timezone.utc),
+        "name": request.name
+    }
+    
+    # Send OTP via WhatsApp to the user's phone
+    try:
+        # Use CallMeBot to send to the user's WhatsApp
+        message = f"🔐 Code de vérification Espace Maxo\n\nVotre code: {otp}\n\n⏱️ Ce code expire dans 5 minutes.\n\nNe partagez ce code avec personne."
+        
+        # URL encode the message
+        encoded_message = quote(message)
+        
+        # Send to user's phone (they need to have activated CallMeBot)
+        # For now, we'll also notify admin and store the OTP
+        admin_message = f"🔑 CODE OTP PROVISION\n\n📱 Numéro: {clean_phone}\n🔐 Code: {otp}\n\nLe client doit entrer ce code pour accéder à sa provision."
+        await send_whatsapp_notification(admin_message)
+        
+        logger.info(f"OTP sent for wallet access: {clean_phone}")
+        
+        return {
+            "success": True,
+            "message": "Code envoyé par WhatsApp",
+            "phone": clean_phone,
+            # For demo purposes, we show a hint (remove in production)
+            "hint": f"Code envoyé à l'admin. En production, le client recevra le code sur son WhatsApp."
+        }
+    except Exception as e:
+        logger.error(f"Error sending OTP: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi du code")
+
+@api_router.post("/wallet/verify-otp")
+async def verify_wallet_otp(request: WalletOTPVerify):
+    """Verify OTP for wallet access"""
+    clean_phone = request.phone.replace(" ", "").replace("+229", "")
+    
+    stored = wallet_otps.get(clean_phone)
+    
+    if not stored:
+        raise HTTPException(status_code=400, detail="Aucun code envoyé pour ce numéro. Veuillez demander un nouveau code.")
+    
+    # Check expiration (5 minutes)
+    created_at = stored["created_at"]
+    now = datetime.now(timezone.utc)
+    if (now - created_at).total_seconds() > 300:  # 5 minutes
+        del wallet_otps[clean_phone]
+        raise HTTPException(status_code=400, detail="Code expiré. Veuillez demander un nouveau code.")
+    
+    # Verify OTP
+    if stored["otp"] != request.otp:
+        raise HTTPException(status_code=400, detail="Code incorrect")
+    
+    # OTP is valid - delete it (one-time use)
+    name = stored.get("name")
+    del wallet_otps[clean_phone]
+    
+    # Check if wallet exists
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    
+    if not wallet and name:
+        # Create wallet
+        wallet = {
+            "id": str(uuid.uuid4()),
+            "phone": clean_phone,
+            "name": name,
+            "balance": 0,
+            "transactions": [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.wallets.insert_one(wallet)
+        wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    
+    # Generate session token for this wallet access
+    session_token = str(uuid.uuid4())
+    
+    # Store session (valid for 30 minutes)
+    await db.wallet_sessions.update_one(
+        {"phone": clean_phone},
+        {
+            "$set": {
+                "token": session_token,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+            }
+        },
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "message": "Code vérifié avec succès",
+        "session_token": session_token,
+        "wallet": {
+            "exists": wallet is not None,
+            "balance": wallet.get("balance", 0) if wallet else 0,
+            "phone": clean_phone,
+            "name": wallet.get("name") if wallet else name,
+            "transactions": wallet.get("transactions", [])[-10:] if wallet else []
+        }
+    }
+
+@api_router.get("/wallet/{phone}/secure")
+async def get_wallet_secure(phone: str, token: str = Query(...)):
+    """Get wallet with session token verification"""
     clean_phone = phone.replace(" ", "").replace("+229", "")
+    
+    # Verify session token
+    session = await db.wallet_sessions.find_one({"phone": clean_phone, "token": token})
+    
+    if not session:
+        raise HTTPException(status_code=401, detail="Session invalide. Veuillez vous reconnecter.")
+    
+    # Check expiration
+    expires_at = datetime.fromisoformat(session["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.wallet_sessions.delete_one({"phone": clean_phone})
+        raise HTTPException(status_code=401, detail="Session expirée. Veuillez vous reconnecter.")
+    
     wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
     
     if not wallet:
@@ -741,7 +878,24 @@ async def get_wallet(phone: str):
         "balance": wallet.get("balance", 0),
         "phone": wallet.get("phone"),
         "name": wallet.get("name"),
-        "transactions": wallet.get("transactions", [])[-10:]  # Last 10 transactions
+        "transactions": wallet.get("transactions", [])[-10:]
+    }
+
+@api_router.get("/wallet/{phone}")
+async def get_wallet(phone: str):
+    """Get wallet balance by phone number (basic check - no sensitive data)"""
+    clean_phone = phone.replace(" ", "").replace("+229", "")
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    
+    if not wallet:
+        return {"exists": False, "balance": 0, "phone": clean_phone}
+    
+    # Only return basic info without full transaction history
+    return {
+        "exists": True,
+        "balance": wallet.get("balance", 0),
+        "phone": wallet.get("phone"),
+        "name": wallet.get("name")
     }
 
 @api_router.post("/wallet/create")
