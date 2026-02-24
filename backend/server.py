@@ -163,6 +163,34 @@ class Review(BaseModel):
 class ReviewUpdate(BaseModel):
     status: str  # approved or rejected
 
+# Location Request Models
+class LocationRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Section 1
+    fullName: str
+    phone: str
+    email: str = ""
+    company: str = ""
+    # Section 2
+    eventType: str
+    otherEventType: str = ""
+    eventDate: str
+    startTime: str = ""
+    endTime: str = ""
+    guestCount: str = ""
+    # Section 3
+    formula: str = ""
+    budget: str = ""
+    # Section 4
+    services: List[str] = []
+    otherService: str = ""
+    # Section 5
+    message: str = ""
+    # Meta
+    status: str = "pending"  # pending, contacted, confirmed, cancelled
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # Loyalty Program Models
 class LoyaltyAccount(BaseModel):
     model_config = ConfigDict(extra="ignore")
