@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta
 
 class EspaceMaxoAPITester:
-    def __init__(self, base_url="https://maxo-cotonou.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://maxo-gaming-hub.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
