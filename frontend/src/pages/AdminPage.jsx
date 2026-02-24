@@ -573,6 +573,183 @@ const AdminPage = () => {
               </div>
             </TabsContent>
 
+            {/* Location Requests Tab */}
+            <TabsContent value="location">
+              <div data-testid="location-section">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-orbitron font-bold text-xl text-white flex items-center gap-2">
+                    <PartyPopper className="w-5 h-5 text-neon-red" />
+                    Demandes de Location ({locationRequests.length})
+                  </h2>
+                  {locationStats && (
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-yellow-500">{locationStats.pending} en attente</span>
+                      <span className="text-green-500">{locationStats.total - locationStats.pending} traitées</span>
+                    </div>
+                  )}
+                </div>
+
+                {loading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-8 h-8 text-neon-red animate-spin mx-auto" />
+                  </div>
+                ) : locationRequests.length === 0 ? (
+                  <div className="text-center py-12">
+                    <PartyPopper className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400 font-outfit">Aucune demande de location pour le moment</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {locationRequests.map((request) => (
+                      <Card 
+                        key={request.id}
+                        className={`bg-dark-card border-white/10 hover:border-neon-red/30 transition-colors ${
+                          request.status === "pending" ? "border-l-4 border-l-yellow-500" : ""
+                        }`}
+                        data-testid={`location-${request.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div className="flex-1 space-y-3">
+                              {/* Header */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-outfit font-semibold text-white text-lg">{request.full_name}</span>
+                                <Badge className={`${
+                                  request.status === "pending" ? "bg-yellow-500" :
+                                  request.status === "confirmed" ? "bg-green-500" : "bg-red-500"
+                                } text-white`}>
+                                  {request.status === "pending" ? "En attente" :
+                                   request.status === "confirmed" ? "Confirmé" : "Rejeté"}
+                                </Badge>
+                                <Badge className="bg-neon-red/20 text-neon-red border border-neon-red/30">
+                                  {request.event_type}
+                                </Badge>
+                              </div>
+
+                              {/* Contact Info */}
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {request.phone}
+                                </span>
+                                {request.email && (
+                                  <span className="flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {request.email}
+                                  </span>
+                                )}
+                                {request.company && (
+                                  <span className="flex items-center gap-1">
+                                    <Building2 className="w-3 h-3" />
+                                    {request.company}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Event Details */}
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3 text-neon-blue" />
+                                  {request.event_date}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-neon-blue" />
+                                  {request.start_time} - {request.end_time}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Users className="w-3 h-3 text-neon-blue" />
+                                  {request.estimated_guests} invités
+                                </span>
+                              </div>
+
+                              {/* Formula & Budget */}
+                              <div className="flex flex-wrap items-center gap-4 text-sm">
+                                <span className="text-food-gold font-semibold">
+                                  Formule: {request.formula === "location_simple" ? "Location simple" :
+                                           request.formula === "location_restauration" ? "Location + Restauration" :
+                                           request.formula === "location_boissons" ? "Location + Boissons" : "Formule personnalisée"}
+                                </span>
+                                <span className="flex items-center gap-1 text-green-400">
+                                  <DollarSign className="w-3 h-3" />
+                                  Budget: {request.budget}
+                                </span>
+                              </div>
+
+                              {/* Additional Services */}
+                              {request.additional_services && request.additional_services.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {request.additional_services.map((service, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-gray-400 border-gray-600 text-xs">
+                                      {service}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Message */}
+                              {request.message && (
+                                <p className="text-gray-400 font-outfit text-sm italic">
+                                  "{request.message}"
+                                </p>
+                              )}
+
+                              <p className="text-gray-600 text-xs">
+                                Demande reçue le {new Date(request.created_at).toLocaleDateString("fr-FR", { 
+                                  day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
+                                })}
+                              </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-2">
+                              {/* WhatsApp Contact */}
+                              <a 
+                                href={`https://wa.me/229${request.phone.replace(/\s/g, '')}?text=Bonjour ${request.full_name}, concernant votre demande de location pour ${request.event_type}...`}
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="border-green-500 text-green-500 hover:bg-green-500/10"
+                                  data-testid={`whatsapp-location-${request.id}`}
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                </Button>
+                              </a>
+
+                              {request.status === "pending" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateLocationStatus(request.id, "confirmed")}
+                                    className="bg-green-600 hover:bg-green-700"
+                                    data-testid={`confirm-location-${request.id}`}
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    Confirmer
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => updateLocationStatus(request.id, "rejected")}
+                                    data-testid={`reject-location-${request.id}`}
+                                  >
+                                    <XCircle className="w-4 h-4 mr-1" />
+                                    Rejeter
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
             {/* Loyalty Tab */}
             <TabsContent value="loyalty">
               <div data-testid="loyalty-section">
