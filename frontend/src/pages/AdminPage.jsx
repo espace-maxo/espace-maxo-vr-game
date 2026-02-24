@@ -211,6 +211,57 @@ const AdminPage = () => {
     }
   };
 
+  const openRescheduleModal = (booking) => {
+    if (booking.has_been_rescheduled) {
+      toast.error("Cette réservation a déjà été reprogrammée. Les frais ne sont pas remboursables.");
+      return;
+    }
+    if (booking.payment_status !== "paid") {
+      toast.error("Seules les réservations payées peuvent être reprogrammées");
+      return;
+    }
+    setSelectedBooking(booking);
+    setNewDate(booking.date);
+    setNewTime(booking.time_slot);
+    setRescheduleModal(true);
+  };
+
+  const handleReschedule = async () => {
+    if (!newDate || !newTime) {
+      toast.error("Veuillez sélectionner une date et un créneau");
+      return;
+    }
+    
+    setRescheduleLoading(true);
+    try {
+      const headers = getAuthHeaders();
+      const response = await axios.post(
+        `${API}/admin/bookings/${selectedBooking.id}/reschedule`,
+        { new_date: newDate, new_time_slot: newTime },
+        { headers }
+      );
+      
+      toast.success("Réservation reprogrammée avec succès!");
+      
+      // Open WhatsApp link to notify client
+      if (response.data.client_whatsapp_link) {
+        window.open(response.data.client_whatsapp_link, '_blank');
+      }
+      
+      setRescheduleModal(false);
+      setSelectedBooking(null);
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error(error.response?.data?.detail || "Erreur lors de la reprogrammation");
+      }
+    } finally {
+      setRescheduleLoading(false);
+    }
+  };
+
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
   const getStatusBadge = (status) => {
