@@ -7,7 +7,8 @@ import {
   BarChart3, Calendar, Users, CreditCard, Clock, 
   Phone, Gamepad2, CheckCircle, XCircle, AlertCircle,
   RefreshCw, Filter, MessageCircle, TrendingUp, LogOut,
-  Star, Gift, Trophy, MessageSquare, Trash2
+  Star, Gift, Trophy, MessageSquare, Trash2, PartyPopper,
+  Mail, Building2, CalendarDays, DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
