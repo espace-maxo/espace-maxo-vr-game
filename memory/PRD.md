@@ -4,77 +4,75 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Proposer des menus détaillés avec photos et descriptions
 - Réserver des parties de jeux VR 360° et Simulateur Course
-- Prix: 1.500 FCFA/partie, 500 FCFA frais de réservation
 - Paiement Mobile Money (MTN, Moov, Celtiis) via Kkiapay
-- Dashboard admin sécurisé pour gestion des réservations
+- Dashboard admin sécurisé
 - Programme de fidélité automatique
 - Système d'avis clients avec validation admin
+- Location événementielle (anniversaires, mariages, séminaires)
 - Notifications WhatsApp automatiques
 
 ## What's Been Implemented
 
-### Phase 1-4 - MVP et Fonctionnalités de base ✅
+### Core Features ✅
 - Menu complet avec catégories et photos
-- Présentation des jeux VR et Simulateur
+- Jeux VR 360° et Simulateur Course
 - Réservation avec calendrier interactif
-- Dashboard admin avec statistiques
-- Intégration Kkiapay (production)
-- Galerie d'images avec lightbox
-- Page témoignages et Google Maps
+- Paiement Kkiapay (MTN, Moov, Celtiis)
+- Dashboard admin sécurisé (JWT)
+- Programme de fidélité (1 partie = 1 point, 10 points = 1 gratuite)
+- Système d'avis avec validation
+- Notifications WhatsApp (avis, locations)
 
-### Phase 5 - Sécurité (23 Feb 2026) ✅
-- Authentification admin sécurisée via JWT (bcrypt + tokens)
-- Validation du format téléphone (01XXXXXXXX)
+### Phase 8 - Location Événementielle (23 Feb 2026) ✅
+- **Page dédiée /location** avec formulaire complet :
+  - Section 1: Informations du demandeur (nom, téléphone, email, entreprise)
+  - Section 2: Informations événement (type, date, horaires, invités)
+  - Section 3: Formule souhaitée (location simple, +restauration, +boissons, personnalisée)
+  - Section 4: Budget estimatif (4 tranches de 300k à +1.5M FCFA)
+  - Section 5: Services additionnels (DJ, décoration, vidéoprojecteur, photographe, etc.)
+  - Section 6: Message complémentaire + validation
+- **Section sur la page d'accueil** avec bouton "Demander un devis"
+- **Notification WhatsApp automatique** à chaque nouvelle demande
+- **Gestion admin** des demandes de location
 
-### Phase 6 - Programme de Fidélité (23 Feb 2026) ✅
-- 1 partie = 1 point, 10 points = 1 partie gratuite
-- Carte fidélité sur page de réservation
-- Onglet Fidélité dans l'admin dashboard
-
-### Phase 7 - Système d'Avis (23 Feb 2026) ✅
-- Formulaire "Laissez votre avis" sur la page /avis
-- Gestion admin des avis (approuver/rejeter/supprimer)
-- Badge notification pour avis en attente
-- **Notification WhatsApp automatique** via CallMeBot
-  - Envoi instantané à chaque nouvel avis soumis
-  - Message formaté avec nom, note, commentaire
+### APIs Backend
+- POST /api/location-requests - Soumettre demande de location
+- GET /api/admin/location-requests - Liste des demandes (protégé)
+- PUT /api/admin/location-requests/{id} - Mettre à jour statut (protégé)
 
 ## Configuration
 
 ### CallMeBot WhatsApp
-- CALLMEBOT_API_KEY: Configuré
+- CALLMEBOT_API_KEY: 9381691
 - Numéro admin: 01 41 47 00 00
 
 ### Kkiapay (Production)
-- KKIAPAY_PUBLIC_KEY: Configuré
-- KKIAPAY_PRIVATE_KEY: Configuré
-- KKIAPAY_SECRET: Configuré
+- Clés configurées
 - KKIAPAY_SANDBOX: false
 
-### Admin Authentication
-- ADMIN_PASSWORD_HASH: bcrypt hash
-- JWT_SECRET_KEY: Configuré
+### Admin
 - Password: Nikeland2016
 
 ## Prioritized Backlog
 
 ### P0 (Completed) ✅
-- [x] MVP + Admin Dashboard + Kkiapay
-- [x] Sécurité admin (JWT backend)
+- [x] MVP + Admin + Kkiapay
+- [x] Sécurité admin (JWT)
 - [x] Programme de fidélité
-- [x] Système d'avis avec validation
-- [x] Notifications WhatsApp pour nouveaux avis
+- [x] Système d'avis
+- [x] Notifications WhatsApp
+- [x] Location événementielle
 
-### P1 (Blocked - User Action Required)
-- [ ] Domaine personnalisé (www.espacemaxo.com) - DNS à configurer
-- [ ] Déploiement production - Cliquer sur "Deploy"
+### P1 (User Action Required)
+- [ ] Domaine (www.espacemaxo.com) - Configurer DNS
+- [ ] Déploiement production - Cliquer "Deploy"
 
 ### P2 (Future)
-- [ ] Section "À propos" de Espace Maxo
-- [ ] Interface pour utiliser les parties gratuites
-- [ ] Notifications WhatsApp pour nouvelles réservations
+- [ ] Section "À propos"
+- [ ] Onglet admin pour demandes de location
+- [ ] Notifications WhatsApp pour réservations payées
 
 ## Contact
 - WhatsApp: +229 01 41 47 00 00
-- Adresse: Fidjrossè Plage, rue EPP Jacquot, Cotonou
-- Horaires: 9h - 23h tous les jours
+- Adresse: Fidjrossè Plage, Cotonou
+- Horaires: 9h - 23h
