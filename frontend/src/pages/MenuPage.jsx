@@ -62,6 +62,9 @@ const MenuPage = () => {
           <p className="font-outfit text-lg text-gray-300 max-w-2xl mx-auto">
             Découvrez nos délicieux plats et combos exclusifs avec jeux VR inclus!
           </p>
+          <p className="font-outfit text-base text-food-gold mt-4 italic">
+            Carte de menus à consulter sur place
+          </p>
         </div>
       </section>
 
