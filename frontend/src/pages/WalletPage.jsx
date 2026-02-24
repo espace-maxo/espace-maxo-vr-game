@@ -111,6 +111,7 @@ const WalletPage = () => {
     try {
       const response = await axios.get(`${API}/wallet/${phone}/secure?token=${sessionToken}`);
       setWalletData(response.data);
+      setLoyaltyData(response.data.loyalty);
     } catch (error) {
       if (error.response?.status === 401) {
         toast.error("Session expirée. Veuillez vous reconnecter.");
