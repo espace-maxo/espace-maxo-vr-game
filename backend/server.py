@@ -1085,6 +1085,99 @@ async def reseed_menu(is_admin: bool = Depends(get_current_admin)):
     
     return {"message": "Menu et jeux mis à jour", "items_count": len(MENU_ITEMS), "games_count": len(GAMES)}
 
+# ============== LOCATION REQUEST ROUTES ==============
+
+EVENT_TYPE_LABELS = {
+    "anniversaire": "Anniversaire",
+    "mariage": "Mariage / Fiançailles",
+    "seminaire": "Séminaire / Formation",
+    "afterwork": "Afterwork",
+    "soiree": "Soirée privée",
+    "lancement": "Lancement de produit",
+    "autre": "Autre"
+}
+
+BUDGET_LABELS = {
+    "moins_300k": "Moins de 300.000 FCFA",
+    "300k_700k": "300.000 – 700.000 FCFA",
+    "700k_1500k": "700.000 – 1.500.000 FCFA",
+    "plus_1500k": "Plus de 1.500.000 FCFA"
+}
+
+@api_router.post("/location-requests")
+async def create_location_request(request_data: LocationRequest):
+    """Submit a new location/event request"""
+    if not request_data.fullName or not request_data.phone:
+        raise HTTPException(status_code=400, detail="Nom et téléphone requis")
+    
+    await db.location_requests.insert_one(request_data.model_dump())
+    
+    # Send WhatsApp notification
+    event_label = EVENT_TYPE_LABELS.get(request_data.eventType, request_data.eventType)
+    if request_data.eventType == "autre" and request_data.otherEventType:
+        event_label = request_data.otherEventType
+    
+    budget_label = BUDGET_LABELS.get(request_data.budget, "Non précisé")
+    
+    notification_message = f"""🎉 *Nouvelle Demande de Location!*
+
+👤 *{request_data.fullName}*
+📞 {request_data.phone}
+🏢 {request_data.company if request_data.company else "Particulier"}
+
+📅 *Événement:* {event_label}
+📆 *Date:* {request_data.eventDate}
+⏰ *Horaire:* {request_data.startTime or "?"} - {request_data.endTime or "?"}
+👥 *Invités:* {request_data.guestCount or "Non précisé"}
+
+💰 *Budget:* {budget_label}
+
+💬 *Message:*
+{request_data.message[:150] if request_data.message else "Aucun message"}
+
+👉 Connectez-vous à l'admin pour voir les détails."""
+
+    await send_whatsapp_notification(notification_message)
+    
+    return {"message": "Demande envoyée avec succès", "id": request_data.id}
+
+@api_router.get("/admin/location-requests")
+async def get_all_location_requests(
+    status: Optional[str] = Query(None),
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Get all location requests (admin only)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.location_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    pending_count = await db.location_requests.count_documents({"status": "pending"})
+    total_count = await db.location_requests.count_documents({})
+    
+    return {
+        "requests": requests,
+        "stats": {
+            "pending": pending_count,
+            "total": total_count
+        }
+    }
+
+@api_router.put("/admin/location-requests/{request_id}")
+async def update_location_request(request_id: str, status: str, is_admin: bool = Depends(get_current_admin)):
+    """Update location request status (admin only)"""
+    request = await db.location_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Demande non trouvée")
+    
+    await db.location_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": status}}
+    )
+    
+    return {"message": "Statut mis à jour", "status": status}
+
 # ============== LOYALTY PROGRAM ROUTES ==============
 
 POINTS_PER_GAME = 1  # 1 game = 1 point
