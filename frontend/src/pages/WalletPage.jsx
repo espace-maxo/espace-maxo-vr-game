@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Wallet, Phone, User, Plus, History, CreditCard, Loader2, ArrowDownLeft, ArrowUpRight, Smartphone, KeyRound, ShieldCheck } from "lucide-react";
+import { Wallet, Phone, User, Plus, History, CreditCard, Loader2, ArrowDownLeft, ArrowUpRight, Smartphone, KeyRound, ShieldCheck, Gift, Star, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
