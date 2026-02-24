@@ -296,7 +296,7 @@ const BookingPage = () => {
 
     setLoading(true);
     try {
-      // Create booking
+      // Create booking with payment options
       const bookingResponse = await axios.post(`${API}/bookings`, {
         customer_name: formData.customerName,
         customer_phone: formData.customerPhone,
@@ -304,7 +304,9 @@ const BookingPage = () => {
         date: format(formData.date, "yyyy-MM-dd"),
         time_slot: formData.timeSlot,
         number_of_players: formData.numberOfPlayers,
-        number_of_games: formData.numberOfGames
+        number_of_games: formData.numberOfGames,
+        pay_full_amount: formData.payFullAmount,
+        use_wallet: formData.useWallet
       });
 
       const booking = bookingResponse.data;
