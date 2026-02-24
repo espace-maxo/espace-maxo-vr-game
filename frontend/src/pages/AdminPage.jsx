@@ -44,6 +44,8 @@ const AdminPage = () => {
   const [loyaltyStats, setLoyaltyStats] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
+  const [locationRequests, setLocationRequests] = useState([]);
+  const [locationStats, setLocationStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
   const [activeTab, setActiveTab] = useState("bookings");
