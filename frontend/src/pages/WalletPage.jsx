@@ -208,7 +208,7 @@ const WalletPage = () => {
       <section className="py-4 px-4 bg-green-500/10 border-y border-green-500/30">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-3 text-green-400">
           <ShieldCheck className="w-5 h-5" />
-          <span className="font-outfit text-sm">Accès sécurisé par code WhatsApp</span>
+          <span className="font-outfit text-sm">Accès sécurisé par code SMS</span>
         </div>
       </section>
 
@@ -245,7 +245,7 @@ const WalletPage = () => {
               <CardContent className="space-y-4">
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
                   <p className="text-green-400 font-outfit text-sm">
-                    🔐 Un code de vérification sera envoyé sur votre WhatsApp pour sécuriser l'accès à votre provision.
+                    🔐 Un code de vérification sera envoyé par SMS pour sécuriser l'accès à votre provision.
                   </p>
                 </div>
 
@@ -288,7 +288,7 @@ const WalletPage = () => {
                   ) : (
                     <KeyRound className="w-5 h-5 mr-2" />
                   )}
-                  Recevoir le code par WhatsApp
+                  Recevoir le code par SMS
                 </Button>
               </CardContent>
             </Card>
