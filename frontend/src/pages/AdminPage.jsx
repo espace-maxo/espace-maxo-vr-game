@@ -613,7 +613,7 @@ const AdminPage = () => {
                             <div className="flex-1 space-y-3">
                               {/* Header */}
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-outfit font-semibold text-white text-lg">{request.full_name}</span>
+                                <span className="font-outfit font-semibold text-white text-lg">{request.fullName}</span>
                                 <Badge className={`${
                                   request.status === "pending" ? "bg-yellow-500" :
                                   request.status === "confirmed" ? "bg-green-500" : "bg-red-500"
@@ -622,7 +622,7 @@ const AdminPage = () => {
                                    request.status === "confirmed" ? "Confirmé" : "Rejeté"}
                                 </Badge>
                                 <Badge className="bg-neon-red/20 text-neon-red border border-neon-red/30">
-                                  {request.event_type}
+                                  {request.eventType === "other" ? request.otherEventType : request.eventType}
                                 </Badge>
                               </div>
 
@@ -650,15 +650,15 @@ const AdminPage = () => {
                               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
                                 <span className="flex items-center gap-1">
                                   <CalendarDays className="w-3 h-3 text-neon-blue" />
-                                  {request.event_date}
+                                  {request.eventDate}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="w-3 h-3 text-neon-blue" />
-                                  {request.start_time} - {request.end_time}
+                                  {request.startTime} - {request.endTime}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Users className="w-3 h-3 text-neon-blue" />
-                                  {request.estimated_guests} invités
+                                  {request.guestCount} invités
                                 </span>
                               </div>
 
@@ -671,14 +671,14 @@ const AdminPage = () => {
                                 </span>
                                 <span className="flex items-center gap-1 text-green-400">
                                   <DollarSign className="w-3 h-3" />
-                                  Budget: {request.budget}
+                                  Budget: {request.budget?.replace("_", " - ").replace("moins", "< ").replace("plus", "> ")}
                                 </span>
                               </div>
 
                               {/* Additional Services */}
-                              {request.additional_services && request.additional_services.length > 0 && (
+                              {request.services && request.services.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
-                                  {request.additional_services.map((service, idx) => (
+                                  {request.services.map((service, idx) => (
                                     <Badge key={idx} variant="outline" className="text-gray-400 border-gray-600 text-xs">
                                       {service}
                                     </Badge>
