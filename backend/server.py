@@ -1200,6 +1200,20 @@ async def cancel_booking(booking_id: str, is_admin: bool = Depends(get_current_a
     
     return {"message": "Réservation annulée", "booking_id": booking_id}
 
+@api_router.delete("/admin/bookings/{booking_id}/permanent")
+async def delete_booking_permanently(booking_id: str, is_admin: bool = Depends(get_current_admin)):
+    """Permanently delete a booking from database"""
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
+    
+    # Permanently delete from database
+    await db.bookings.delete_one({"id": booking_id})
+    
+    logger.info(f"Booking {booking_id} permanently deleted by admin")
+    
+    return {"message": "Réservation supprimée définitivement", "booking_id": booking_id}
+
 # WhatsApp link generator
 @api_router.get("/whatsapp/booking/{booking_id}")
 async def get_whatsapp_links(booking_id: str):
