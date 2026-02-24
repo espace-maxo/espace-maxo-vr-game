@@ -816,15 +816,6 @@ async def verify_wallet_otp(request: WalletOTPVerify):
     # OTP is valid - clean up stored data
     if clean_phone in wallet_otps:
         del wallet_otps[clean_phone]
-        raise HTTPException(status_code=400, detail="Code expiré. Veuillez demander un nouveau code.")
-    
-    # Verify OTP
-    if stored["otp"] != request.otp:
-        raise HTTPException(status_code=400, detail="Code incorrect")
-    
-    # OTP is valid - delete it (one-time use)
-    name = stored.get("name")
-    del wallet_otps[clean_phone]
     
     # Check if wallet exists
     wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
