@@ -740,11 +740,73 @@ const BookingPage = () => {
                   </div>
                 </div>
 
+                {/* Payment Options */}
+                <div className="mt-6 space-y-4">
+                  <h3 className="font-rajdhani font-bold text-white text-lg">Options de paiement</h3>
+                  
+                  {/* Full Payment Option */}
+                  <label className="flex items-start gap-3 p-4 rounded-lg bg-surface-highlight/50 border border-white/10 cursor-pointer hover:border-neon-blue/50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.payFullAmount}
+                      onChange={(e) => handleInputChange("payFullAmount", e.target.checked)}
+                      className="w-5 h-5 mt-0.5 rounded border-white/20 bg-surface-highlight text-neon-blue focus:ring-neon-blue"
+                    />
+                    <div className="flex-1">
+                      <span className="font-outfit text-white font-semibold">Payer le montant total en ligne</span>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Payez {formatPrice(calculateTotal().total)} FCFA maintenant et profitez directement de votre session sans paiement sur place
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Wallet Option */}
+                  {walletBalance > 0 && (
+                    <label className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30 cursor-pointer hover:border-green-500/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={formData.useWallet}
+                        onChange={(e) => handleInputChange("useWallet", e.target.checked)}
+                        className="w-5 h-5 mt-0.5 rounded border-white/20 bg-surface-highlight text-green-500 focus:ring-green-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-outfit text-white font-semibold flex items-center gap-2">
+                          Utiliser ma provision
+                          <span className="text-green-400 text-sm">({formatPrice(walletBalance)} FCFA disponible)</span>
+                        </span>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Déduire le montant de votre solde provision
+                        </p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+
+                {/* Summary Box */}
                 <div className="mt-6 p-4 rounded-lg bg-neon-blue/10 border border-neon-blue/30">
-                  <p className="text-neon-blue font-outfit text-sm">
-                    <strong>Paiement Mobile Money:</strong> Seuls les frais de réservation (500 FCFA) seront débités maintenant via MTN, Moov ou Celtiis. 
-                    Le reste sera payé sur place.
-                  </p>
+                  <div className="space-y-2">
+                    {formData.useWallet && calculateTotal().walletUsed > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-green-400 font-outfit">Provision utilisée</span>
+                        <span className="text-green-400 font-rajdhani font-bold">
+                          - {formatPrice(calculateTotal().walletUsed)} FCFA
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-neon-blue font-outfit font-semibold">
+                        {calculateTotal().amountToPay > 0 ? "À payer maintenant" : "Rien à payer"}
+                      </span>
+                      <span className="text-neon-blue font-rajdhani font-bold text-xl">
+                        {formatPrice(calculateTotal().amountToPay)} FCFA
+                      </span>
+                    </div>
+                    {!formData.payFullAmount && calculateTotal().amountToPay > 0 && (
+                      <p className="text-gray-400 font-outfit text-xs mt-2">
+                        Reste à payer sur place: {formatPrice(calculateTotal().total - calculateTotal().amountToPay - calculateTotal().walletUsed)} FCFA
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
