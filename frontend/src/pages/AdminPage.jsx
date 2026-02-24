@@ -1147,6 +1147,59 @@ const AdminPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModal} onOpenChange={setDeleteModal}>
+        <DialogContent className="bg-dark-card border-red-500/30 text-white">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-red-500 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Supprimer définitivement
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {bookingToDelete && (
+                <>
+                  Voulez-vous vraiment supprimer la réservation de <span className="text-white font-semibold">{bookingToDelete.name}</span> ?
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400 text-sm font-outfit">
+                ⚠️ <strong>ATTENTION:</strong> Cette action est <strong>IRRÉVERSIBLE</strong>. 
+                La réservation sera définitivement supprimée de la base de données.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteModal(false);
+                setBookingToDelete(null);
+              }}
+              className="border-white/20 text-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={confirmDeleteBooking}
+              disabled={deleteLoading}
+              className="bg-red-600 hover:bg-red-700 text-white font-rajdhani font-bold"
+            >
+              {deleteLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Supprimer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
