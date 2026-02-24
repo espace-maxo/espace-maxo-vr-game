@@ -1022,6 +1022,86 @@ const AdminPage = () => {
           </Tabs>
         </div>
       </section>
+
+      {/* Reschedule Modal */}
+      <Dialog open={rescheduleModal} onOpenChange={setRescheduleModal}>
+        <DialogContent className="bg-dark-card border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-neon-blue flex items-center gap-2">
+              <CalendarClock className="w-5 h-5" />
+              Reprogrammer la réservation
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {selectedBooking && (
+                <>
+                  Client: <span className="text-white">{selectedBooking.customer_name}</span>
+                  <br />
+                  Actuelle: <span className="text-white">{selectedBooking.date} à {selectedBooking.time_slot}</span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+              <p className="text-yellow-400 text-sm font-outfit">
+                ⚠️ <strong>Attention:</strong> Le client ne pourra reprogrammer qu'une seule fois. 
+                Après cette reprogrammation, les frais de réservation ne seront pas remboursables.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-date" className="text-gray-300">Nouvelle date</Label>
+              <Input
+                id="new-date"
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="bg-surface-highlight border-white/20 text-white"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-time" className="text-gray-300">Nouveau créneau</Label>
+              <Select value={newTime} onValueChange={setNewTime}>
+                <SelectTrigger className="bg-surface-highlight border-white/20 text-white">
+                  <SelectValue placeholder="Sélectionner un créneau" />
+                </SelectTrigger>
+                <SelectContent className="bg-dark-card border-white/20">
+                  {["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"].map((time) => (
+                    <SelectItem key={time} value={time} className="text-white">
+                      {time}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRescheduleModal(false)}
+              className="border-white/20 text-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleReschedule}
+              disabled={rescheduleLoading || !newDate || !newTime}
+              className="bg-neon-blue text-black font-rajdhani font-bold"
+            >
+              {rescheduleLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CalendarClock className="w-4 h-4 mr-2" />
+              )}
+              Reprogrammer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
