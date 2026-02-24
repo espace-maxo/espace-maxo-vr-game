@@ -718,10 +718,10 @@ async def find_booking_for_reschedule(request_data: FindBookingRequest):
     name = request_data.name.strip()
     
     # Search for booking with exact phone and name (case insensitive)
+    # Allow both paid and pending reservations that are active
     booking = await db.bookings.find_one({
         "customer_phone": {"$regex": f".*{phone}$", "$options": "i"},
         "customer_name": {"$regex": f"^{name}$", "$options": "i"},
-        "payment_status": "paid",
         "booking_status": "active",
         "has_been_rescheduled": {"$ne": True}
     }, {"_id": 0})
@@ -734,8 +734,6 @@ async def find_booking_for_reschedule(request_data: FindBookingRequest):
         })
         
         if any_booking:
-            if any_booking.get("payment_status") != "paid":
-                raise HTTPException(status_code=400, detail="Cette réservation n'est pas encore payée")
             if any_booking.get("booking_status") == "cancelled":
                 raise HTTPException(status_code=400, detail="Cette réservation a été annulée")
             if any_booking.get("booking_status") == "completed":
@@ -756,7 +754,8 @@ async def find_booking_for_reschedule(request_data: FindBookingRequest):
             "date": booking["date"],
             "time_slot": booking["time_slot"],
             "number_of_players": booking["number_of_players"],
-            "number_of_games": booking["number_of_games"]
+            "number_of_games": booking["number_of_games"],
+            "payment_status": booking.get("payment_status", "pending")
         },
         "can_reschedule": True,
         "fee_required": fee_required,
