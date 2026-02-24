@@ -62,13 +62,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Système d'avis
 - [x] Notifications WhatsApp
 - [x] Location événementielle
+- [x] Texte "Carte de menus à consulter sur place" sur page Menu (Dec 2025)
 
 ### P1 (User Action Required)
 - [ ] Domaine (www.espacemaxo.com) - Configurer DNS
-- [ ] Déploiement production - Cliquer "Deploy"
+- [ ] Déploiement production - Cliquer bouton **"Deploy"**
 
 ### P2 (Future)
-- [ ] Section "À propos"
+- [ ] Section "À propos de nous" avec histoire d'Espace Maxo
 - [ ] Onglet admin pour demandes de location
 - [ ] Notifications WhatsApp pour réservations payées
 
