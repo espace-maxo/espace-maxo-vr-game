@@ -182,7 +182,7 @@ const BookingPage = () => {
   }, [navigate]);
 
   // Open Kkiapay widget
-  const openPaymentWidget = (bookingId) => {
+  const openPaymentWidget = async (bookingId) => {
     console.log("Opening payment widget for booking:", bookingId);
     console.log("Payment config:", paymentConfig);
     
