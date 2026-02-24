@@ -462,10 +462,11 @@ const LocationPage = () => {
               
               <div className="space-y-4">
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <Checkbox
+                  <input
+                    type="checkbox"
                     checked={formData.confirmInfo}
-                    onCheckedChange={(checked) => handleInputChange("confirmInfo", checked)}
-                    className="mt-1 border-white/30 data-[state=checked]:bg-neon-blue data-[state=checked]:border-neon-blue"
+                    onChange={(e) => handleInputChange("confirmInfo", e.target.checked)}
+                    className="mt-1 w-5 h-5 accent-neon-blue rounded"
                   />
                   <span className="text-gray-300 font-outfit">
                     Je confirme que ces informations sont exactes
@@ -473,10 +474,11 @@ const LocationPage = () => {
                 </label>
                 
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <Checkbox
+                  <input
+                    type="checkbox"
                     checked={formData.acceptContact}
-                    onCheckedChange={(checked) => handleInputChange("acceptContact", checked)}
-                    className="mt-1 border-white/30 data-[state=checked]:bg-neon-blue data-[state=checked]:border-neon-blue"
+                    onChange={(e) => handleInputChange("acceptContact", e.target.checked)}
+                    className="mt-1 w-5 h-5 accent-neon-blue rounded"
                   />
                   <span className="text-gray-300 font-outfit">
                     J'accepte d'être contacté par Espace Maxo
