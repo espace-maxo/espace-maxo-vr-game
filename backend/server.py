@@ -839,6 +839,11 @@ async def verify_wallet_otp(request: WalletOTPVerify):
         upsert=True
     )
     
+    # Get loyalty points
+    loyalty = await db.loyalty_accounts.find_one({"phone_number": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    loyalty_points = loyalty.get("points", 0) if loyalty else 0
+    free_games = loyalty_points // 100  # 100 points = 1 free game
+    
     return {
         "success": True,
         "message": "Code vérifié avec succès",
@@ -849,6 +854,10 @@ async def verify_wallet_otp(request: WalletOTPVerify):
             "phone": clean_phone,
             "name": wallet.get("name") if wallet else name,
             "transactions": wallet.get("transactions", [])[-10:] if wallet else []
+        },
+        "loyalty": {
+            "points": loyalty_points,
+            "free_games_available": free_games
         }
     }
 
