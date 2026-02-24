@@ -774,8 +774,9 @@ async def send_wallet_otp(request: WalletOTPRequest):
             "success": True,
             "message": "Code envoyé par WhatsApp",
             "phone": clean_phone,
-            # For demo purposes, we show a hint (remove in production)
-            "hint": f"Code envoyé à l'admin. En production, le client recevra le code sur son WhatsApp."
+            # TEMPORAIRE: Afficher le code car WhatsApp ne fonctionne pas
+            "otp_code": otp,
+            "note": "⚠️ WhatsApp temporairement indisponible. Voici votre code."
         }
     except Exception as e:
         logger.error(f"Error sending OTP: {e}")
