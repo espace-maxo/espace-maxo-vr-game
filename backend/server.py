@@ -784,9 +784,6 @@ async def reschedule_booking_by_phone_name(
     if not booking_phone.endswith(phone) or booking.get("customer_name", "").lower() != name.lower():
         raise HTTPException(status_code=403, detail="Les informations ne correspondent pas à cette réservation")
     
-    if booking.get("payment_status") != "paid":
-        raise HTTPException(status_code=400, detail="Seules les réservations payées peuvent être reprogrammées")
-    
     if booking.get("booking_status") in ["cancelled", "completed"]:
         raise HTTPException(status_code=400, detail="Cette réservation ne peut plus être modifiée")
     
@@ -800,7 +797,6 @@ async def reschedule_booking_by_phone_name(
     existing = await db.bookings.find_one({
         "date": reschedule_data.new_date,
         "time_slot": reschedule_data.new_time_slot,
-        "payment_status": {"$in": ["completed", "paid"]},
         "booking_status": {"$ne": "cancelled"},
         "id": {"$ne": booking_id}
     })
