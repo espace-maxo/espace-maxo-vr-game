@@ -704,7 +704,7 @@ const AdminPage = () => {
                             <div className="flex items-center gap-2">
                               {/* WhatsApp Contact */}
                               <a 
-                                href={`https://wa.me/229${request.phone.replace(/\s/g, '')}?text=Bonjour ${request.full_name}, concernant votre demande de location pour ${request.event_type}...`}
+                                href={`https://wa.me/229${request.phone.replace(/\s/g, '')}?text=Bonjour ${request.fullName}, concernant votre demande de location pour ${request.eventType}...`}
                                 target="_blank" 
                                 rel="noopener noreferrer"
                               >
