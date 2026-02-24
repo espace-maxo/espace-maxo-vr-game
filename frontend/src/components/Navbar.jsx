@@ -92,6 +92,16 @@ const Navbar = () => {
                   {link.label}
                 </Link>
               ))}
+              <Link to="/reprogrammer" onClick={() => setIsOpen(false)}>
+                <Button
+                  variant="outline"
+                  className="w-full border-neon-blue text-neon-blue font-rajdhani font-bold uppercase py-3 flex items-center justify-center gap-2"
+                  data-testid="mobile-nav-reprogrammer"
+                >
+                  <CalendarClock className="w-4 h-4" />
+                  Reprogrammer
+                </Button>
+              </Link>
               <Link to="/booking" onClick={() => setIsOpen(false)}>
                 <Button
                   className="w-full bg-neon-red text-white font-rajdhani font-bold uppercase py-3"
