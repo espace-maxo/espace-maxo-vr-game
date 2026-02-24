@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Phone, MapPin, Clock, Gamepad2, CalendarClock } from "lucide-react";
+import { Phone, MapPin, Clock, Gamepad2, CalendarClock, Wallet } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -23,6 +23,14 @@ const Footer = () => {
           <div className="space-y-4">
             <h3 className="font-orbitron font-bold text-lg text-neon-blue uppercase">Liens utiles</h3>
             <div className="space-y-3">
+              <Link
+                to="/provision"
+                className="flex items-center gap-3 text-gray-300 hover:text-green-500 transition-colors"
+                data-testid="footer-provision"
+              >
+                <Wallet className="w-5 h-5 text-green-500" />
+                <span className="font-outfit">Ma Provision</span>
+              </Link>
               <Link
                 to="/reprogrammer"
                 className="flex items-center gap-3 text-gray-300 hover:text-neon-blue transition-colors"
