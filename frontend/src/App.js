@@ -11,6 +11,7 @@ import ConfirmationPage from "@/pages/ConfirmationPage";
 import AdminLoginPage from "@/pages/AdminLoginPage";
 import AdminPage from "@/pages/AdminPage";
 import TestimonialsPage from "@/pages/TestimonialsPage";
+import LocationPage from "@/pages/LocationPage";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="/admin" element={<AdminLoginPage />} />
             <Route path="/admin/dashboard" element={<AdminPage />} />
             <Route path="/avis" element={<TestimonialsPage />} />
+            <Route path="/location" element={<LocationPage />} />
           </Routes>
         </main>
         <Footer />
