@@ -49,8 +49,8 @@ const WalletPage = () => {
   }, []);
 
   const sendOTP = async () => {
-    if (!phone || phone.length < 10) {
-      toast.error("Veuillez entrer un numéro de téléphone valide (10 chiffres)");
+    if (!phone || phone.length < 8) {
+      toast.error("Veuillez entrer un numéro de téléphone valide");
       return;
     }
 
@@ -63,16 +63,7 @@ const WalletPage = () => {
       
       setOtpSent(true);
       setStep(2);
-      
-      // Si le code est retourné (WhatsApp indisponible), l'afficher
-      if (response.data.otp_code) {
-        toast.success(`Votre code de vérification: ${response.data.otp_code}`, { 
-          duration: 30000,
-          description: response.data.note || "Entrez ce code ci-dessous"
-        });
-      } else {
-        toast.success("Code de vérification envoyé par WhatsApp!");
-      }
+      toast.success("Code de vérification envoyé par SMS!");
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de l'envoi du code");
     } finally {
