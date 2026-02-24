@@ -276,6 +276,61 @@ const HomePage = () => {
       {/* Testimonials Section */}
       <TestimonialsSection />
 
+      {/* Location / Événements Section */}
+      <section className="py-20 px-4 bg-gradient-to-b from-neon-purple/10 to-dark-bg" data-testid="location-section">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-dark-card rounded-2xl border border-neon-purple/30 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+              {/* Image */}
+              <div className="relative h-64 lg:h-auto">
+                <img
+                  src="https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/ix3jsee6_1af7712a-41b2-40d6-a148-c77efdf0a6c4.JPG"
+                  alt="Location Espace Maxo"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-dark-card lg:block hidden"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-dark-card to-transparent lg:hidden"></div>
+              </div>
+              
+              {/* Content */}
+              <div className="p-8 lg:p-12 flex flex-col justify-center">
+                <div className="w-14 h-14 bg-neon-purple/20 rounded-full flex items-center justify-center mb-6">
+                  <Calendar className="w-7 h-7 text-neon-purple" />
+                </div>
+                <h2 className="font-orbitron font-bold text-2xl md:text-3xl mb-4">
+                  <span className="text-white">Anniversaire /</span>{" "}
+                  <span className="text-neon-purple">Location</span>
+                </h2>
+                <p className="text-gray-400 font-outfit mb-6">
+                  Célébrez vos événements dans un cadre unique ! Anniversaires, mariages, séminaires, 
+                  soirées privées... Espace Maxo s'adapte à toutes vos envies.
+                </p>
+                <ul className="text-gray-300 font-outfit space-y-2 mb-8">
+                  <li className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-neon-purple rounded-full"></span>
+                    Cadre moderne et festif
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-neon-purple rounded-full"></span>
+                    Restauration sur mesure
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-neon-purple rounded-full"></span>
+                    Jeux VR inclus en option
+                  </li>
+                </ul>
+                <Link to="/location" data-testid="location-cta-button">
+                  <Button className="bg-gradient-to-r from-neon-purple to-neon-blue text-white font-rajdhani font-bold text-lg px-8 py-6 hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all w-full sm:w-auto">
+                    Demander un devis
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-20 px-4 bg-gradient-radial-red" data-testid="cta-section">
         <div className="max-w-4xl mx-auto text-center">
