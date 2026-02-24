@@ -664,6 +664,28 @@ async def create_booking(booking_data: BookingCreate):
     reservation_fee = 500.0
     total_amount = total_game_price + reservation_fee
     
+    # Determine amount to pay based on options
+    wallet_amount_used = 0.0
+    amount_to_pay = reservation_fee  # Default: just reservation fee
+    payment_type = "reservation_only"
+    
+    if booking_data.pay_full_amount:
+        amount_to_pay = total_amount
+        payment_type = "full_payment"
+    
+    # Check wallet balance if user wants to use it
+    if booking_data.use_wallet:
+        phone = booking_data.customer_phone.replace(" ", "").replace("+229", "")
+        wallet = await db.wallets.find_one({"phone": {"$regex": f".*{phone}$"}})
+        if wallet and wallet.get("balance", 0) > 0:
+            available_balance = wallet.get("balance", 0)
+            if available_balance >= amount_to_pay:
+                wallet_amount_used = amount_to_pay
+                amount_to_pay = 0
+            else:
+                wallet_amount_used = available_balance
+                amount_to_pay = amount_to_pay - available_balance
+    
     # Generate unique reschedule token
     reschedule_token = str(uuid.uuid4())[:8].upper()
     
@@ -678,6 +700,9 @@ async def create_booking(booking_data: BookingCreate):
         total_game_price=total_game_price,
         reservation_fee=reservation_fee,
         total_amount=total_amount,
+        amount_to_pay=amount_to_pay,
+        payment_type=payment_type,
+        wallet_amount_used=wallet_amount_used,
         reschedule_token=reschedule_token
     )
     
@@ -699,6 +724,163 @@ async def get_booking(booking_id: str):
     booking["whatsapp_admin_link"] = generate_admin_whatsapp_notification(booking)
     
     return booking
+
+# ============== WALLET/PROVISION ROUTES ==============
+
+@api_router.get("/wallet/{phone}")
+async def get_wallet(phone: str):
+    """Get wallet balance by phone number"""
+    clean_phone = phone.replace(" ", "").replace("+229", "")
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
+    
+    if not wallet:
+        return {"exists": False, "balance": 0, "phone": clean_phone}
+    
+    return {
+        "exists": True,
+        "balance": wallet.get("balance", 0),
+        "phone": wallet.get("phone"),
+        "name": wallet.get("name"),
+        "transactions": wallet.get("transactions", [])[-10:]  # Last 10 transactions
+    }
+
+@api_router.post("/wallet/create")
+async def create_wallet(wallet_data: WalletCreate):
+    """Create a new wallet"""
+    clean_phone = wallet_data.phone.replace(" ", "").replace("+229", "")
+    
+    existing = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}})
+    if existing:
+        return {
+            "message": "Portefeuille existant",
+            "balance": existing.get("balance", 0),
+            "phone": existing.get("phone")
+        }
+    
+    wallet = {
+        "id": str(uuid.uuid4()),
+        "phone": clean_phone,
+        "name": wallet_data.name,
+        "balance": 0,
+        "transactions": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.wallets.insert_one(wallet)
+    
+    return {
+        "message": "Portefeuille créé avec succès",
+        "balance": 0,
+        "phone": clean_phone
+    }
+
+@api_router.post("/wallet/topup")
+async def topup_wallet(topup_data: WalletTopUp):
+    """Add funds to wallet after Kkiapay payment"""
+    clean_phone = topup_data.phone.replace(" ", "").replace("+229", "")
+    
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}})
+    
+    if not wallet:
+        # Create wallet if doesn't exist
+        wallet = {
+            "id": str(uuid.uuid4()),
+            "phone": clean_phone,
+            "name": "Client",
+            "balance": 0,
+            "transactions": [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.wallets.insert_one(wallet)
+    
+    # Add transaction
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "type": "topup",
+        "amount": topup_data.amount,
+        "kkiapay_transaction_id": topup_data.transaction_id,
+        "date": datetime.now(timezone.utc).isoformat(),
+        "description": f"Recharge de {int(topup_data.amount)} FCFA"
+    }
+    
+    new_balance = wallet.get("balance", 0) + topup_data.amount
+    
+    await db.wallets.update_one(
+        {"phone": {"$regex": f".*{clean_phone}$"}},
+        {
+            "$set": {"balance": new_balance},
+            "$push": {"transactions": transaction}
+        }
+    )
+    
+    # Send WhatsApp notification
+    notification = f"💰 RECHARGE PORTEFEUILLE\n\n📱 {clean_phone}\n💵 Montant: {int(topup_data.amount)} FCFA\n🏦 Nouveau solde: {int(new_balance)} FCFA"
+    await send_whatsapp_notification(notification)
+    
+    logger.info(f"Wallet topped up: {clean_phone} +{topup_data.amount} FCFA")
+    
+    return {
+        "message": "Recharge effectuée avec succès",
+        "new_balance": new_balance,
+        "amount_added": topup_data.amount
+    }
+
+@api_router.post("/wallet/use")
+async def use_wallet(use_data: WalletUse):
+    """Use wallet balance for a service"""
+    clean_phone = use_data.phone.replace(" ", "").replace("+229", "")
+    
+    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}})
+    
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Portefeuille non trouvé")
+    
+    current_balance = wallet.get("balance", 0)
+    if current_balance < use_data.amount:
+        raise HTTPException(status_code=400, detail=f"Solde insuffisant. Disponible: {int(current_balance)} FCFA")
+    
+    # Add transaction
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "type": "payment",
+        "amount": -use_data.amount,
+        "service_type": use_data.service_type,
+        "date": datetime.now(timezone.utc).isoformat(),
+        "description": use_data.description
+    }
+    
+    new_balance = current_balance - use_data.amount
+    
+    await db.wallets.update_one(
+        {"phone": {"$regex": f".*{clean_phone}$"}},
+        {
+            "$set": {"balance": new_balance},
+            "$push": {"transactions": transaction}
+        }
+    )
+    
+    logger.info(f"Wallet used: {clean_phone} -{use_data.amount} FCFA for {use_data.service_type}")
+    
+    return {
+        "message": "Paiement effectué avec succès",
+        "new_balance": new_balance,
+        "amount_used": use_data.amount
+    }
+
+@api_router.get("/admin/wallets")
+async def get_all_wallets(is_admin: bool = Depends(get_current_admin)):
+    """Get all wallets for admin"""
+    wallets = await db.wallets.find({}, {"_id": 0}).to_list(100)
+    
+    total_balance = sum(w.get("balance", 0) for w in wallets)
+    
+    return {
+        "wallets": wallets,
+        "stats": {
+            "total_wallets": len(wallets),
+            "total_balance": total_balance
+        }
+    }
 
 # ============== RESCHEDULING ROUTES ==============
 
