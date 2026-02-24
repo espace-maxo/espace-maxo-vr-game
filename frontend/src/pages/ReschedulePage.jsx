@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { CalendarClock, AlertTriangle, CheckCircle, Gamepad2, Calendar, Clock, Users, Loader2 } from "lucide-react";
+import { CalendarClock, AlertTriangle, CheckCircle, Gamepad2, Calendar, Clock, Users, Loader2, Search, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,42 +12,62 @@ import { toast } from "sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const ReschedulePage = () => {
-  const { bookingId } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token");
 
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  // Search state
+  const [searchPhone, setSearchPhone] = useState("");
+  const [searchName, setSearchName] = useState("");
+  const [searching, setSearching] = useState(false);
+  
+  // Booking state
+  const [booking, setBooking] = useState(null);
   const [bookingInfo, setBookingInfo] = useState(null);
+  
+  // Reschedule state
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [successData, setSuccessData] = useState(null);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!token) {
-      setError("Token de reprogrammation manquant");
-      setLoading(false);
+  const handleSearch = async () => {
+    if (!searchPhone || !searchName) {
+      toast.error("Veuillez entrer votre numéro de téléphone et votre nom");
       return;
     }
 
-    const fetchBookingInfo = async () => {
-      try {
-        const response = await axios.get(`${API}/bookings/${bookingId}/reschedule-info?token=${token}`);
-        setBookingInfo(response.data);
-        setNewDate(response.data.booking.date);
-        setNewTime(response.data.booking.time_slot);
-      } catch (err) {
-        setError(err.response?.data?.detail || "Erreur lors du chargement de la réservation");
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Validate phone format
+    const cleanPhone = searchPhone.replace(/\s/g, '');
+    if (!/^01\d{8}$/.test(cleanPhone)) {
+      toast.error("Le numéro doit commencer par 01 et contenir 10 chiffres");
+      return;
+    }
 
-    fetchBookingInfo();
-  }, [bookingId, token]);
+    setSearching(true);
+    setError(null);
+    setBooking(null);
+    setBookingInfo(null);
+
+    try {
+      const response = await axios.post(`${API}/bookings/find-for-reschedule`, {
+        phone: cleanPhone,
+        name: searchName.trim()
+      });
+      
+      setBooking(response.data.booking);
+      setBookingInfo(response.data);
+      setNewDate(response.data.booking.date);
+      setNewTime(response.data.booking.time_slot);
+      toast.success("Réservation trouvée!");
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Aucune réservation trouvée avec ces informations";
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleReschedule = async () => {
     if (!newDate || !newTime) {
@@ -58,8 +78,13 @@ const ReschedulePage = () => {
     setSubmitting(true);
     try {
       const response = await axios.post(
-        `${API}/bookings/${bookingId}/reschedule?token=${token}`,
-        { new_date: newDate, new_time_slot: newTime }
+        `${API}/bookings/${booking.id}/reschedule-by-client`,
+        { 
+          new_date: newDate, 
+          new_time_slot: newTime,
+          phone: searchPhone.replace(/\s/g, ''),
+          name: searchName.trim()
+        }
       );
       
       setSuccess(true);
@@ -72,37 +97,6 @@ const ReschedulePage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen pt-20 bg-dark-bg flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-neon-blue animate-spin mx-auto mb-4" />
-          <p className="text-gray-400 font-outfit">Chargement de votre réservation...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen pt-20 bg-dark-bg flex items-center justify-center px-4">
-        <Card className="bg-dark-card border-neon-red/30 max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <AlertTriangle className="w-16 h-16 text-neon-red mx-auto mb-4" />
-            <h2 className="font-orbitron text-xl text-white mb-2">Erreur</h2>
-            <p className="text-gray-400 font-outfit">{error}</p>
-            <Button 
-              onClick={() => navigate("/")}
-              className="mt-6 bg-neon-blue text-black font-rajdhani font-bold"
-            >
-              Retour à l'accueil
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (success) {
     return (
       <div className="min-h-screen pt-20 bg-dark-bg flex items-center justify-center px-4">
@@ -112,7 +106,7 @@ const ReschedulePage = () => {
             <h2 className="font-orbitron text-xl text-white mb-2">Reprogrammation réussie!</h2>
             <div className="text-gray-300 font-outfit space-y-2 mb-4">
               <p>Votre nouvelle réservation:</p>
-              <p className="text-neon-blue font-semibold">{successData?.new_date} à {successData?.new_time_slot}</p>
+              <p className="text-neon-blue font-semibold text-lg">{successData?.new_date} à {successData?.new_time_slot}</p>
             </div>
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-6">
               <p className="text-yellow-400 text-sm">{successData?.warning}</p>
@@ -139,114 +133,206 @@ const ReschedulePage = () => {
             <span className="text-white">Reprogrammer</span>{" "}
             <span className="text-neon-blue">Ma Réservation</span>
           </h1>
+          <p className="text-gray-400 font-outfit">
+            Entrez vos informations de réservation pour la modifier
+          </p>
         </div>
       </section>
 
       <section className="py-8 px-4">
         <div className="max-w-xl mx-auto">
-          {/* Current Booking Info */}
-          <Card className="bg-dark-card border-white/10 mb-6">
-            <CardHeader>
-              <CardTitle className="font-orbitron text-lg text-white flex items-center gap-2">
-                <Gamepad2 className="w-5 h-5 text-neon-blue" />
-                Réservation actuelle
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2 text-gray-300">
-                <Users className="w-4 h-4 text-gray-500" />
-                <span className="font-outfit">{bookingInfo?.booking?.customer_name}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-300">
-                <Gamepad2 className="w-4 h-4 text-gray-500" />
-                <span className="font-outfit">
-                  {bookingInfo?.booking?.game_type === "VR_360" ? "VR 360°" : "Simulateur"} - 
-                  {bookingInfo?.booking?.number_of_players} joueur(s) x {bookingInfo?.booking?.number_of_games} partie(s)
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-neon-red">
-                <Calendar className="w-4 h-4" />
-                <span className="font-outfit font-semibold">{bookingInfo?.booking?.date}</span>
-                <Clock className="w-4 h-4 ml-2" />
-                <span className="font-outfit font-semibold">{bookingInfo?.booking?.time_slot}</span>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Search Form */}
+          {!booking && (
+            <Card className="bg-dark-card border-white/10 mb-6">
+              <CardHeader>
+                <CardTitle className="font-orbitron text-lg text-white flex items-center gap-2">
+                  <Search className="w-5 h-5 text-neon-blue" />
+                  Rechercher ma réservation
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="search-phone" className="text-gray-300 font-outfit flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    Numéro de téléphone
+                  </Label>
+                  <Input
+                    id="search-phone"
+                    type="tel"
+                    placeholder="01 XX XX XX XX"
+                    value={searchPhone}
+                    onChange={(e) => setSearchPhone(e.target.value)}
+                    className="bg-surface-highlight border-white/20 text-white font-outfit"
+                  />
+                  <p className="text-xs text-gray-500">Format: 01XXXXXXXX (10 chiffres)</p>
+                </div>
 
-          {/* Warning */}
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-yellow-400 font-outfit text-sm">
-                  {bookingInfo?.warning_message}
-                </p>
-                {bookingInfo?.fee_required && (
-                  <p className="text-yellow-300 font-semibold mt-2">
-                    Frais de reprogrammation: {bookingInfo?.fee_amount} FCFA
-                  </p>
+                <div className="space-y-2">
+                  <Label htmlFor="search-name" className="text-gray-300 font-outfit flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Nom exact de la réservation
+                  </Label>
+                  <Input
+                    id="search-name"
+                    type="text"
+                    placeholder="Votre nom"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    className="bg-surface-highlight border-white/20 text-white font-outfit"
+                  />
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    <p className="text-red-400 text-sm flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {error}
+                    </p>
+                  </div>
                 )}
-              </div>
-            </div>
-          </div>
 
-          {/* New Date/Time Selection */}
-          <Card className="bg-dark-card border-neon-blue/30">
-            <CardHeader>
-              <CardTitle className="font-orbitron text-lg text-neon-blue flex items-center gap-2">
-                <CalendarClock className="w-5 h-5" />
-                Nouvelle date et heure
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-date" className="text-gray-300 font-outfit">Nouvelle date</Label>
-                <Input
-                  id="new-date"
-                  type="date"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="bg-surface-highlight border-white/20 text-white font-outfit"
-                />
+                <Button
+                  onClick={handleSearch}
+                  disabled={searching || !searchPhone || !searchName}
+                  className="w-full bg-neon-blue text-black font-rajdhani font-bold uppercase py-6"
+                >
+                  {searching ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Recherche en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-5 h-5 mr-2" />
+                      Rechercher ma réservation
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Booking Found - Show Reschedule Form */}
+          {booking && (
+            <>
+              {/* Current Booking Info */}
+              <Card className="bg-dark-card border-white/10 mb-6">
+                <CardHeader>
+                  <CardTitle className="font-orbitron text-lg text-white flex items-center gap-2">
+                    <Gamepad2 className="w-5 h-5 text-neon-blue" />
+                    Réservation trouvée
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <Users className="w-4 h-4 text-gray-500" />
+                    <span className="font-outfit">{booking.customer_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <Gamepad2 className="w-4 h-4 text-gray-500" />
+                    <span className="font-outfit">
+                      {booking.game_type === "VR_360" ? "VR 360°" : "Simulateur"} - 
+                      {booking.number_of_players} joueur(s) x {booking.number_of_games} partie(s)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-neon-red">
+                    <Calendar className="w-4 h-4" />
+                    <span className="font-outfit font-semibold">{booking.date}</span>
+                    <Clock className="w-4 h-4 ml-2" />
+                    <span className="font-outfit font-semibold">{booking.time_slot}</span>
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBooking(null);
+                      setBookingInfo(null);
+                      setError(null);
+                    }}
+                    className="mt-2 text-gray-400 border-gray-600"
+                  >
+                    Rechercher une autre réservation
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Warning */}
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-yellow-400 font-outfit text-sm">
+                      {bookingInfo?.warning_message}
+                    </p>
+                    {bookingInfo?.fee_required && (
+                      <p className="text-yellow-300 font-semibold mt-2">
+                        Frais de reprogrammation: {bookingInfo?.fee_amount} FCFA
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="new-time" className="text-gray-300 font-outfit">Nouveau créneau</Label>
-                <Select value={newTime} onValueChange={setNewTime}>
-                  <SelectTrigger className="bg-surface-highlight border-white/20 text-white">
-                    <SelectValue placeholder="Sélectionner un créneau" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-dark-card border-white/20">
-                    {["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"].map((time) => (
-                      <SelectItem key={time} value={time} className="text-white">
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* New Date/Time Selection */}
+              <Card className="bg-dark-card border-neon-blue/30">
+                <CardHeader>
+                  <CardTitle className="font-orbitron text-lg text-neon-blue flex items-center gap-2">
+                    <CalendarClock className="w-5 h-5" />
+                    Nouvelle date et heure
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-date" className="text-gray-300 font-outfit">Nouvelle date</Label>
+                    <Input
+                      id="new-date"
+                      type="date"
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="bg-surface-highlight border-white/20 text-white font-outfit"
+                    />
+                  </div>
 
-              <Button
-                onClick={handleReschedule}
-                disabled={submitting || !newDate || !newTime}
-                className="w-full bg-neon-blue text-black font-rajdhani font-bold uppercase py-6 text-lg mt-4"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    Reprogrammation en cours...
-                  </>
-                ) : (
-                  <>
-                    <CalendarClock className="w-5 h-5 mr-2" />
-                    Confirmer la reprogrammation
-                    {bookingInfo?.fee_required && ` (${bookingInfo?.fee_amount} FCFA)`}
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-time" className="text-gray-300 font-outfit">Nouveau créneau</Label>
+                    <Select value={newTime} onValueChange={setNewTime}>
+                      <SelectTrigger className="bg-surface-highlight border-white/20 text-white">
+                        <SelectValue placeholder="Sélectionner un créneau" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-dark-card border-white/20">
+                        {["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"].map((time) => (
+                          <SelectItem key={time} value={time} className="text-white">
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    onClick={handleReschedule}
+                    disabled={submitting || !newDate || !newTime}
+                    className="w-full bg-neon-blue text-black font-rajdhani font-bold uppercase py-6 text-lg mt-4"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        Reprogrammation en cours...
+                      </>
+                    ) : (
+                      <>
+                        <CalendarClock className="w-5 h-5 mr-2" />
+                        Confirmer la reprogrammation
+                        {bookingInfo?.fee_required && ` (${bookingInfo?.fee_amount} FCFA)`}
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </section>
     </div>
