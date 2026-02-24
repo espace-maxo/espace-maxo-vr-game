@@ -661,6 +661,18 @@ const AdminPage = () => {
                             </Button>
                           </>
                         )}
+                        
+                        {/* Delete permanently button - always visible */}
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deleteBookingPermanently(booking.id, booking.customer_name)}
+                          className="border-red-800 text-red-500 hover:bg-red-900/20"
+                          data-testid={`delete-${booking.id}`}
+                          title="Supprimer définitivement"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
