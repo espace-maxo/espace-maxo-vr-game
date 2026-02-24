@@ -753,60 +753,68 @@ class WalletOTPVerify(BaseModel):
 
 @api_router.post("/wallet/send-otp")
 async def send_wallet_otp(request: WalletOTPRequest):
-    """Send OTP to phone via WhatsApp for wallet access"""
+    """Send OTP to phone via SMS using Twilio Verify"""
     clean_phone = request.phone.replace(" ", "").replace("+229", "")
     
-    # Generate 6-digit OTP
-    otp = str(random.randint(100000, 999999))
+    # Format phone number for Twilio (E.164 format: +229XXXXXXXX)
+    formatted_phone = f"+229{clean_phone}" if not clean_phone.startswith("+") else clean_phone
     
-    # Store OTP with timestamp (expires in 5 minutes)
+    # Store name for later use when verifying
     wallet_otps[clean_phone] = {
-        "otp": otp,
-        "created_at": datetime.now(timezone.utc),
-        "name": request.name
+        "name": request.name,
+        "created_at": datetime.now(timezone.utc)
     }
     
-    # Send OTP via WhatsApp to the user's phone
+    # Send OTP via Twilio Verify SMS
     try:
-        # Use CallMeBot to send to the user's WhatsApp
-        message = f"🔐 Code de vérification Espace Maxo\n\nVotre code: {otp}\n\n⏱️ Ce code expire dans 5 minutes.\n\nNe partagez ce code avec personne."
+        if not twilio_client or not TWILIO_VERIFY_SERVICE_SID:
+            logger.error("Twilio not configured")
+            raise HTTPException(status_code=500, detail="Service SMS non configuré")
         
-        # URL encode the message
-        encoded_message = quote(message)
+        verification = twilio_client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID) \
+            .verifications.create(to=formatted_phone, channel="sms")
         
-        # Send to user's phone (they need to have activated CallMeBot)
-        # For now, we'll also notify admin and store the OTP
-        admin_message = f"🔑 CODE OTP PROVISION\n\n📱 Numéro: {clean_phone}\n🔐 Code: {otp}\n\nLe client doit entrer ce code pour accéder à sa provision."
-        await send_whatsapp_notification(admin_message)
-        
-        logger.info(f"OTP sent for wallet access: {clean_phone}")
+        logger.info(f"OTP SMS sent for wallet access: {clean_phone}, status: {verification.status}")
         
         return {
             "success": True,
-            "message": "Code envoyé par WhatsApp",
-            "phone": clean_phone,
-            # TEMPORAIRE: Afficher le code car WhatsApp ne fonctionne pas
-            "otp_code": otp,
-            "note": "⚠️ WhatsApp temporairement indisponible. Voici votre code."
+            "message": "Code envoyé par SMS",
+            "phone": clean_phone
         }
     except Exception as e:
-        logger.error(f"Error sending OTP: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi du code")
+        logger.error(f"Error sending OTP via Twilio: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi du SMS: {str(e)}")
 
 @api_router.post("/wallet/verify-otp")
 async def verify_wallet_otp(request: WalletOTPVerify):
-    """Verify OTP for wallet access"""
+    """Verify OTP for wallet access using Twilio Verify"""
     clean_phone = request.phone.replace(" ", "").replace("+229", "")
+    formatted_phone = f"+229{clean_phone}" if not clean_phone.startswith("+") else clean_phone
     
     stored = wallet_otps.get(clean_phone)
+    name = stored.get("name") if stored else None
     
-    if not stored:
-        raise HTTPException(status_code=400, detail="Aucun code envoyé pour ce numéro. Veuillez demander un nouveau code.")
+    # Verify OTP with Twilio
+    try:
+        if not twilio_client or not TWILIO_VERIFY_SERVICE_SID:
+            raise HTTPException(status_code=500, detail="Service SMS non configuré")
+        
+        verification_check = twilio_client.verify.v2.services(TWILIO_VERIFY_SERVICE_SID) \
+            .verification_checks.create(to=formatted_phone, code=request.otp)
+        
+        if verification_check.status != "approved":
+            raise HTTPException(status_code=400, detail="Code incorrect ou expiré")
+        
+        logger.info(f"OTP verified for wallet access: {clean_phone}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying OTP: {e}")
+        raise HTTPException(status_code=400, detail="Code incorrect ou expiré")
     
-    # Check expiration (5 minutes)
-    created_at = stored["created_at"]
-    now = datetime.now(timezone.utc)
-    if (now - created_at).total_seconds() > 300:  # 5 minutes
+    # OTP is valid - clean up stored data
+    if clean_phone in wallet_otps:
         del wallet_otps[clean_phone]
         raise HTTPException(status_code=400, detail="Code expiré. Veuillez demander un nouveau code.")
     
