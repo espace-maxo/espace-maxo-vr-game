@@ -907,19 +907,6 @@ async def get_wallet_secure(phone: str, token: str = Query(...)):
             "free_games_available": free_games
         }
     }
-    
-    wallet = await db.wallets.find_one({"phone": {"$regex": f".*{clean_phone}$"}}, {"_id": 0})
-    
-    if not wallet:
-        return {"exists": False, "balance": 0, "phone": clean_phone}
-    
-    return {
-        "exists": True,
-        "balance": wallet.get("balance", 0),
-        "phone": wallet.get("phone"),
-        "name": wallet.get("name"),
-        "transactions": wallet.get("transactions", [])[-10:]
-    }
 
 @api_router.get("/wallet/{phone}")
 async def get_wallet(phone: str):
