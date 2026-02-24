@@ -85,6 +85,23 @@ const BookingPage = () => {
     loadKkiapayScript();
   }, []);
 
+  // Fetch wallet balance when phone changes
+  useEffect(() => {
+    const fetchWalletBalance = async () => {
+      if (formData.customerPhone && formData.customerPhone.length >= 10) {
+        try {
+          const response = await axios.get(`${API}/wallet/${formData.customerPhone}`);
+          setWalletBalance(response.data.balance || 0);
+          setWalletExists(response.data.exists || false);
+        } catch (error) {
+          setWalletBalance(0);
+          setWalletExists(false);
+        }
+      }
+    };
+    fetchWalletBalance();
+  }, [formData.customerPhone]);
+
   useEffect(() => {
     if (formData.date) {
       fetchSlots(format(formData.date, "yyyy-MM-dd"));
@@ -112,10 +129,28 @@ const BookingPage = () => {
     const gamePrice = 1500;
     const reservationFee = 500;
     const totalGames = formData.numberOfPlayers * formData.numberOfGames;
+    const gamesPrice = totalGames * gamePrice;
+    const total = gamesPrice + reservationFee;
+    
+    // Calculate amount to pay based on options
+    let amountToPay = reservationFee; // Default: just reservation fee
+    if (formData.payFullAmount) {
+      amountToPay = total;
+    }
+    
+    // Apply wallet balance if enabled
+    let walletUsed = 0;
+    if (formData.useWallet && walletBalance > 0) {
+      walletUsed = Math.min(walletBalance, amountToPay);
+      amountToPay = amountToPay - walletUsed;
+    }
+    
     return {
-      gamesPrice: totalGames * gamePrice,
+      gamesPrice,
       reservationFee,
-      total: (totalGames * gamePrice) + reservationFee
+      total,
+      amountToPay,
+      walletUsed
     };
   };
 
