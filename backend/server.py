@@ -919,6 +919,25 @@ async def verify_payment(request: Request):
         except Exception as e:
             logger.error(f"Error adding loyalty points: {e}")
         
+        # Send WhatsApp notification to admin for new paid booking
+        try:
+            game_type_label = "VR 360°" if booking.get("game_type") == "VR_360" else "Simulateur"
+            notification_message = (
+                f"🎮 NOUVELLE RÉSERVATION PAYÉE!\n\n"
+                f"👤 Client: {booking.get('customer_name')}\n"
+                f"📱 Tél: {booking.get('customer_phone')}\n"
+                f"🎯 Jeu: {game_type_label}\n"
+                f"📅 Date: {booking.get('date')}\n"
+                f"⏰ Créneau: {booking.get('time_slot')}\n"
+                f"👥 {booking.get('number_of_players')} joueur(s) x {booking.get('number_of_games')} partie(s)\n"
+                f"💰 Montant: {booking.get('reservation_fee')} FCFA\n\n"
+                f"✅ Paiement confirmé!"
+            )
+            await send_whatsapp_notification(notification_message)
+            logger.info(f"WhatsApp notification sent for booking {booking_id}")
+        except Exception as e:
+            logger.error(f"Error sending WhatsApp notification: {e}")
+        
         # Get updated booking
         updated_booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         
