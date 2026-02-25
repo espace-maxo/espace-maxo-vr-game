@@ -308,6 +308,10 @@ const DeliveryPage = () => {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const deliveryFee = orderForm.zone === "cotonou" ? 1000 : 0; // Frais uniquement pour Cotonou
   const totalWithDelivery = cartTotal + deliveryFee;
+  
+  // Calculate wallet usage
+  const walletAmountToUse = useWallet ? Math.min(walletBalance, totalWithDelivery) : 0;
+  const amountToPay = totalWithDelivery - walletAmountToUse;
 
   // Create order in backend
   const createOrder = async (paymentStatus = "pending", transactionId = null) => {
