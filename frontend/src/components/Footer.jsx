@@ -29,7 +29,7 @@ const Footer = () => {
                 data-testid="footer-provision"
               >
                 <Wallet className="w-5 h-5 text-green-500" />
-                <span className="font-outfit">Ma Provision</span>
+                <span className="font-outfit">Mon Porte-Monnaie</span>
               </Link>
               <Link
                 to="/reprogrammer"
@@ -37,7 +37,7 @@ const Footer = () => {
                 data-testid="footer-reschedule"
               >
                 <CalendarClock className="w-5 h-5 text-neon-blue" />
-                <span className="font-outfit">Reprogrammer ma réservation</span>
+                <span className="font-outfit">Reprogrammer session de jeu</span>
               </Link>
               <Link
                 to="/location"
