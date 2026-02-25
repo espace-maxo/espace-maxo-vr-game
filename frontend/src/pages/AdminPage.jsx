@@ -898,6 +898,17 @@ const AdminPage = () => {
                                   </Button>
                                 </>
                               )}
+                              
+                              {/* Delete button - always visible */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openDeleteLocationModal(request)}
+                                className="border-red-500 text-red-500 hover:bg-red-500/10"
+                                data-testid={`delete-location-${request.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
