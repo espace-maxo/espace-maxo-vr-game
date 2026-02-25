@@ -1240,7 +1240,7 @@ const AdminPage = () => {
                 <>
                   Client: <span className="text-white">{selectedBooking.customer_name}</span>
                   <br />
-                  Actuelle: <span className="text-white">{selectedBooking.date} à {selectedBooking.time_slot}</span>
+                  Actuelle: <span className="text-white">{formatDateFR(selectedBooking.date)} à {selectedBooking.time_slot}</span>
                 </>
               )}
             </DialogDescription>
