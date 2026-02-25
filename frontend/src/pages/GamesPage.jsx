@@ -51,7 +51,7 @@ const GamesPage = () => {
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-neon-blue animate-pulse"></div>
             <span className="font-rajdhani font-bold text-xl text-white">
-              Prix par partie: <span className="text-food-gold">1.500 FCFA</span>
+              Prix par partie: <span className="text-food-gold">2.000 FCFA</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
