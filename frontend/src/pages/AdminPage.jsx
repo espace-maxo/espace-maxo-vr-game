@@ -723,7 +723,7 @@ const AdminPage = () => {
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {booking.date}
+                            {formatDateFR(booking.date)}
                           </span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
