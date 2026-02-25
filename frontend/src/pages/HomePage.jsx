@@ -327,41 +327,6 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 px-4 bg-gradient-radial-red" data-testid="cta-section">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="font-orbitron font-bold text-3xl md:text-5xl mb-6">
-            <span className="text-white">Prêt à</span>{" "}
-            <span className="text-neon-red text-glow-red">Jouer?</span>
-          </h2>
-          <p className="text-gray-300 font-outfit text-lg mb-8 max-w-2xl mx-auto">
-            Réservez votre créneau dès maintenant et venez vivre une expérience gaming inoubliable!
-            <br />
-            <span className="text-food-gold font-semibold">Frais de réservation: 500 FCFA</span>
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/booking" data-testid="cta-booking-button">
-              <Button
-                size="lg"
-                className="bg-neon-blue text-black font-rajdhani font-bold text-lg uppercase px-8 py-6 hover:shadow-[0_0_30px_rgba(0,240,255,0.5)] transition-all pulse-glow"
-              >
-                Réserver une session
-              </Button>
-            </Link>
-            <a href="https://wa.me/2290141470000" data-testid="cta-whatsapp-button">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/30 text-white font-rajdhani font-bold text-lg uppercase px-8 py-6 hover:bg-white/10 transition-all"
-              >
-                <Phone className="w-5 h-5 mr-2" />
-                WhatsApp
-              </Button>
-            </a>
-          </div>
-        </div>
-      </section>
-
       {/* Info Section */}
       <section className="py-20 px-4 bg-dark-card" data-testid="info-section">
         <div className="max-w-7xl mx-auto">
