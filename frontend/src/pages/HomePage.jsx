@@ -32,7 +32,7 @@ const HomePage = () => {
         onClose={() => setLightboxOpen(false)}
       />
       {/* Hero Section */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden pt-16" data-testid="hero-section">
+      <section className="relative h-screen flex items-center justify-center overflow-hidden" data-testid="hero-section">
         {/* Background Image */}
         <div className="absolute inset-0">
           <img
