@@ -78,7 +78,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [x] **Frais reprogrammation avec paiement Kkiapay**
 - [x] **Format date jj/mm/aaaa**
 - [x] **Nouveau mot de passe admin**
-- [x] **Réduction 10% prix livraison**
+- [x] **Section "Nous Rejoindre" avec dépôt CV**
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
