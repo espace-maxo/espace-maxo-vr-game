@@ -6,9 +6,15 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ## What's Been Implemented
 
 ### Phase 13 - Réduction Prix Livraison (Déc 2025)
-- **Réduction de 10%** sur tous les prix de la page Livraison
-- Prix arrondis à la **centaine inférieure** (ex: 3600 → 3200, 2200 → 1900)
-- 15 catégories mises à jour (Salades, Entrées, Volailles, Viandes, Poissons, etc.)
+- **Annulé** - Les prix ont été remis à leur valeur originale à la demande de l'utilisateur
+
+### Phase 14 - Section "Nous Rejoindre" (Déc 2025)
+- **Nouvelle page `/rejoindre`** : Formulaire de candidature complet
+- **Champs** : Nom, Téléphone, Email, Poste souhaité, CV (PDF), Message/Motivation
+- **Upload CV** : Support des fichiers PDF jusqu'à 5 Mo (stockage base64)
+- **SMS Admin** : Notification automatique à chaque nouvelle candidature
+- **Panel Admin** : Nouvel onglet "Candidatures" avec gestion complète
+- **Fonctionnalités Admin** : Voir CV, changer statut, supprimer, export CSV
 
 ### Phase 12 - Corrections (25 Feb 2026)
 - **Frais de reprogrammation** : Paiement Kkiapay obligatoire si < 15 min avant session (500 FCFA)
