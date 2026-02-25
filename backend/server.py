@@ -168,6 +168,7 @@ class RescheduleByClientRequest(BaseModel):
     new_time_slot: str
     phone: str
     name: str
+    payment_transaction_id: Optional[str] = None  # Required if fee_required
 
 class FindBookingRequest(BaseModel):
     phone: str
