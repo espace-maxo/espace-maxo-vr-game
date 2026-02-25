@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Gamepad2, Phone, Lock, CalendarClock } from "lucide-react";
+import { Menu, X, Gamepad2, Phone, Lock, CalendarClock, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -10,6 +10,7 @@ const Navbar = () => {
   const navLinks = [
     { label: "Accueil", path: "/" },
     { label: "Menu", path: "/menu" },
+    { label: "Livraison", path: "/livraison" },
     { label: "Jeux & VR", path: "/games" },
     { label: "Avis", path: "/avis" },
     { label: "Admin", path: "/admin" },
