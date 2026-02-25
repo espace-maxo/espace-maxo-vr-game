@@ -18,19 +18,19 @@ import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-// Menu data - Prix réduits de 10% pour la livraison (arrondis à la centaine inférieure)
+// Menu data - Prix livraison
 const menuData = {
   salades: {
     name: "Salades",
     icon: Salad,
     color: "text-green-500",
     items: [
-      { id: "sal1", name: "Salade niçoise", price: 3200 },
-      { id: "sal2", name: "Salade crudités", price: 1900 },
-      { id: "sal3", name: "Salade César", price: 3600 },
-      { id: "sal4", name: "Salade Maxo", price: 4000, popular: true },
-      { id: "sal5", name: "Salade Avocat crevettes", price: 3600 },
-      { id: "sal6", name: "Salade au thon", price: 3200 }
+      { id: "sal1", name: "Salade niçoise", price: 3600 },
+      { id: "sal2", name: "Salade crudités", price: 2200 },
+      { id: "sal3", name: "Salade César", price: 4000 },
+      { id: "sal4", name: "Salade Maxo", price: 4500, popular: true },
+      { id: "sal5", name: "Salade Avocat crevettes", price: 4000 },
+      { id: "sal6", name: "Salade au thon", price: 3600 }
     ]
   },
   entrees: {
@@ -38,9 +38,9 @@ const menuData = {
     icon: ChefHat,
     color: "text-orange-500",
     items: [
-      { id: "ent1", name: "Samossas au Poulet", price: 1900 },
-      { id: "ent2", name: "Samossas à la viande", price: 1900 },
-      { id: "ent3", name: "Neems Poulet ou Viande", price: 1900 }
+      { id: "ent1", name: "Samossas au Poulet", price: 2200 },
+      { id: "ent2", name: "Samossas à la viande", price: 2200 },
+      { id: "ent3", name: "Neems Poulet ou Viande", price: 2200 }
     ]
   },
   volailles: {
@@ -48,12 +48,12 @@ const menuData = {
     icon: Drumstick,
     color: "text-yellow-500",
     items: [
-      { id: "vol1", name: "Sauce Poulet au Curry", price: 4400, description: "Poulet Chair ou Bicyclette" },
-      { id: "vol2", name: "Choukouya Poulet Bicyclette", price: 4800, popular: true },
-      { id: "vol3", name: "Choukouya Poulet Chair (Demi)", price: 4000 },
-      { id: "vol4", name: "Poulet chair Frit/Grillé/BFW (Demi)", price: 4000 },
-      { id: "vol5", name: "Poulet chair Frit/Grillé/BFW (Complet)", price: 7200 },
-      { id: "vol6", name: "Poulet Bicyclette Frit/Braisé/Grillé", price: 4800 }
+      { id: "vol1", name: "Sauce Poulet au Curry", price: 4900, description: "Poulet Chair ou Bicyclette" },
+      { id: "vol2", name: "Choukouya Poulet Bicyclette", price: 5400, popular: true },
+      { id: "vol3", name: "Choukouya Poulet Chair (Demi)", price: 4500 },
+      { id: "vol4", name: "Poulet chair Frit/Grillé/BFW (Demi)", price: 4500 },
+      { id: "vol5", name: "Poulet chair Frit/Grillé/BFW (Complet)", price: 8100 },
+      { id: "vol6", name: "Poulet Bicyclette Frit/Braisé/Grillé", price: 5400 }
     ]
   },
   viandes: {
@@ -61,13 +61,13 @@ const menuData = {
     icon: Beef,
     color: "text-red-500",
     items: [
-      { id: "via1", name: "Filet de Boeuf sauce champignons", price: 4800, description: "Sauce crème aux champignons" },
-      { id: "via2", name: "Steaks Grillés", price: 4400 },
-      { id: "via3", name: "Steak au poivre", price: 4400, popular: true },
-      { id: "via4", name: "Choukouya Mouton", price: 4000 },
-      { id: "via5", name: "Mouton frit/braisé/Grillé", price: 4000 },
-      { id: "via6", name: "Langue de Boeuf Braisé/Grillé", price: 4000 },
-      { id: "via7", name: "Agneau Frit/Braisé/Grillé", price: 4000 }
+      { id: "via1", name: "Filet de Boeuf sauce champignons", price: 5400, description: "Sauce crème aux champignons" },
+      { id: "via2", name: "Steaks Grillés", price: 4900 },
+      { id: "via3", name: "Steak au poivre", price: 4900, popular: true },
+      { id: "via4", name: "Choukouya Mouton", price: 4500 },
+      { id: "via5", name: "Mouton frit/braisé/Grillé", price: 4500 },
+      { id: "via6", name: "Langue de Boeuf Braisé/Grillé", price: 4500 },
+      { id: "via7", name: "Agneau Frit/Braisé/Grillé", price: 4500 }
     ]
   },
   poissons: {
@@ -75,8 +75,8 @@ const menuData = {
     icon: Fish,
     color: "text-blue-500",
     items: [
-      { id: "poi1", name: "Poisson frit/Braisé/Grillé", price: 4800 },
-      { id: "poi2", name: "Moyo Poisson", price: 4800, description: "Poisson au choix" }
+      { id: "poi1", name: "Poisson frit/Braisé/Grillé", price: 5400 },
+      { id: "poi2", name: "Moyo Poisson", price: 5400, description: "Poisson au choix" }
     ]
   },
   divers: {
@@ -84,8 +84,8 @@ const menuData = {
     icon: UtensilsCrossed,
     color: "text-purple-500",
     items: [
-      { id: "div1", name: "Lapin frit/Braisé/Grillé (Portion)", price: 3200 },
-      { id: "div2", name: "Aileron Frit/Braisé/Grillé", price: 4000 }
+      { id: "div1", name: "Lapin frit/Braisé/Grillé (Portion)", price: 3600 },
+      { id: "div2", name: "Aileron Frit/Braisé/Grillé", price: 4500 }
     ]
   },
   sauces: {
@@ -93,14 +93,14 @@ const menuData = {
     icon: ChefHat,
     color: "text-amber-600",
     items: [
-      { id: "sau1", name: "Sauce Légume GBOMA/TCHIAVO/AMANVIVÈ", price: 4000 },
-      { id: "sau2", name: "Sauce Légume Mixte", price: 4400, description: "Au choix de légume" },
-      { id: "sau3", name: "Sauce Vassa", price: 4400, description: "Poulet Chair ou Bicyclette", popular: true },
-      { id: "sau4", name: "Sauce Assrokouin", price: 4000 },
-      { id: "sau5", name: "Sauce Arachide (Fromage/Poisson)", price: 4000 },
-      { id: "sau6", name: "Agneau en Sauce Arachide", price: 4000 },
-      { id: "sau7", name: "Agneau en Sauce Tomate", price: 4000 },
-      { id: "sau8", name: "Sauce Goussi (Sésame)", price: 4000 }
+      { id: "sau1", name: "Sauce Légume GBOMA/TCHIAVO/AMANVIVÈ", price: 4500 },
+      { id: "sau2", name: "Sauce Légume Mixte", price: 4900, description: "Au choix de légume" },
+      { id: "sau3", name: "Sauce Vassa", price: 4900, description: "Poulet Chair ou Bicyclette", popular: true },
+      { id: "sau4", name: "Sauce Assrokouin", price: 4500 },
+      { id: "sau5", name: "Sauce Arachide (Fromage/Poisson)", price: 4500 },
+      { id: "sau6", name: "Agneau en Sauce Arachide", price: 4500 },
+      { id: "sau7", name: "Agneau en Sauce Tomate", price: 4500 },
+      { id: "sau8", name: "Sauce Goussi (Sésame)", price: 4500 }
     ]
   },
   pates: {
@@ -108,14 +108,14 @@ const menuData = {
     icon: UtensilsCrossed,
     color: "text-yellow-600",
     items: [
-      { id: "pat1", name: "Spaghetti bolognaise", price: 3200 },
-      { id: "pat2", name: "Tagliatelles crevettes", price: 4000 },
-      { id: "pat3", name: "Spaghetti (Sauté au beurre/au gras)", price: 800 },
-      { id: "pat4", name: "Pïron (Rouge/Blanc)", price: 800 },
-      { id: "pat5", name: "Couscous (au gras/Blanc)", price: 800 },
-      { id: "pat6", name: "Pâte Blanche (Pâte de Maïs)", price: 800 },
-      { id: "pat7", name: "Pâte Noire (Télibo)", price: 800 },
-      { id: "pat8", name: "Pâte Rouge (Amiwo)", price: 800 }
+      { id: "pat1", name: "Spaghetti bolognaise", price: 3600 },
+      { id: "pat2", name: "Tagliatelles crevettes", price: 4500 },
+      { id: "pat3", name: "Spaghetti (Sauté au beurre/au gras)", price: 900 },
+      { id: "pat4", name: "Pïron (Rouge/Blanc)", price: 900 },
+      { id: "pat5", name: "Couscous (au gras/Blanc)", price: 900 },
+      { id: "pat6", name: "Pâte Blanche (Pâte de Maïs)", price: 900 },
+      { id: "pat7", name: "Pâte Noire (Télibo)", price: 900 },
+      { id: "pat8", name: "Pâte Rouge (Amiwo)", price: 900 }
     ]
   },
   accompagnements: {
@@ -123,15 +123,15 @@ const menuData = {
     icon: UtensilsCrossed,
     color: "text-lime-500",
     items: [
-      { id: "acc1", name: "Riz blanc", price: 800 },
-      { id: "acc2", name: "Riz Cantonais", price: 1100 },
-      { id: "acc3", name: "Riz aux légumes", price: 1100 },
-      { id: "acc4", name: "Pomme sautée", price: 1100 },
-      { id: "acc5", name: "Frite surgelée", price: 800 },
-      { id: "acc6", name: "Frite Nature", price: 1100 },
-      { id: "acc7", name: "Atiékè", price: 800 },
-      { id: "acc8", name: "Akassa", price: 300 },
-      { id: "acc9", name: "Salade verte", price: 1100 }
+      { id: "acc1", name: "Riz blanc", price: 900 },
+      { id: "acc2", name: "Riz Cantonais", price: 1300 },
+      { id: "acc3", name: "Riz aux légumes", price: 1300 },
+      { id: "acc4", name: "Pomme sautée", price: 1300 },
+      { id: "acc5", name: "Frite surgelée", price: 900 },
+      { id: "acc6", name: "Frite Nature", price: 1300 },
+      { id: "acc7", name: "Atiékè", price: 900 },
+      { id: "acc8", name: "Akassa", price: 400 },
+      { id: "acc9", name: "Salade verte", price: 1300 }
     ]
   },
   burgers: {
@@ -139,11 +139,11 @@ const menuData = {
     icon: Sandwich,
     color: "text-orange-600",
     items: [
-      { id: "bur1", name: "MeetBurger", price: 1900, description: "Viande burger, oignons, tomate, cornichons, salade" },
-      { id: "bur2", name: "CheeseBurger", price: 2400, description: "Viande burger, cheese, oignons, tomate, cornichons" },
-      { id: "bur3", name: "Double Cheese Burger", price: 4000, description: "Double viande, double cheese", popular: true },
-      { id: "bur4", name: "KingBurger", price: 2700, description: "Viande, cheese, oeuf, oignons, tomate, cornichons" },
-      { id: "bur5", name: "Burger Maxo", price: 3200, description: "Poulet crispy, cheese, oeuf, oignons, tomate", popular: true }
+      { id: "bur1", name: "MeetBurger", price: 2200, description: "Viande burger, oignons, tomate, cornichons, salade" },
+      { id: "bur2", name: "CheeseBurger", price: 2700, description: "Viande burger, cheese, oignons, tomate, cornichons" },
+      { id: "bur3", name: "Double Cheese Burger", price: 4500, description: "Double viande, double cheese", popular: true },
+      { id: "bur4", name: "KingBurger", price: 3100, description: "Viande, cheese, oeuf, oignons, tomate, cornichons" },
+      { id: "bur5", name: "Burger Maxo", price: 3600, description: "Poulet crispy, cheese, oeuf, oignons, tomate", popular: true }
     ]
   },
   sandwichs: {
@@ -151,12 +151,12 @@ const menuData = {
     icon: Sandwich,
     color: "text-amber-500",
     items: [
-      { id: "san1", name: "Chawarma Viande", price: 1600 },
-      { id: "san2", name: "Chawarma Poulet", price: 1600 },
-      { id: "san3", name: "Sandwich au Poisson + Frite", price: 2400 },
-      { id: "san4", name: "Sandwich Fajitas + Frite", price: 2400 },
-      { id: "san5", name: "Sandwich Philadelphia + Frite", price: 2400 },
-      { id: "san6", name: "Sandwich MAXO + Frite", price: 2400, popular: true }
+      { id: "san1", name: "Chawarma Viande", price: 1800 },
+      { id: "san2", name: "Chawarma Poulet", price: 1800 },
+      { id: "san3", name: "Sandwich au Poisson + Frite", price: 2700 },
+      { id: "san4", name: "Sandwich Fajitas + Frite", price: 2700 },
+      { id: "san5", name: "Sandwich Philadelphia + Frite", price: 2700 },
+      { id: "san6", name: "Sandwich MAXO + Frite", price: 2700, popular: true }
     ]
   },
   pizzas: {
@@ -164,12 +164,12 @@ const menuData = {
     icon: Pizza,
     color: "text-red-600",
     items: [
-      { id: "piz1", name: "Pizza Reine", price: 4000, description: "Sauce tomate, Jambon, Champignon, fromage" },
-      { id: "piz2", name: "Pizza 4 saisons", price: 4000, description: "Jambon, artichaut, champignon, poivron" },
-      { id: "piz3", name: "Pizza Margherita", price: 3600, description: "Sauce tomate, olive, origan, fromage" },
-      { id: "piz4", name: "Pizza Maxo", price: 4800, description: "Chorizo, champignon, poulet, origan, olive", popular: true },
-      { id: "piz5", name: "Pizza Végétarienne", price: 4000, description: "Oignon, champignon, maïs, poivron, olive" },
-      { id: "piz6", name: "Pizza Bolognaise", price: 4000, description: "Sauce tomate, viande hachée, fromage" }
+      { id: "piz1", name: "Pizza Reine", price: 4500, description: "Sauce tomate, Jambon, Champignon, fromage" },
+      { id: "piz2", name: "Pizza 4 saisons", price: 4500, description: "Jambon, artichaut, champignon, poivron" },
+      { id: "piz3", name: "Pizza Margherita", price: 4000, description: "Sauce tomate, olive, origan, fromage" },
+      { id: "piz4", name: "Pizza Maxo", price: 5400, description: "Chorizo, champignon, poulet, origan, olive", popular: true },
+      { id: "piz5", name: "Pizza Végétarienne", price: 4500, description: "Oignon, champignon, maïs, poivron, olive" },
+      { id: "piz6", name: "Pizza Bolognaise", price: 4500, description: "Sauce tomate, viande hachée, fromage" }
     ]
   },
   desserts: {
@@ -177,13 +177,13 @@ const menuData = {
     icon: IceCream,
     color: "text-pink-500",
     items: [
-      { id: "des1", name: "Crêpe Nature (1 pièce)", price: 500 },
-      { id: "des2", name: "Crêpe au Nutella (1 pièce)", price: 1100 },
-      { id: "des3", name: "Salade de Fruit", price: 800 },
-      { id: "des4", name: "Ananas Pirogue", price: 800 },
-      { id: "des5", name: "Assiette de Fruit", price: 1100 },
-      { id: "des6", name: "Glace Chocolat/Fraise/Vanille (boule)", price: 800 },
-      { id: "des7", name: "Coupe de glace (3 boules + chantilly)", price: 1900, popular: true }
+      { id: "des1", name: "Crêpe Nature (1 pièce)", price: 600 },
+      { id: "des2", name: "Crêpe au Nutella (1 pièce)", price: 1300 },
+      { id: "des3", name: "Salade de Fruit", price: 900 },
+      { id: "des4", name: "Ananas Pirogue", price: 900 },
+      { id: "des5", name: "Assiette de Fruit", price: 1300 },
+      { id: "des6", name: "Glace Chocolat/Fraise/Vanille (boule)", price: 900 },
+      { id: "des7", name: "Coupe de glace (3 boules + chantilly)", price: 2200, popular: true }
     ]
   },
   boissons: {
@@ -191,15 +191,15 @@ const menuData = {
     icon: GlassWater,
     color: "text-cyan-500",
     items: [
-      { id: "boi1", name: "Majestic / World cola", price: 800 },
-      { id: "boi2", name: "Jus d'orange", price: 800 },
-      { id: "boi3", name: "Jus d'ananas", price: 800 },
-      { id: "boi4", name: "Jus de pastèque", price: 800 },
-      { id: "boi5", name: "Jus Mixte (Mélange au choix)", price: 1100 },
-      { id: "boi6", name: "Béninoises 0,33 cl", price: 800 },
-      { id: "boi7", name: "Sombreros 0,33 cl", price: 800 },
-      { id: "boi8", name: "Guinness 0,33 cl", price: 1100 },
-      { id: "boi9", name: "Chill 0,33 cl", price: 800 }
+      { id: "boi1", name: "Majestic / World cola", price: 900 },
+      { id: "boi2", name: "Jus d'orange", price: 900 },
+      { id: "boi3", name: "Jus d'ananas", price: 900 },
+      { id: "boi4", name: "Jus de pastèque", price: 900 },
+      { id: "boi5", name: "Jus Mixte (Mélange au choix)", price: 1300 },
+      { id: "boi6", name: "Béninoises 0,33 cl", price: 900 },
+      { id: "boi7", name: "Sombreros 0,33 cl", price: 900 },
+      { id: "boi8", name: "Guinness 0,33 cl", price: 1300 },
+      { id: "boi9", name: "Chill 0,33 cl", price: 900 }
     ]
   }
 };
