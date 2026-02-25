@@ -475,7 +475,7 @@ GAMES = [
         "name": "VR 360° Immersif",
         "description": "Plongez dans des mondes virtuels époustouflants avec notre casque VR dernière génération. Combattez des zombies, explorez l'espace ou visitez des mondes fantastiques!",
         "game_type": "VR_360",
-        "price_per_game": 1500,
+        "price_per_game": 2000,
         "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/caxe4zas_52ccd1b2-bdd5-4dc7-835c-75cef471dbeb%202.JPG",
         "duration_minutes": 15
     },
@@ -484,7 +484,7 @@ GAMES = [
         "name": "Simulateur Course",
         "description": "Vivez l'adrénaline de la course automobile avec notre simulateur professionnel. Volant, pédales et siège baquet pour une expérience ultra-réaliste!",
         "game_type": "RACING_SIMULATOR",
-        "price_per_game": 1500,
+        "price_per_game": 2000,
         "image_url": "https://customer-assets.emergentagent.com/job_vr-gaming-hub-1/artifacts/caxe4zas_52ccd1b2-bdd5-4dc7-835c-75cef471dbeb%202.JPG",
         "duration_minutes": 15
     }
