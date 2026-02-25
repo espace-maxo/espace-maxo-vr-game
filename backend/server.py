@@ -2609,6 +2609,158 @@ async def export_loyalty_csv(is_admin: bool = Depends(get_current_admin)):
         logger.error(f"Error exporting loyalty: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de l'export")
 
+# ============== JOB APPLICATIONS ROUTES ==============
+
+@api_router.post("/job-applications")
+async def submit_job_application(application: JobApplicationCreate):
+    """Submit a job application"""
+    if not application.full_name or not application.phone or not application.email or not application.position:
+        raise HTTPException(status_code=400, detail="Tous les champs obligatoires doivent être remplis")
+    
+    # Create application record
+    job_app = JobApplication(
+        full_name=application.full_name,
+        phone=application.phone,
+        email=application.email,
+        position=application.position,
+        message=application.message,
+        cv_filename=application.cv_filename
+    )
+    
+    # If CV data is provided (base64), store it
+    if application.cv_data and application.cv_filename:
+        # Store the CV data in the database (base64 encoded)
+        job_app_dict = job_app.model_dump()
+        job_app_dict["cv_data"] = application.cv_data
+        await db.job_applications.insert_one(job_app_dict)
+    else:
+        await db.job_applications.insert_one(job_app.model_dump())
+    
+    # Send SMS notification to admin
+    notification_message = f"""[CANDIDATURE] Nouvelle candidature reçue!
+
+Nom: {application.full_name}
+Tel: {application.phone}
+Email: {application.email}
+Poste: {application.position}
+CV: {'Oui' if application.cv_filename else 'Non'}
+
+Connectez-vous au panel admin pour voir les détails."""
+    
+    await send_admin_sms_notification(notification_message)
+    
+    return {
+        "success": True,
+        "message": "Votre candidature a été envoyée avec succès. Nous vous contacterons bientôt."
+    }
+
+
+@api_router.get("/admin/job-applications")
+async def get_job_applications(is_admin: bool = Depends(get_current_admin)):
+    """Get all job applications (admin only)"""
+    applications = await db.job_applications.find({}, {"_id": 0, "cv_data": 0}).sort("created_at", -1).to_list(length=500)
+    return applications
+
+
+@api_router.get("/admin/job-applications/{application_id}")
+async def get_job_application_detail(application_id: str, is_admin: bool = Depends(get_current_admin)):
+    """Get a specific job application with CV data (admin only)"""
+    application = await db.job_applications.find_one({"id": application_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Candidature non trouvée")
+    return application
+
+
+@api_router.put("/admin/job-applications/{application_id}/status")
+async def update_job_application_status(
+    application_id: str, 
+    status_update: dict,
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Update job application status (admin only)"""
+    valid_statuses = ["pending", "reviewed", "contacted", "hired", "rejected"]
+    new_status = status_update.get("status")
+    
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Statut invalide. Statuts valides: {', '.join(valid_statuses)}")
+    
+    result = await db.job_applications.update_one(
+        {"id": application_id},
+        {"$set": {"status": new_status}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Candidature non trouvée")
+    
+    return {"success": True, "message": f"Statut mis à jour: {new_status}"}
+
+
+@api_router.delete("/admin/job-applications/{application_id}")
+async def delete_job_application(application_id: str, is_admin: bool = Depends(get_current_admin)):
+    """Delete a job application (admin only)"""
+    result = await db.job_applications.delete_one({"id": application_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Candidature non trouvée")
+    
+    return {"success": True, "message": "Candidature supprimée"}
+
+
+@api_router.get("/admin/export/job-applications")
+async def export_job_applications_csv(is_admin: bool = Depends(get_current_admin)):
+    """Export all job applications to CSV"""
+    try:
+        applications = await db.job_applications.find({}, {"_id": 0, "cv_data": 0}).sort("created_at", -1).to_list(length=5000)
+        
+        if not applications:
+            raise HTTPException(status_code=404, detail="Aucune candidature à exporter")
+        
+        output = io.StringIO()
+        fieldnames = [
+            "ID", "Nom", "Téléphone", "Email", "Poste Souhaité", 
+            "Message", "CV", "Statut", "Date Candidature"
+        ]
+        
+        writer = csv.DictWriter(output, fieldnames=fieldnames, delimiter=';')
+        writer.writeheader()
+        
+        status_labels = {
+            "pending": "En attente",
+            "reviewed": "Examiné",
+            "contacted": "Contacté",
+            "hired": "Embauché",
+            "rejected": "Rejeté"
+        }
+        
+        for app in applications:
+            writer.writerow({
+                "ID": app.get("id", "")[:8],
+                "Nom": app.get("full_name", ""),
+                "Téléphone": app.get("phone", ""),
+                "Email": app.get("email", ""),
+                "Poste Souhaité": app.get("position", ""),
+                "Message": app.get("message", "")[:200],
+                "CV": "Oui" if app.get("cv_filename") else "Non",
+                "Statut": status_labels.get(app.get("status", ""), app.get("status", "")),
+                "Date Candidature": app.get("created_at", "")[:19].replace("T", " ")
+            })
+        
+        output.seek(0)
+        filename = f"candidatures_espace_maxo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting job applications: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'export")
+
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
