@@ -415,12 +415,23 @@ const DeliveryPage = () => {
       toast.success("Paiement réussi!");
       
       try {
+        // Deduct wallet amount if used
+        if (useWallet && walletAmountToUse > 0) {
+          await axios.post(`${API}/wallet/use`, {
+            phone: orderForm.phone,
+            amount: walletAmountToUse,
+            description: `Commande livraison Espace Maxo (complément)`
+          });
+          setWalletBalance(prev => prev - walletAmountToUse);
+        }
+        
         // Create order with payment confirmed
-        await createOrder("paid", response.transactionId);
+        await createOrder("paid", response.transactionId, walletAmountToUse);
         setOrderSuccess(true);
-        setSuccessMessage("Votre commande est confirmée et en cours de préparation. Livraison dans 30-45 minutes!");
+        setSuccessMessage(`Votre commande est confirmée et en cours de préparation. ${walletAmountToUse > 0 ? `(${formatPrice(walletAmountToUse)} FCFA via porte-monnaie + ${formatPrice(amountToPay)} FCFA via mobile money) ` : ''}Livraison dans 30-45 minutes!`);
         setCart([]);
         setShowOrderForm(false);
+        setUseWallet(false);
       } catch (error) {
         console.error("Error creating order:", error);
         toast.error("Erreur lors de l'enregistrement. Contactez-nous avec votre ID de paiement.");
