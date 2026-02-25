@@ -94,11 +94,26 @@ const Footer = () => {
 
         {/* Bottom */}
         <div className="mt-12 pt-8 border-t border-white/10 text-center">
-          <p className="text-gray-500 font-outfit text-sm">
+          <p className="text-gray-400 font-outfit text-sm">
             © 2024 Espace Maxo. Tous droits réservés.
           </p>
         </div>
       </div>
+      
+      {/* Hide Emergent branding */}
+      <style>{`
+        [class*="emergent"], 
+        [data-emergent], 
+        a[href*="emergent"],
+        div:has(> span:contains("Emergent")),
+        .fixed.bottom-4.right-4,
+        div[style*="position: fixed"][style*="bottom"],
+        div[style*="position: fixed"][style*="right"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+        }
+      `}</style>
     </footer>
   );
 };
