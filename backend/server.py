@@ -1737,6 +1737,26 @@ async def verify_payment(request: Request):
         except Exception as e:
             logger.error(f"Error sending WhatsApp notification: {e}")
         
+        # Send SMS confirmation to client
+        try:
+            game_type_label = "VR 360°" if booking.get("game_type") == "VR_360" else "Simulateur"
+            client_message = (
+                f"ESPACE MAXO - Confirmation\n\n"
+                f"Votre reservation est confirmee!\n\n"
+                f"Jeu: {game_type_label}\n"
+                f"Date: {booking.get('date')}\n"
+                f"Heure: {booking.get('time_slot')}\n"
+                f"Joueurs: {booking.get('number_of_players')}\n"
+                f"Parties: {booking.get('number_of_games')}\n\n"
+                f"Montant paye: {booking.get('reservation_fee')} FCFA\n\n"
+                f"Adresse: Fidjrosse Plage, Cotonou\n"
+                f"A bientot!"
+            )
+            await send_client_sms_confirmation(booking.get('customer_phone'), client_message)
+            logger.info(f"Client SMS confirmation sent for booking {booking_id}")
+        except Exception as e:
+            logger.error(f"Error sending client SMS confirmation: {e}")
+        
         # Get updated booking
         updated_booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         
