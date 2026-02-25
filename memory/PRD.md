@@ -9,11 +9,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Programme de fidélité automatique
 - Système d'avis clients avec validation admin
 - Location événementielle (anniversaires, mariages, séminaires)
-- Notifications WhatsApp automatiques
+- Notifications SMS automatiques aux admins
 
 ## What's Been Implemented
 
-### Core Features ✅
+### Core Features
 - Menu complet avec catégories et photos
 - Jeux VR 360° et Simulateur Course
 - Réservation avec calendrier interactif
@@ -21,75 +21,95 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Dashboard admin sécurisé (JWT)
 - Programme de fidélité (1 partie = 1 point, 10 points = 1 gratuite)
 - Système d'avis avec validation
-- Notifications WhatsApp (avis, locations)
+- Location événementielle avec formulaire complet
 
-### Phase 8 - Location Événementielle (23 Feb 2026) ✅
-- **Page dédiée /location** avec formulaire complet :
-  - Section 1: Informations du demandeur (nom, téléphone, email, entreprise)
-  - Section 2: Informations événement (type, date, horaires, invités)
-  - Section 3: Formule souhaitée (location simple, +restauration, +boissons, personnalisée)
-  - Section 4: Budget estimatif (4 tranches de 300k à +1.5M FCFA)
-  - Section 5: Services additionnels (DJ, décoration, vidéoprojecteur, photographe, etc.)
-  - Section 6: Message complémentaire + validation
-- **Section sur la page d'accueil** avec bouton "Demander un devis"
-- **Notification WhatsApp automatique** à chaque nouvelle demande
-- **Gestion admin** des demandes de location
+### Phase 9 - Intégration Twilio SMS (25 Feb 2026)
+- **OTP par SMS** pour sécuriser l'accès au portefeuille/provision
+  - Utilise Twilio Verify API
+  - Code à 6 chiffres envoyé par SMS
+  - Remplace l'ancien système WhatsApp (CallMeBot)
+- **Notifications SMS Admin** pour :
+  - Nouvelles réservations payées
+  - Nouveaux avis clients
+  - Nouvelles demandes de location
+- **2 numéros admin configurés** :
+  - +229 97 72 08 08
+  - +229 91 00 50 84
 
-### APIs Backend
-- POST /api/location-requests - Soumettre demande de location
-- GET /api/admin/location-requests - Liste des demandes (protégé)
-- PUT /api/admin/location-requests/{id} - Mettre à jour statut (protégé)
+### Phase 8 - Location Événementielle (23 Feb 2026)
+- Page dédiée /location avec formulaire complet
+- Notification automatique à chaque nouvelle demande
+- Gestion admin des demandes de location
+
+### Phase 7 - Système Provision/Portefeuille (Dec 2025)
+- Page `/provision` pour gérer son portefeuille
+- Sécurisé par OTP SMS
+- Recharge via MTN MoMo, Moov Money, Celtiis
+- Historique des transactions
+- Affichage des points de fidélité
+
+### Phase 6 - Reprogrammation (Dec 2025)
+- Page `/reprogrammer` accessible depuis navbar et footer
+- Client et Admin peuvent reprogrammer
+- Gratuit si > 15 min avant session
 
 ## Configuration
 
-### CallMeBot WhatsApp
-- CALLMEBOT_API_KEY: 9381691
-- Numéro admin: 01 41 47 00 00
+### Twilio SMS
+- TWILIO_ACCOUNT_SID: AC1658d13a8d79989f96d5079ca0bd79a0
+- TWILIO_VERIFY_SERVICE_SID: VA95338ebd8fe9ee36d1348df714a29e65
+- TWILIO_PHONE_NUMBER: +14475742763
+- Numéros admin: +22997720808, +22991005084
 
 ### Kkiapay (Production)
 - Clés configurées
 - KKIAPAY_SANDBOX: false
 
 ### Admin
+- URL: /admin
 - Password: Nikeland2016
+
+## APIs Backend
+
+### Wallet/OTP
+- POST /api/wallet/send-otp - Envoyer OTP par SMS
+- POST /api/wallet/verify-otp - Vérifier OTP
+- GET /api/wallet/{phone}/secure - Accès sécurisé au portefeuille
+- POST /api/wallet/topup - Recharger le portefeuille
+
+### Réservations
+- POST /api/bookings - Créer réservation
+- POST /api/bookings/find-for-reschedule - Trouver réservation
+- POST /api/bookings/reschedule-by-user - Reprogrammer (client)
+- POST /api/bookings/{id}/reschedule-admin - Reprogrammer (admin)
+
+### Admin
+- POST /api/admin/login - Connexion admin
+- GET /api/admin/bookings - Liste réservations
+- DELETE /api/admin/bookings/{id} - Supprimer définitivement
+- GET /api/admin/location-requests - Demandes de location
 
 ## Prioritized Backlog
 
-### P0 (Completed) ✅
+### P0 (Completed)
 - [x] MVP + Admin + Kkiapay
 - [x] Sécurité admin (JWT)
 - [x] Programme de fidélité
 - [x] Système d'avis
-- [x] Notifications WhatsApp
 - [x] Location événementielle
-- [x] Texte "Carte de menus à consulter sur place" sur page Menu (Dec 2025)
-- [x] Onglet admin "Location" pour gérer les demandes de location (Dec 2025)
-- [x] Notifications WhatsApp pour les réservations payées (Dec 2025)
-- [x] Reprogrammation des réservations (Dec 2025)
-  - Page `/reprogrammer` accessible depuis navbar et footer
-  - Client entre son numéro de téléphone + nom exact pour trouver sa réservation
-  - Admin peut aussi reprogrammer via dashboard
-  - Gratuit si > 15 min avant session, sinon 500 FCFA
-  - 1 seule reprogrammation par réservation
-  - Notifications WhatsApp à l'admin quand un client reprogramme
-- [x] Bouton suppression définitive réservations avec modal de confirmation (Dec 2025)
-- [x] Système de Provision/Portefeuille (Dec 2025)
-  - Page `/provision` pour gérer son portefeuille
-  - Recharge via MTN MoMo, Moov Money, Celtiis
-  - Historique des transactions
-  - Utilisation pour payer jeux, menus, événements
-- [x] Option paiement total en ligne (Dec 2025)
-  - Checkbox "Payer le montant total en ligne" sur page réservation
-  - Option utiliser solde provision
+- [x] Reprogrammation des réservations
+- [x] Système de Provision/Portefeuille
+- [x] OTP SMS via Twilio
+- [x] Notifications SMS Admin (2 numéros)
 
 ### P1 (User Action Required)
-- [ ] Domaine (www.espacemaxo.com) - Configurer DNS
-- [ ] Déploiement production - Cliquer bouton **"Deploy"**
+- [ ] Déploiement production - Cliquer bouton **"Deploy"** pour mettre à jour espacemaxo.com
 
 ### P2 (Future)
 - [ ] Section "À propos de nous" avec histoire d'Espace Maxo
+- [ ] Refactorisation server.py en modules séparés
 
 ## Contact
-- WhatsApp: +229 01 41 47 00 00
+- SMS Admin: +229 97 72 08 08, +229 91 00 50 84
 - Adresse: Fidjrossè Plage, Cotonou
 - Horaires: 9h - 23h
