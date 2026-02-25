@@ -64,6 +64,11 @@ const AdminPage = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  
+  // Delete location request modal state
+  const [deleteLocationModal, setDeleteLocationModal] = useState(false);
+  const [locationToDelete, setLocationToDelete] = useState(null);
+  const [deleteLocationLoading, setDeleteLocationLoading] = useState(false);
 
   // Check authentication
   useEffect(() => {
