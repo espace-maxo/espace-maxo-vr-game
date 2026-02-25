@@ -912,7 +912,7 @@ const AdminPage = () => {
                               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
                                 <span className="flex items-center gap-1">
                                   <CalendarDays className="w-3 h-3 text-neon-blue" />
-                                  {request.eventDate}
+                                  {formatDateFR(request.eventDate)}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="w-3 h-3 text-neon-blue" />
