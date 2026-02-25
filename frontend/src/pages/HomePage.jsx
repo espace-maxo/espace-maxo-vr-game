@@ -65,7 +65,7 @@ const HomePage = () => {
               >
                 <span className="flex items-center gap-2">
                   <Calendar className="w-5 h-5" />
-                  Réserver maintenant
+                  Réserver une session maintenant
                 </span>
               </Button>
             </Link>
@@ -76,7 +76,7 @@ const HomePage = () => {
                 className="border-neon-blue text-neon-blue font-rajdhani font-bold text-lg uppercase px-8 py-6 hover:bg-neon-blue/10 transition-all btn-skewed"
               >
                 <span className="flex items-center gap-2">
-                  Voir le Menu
+                  Nos Combos
                   <ArrowRight className="w-5 h-5" />
                 </span>
               </Button>
