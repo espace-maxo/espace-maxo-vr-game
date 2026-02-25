@@ -10,6 +10,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Système d'avis clients avec validation admin
 - Location événementielle (anniversaires, mariages, séminaires)
 - Notifications SMS automatiques aux admins et clients
+- Export CSV des données pour comptabilité
 
 ## What's Been Implemented
 
@@ -23,37 +24,32 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Système d'avis avec validation
 - Location événementielle avec formulaire complet
 
+### Phase 11 - Export CSV & Refactorisation (25 Feb 2026)
+- **Export CSV Réservations** : `/api/admin/export/bookings`
+- **Export CSV Demandes de Location** : `/api/admin/export/location-requests`
+- **Export CSV Fidélité** : `/api/admin/export/loyalty`
+- **Boutons d'export** dans chaque onglet du dashboard admin
+- **Refactorisation partielle** :
+  - `/backend/config.py` - Configuration centralisée
+  - `/backend/auth.py` - Authentification JWT
+  - `/backend/models/__init__.py` - Modèles Pydantic
+  - `/backend/services/sms_service.py` - Services SMS Twilio
+  - `/backend/routers/export.py` - Routes d'export (référence)
+
 ### Phase 10 - Suppression Demandes Location (25 Feb 2026)
-- **Endpoint DELETE** `/api/admin/location-requests/{id}` pour supprimer définitivement
-- **Bouton poubelle** dans l'admin pour chaque demande de location
-- **Modal de confirmation** avant suppression définitive
-- Action irréversible avec avertissement clair
+- Endpoint DELETE pour supprimer définitivement les demandes
+- Bouton poubelle dans l'admin avec modal de confirmation
 
 ### Phase 9 - Intégration Twilio SMS (25 Feb 2026)
-- **OTP par SMS** pour sécuriser l'accès au portefeuille/provision
-- **Notifications SMS Admin** pour : réservations, avis, locations
-- **2 numéros admin** : +229 97 72 08 08, +229 91 00 50 84
-- **SMS de confirmation au client** après paiement réussi
+- OTP par SMS pour sécuriser l'accès au portefeuille
+- Notifications SMS Admin (2 numéros)
+- SMS de confirmation au client après paiement
 
-### Phase 8 - Location Événementielle (23 Feb 2026)
-- Page dédiée /location avec formulaire complet
-- Notification automatique à chaque nouvelle demande
-- Gestion admin des demandes de location
-
-### Phase 7 - Système Provision/Portefeuille (Dec 2025)
-- Page `/provision` pour gérer son portefeuille
-- Sécurisé par OTP SMS
-- Recharge via MTN MoMo, Moov Money, Celtiis
-
-### Phase 6 - Reprogrammation (Dec 2025)
-- Page `/reprogrammer` accessible depuis navbar et footer
-- Client et Admin peuvent reprogrammer
-
-### Refactorisation Backend (25 Feb 2026)
-- Création structure modulaire :
-  - `/backend/models/__init__.py` - Tous les modèles Pydantic
-  - `/backend/services/sms_service.py` - Services SMS Twilio
-  - `/backend/routers/` - (prévu) Routes séparées
+### Phases Précédentes
+- Phase 8: Location événementielle
+- Phase 7: Système Provision/Portefeuille
+- Phase 6: Reprogrammation des réservations
+- Phases 1-5: MVP, Admin, Kkiapay, Fidélité, Avis
 
 ## Configuration
 
@@ -73,6 +69,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 
 ## APIs Backend
 
+### Export CSV (Admin)
+- GET /api/admin/export/bookings - Export réservations
+- GET /api/admin/export/location-requests - Export demandes location
+- GET /api/admin/export/loyalty - Export comptes fidélité
+
 ### Location Requests (Admin)
 - GET /api/admin/location-requests - Liste des demandes
 - PUT /api/admin/location-requests/{id} - Mettre à jour statut
@@ -81,8 +82,6 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 ### Wallet/OTP
 - POST /api/wallet/send-otp - Envoyer OTP par SMS
 - POST /api/wallet/verify-otp - Vérifier OTP
-- GET /api/wallet/{phone}/secure - Accès sécurisé au portefeuille
-- POST /api/wallet/topup - Recharger le portefeuille
 
 ### Réservations
 - POST /api/bookings - Créer réservation
@@ -118,13 +117,31 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Notifications SMS Admin (2 numéros)
 - [x] SMS confirmation au client après paiement
 - [x] Suppression définitive des demandes de location
+- [x] Export CSV (réservations, locations, fidélité)
+- [x] Refactorisation backend (partielle)
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer bouton **"Deploy"** pour mettre à jour espacemaxo.com
 
 ### P2 (Future)
 - [ ] Section "À propos de nous" avec histoire d'Espace Maxo
-- [ ] Refactorisation complète server.py en routers séparés
+- [ ] Export Excel (format .xlsx) en plus du CSV
+
+## Architecture Backend
+
+```
+/app/backend/
+├── server.py          # Point d'entrée principal (~2400 lignes)
+├── config.py          # Configuration centralisée
+├── auth.py            # Authentification JWT
+├── models/
+│   └── __init__.py    # Modèles Pydantic
+├── services/
+│   ├── __init__.py
+│   └── sms_service.py # Services SMS Twilio
+└── routers/
+    └── export.py      # Routes d'export (référence)
+```
 
 ## Contact
 - SMS Admin: +229 97 72 08 08, +229 91 00 50 84
