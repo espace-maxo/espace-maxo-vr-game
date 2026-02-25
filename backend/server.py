@@ -287,6 +287,7 @@ class DeliveryOrder(BaseModel):
     status: str = "pending"  # pending, pending_validation, confirmed, preparing, delivered, cancelled
     payment_status: str = "pending"  # pending, pending_validation, paid
     payment_transaction_id: Optional[str] = None
+    wallet_amount_used: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Job Application Models
