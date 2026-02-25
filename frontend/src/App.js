@@ -15,6 +15,7 @@ import TestimonialsPage from "@/pages/TestimonialsPage";
 import LocationPage from "@/pages/LocationPage";
 import ReschedulePage from "@/pages/ReschedulePage";
 import WalletPage from "@/pages/WalletPage";
+import DeliveryPage from "@/pages/DeliveryPage";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
             <Route path="/location" element={<LocationPage />} />
             <Route path="/reprogrammer" element={<ReschedulePage />} />
             <Route path="/provision" element={<WalletPage />} />
+            <Route path="/livraison" element={<DeliveryPage />} />
           </Routes>
         </main>
         <Footer />
