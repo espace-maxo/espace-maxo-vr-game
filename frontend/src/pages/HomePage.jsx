@@ -166,7 +166,7 @@ const HomePage = () => {
                   Savourez nos burgers, pizzas et cocktails dans une ambiance gaming unique.
                 </p>
                 <Link to="/menu" className="font-rajdhani font-bold text-neon-blue text-lg hover:underline">
-                  Voir le menu →
+                  Voir nos combos →
                 </Link>
               </div>
             </div>
