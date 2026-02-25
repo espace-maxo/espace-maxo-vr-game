@@ -277,6 +277,76 @@ const AdminPage = () => {
     }
   };
 
+  // Export functions
+  const handleExportBookings = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await axios.get(`${API}/admin/export/bookings`, {
+        headers,
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `reservations_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Export des réservations téléchargé!");
+    } catch (error) {
+      toast.error("Erreur lors de l'export");
+    }
+  };
+
+  const handleExportLocationRequests = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await axios.get(`${API}/admin/export/location-requests`, {
+        headers,
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `demandes_location_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Export des demandes téléchargé!");
+    } catch (error) {
+      toast.error("Erreur lors de l'export");
+    }
+  };
+
+  const handleExportLoyalty = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await axios.get(`${API}/admin/export/loyalty`, {
+        headers,
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `fidelite_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Export fidélité téléchargé!");
+    } catch (error) {
+      toast.error("Erreur lors de l'export");
+    }
+  };
+
   const openRescheduleModal = (booking) => {
     if (booking.has_been_rescheduled) {
       toast.error("Cette réservation a déjà été reprogrammée. Les frais ne sont pas remboursables.");
