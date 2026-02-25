@@ -126,7 +126,8 @@ const BookingPage = () => {
   };
 
   const calculateTotal = () => {
-    const gamePrice = 2000;
+    // Prix différents selon le type de jeu
+    const gamePrice = formData.gameType === "RACING_SIMULATOR" ? 1500 : 2000;
     const reservationFee = 500;
     const totalGames = formData.numberOfPlayers * formData.numberOfGames;
     const gamesPrice = totalGames * gamePrice;
@@ -150,7 +151,8 @@ const BookingPage = () => {
       reservationFee,
       total,
       amountToPay,
-      walletUsed
+      walletUsed,
+      gamePrice
     };
   };
 
