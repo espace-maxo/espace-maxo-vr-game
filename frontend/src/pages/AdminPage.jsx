@@ -822,12 +822,24 @@ const AdminPage = () => {
                     <PartyPopper className="w-5 h-5 text-neon-red" />
                     Demandes de Location ({locationRequests.length})
                   </h2>
-                  {locationStats && (
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-yellow-500">{locationStats.pending} en attente</span>
-                      <span className="text-green-500">{locationStats.total - locationStats.pending} traitées</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-4">
+                    {locationStats && (
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-yellow-500">{locationStats.pending} en attente</span>
+                        <span className="text-green-500">{locationStats.total - locationStats.pending} traitées</span>
+                      </div>
+                    )}
+                    <Button
+                      onClick={handleExportLocationRequests}
+                      variant="outline"
+                      size="sm"
+                      className="border-green-500 text-green-500 hover:bg-green-500/10"
+                      data-testid="export-location-btn"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Exporter CSV
+                    </Button>
+                  </div>
                 </div>
 
                 {loading ? (
