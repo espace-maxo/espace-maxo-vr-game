@@ -16,6 +16,7 @@ import LocationPage from "@/pages/LocationPage";
 import ReschedulePage from "@/pages/ReschedulePage";
 import WalletPage from "@/pages/WalletPage";
 import DeliveryPage from "@/pages/DeliveryPage";
+import JoinUsPage from "@/pages/JoinUsPage";
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
             <Route path="/reprogrammer" element={<ReschedulePage />} />
             <Route path="/provision" element={<WalletPage />} />
             <Route path="/livraison" element={<DeliveryPage />} />
+            <Route path="/rejoindre" element={<JoinUsPage />} />
           </Routes>
         </main>
         <Footer />
