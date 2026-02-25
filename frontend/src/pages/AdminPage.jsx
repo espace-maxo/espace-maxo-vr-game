@@ -1243,6 +1243,59 @@ const AdminPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Location Request Modal */}
+      <Dialog open={deleteLocationModal} onOpenChange={setDeleteLocationModal}>
+        <DialogContent className="bg-dark-card border-red-500/30 text-white">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-red-500 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Supprimer la demande de location
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {locationToDelete && (
+                <>
+                  Voulez-vous vraiment supprimer la demande de <span className="text-white font-semibold">{locationToDelete.fullName}</span> pour l'événement <span className="text-neon-red">{locationToDelete.eventType}</span> ?
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400 text-sm font-outfit">
+                ⚠️ <strong>ATTENTION:</strong> Cette action est <strong>IRRÉVERSIBLE</strong>. 
+                La demande sera définitivement supprimée de la base de données.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteLocationModal(false);
+                setLocationToDelete(null);
+              }}
+              className="border-white/20 text-gray-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleDeleteLocation}
+              disabled={deleteLocationLoading}
+              className="bg-red-600 hover:bg-red-700 text-white font-rajdhani font-bold"
+            >
+              {deleteLocationLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Supprimer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
