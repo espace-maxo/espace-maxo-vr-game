@@ -9,7 +9,7 @@ import {
   RefreshCw, Filter, MessageCircle, TrendingUp, LogOut,
   Star, Gift, Trophy, MessageSquare, Trash2, PartyPopper,
   Mail, Building2, CalendarDays, DollarSign, CalendarClock,
-  Download, FileSpreadsheet
+  Download, FileSpreadsheet, Briefcase, FileText, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
