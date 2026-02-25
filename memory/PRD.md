@@ -9,7 +9,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Programme de fidélité automatique
 - Système d'avis clients avec validation admin
 - Location événementielle (anniversaires, mariages, séminaires)
-- Notifications SMS automatiques aux admins
+- Notifications SMS automatiques aux admins et clients
 
 ## What's Been Implemented
 
@@ -35,6 +35,9 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - **2 numéros admin configurés** :
   - +229 97 72 08 08
   - +229 91 00 50 84
+- **SMS de confirmation au client** après paiement réussi
+  - Récapitulatif de la réservation (jeu, date, heure, montant)
+  - Adresse du lieu
 
 ### Phase 8 - Location Événementielle (23 Feb 2026)
 - Page dédiée /location avec formulaire complet
@@ -53,6 +56,12 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Client et Admin peuvent reprogrammer
 - Gratuit si > 15 min avant session
 
+### Refactorisation Backend (25 Feb 2026)
+- Création structure modulaire :
+  - `/backend/models/__init__.py` - Tous les modèles Pydantic
+  - `/backend/services/sms_service.py` - Services SMS Twilio
+  - `/backend/routers/` - (prévu) Routes séparées
+
 ## Configuration
 
 ### Twilio SMS
@@ -62,7 +71,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Numéros admin: +22997720808, +22991005084
 
 ### Kkiapay (Production)
-- Clés configurées
+- KKIAPAY_PUBLIC_KEY: 4b3fe59844c0f4291c1b285a9485024a1d668c96
 - KKIAPAY_SANDBOX: false
 
 ### Admin
@@ -83,11 +92,27 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - POST /api/bookings/reschedule-by-user - Reprogrammer (client)
 - POST /api/bookings/{id}/reschedule-admin - Reprogrammer (admin)
 
+### Paiement
+- GET /api/payment/config - Configuration Kkiapay
+- POST /api/payment/verify - Vérifier paiement (déclenche SMS admin + client)
+
 ### Admin
 - POST /api/admin/login - Connexion admin
 - GET /api/admin/bookings - Liste réservations
 - DELETE /api/admin/bookings/{id} - Supprimer définitivement
 - GET /api/admin/location-requests - Demandes de location
+
+## Frontend Routes
+- `/` - Accueil
+- `/menu` - Menu restaurant
+- `/games` - Jeux VR
+- `/booking` - Réservation
+- `/provision` - Portefeuille client
+- `/reprogrammer` - Reprogrammation
+- `/location` - Location événementielle
+- `/avis` - Témoignages
+- `/admin` - Connexion admin
+- `/admin/dashboard` - Dashboard admin
 
 ## Prioritized Backlog
 
@@ -101,13 +126,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] Système de Provision/Portefeuille
 - [x] OTP SMS via Twilio
 - [x] Notifications SMS Admin (2 numéros)
+- [x] SMS confirmation au client après paiement
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer bouton **"Deploy"** pour mettre à jour espacemaxo.com
 
 ### P2 (Future)
 - [ ] Section "À propos de nous" avec histoire d'Espace Maxo
-- [ ] Refactorisation server.py en modules séparés
+- [ ] Refactorisation complète server.py en routers séparés
 
 ## Contact
 - SMS Admin: +229 97 72 08 08, +229 91 00 50 84
