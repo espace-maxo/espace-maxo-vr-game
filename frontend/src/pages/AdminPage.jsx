@@ -1017,10 +1017,22 @@ const AdminPage = () => {
             {/* Loyalty Tab */}
             <TabsContent value="loyalty">
               <div data-testid="loyalty-section">
-                <h2 className="font-orbitron font-bold text-xl text-white mb-4 flex items-center gap-2">
-                  <Star className="w-5 h-5 text-food-gold" />
-                  Membres Fidélité ({loyaltyAccounts.length})
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-orbitron font-bold text-xl text-white flex items-center gap-2">
+                    <Star className="w-5 h-5 text-food-gold" />
+                    Membres Fidélité ({loyaltyAccounts.length})
+                  </h2>
+                  <Button
+                    onClick={handleExportLoyalty}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500 text-green-500 hover:bg-green-500/10"
+                    data-testid="export-loyalty-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Exporter CSV
+                  </Button>
+                </div>
                 
                 {loading ? (
                   <div className="text-center py-12">
