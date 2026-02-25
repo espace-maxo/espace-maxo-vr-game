@@ -195,11 +195,11 @@ const WalletPage = () => {
         <div className="max-w-2xl mx-auto text-center">
           <Wallet className="w-12 h-12 text-green-500 mx-auto mb-4" />
           <h1 className="font-orbitron font-black text-3xl sm:text-4xl uppercase tracking-tight mb-4">
-            <span className="text-white">Ma</span>{" "}
-            <span className="text-green-500">Provision</span>
+            <span className="text-white">Mon</span>{" "}
+            <span className="text-green-500">Porte-Monnaie</span>
           </h1>
           <p className="text-gray-400 font-outfit">
-            Rechargez votre provision et payez facilement vos sessions de jeux, menus et événements
+            Rechargez votre porte-monnaie et payez facilement vos sessions de jeux, menus et événements
           </p>
         </div>
       </section>
