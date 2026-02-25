@@ -239,13 +239,13 @@ const WalletPage = () => {
               <CardHeader>
                 <CardTitle className="font-orbitron text-lg text-white flex items-center gap-2">
                   <Phone className="w-5 h-5 text-green-500" />
-                  Accéder à ma provision
+                  Accéder à mon porte-monnaie
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
                   <p className="text-green-400 font-outfit text-sm">
-                    🔐 Un code de vérification sera envoyé par SMS pour sécuriser l'accès à votre provision.
+                    🔐 Un code de vérification sera envoyé par SMS pour sécuriser l'accès à votre porte-monnaie.
                   </p>
                 </div>
 
