@@ -222,6 +222,11 @@ const DeliveryPage = () => {
   const [paymentConfig, setPaymentConfig] = useState(null);
   const [awaitingPayment, setAwaitingPayment] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState(null);
+  
+  // Wallet states
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useWallet, setUseWallet] = useState(false);
+  const [walletLoading, setWalletLoading] = useState(false);
 
   // Fetch payment config on mount
   useEffect(() => {
