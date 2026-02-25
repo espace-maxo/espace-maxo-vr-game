@@ -2072,6 +2072,22 @@ async def update_location_request(request_id: str, status: str, is_admin: bool =
     
     return {"message": "Statut mis à jour", "status": status}
 
+@api_router.delete("/admin/location-requests/{request_id}")
+async def delete_location_request(request_id: str, is_admin: bool = Depends(get_current_admin)):
+    """Permanently delete a location request (admin only)"""
+    request = await db.location_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Demande non trouvée")
+    
+    result = await db.location_requests.delete_one({"id": request_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=500, detail="Erreur lors de la suppression")
+    
+    logger.info(f"Location request {request_id} permanently deleted by admin")
+    
+    return {"message": "Demande supprimée définitivement", "id": request_id}
+
 # ============== LOYALTY PROGRAM ROUTES ==============
 
 POINTS_PER_GAME = 1  # 1 game = 1 point
