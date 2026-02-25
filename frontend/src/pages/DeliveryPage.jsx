@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { 
   UtensilsCrossed, Salad, Drumstick, Beef, Fish, Pizza, 
   Sandwich, IceCream, GlassWater, ShoppingCart, Phone, 
-  MapPin, Clock, ChefHat, Truck, Plus, Minus, X, Check
+  MapPin, Clock, ChefHat, Truck, Plus, Minus, X, Check,
+  CreditCard, AlertTriangle, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import axios from "axios";
@@ -211,10 +213,39 @@ const DeliveryPage = () => {
     name: "",
     phone: "",
     address: "",
-    notes: ""
+    notes: "",
+    zone: "cotonou" // cotonou or outside
   });
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [paymentConfig, setPaymentConfig] = useState(null);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState(null);
+
+  // Fetch payment config on mount
+  useEffect(() => {
+    const fetchPaymentConfig = async () => {
+      try {
+        const response = await axios.get(`${API}/payment/config`);
+        setPaymentConfig(response.data);
+      } catch (error) {
+        console.error("Error fetching payment config:", error);
+      }
+    };
+    fetchPaymentConfig();
+  }, []);
+
+  // Load Kkiapay script
+  useEffect(() => {
+    if (!document.getElementById("kkiapay-script")) {
+      const script = document.createElement("script");
+      script.id = "kkiapay-script";
+      script.src = "https://cdn.kkiapay.me/k.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   // Add item to cart
   const addToCart = (item) => {
@@ -247,45 +278,115 @@ const DeliveryPage = () => {
 
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = 1000; // Frais de livraison
+  const deliveryFee = orderForm.zone === "cotonou" ? 1000 : 0; // Frais uniquement pour Cotonou
   const totalWithDelivery = cartTotal + deliveryFee;
 
-  // Submit order
+  // Create order in backend
+  const createOrder = async (paymentStatus = "pending", transactionId = null) => {
+    const orderData = {
+      customer_name: orderForm.name,
+      customer_phone: orderForm.phone,
+      delivery_address: orderForm.address,
+      delivery_zone: orderForm.zone,
+      notes: orderForm.notes,
+      items: cart.map(item => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity
+      })),
+      subtotal: cartTotal,
+      delivery_fee: deliveryFee,
+      total: totalWithDelivery,
+      payment_status: paymentStatus,
+      payment_transaction_id: transactionId
+    };
+
+    const response = await axios.post(`${API}/delivery-orders`, orderData);
+    return response.data;
+  };
+
+  // Handle order submission
   const handleSubmitOrder = async () => {
     if (!orderForm.name || !orderForm.phone || !orderForm.address) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
+    if (orderForm.zone === "cotonou") {
+      // Cotonou: Payment required via Kkiapay
+      initiatePayment();
+    } else {
+      // Outside Cotonou: Submit for validation
+      await submitForValidation();
+    }
+  };
+
+  // Initiate Kkiapay payment for Cotonou orders
+  const initiatePayment = () => {
+    if (!paymentConfig || !window.openKkiapayWidget) {
+      toast.error("Service de paiement non disponible. Veuillez réessayer.");
+      return;
+    }
+
+    setAwaitingPayment(true);
+
+    window.openKkiapayWidget({
+      amount: totalWithDelivery,
+      position: "center",
+      callback: "",
+      data: "",
+      theme: "#FF6B00",
+      key: paymentConfig.public_key,
+      sandbox: paymentConfig.sandbox,
+      phone: orderForm.phone.replace(/\s/g, ''),
+      name: orderForm.name,
+      description: `Commande Livraison Espace Maxo`
+    });
+
+    // Listen for payment success
+    window.addSuccessListener(async (response) => {
+      console.log("Payment success:", response);
+      toast.success("Paiement réussi!");
+      
+      try {
+        // Create order with payment confirmed
+        await createOrder("paid", response.transactionId);
+        setOrderSuccess(true);
+        setSuccessMessage("Votre commande est confirmée et en cours de préparation. Livraison dans 30-45 minutes!");
+        setCart([]);
+        setShowOrderForm(false);
+      } catch (error) {
+        console.error("Error creating order:", error);
+        toast.error("Erreur lors de l'enregistrement. Contactez-nous avec votre ID de paiement.");
+      }
+      
+      setAwaitingPayment(false);
+    });
+
+    window.addFailedListener((response) => {
+      console.log("Payment failed:", response);
+      setAwaitingPayment(false);
+      toast.error("Le paiement a échoué. Veuillez réessayer.");
+    });
+
+    window.addKkiapayCloseListener(() => {
+      setAwaitingPayment(false);
+    });
+  };
+
+  // Submit order for validation (outside Cotonou)
+  const submitForValidation = async () => {
     setSubmitting(true);
     try {
-      // Create order in backend
-      const orderData = {
-        customer_name: orderForm.name,
-        customer_phone: orderForm.phone,
-        delivery_address: orderForm.address,
-        notes: orderForm.notes,
-        items: cart.map(item => ({
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        })),
-        subtotal: cartTotal,
-        delivery_fee: deliveryFee,
-        total: totalWithDelivery
-      };
-
-      await axios.post(`${API}/delivery-orders`, orderData);
-      
+      await createOrder("pending_validation", null);
       setOrderSuccess(true);
+      setSuccessMessage("Votre commande a été soumise pour validation. Nous vous contacterons sous peu pour confirmer la disponibilité de livraison et les frais dans votre zone.");
       setCart([]);
-      toast.success("Commande envoyée avec succès!");
+      setShowOrderForm(false);
+      toast.success("Commande soumise pour validation!");
     } catch (error) {
       console.error("Error submitting order:", error);
-      // Still show success for demo purposes
-      setOrderSuccess(true);
-      setCart([]);
-      toast.success("Commande envoyée! Nous vous appellerons pour confirmer.");
+      toast.error("Erreur lors de l'envoi. Veuillez réessayer.");
     } finally {
       setSubmitting(false);
     }
@@ -312,12 +413,12 @@ const DeliveryPage = () => {
               Livraison 30-45 min
             </Badge>
             <Badge className="bg-green-500/20 text-green-400 border-green-500/30 px-4 py-2">
-              <Truck className="w-4 h-4 mr-2" />
-              Frais: 1 000 FCFA
+              <MapPin className="w-4 h-4 mr-2" />
+              Cotonou: 1 000 FCFA
             </Badge>
             <Badge className="bg-neon-blue/20 text-neon-blue border-neon-blue/30 px-4 py-2">
-              <Phone className="w-4 h-4 mr-2" />
-              01 41 47 00 00
+              <CreditCard className="w-4 h-4 mr-2" />
+              Paiement Mobile Money
             </Badge>
           </div>
         </div>
@@ -409,7 +510,8 @@ const DeliveryPage = () => {
       {cart.length > 0 && (
         <button
           onClick={() => setShowCart(true)}
-          className="fixed bottom-6 right-6 bg-food-orange text-white p-4 rounded-full shadow-lg hover:bg-food-orange/90 transition-colors z-50"
+          className="fixed bottom-6 right-6 bg-food-orange text-white p-4 rounded-full shadow-lg hover:bg-food-orange/90 transition-colors z-40"
+          data-testid="cart-button"
         >
           <ShoppingCart className="w-6 h-6" />
           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
@@ -470,12 +572,11 @@ const DeliveryPage = () => {
                   <span>{cartTotal.toLocaleString()} FCFA</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
-                  <span>Frais de livraison</span>
-                  <span>{deliveryFee.toLocaleString()} FCFA</span>
+                  <span>Frais de livraison (Cotonou)</span>
+                  <span>1 000 FCFA</span>
                 </div>
-                <div className="flex justify-between text-xl font-bold text-food-orange">
-                  <span>Total</span>
-                  <span>{totalWithDelivery.toLocaleString()} FCFA</span>
+                <div className="text-xs text-yellow-400">
+                  * Hors Cotonou: frais à confirmer
                 </div>
               </div>
 
@@ -495,7 +596,7 @@ const DeliveryPage = () => {
 
       {/* Order Form Dialog */}
       <Dialog open={showOrderForm} onOpenChange={setShowOrderForm}>
-        <DialogContent className="bg-dark-card border-white/20 text-white max-w-md">
+        <DialogContent className="bg-dark-card border-white/20 text-white max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-orbitron text-xl flex items-center gap-2">
               <Truck className="w-5 h-5 text-food-orange" />
@@ -506,14 +607,15 @@ const DeliveryPage = () => {
           {orderSuccess ? (
             <div className="text-center py-8">
               <Check className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h3 className="font-orbitron text-xl text-white mb-2">Commande envoyée!</h3>
-              <p className="text-gray-400 mb-4">
-                Nous vous appellerons sous peu pour confirmer votre commande.
-              </p>
+              <h3 className="font-orbitron text-xl text-white mb-2">
+                {orderForm.zone === "cotonou" ? "Commande confirmée!" : "Commande soumise!"}
+              </h3>
+              <p className="text-gray-400 mb-4">{successMessage}</p>
               <Button
                 onClick={() => {
                   setShowOrderForm(false);
                   setOrderSuccess(false);
+                  setSuccessMessage("");
                 }}
                 className="bg-food-orange hover:bg-food-orange/80"
               >
@@ -523,6 +625,39 @@ const DeliveryPage = () => {
           ) : (
             <>
               <div className="space-y-4">
+                {/* Zone Selection */}
+                <div className="space-y-3">
+                  <Label className="text-gray-300 font-semibold">Zone de livraison *</Label>
+                  <RadioGroup
+                    value={orderForm.zone}
+                    onValueChange={(value) => setOrderForm({ ...orderForm, zone: value })}
+                    className="flex flex-col gap-3"
+                  >
+                    <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                      orderForm.zone === "cotonou" 
+                        ? "border-green-500 bg-green-500/10" 
+                        : "border-white/20"
+                    }`}>
+                      <RadioGroupItem value="cotonou" id="cotonou" />
+                      <Label htmlFor="cotonou" className="flex-1 cursor-pointer">
+                        <span className="text-white font-semibold">Cotonou</span>
+                        <span className="block text-sm text-green-400">Frais: 1 000 FCFA - Paiement immédiat</span>
+                      </Label>
+                    </div>
+                    <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                      orderForm.zone === "outside" 
+                        ? "border-yellow-500 bg-yellow-500/10" 
+                        : "border-white/20"
+                    }`}>
+                      <RadioGroupItem value="outside" id="outside" />
+                      <Label htmlFor="outside" className="flex-1 cursor-pointer">
+                        <span className="text-white font-semibold">Hors Cotonou</span>
+                        <span className="block text-sm text-yellow-400">Commande à valider - Nous vous contacterons</span>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
                 <div>
                   <Label htmlFor="name" className="text-gray-300">Nom complet *</Label>
                   <Input
@@ -540,7 +675,7 @@ const DeliveryPage = () => {
                     value={orderForm.phone}
                     onChange={(e) => setOrderForm({ ...orderForm, phone: e.target.value })}
                     className="bg-surface-highlight border-white/20 text-white"
-                    placeholder="01 XX XX XX XX"
+                    placeholder="97 XX XX XX"
                   />
                 </div>
                 <div>
@@ -566,27 +701,86 @@ const DeliveryPage = () => {
                 </div>
               </div>
 
-              <div className="bg-food-orange/10 border border-food-orange/30 rounded-lg p-3 mt-4">
-                <p className="text-food-orange font-semibold">
-                  Total à payer: {totalWithDelivery.toLocaleString()} FCFA
-                </p>
-                <p className="text-gray-400 text-sm">Paiement à la livraison</p>
+              {/* Order Summary */}
+              <div className={`rounded-lg p-4 mt-4 ${
+                orderForm.zone === "cotonou" 
+                  ? "bg-green-500/10 border border-green-500/30" 
+                  : "bg-yellow-500/10 border border-yellow-500/30"
+              }`}>
+                {orderForm.zone === "cotonou" ? (
+                  <>
+                    <div className="flex justify-between text-gray-300 text-sm">
+                      <span>Sous-total</span>
+                      <span>{cartTotal.toLocaleString()} FCFA</span>
+                    </div>
+                    <div className="flex justify-between text-gray-300 text-sm">
+                      <span>Livraison Cotonou</span>
+                      <span>1 000 FCFA</span>
+                    </div>
+                    <div className="flex justify-between text-green-400 font-bold text-lg mt-2 pt-2 border-t border-green-500/30">
+                      <span>Total à payer</span>
+                      <span>{totalWithDelivery.toLocaleString()} FCFA</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 text-sm text-green-300">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Paiement par Mobile Money (MTN, Moov, Celtiis)</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 text-yellow-400">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">Commande hors Cotonou</p>
+                        <p className="text-sm text-yellow-300">
+                          Votre commande sera soumise pour validation. Nous vous contacterons pour confirmer 
+                          la disponibilité de livraison et les frais dans votre zone.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-gray-300">
+                      <span>Sous-total: </span>
+                      <span className="font-bold">{cartTotal.toLocaleString()} FCFA</span>
+                      <span className="text-yellow-400 text-sm ml-2">(+ frais à confirmer)</span>
+                    </div>
+                  </>
+                )}
               </div>
 
-              <DialogFooter className="mt-4">
+              <DialogFooter className="mt-4 flex-col sm:flex-row gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setShowOrderForm(false)}
                   className="border-white/20 text-gray-300"
+                  disabled={submitting || awaitingPayment}
                 >
                   Annuler
                 </Button>
                 <Button
                   onClick={handleSubmitOrder}
-                  disabled={submitting}
-                  className="bg-food-orange hover:bg-food-orange/80 text-white font-rajdhani font-bold"
+                  disabled={submitting || awaitingPayment || !orderForm.name || !orderForm.phone || !orderForm.address}
+                  className={`font-rajdhani font-bold flex-1 ${
+                    orderForm.zone === "cotonou"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-yellow-600 hover:bg-yellow-700"
+                  }`}
                 >
-                  {submitting ? "Envoi..." : "Confirmer la commande"}
+                  {submitting || awaitingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      {awaitingPayment ? "Paiement en cours..." : "Envoi..."}
+                    </>
+                  ) : orderForm.zone === "cotonou" ? (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Payer {totalWithDelivery.toLocaleString()} FCFA
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Soumettre pour validation
+                    </>
+                  )}
                 </Button>
               </DialogFooter>
             </>
