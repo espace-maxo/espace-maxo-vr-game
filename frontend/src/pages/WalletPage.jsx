@@ -152,7 +152,7 @@ const WalletPage = () => {
         sandbox: paymentConfig.sandbox || false,
         phone: cleanPhone,
         name: walletData?.name || name,
-        reason: "Recharge Provision Espace Maxo",
+        reason: "Recharge Porte-Monnaie Espace Maxo",
         theme: "#22c55e"
       });
 
