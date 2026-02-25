@@ -794,13 +794,44 @@ const DeliveryPage = () => {
                       <span>Livraison Cotonou</span>
                       <span>1 000 FCFA</span>
                     </div>
+                    
+                    {/* Wallet Option */}
+                    {walletBalance > 0 && (
+                      <div className="mt-3 p-3 rounded-lg bg-neon-blue/10 border border-neon-blue/30">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={useWallet}
+                            onChange={(e) => setUseWallet(e.target.checked)}
+                            className="w-5 h-5 mt-0.5 rounded border-white/20 bg-surface-highlight text-neon-blue focus:ring-neon-blue"
+                          />
+                          <div className="flex-1">
+                            <span className="font-outfit text-white font-semibold flex items-center gap-2">
+                              <Wallet className="w-4 h-4 text-neon-blue" />
+                              Utiliser mon porte-monnaie
+                              <span className="text-neon-blue text-sm">({walletBalance.toLocaleString()} FCFA disponible)</span>
+                            </span>
+                            {useWallet && walletAmountToUse > 0 && (
+                              <p className="text-sm text-neon-blue mt-1">
+                                -{walletAmountToUse.toLocaleString()} FCFA sera déduit
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-between text-green-400 font-bold text-lg mt-2 pt-2 border-t border-green-500/30">
-                      <span>Total à payer</span>
-                      <span>{totalWithDelivery.toLocaleString()} FCFA</span>
+                      <span>{useWallet && amountToPay === 0 ? "Total (couvert par porte-monnaie)" : "Total à payer"}</span>
+                      <span>{amountToPay.toLocaleString()} FCFA</span>
                     </div>
                     <div className="flex items-center gap-2 mt-2 text-sm text-green-300">
                       <CreditCard className="w-4 h-4" />
-                      <span>Paiement par Mobile Money (MTN, Moov, Celtiis)</span>
+                      <span>
+                        {useWallet && amountToPay === 0 
+                          ? "Paiement 100% via porte-monnaie" 
+                          : "Paiement par Mobile Money (MTN, Moov, Celtiis)"}
+                      </span>
                     </div>
                   </>
                 ) : (
