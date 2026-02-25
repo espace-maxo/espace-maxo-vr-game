@@ -249,6 +249,33 @@ const AdminPage = () => {
     }
   };
 
+  const openDeleteLocationModal = (request) => {
+    setLocationToDelete(request);
+    setDeleteLocationModal(true);
+  };
+
+  const handleDeleteLocation = async () => {
+    if (!locationToDelete) return;
+    
+    setDeleteLocationLoading(true);
+    try {
+      const headers = getAuthHeaders();
+      await axios.delete(`${API}/admin/location-requests/${locationToDelete.id}`, { headers });
+      toast.success("Demande supprimée définitivement");
+      setDeleteLocationModal(false);
+      setLocationToDelete(null);
+      fetchData();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/admin");
+      } else {
+        toast.error("Erreur lors de la suppression");
+      }
+    } finally {
+      setDeleteLocationLoading(false);
+    }
+  };
+
   const openRescheduleModal = (booking) => {
     if (booking.has_been_rescheduled) {
       toast.error("Cette réservation a déjà été reprogrammée. Les frais ne sont pas remboursables.");
