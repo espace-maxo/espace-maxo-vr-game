@@ -3,7 +3,7 @@ import {
   UtensilsCrossed, Salad, Drumstick, Beef, Fish, Pizza, 
   Sandwich, IceCream, GlassWater, ShoppingCart, Phone, 
   MapPin, Clock, ChefHat, Truck, Plus, Minus, X, Check,
-  CreditCard, AlertTriangle, Loader2
+  CreditCard, AlertTriangle, Loader2, Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
