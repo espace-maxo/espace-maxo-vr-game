@@ -23,6 +23,15 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Helper to format date as dd/mm/yyyy
+const formatDateFR = (dateStr) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  const [year, month, day] = parts;
+  return `${day}/${month}/${year}`;
+};
+
 // Helper to get auth headers
 const getAuthHeaders = () => {
   const token = localStorage.getItem("adminToken");
