@@ -241,6 +241,29 @@ const DeliveryPage = () => {
     fetchPaymentConfig();
   }, []);
 
+  // Fetch wallet balance when phone changes
+  useEffect(() => {
+    const fetchWalletBalance = async () => {
+      if (orderForm.phone && orderForm.phone.length >= 8) {
+        setWalletLoading(true);
+        try {
+          const response = await axios.get(`${API}/wallet/${orderForm.phone}`);
+          setWalletBalance(response.data.balance || 0);
+        } catch (error) {
+          setWalletBalance(0);
+        } finally {
+          setWalletLoading(false);
+        }
+      } else {
+        setWalletBalance(0);
+        setUseWallet(false);
+      }
+    };
+    
+    const timeoutId = setTimeout(fetchWalletBalance, 500);
+    return () => clearTimeout(timeoutId);
+  }, [orderForm.phone]);
+
   // Load Kkiapay script
   useEffect(() => {
     if (!document.getElementById("kkiapay-script")) {
