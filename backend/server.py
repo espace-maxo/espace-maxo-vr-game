@@ -1203,6 +1203,35 @@ async def reschedule_booking_by_phone_name(
     
     fee_required, fee_amount, _ = check_reschedule_fee_required(booking)
     
+    # Verify payment if fee is required
+    if fee_required and fee_amount > 0:
+        if not reschedule_data.payment_transaction_id:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Le paiement des frais de reprogrammation ({fee_amount} FCFA) est requis. Veuillez effectuer le paiement."
+            )
+        
+        # Verify the transaction with Kkiapay
+        try:
+            async with httpx.AsyncClient() as client:
+                verify_response = await client.get(
+                    f"https://api.kkiapay.me/api/v1/transactions/status/{reschedule_data.payment_transaction_id}",
+                    headers={"x-private-key": KKIAPAY_PRIVATE_KEY}
+                )
+                if verify_response.status_code == 200:
+                    tx_data = verify_response.json()
+                    if tx_data.get("status") != "SUCCESS":
+                        raise HTTPException(status_code=400, detail="Le paiement n'a pas été validé")
+                    if tx_data.get("amount") < fee_amount:
+                        raise HTTPException(status_code=400, detail="Le montant payé est insuffisant")
+                else:
+                    logger.error(f"Kkiapay verification failed: {verify_response.text}")
+                    # Allow reschedule but log the issue
+                    logger.warning(f"Could not verify payment {reschedule_data.payment_transaction_id}, proceeding anyway")
+        except httpx.RequestError as e:
+            logger.error(f"Error verifying payment: {e}")
+            # Allow reschedule but log the issue
+    
     # Update booking
     update_data = {
         "original_date": booking["date"],
@@ -1212,21 +1241,29 @@ async def reschedule_booking_by_phone_name(
         "has_been_rescheduled": True,
         "rescheduled_at": datetime.now(timezone.utc).isoformat(),
         "reschedule_fee_paid": fee_amount if fee_required else 0,
+        "reschedule_payment_id": reschedule_data.payment_transaction_id if fee_required else None,
         "rescheduled_by": "client"
     }
     
     await db.bookings.update_one({"id": booking_id}, {"$set": update_data})
     
-    # Send WhatsApp notification to admin
+    # Format dates for notification
+    def format_date_fr(date_str):
+        if not date_str:
+            return ""
+        year, month, day = date_str.split("-")
+        return f"{day}/{month}/{year}"
+    
+    # Send SMS notification to admin
     game_type_label = "VR 360°" if booking.get("game_type") == "VR_360" else "Simulateur"
     admin_notification = (
-        f"📅 REPROGRAMMATION CLIENT\n\n"
-        f"👤 {booking['customer_name']}\n"
-        f"📱 {booking['customer_phone']}\n"
-        f"🎯 {game_type_label}\n\n"
-        f"❌ Ancienne date: {booking['date']} à {booking['time_slot']}\n"
-        f"✅ Nouvelle date: {reschedule_data.new_date} à {reschedule_data.new_time_slot}\n"
-        f"{'💰 Frais: 500 FCFA' if fee_required else '✨ Gratuit (> 15 min avant)'}"
+        f"REPROGRAMMATION CLIENT\n\n"
+        f"Client: {booking['customer_name']}\n"
+        f"Tel: {booking['customer_phone']}\n"
+        f"Jeu: {game_type_label}\n\n"
+        f"Ancienne date: {format_date_fr(booking['date'])} a {booking['time_slot']}\n"
+        f"Nouvelle date: {format_date_fr(reschedule_data.new_date)} a {reschedule_data.new_time_slot}\n"
+        f"{'Frais: 500 FCFA PAYES' if fee_required else 'Gratuit (> 15 min avant)'}"
     )
     await send_whatsapp_notification(admin_notification)
     
