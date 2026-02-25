@@ -278,12 +278,15 @@ class DeliveryOrder(BaseModel):
     customer_name: str
     customer_phone: str
     delivery_address: str
+    delivery_zone: str = "cotonou"  # cotonou or outside
     notes: str = ""
     items: List[Dict] = []
     subtotal: float
     delivery_fee: float = 1000
     total: float
-    status: str = "pending"  # pending, confirmed, preparing, delivered, cancelled
+    status: str = "pending"  # pending, pending_validation, confirmed, preparing, delivered, cancelled
+    payment_status: str = "pending"  # pending, pending_validation, paid
+    payment_transaction_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # ============== SEED DATA ==============
