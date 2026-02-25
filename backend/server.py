@@ -1769,29 +1769,55 @@ async def get_payment_status(booking_id: str):
 # ============== WHATSAPP NOTIFICATION ==============
 
 CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
-ADMIN_WHATSAPP_NUMBER = "22901414700"  # Format: country code + number without spaces
+# Admin phone numbers for SMS notifications (format: +229XXXXXXXX)
+ADMIN_PHONE_NUMBERS = ["+22901414700", "+22991005084"]
 
-async def send_whatsapp_notification(message: str):
-    """Send WhatsApp notification via CallMeBot"""
-    if not CALLMEBOT_API_KEY:
-        logger.warning("CallMeBot API key not configured, skipping WhatsApp notification")
+async def send_admin_sms_notification(message: str):
+    """Send SMS notification to admin phone numbers via Twilio"""
+    if not twilio_client:
+        logger.warning("Twilio not configured, skipping SMS notification")
         return False
     
-    try:
-        encoded_message = quote(message)
-        url = f"https://api.callmebot.com/whatsapp.php?phone={ADMIN_WHATSAPP_NUMBER}&text={encoded_message}&apikey={CALLMEBOT_API_KEY}"
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10)
-            if response.status_code == 200:
-                logger.info(f"WhatsApp notification sent successfully")
-                return True
+    # Get Twilio phone number for sending
+    twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER', '')
+    if not twilio_phone_number:
+        # Use Twilio Messaging Service or default sender
+        logger.warning("Twilio phone number not configured, trying without sender ID")
+    
+    success_count = 0
+    for admin_phone in ADMIN_PHONE_NUMBERS:
+        try:
+            # Clean the message for SMS (remove emojis that might cause issues)
+            clean_message = message.replace("*", "").replace("👤", "").replace("⭐", "*").replace("💬", "").replace("👉", "->").replace("🆕", "[NOUVEAU]").replace("🎮", "[JEUX]").replace("📅", "").replace("⏰", "").replace("👥", "").replace("💰", "").replace("📱", "Tel:").replace("📍", "").replace("🏠", "[LOCATION]").replace("📝", "")
+            
+            msg_params = {
+                "body": clean_message[:1600],  # SMS limit
+                "to": admin_phone
+            }
+            
+            if twilio_phone_number:
+                msg_params["from_"] = twilio_phone_number
             else:
-                logger.error(f"WhatsApp notification failed: {response.text}")
-                return False
-    except Exception as e:
-        logger.error(f"Error sending WhatsApp notification: {e}")
-        return False
+                # Use messaging service if available
+                messaging_service_sid = os.environ.get('TWILIO_MESSAGING_SERVICE_SID', '')
+                if messaging_service_sid:
+                    msg_params["messaging_service_sid"] = messaging_service_sid
+                else:
+                    logger.error(f"No Twilio sender configured for {admin_phone}")
+                    continue
+            
+            message_response = twilio_client.messages.create(**msg_params)
+            logger.info(f"SMS notification sent to {admin_phone}, SID: {message_response.sid}")
+            success_count += 1
+        except Exception as e:
+            logger.error(f"Error sending SMS to {admin_phone}: {e}")
+    
+    return success_count > 0
+
+# Keep old function name for backward compatibility
+async def send_whatsapp_notification(message: str):
+    """Deprecated: Now sends SMS instead of WhatsApp"""
+    return await send_admin_sms_notification(message)
 
 # ============== REVIEWS ROUTES ==============
 
