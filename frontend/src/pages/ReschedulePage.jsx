@@ -249,11 +249,11 @@ const ReschedulePage = () => {
         <div className="max-w-2xl mx-auto text-center">
           <CalendarClock className="w-12 h-12 text-neon-blue mx-auto mb-4" />
           <h1 className="font-orbitron font-black text-2xl sm:text-3xl lg:text-4xl uppercase tracking-tight mb-4">
-            <span className="text-white">Vous avez un imprévu?</span><br />
-            <span className="text-neon-blue">Pas de panique!</span>
+            <span className="text-white">Reprogrammer</span><br />
+            <span className="text-neon-blue">Session de Jeu</span>
           </h1>
           <p className="text-gray-300 font-outfit text-lg">
-            Reprogrammez votre session en quelques clics
+            Vous avez un imprévu ? Reprogrammez votre session en quelques clics
           </p>
         </div>
       </section>
