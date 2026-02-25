@@ -721,7 +721,7 @@ async def create_booking(booking_data: BookingCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Ce créneau est déjà réservé")
     
-    game_price = 1500.0
+    game_price = 2000.0
     total_game_price = game_price * booking_data.number_of_games * booking_data.number_of_players
     reservation_fee = 500.0
     total_amount = total_game_price + reservation_fee
