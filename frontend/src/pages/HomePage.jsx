@@ -69,18 +69,6 @@ const HomePage = () => {
                 </span>
               </Button>
             </Link>
-            <Link to="/menu" data-testid="hero-cta-menu">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-neon-blue text-neon-blue font-rajdhani font-bold text-lg uppercase px-8 py-6 hover:bg-neon-blue/10 transition-all btn-skewed"
-              >
-                <span className="flex items-center gap-2">
-                  Nos Combos
-                  <ArrowRight className="w-5 h-5" />
-                </span>
-              </Button>
-            </Link>
           </div>
         </div>
 
