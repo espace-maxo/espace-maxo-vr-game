@@ -152,7 +152,7 @@ const HomePage = () => {
                   Vivez l'adrénaline de la course avec notre simulateur SONY professionnel.
                 </p>
                 <p className="font-rajdhani font-bold text-food-gold text-lg">
-                  2.000 FCFA / partie
+                  1.500 FCFA / partie
                 </p>
               </div>
             </div>
