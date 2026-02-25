@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { CalendarClock, AlertTriangle, CheckCircle, Gamepad2, Calendar, Clock, Users, Loader2, Search, Phone, User } from "lucide-react";
+import { CalendarClock, AlertTriangle, CheckCircle, Gamepad2, Calendar, Clock, Users, Loader2, Search, Phone, User, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// Helper to format date as dd/mm/yyyy
+const formatDateFR = (dateStr) => {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
+};
 
 const ReschedulePage = () => {
   const navigate = useNavigate();
@@ -30,6 +37,34 @@ const ReschedulePage = () => {
   const [success, setSuccess] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [error, setError] = useState(null);
+  
+  // Payment state
+  const [paymentConfig, setPaymentConfig] = useState(null);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
+
+  // Fetch payment config on mount
+  useEffect(() => {
+    const fetchPaymentConfig = async () => {
+      try {
+        const response = await axios.get(`${API}/payment/config`);
+        setPaymentConfig(response.data);
+      } catch (error) {
+        console.error("Error fetching payment config:", error);
+      }
+    };
+    fetchPaymentConfig();
+  }, []);
+
+  // Load Kkiapay script
+  useEffect(() => {
+    if (!document.getElementById("kkiapay-script")) {
+      const script = document.createElement("script");
+      script.id = "kkiapay-script";
+      script.src = "https://cdn.kkiapay.me/k.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   const handleSearch = async () => {
     if (!searchPhone || !searchName) {
@@ -37,10 +72,10 @@ const ReschedulePage = () => {
       return;
     }
 
-    // Validate phone format
+    // Validate phone format (8 digits for Benin)
     const cleanPhone = searchPhone.replace(/\s/g, '');
-    if (!/^01\d{8}$/.test(cleanPhone)) {
-      toast.error("Le numéro doit commencer par 01 et contenir 10 chiffres");
+    if (cleanPhone.length < 8) {
+      toast.error("Le numéro doit contenir au moins 8 chiffres");
       return;
     }
 
@@ -75,6 +110,58 @@ const ReschedulePage = () => {
       return;
     }
 
+    // Check if fee is required
+    if (bookingInfo?.fee_required && bookingInfo?.fee_amount > 0) {
+      // Initiate payment for rescheduling fee
+      initiatePayment();
+    } else {
+      // No fee required, proceed directly
+      executeReschedule();
+    }
+  };
+
+  const initiatePayment = () => {
+    if (!paymentConfig || !window.openKkiapayWidget) {
+      toast.error("Service de paiement non disponible");
+      return;
+    }
+
+    setAwaitingPayment(true);
+
+    window.openKkiapayWidget({
+      amount: bookingInfo.fee_amount,
+      position: "center",
+      callback: "",
+      data: "",
+      theme: "#007bff",
+      key: paymentConfig.public_key,
+      sandbox: paymentConfig.sandbox,
+      phone: searchPhone.replace(/\s/g, ''),
+      name: searchName,
+      description: `Frais reprogrammation - ${formatDateFR(newDate)}`
+    });
+
+    // Listen for payment success
+    window.addSuccessListener(async (response) => {
+      console.log("Payment success:", response);
+      toast.success("Paiement des frais réussi!");
+      
+      // Execute reschedule after successful payment
+      await executeRescheduleWithPayment(response.transactionId);
+    });
+
+    window.addFailedListener((response) => {
+      console.log("Payment failed:", response);
+      setAwaitingPayment(false);
+      toast.error("Le paiement a échoué. Veuillez réessayer.");
+    });
+
+    window.addKkiapayCloseListener(() => {
+      setAwaitingPayment(false);
+    });
+  };
+
+  const executeReschedule = async () => {
     setSubmitting(true);
     try {
       const response = await axios.post(
@@ -97,6 +184,31 @@ const ReschedulePage = () => {
     }
   };
 
+  const executeRescheduleWithPayment = async (transactionId) => {
+    setSubmitting(true);
+    try {
+      const response = await axios.post(
+        `${API}/bookings/${booking.id}/reschedule-by-client`,
+        { 
+          new_date: newDate, 
+          new_time_slot: newTime,
+          phone: searchPhone.replace(/\s/g, ''),
+          name: searchName.trim(),
+          payment_transaction_id: transactionId
+        }
+      );
+      
+      setSuccess(true);
+      setSuccessData(response.data);
+      toast.success("Réservation reprogrammée avec succès!");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Erreur lors de la reprogrammation");
+    } finally {
+      setSubmitting(false);
+      setAwaitingPayment(false);
+    }
+  };
+
   if (success) {
     return (
       <div className="min-h-screen pt-20 bg-dark-bg flex items-center justify-center px-4">
@@ -106,7 +218,14 @@ const ReschedulePage = () => {
             <h2 className="font-orbitron text-xl text-white mb-2">Reprogrammation réussie!</h2>
             <div className="text-gray-300 font-outfit space-y-2 mb-4">
               <p>Votre nouvelle réservation:</p>
-              <p className="text-neon-blue font-semibold text-lg">{successData?.new_date} à {successData?.new_time_slot}</p>
+              <p className="text-neon-blue font-semibold text-lg">
+                {formatDateFR(successData?.new_date)} à {successData?.new_time_slot}
+              </p>
+              {successData?.fee_charged > 0 && (
+                <p className="text-green-400 text-sm">
+                  Frais de reprogrammation payés: {successData?.fee_charged} FCFA
+                </p>
+              )}
             </div>
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-6">
               <p className="text-yellow-400 text-sm">{successData?.warning}</p>
@@ -159,12 +278,12 @@ const ReschedulePage = () => {
                   <Input
                     id="search-phone"
                     type="tel"
-                    placeholder="01 XX XX XX XX"
+                    placeholder="97 XX XX XX"
                     value={searchPhone}
                     onChange={(e) => setSearchPhone(e.target.value)}
                     className="bg-surface-highlight border-white/20 text-white font-outfit"
                   />
-                  <p className="text-xs text-gray-500">Format: 01XXXXXXXX (10 chiffres)</p>
+                  <p className="text-xs text-gray-500">Format: 8 chiffres (ex: 97123456)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -237,7 +356,7 @@ const ReschedulePage = () => {
                   </div>
                   <div className="flex items-center gap-2 text-neon-red">
                     <Calendar className="w-4 h-4" />
-                    <span className="font-outfit font-semibold">{booking.date}</span>
+                    <span className="font-outfit font-semibold">{formatDateFR(booking.date)}</span>
                     <Clock className="w-4 h-4 ml-2" />
                     <span className="font-outfit font-semibold">{booking.time_slot}</span>
                   </div>
@@ -266,9 +385,15 @@ const ReschedulePage = () => {
                       {bookingInfo?.warning_message}
                     </p>
                     {bookingInfo?.fee_required && (
-                      <p className="text-yellow-300 font-semibold mt-2">
-                        Frais de reprogrammation: {bookingInfo?.fee_amount} FCFA
-                      </p>
+                      <div className="mt-2 bg-red-500/20 border border-red-500/30 rounded p-2">
+                        <p className="text-red-400 font-semibold flex items-center gap-2">
+                          <CreditCard className="w-4 h-4" />
+                          Frais de reprogrammation: {bookingInfo?.fee_amount} FCFA
+                        </p>
+                        <p className="text-red-300 text-xs mt-1">
+                          Ces frais seront prélevés par mobile money avant la reprogrammation.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -293,6 +418,11 @@ const ReschedulePage = () => {
                       min={new Date().toISOString().split('T')[0]}
                       className="bg-surface-highlight border-white/20 text-white font-outfit"
                     />
+                    {newDate && (
+                      <p className="text-neon-blue text-sm">
+                        Nouvelle date: {formatDateFR(newDate)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -313,19 +443,31 @@ const ReschedulePage = () => {
 
                   <Button
                     onClick={handleReschedule}
-                    disabled={submitting || !newDate || !newTime}
-                    className="w-full bg-neon-blue text-black font-rajdhani font-bold uppercase py-6 text-lg mt-4"
+                    disabled={submitting || awaitingPayment || !newDate || !newTime}
+                    className={`w-full font-rajdhani font-bold uppercase py-6 text-lg mt-4 ${
+                      bookingInfo?.fee_required 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-neon-blue text-black"
+                    }`}
                   >
-                    {submitting ? (
+                    {submitting || awaitingPayment ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Reprogrammation en cours...
+                        {awaitingPayment ? "Paiement en cours..." : "Reprogrammation en cours..."}
                       </>
                     ) : (
                       <>
-                        <CalendarClock className="w-5 h-5 mr-2" />
-                        Confirmer la reprogrammation
-                        {bookingInfo?.fee_required && ` (${bookingInfo?.fee_amount} FCFA)`}
+                        {bookingInfo?.fee_required ? (
+                          <>
+                            <CreditCard className="w-5 h-5 mr-2" />
+                            Payer {bookingInfo?.fee_amount} FCFA et reprogrammer
+                          </>
+                        ) : (
+                          <>
+                            <CalendarClock className="w-5 h-5 mr-2" />
+                            Confirmer la reprogrammation (gratuit)
+                          </>
+                        )}
                       </>
                     )}
                   </Button>
