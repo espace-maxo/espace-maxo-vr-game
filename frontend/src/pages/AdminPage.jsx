@@ -1248,9 +1248,236 @@ const AdminPage = () => {
                 )}
               </div>
             </TabsContent>
+
+            {/* Candidatures Tab */}
+            <TabsContent value="candidatures">
+              <div className="space-y-4">
+                {/* Header with Export */}
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-dark-card p-4 rounded-lg border border-white/10">
+                  <div className="flex items-center gap-4">
+                    <div className="text-gray-300">
+                      <span className="font-semibold text-white">{jobApplications.length}</span> candidature(s)
+                      {jobApplicationsStats.pending > 0 && (
+                        <span className="ml-2 text-food-orange">
+                          ({jobApplicationsStats.pending} en attente)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = `${API}/admin/export/job-applications`;
+                      link.setAttribute('download', '');
+                      const headers = getAuthHeaders();
+                      fetch(`${API}/admin/export/job-applications`, { headers })
+                        .then(res => res.blob())
+                        .then(blob => {
+                          const url = window.URL.createObjectURL(blob);
+                          link.href = url;
+                          link.click();
+                          window.URL.revokeObjectURL(url);
+                        })
+                        .catch(() => toast.error("Erreur lors de l'export"));
+                    }}
+                    className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </Button>
+                </div>
+
+                {/* Applications List */}
+                {jobApplications.length === 0 ? (
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="p-8 text-center">
+                      <Briefcase className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                      <p className="text-gray-400">Aucune candidature reçue</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4">
+                    {jobApplications.map((app) => (
+                      <Card key={app.id} className="bg-dark-card border-white/10">
+                        <CardContent className="p-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                <h3 className="font-outfit font-semibold text-white text-lg">{app.full_name}</h3>
+                                <Badge className={
+                                  app.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                                  app.status === "reviewed" ? "bg-blue-500/20 text-blue-400" :
+                                  app.status === "contacted" ? "bg-purple-500/20 text-purple-400" :
+                                  app.status === "hired" ? "bg-green-500/20 text-green-400" :
+                                  "bg-red-500/20 text-red-400"
+                                }>
+                                  {app.status === "pending" ? "En attente" :
+                                   app.status === "reviewed" ? "Examiné" :
+                                   app.status === "contacted" ? "Contacté" :
+                                   app.status === "hired" ? "Embauché" : "Rejeté"}
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <Briefcase className="w-4 h-4 text-green-400" />
+                                  {app.position === "serveur" ? "Serveur/Serveuse" :
+                                   app.position === "cuisinier" ? "Cuisinier/Cuisinière" :
+                                   app.position === "barman" ? "Barman/Barmaid" :
+                                   app.position === "caissier" ? "Caissier/Caissière" :
+                                   app.position === "livreur" ? "Livreur" :
+                                   app.position === "animateur_vr" ? "Animateur VR" :
+                                   app.position === "manager" ? "Manager" : app.position}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-4 h-4 text-neon-blue" />
+                                  {app.phone}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-4 h-4 text-neon-purple" />
+                                  {app.email}
+                                </span>
+                              </div>
+                              
+                              {app.message && (
+                                <p className="text-gray-500 text-sm mt-2 line-clamp-2">
+                                  "{app.message}"
+                                </p>
+                              )}
+                              
+                              <p className="text-gray-600 text-xs">
+                                Reçue le {app.created_at ? new Date(app.created_at).toLocaleDateString('fr-FR') : "N/A"}
+                              </p>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-2">
+                              {app.cv_filename && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    setCvLoading(true);
+                                    try {
+                                      const headers = getAuthHeaders();
+                                      const res = await axios.get(`${API}/admin/job-applications/${app.id}`, { headers });
+                                      if (res.data.cv_data) {
+                                        setSelectedCV({
+                                          name: res.data.cv_filename,
+                                          data: res.data.cv_data
+                                        });
+                                        setCvViewerModal(true);
+                                      } else {
+                                        toast.error("CV non disponible");
+                                      }
+                                    } catch (err) {
+                                      toast.error("Erreur lors du chargement du CV");
+                                    } finally {
+                                      setCvLoading(false);
+                                    }
+                                  }}
+                                  className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                  disabled={cvLoading}
+                                >
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  CV
+                                </Button>
+                              )}
+                              
+                              <Select
+                                value={app.status}
+                                onValueChange={async (newStatus) => {
+                                  try {
+                                    const headers = getAuthHeaders();
+                                    await axios.put(`${API}/admin/job-applications/${app.id}/status`, 
+                                      { status: newStatus }, 
+                                      { headers }
+                                    );
+                                    toast.success("Statut mis à jour");
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error("Erreur lors de la mise à jour");
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-32 bg-surface-highlight border-white/20 text-white text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-dark-card border-white/20">
+                                  <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
+                                  <SelectItem value="reviewed" className="text-blue-400">Examiné</SelectItem>
+                                  <SelectItem value="contacted" className="text-purple-400">Contacté</SelectItem>
+                                  <SelectItem value="hired" className="text-green-400">Embauché</SelectItem>
+                                  <SelectItem value="rejected" className="text-red-400">Rejeté</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  if (!window.confirm(`Supprimer la candidature de ${app.full_name} ?`)) return;
+                                  try {
+                                    const headers = getAuthHeaders();
+                                    await axios.delete(`${API}/admin/job-applications/${app.id}`, { headers });
+                                    toast.success("Candidature supprimée");
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error("Erreur lors de la suppression");
+                                  }
+                                }}
+                                className="border-red-500/50 text-red-500 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
       </section>
+
+      {/* CV Viewer Modal */}
+      <Dialog open={cvViewerModal} onOpenChange={setCvViewerModal}>
+        <DialogContent className="bg-dark-card border-white/10 text-white max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-neon-blue flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              {selectedCV?.name || "CV"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {selectedCV?.data && (
+              <div className="space-y-4">
+                <Button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = `data:application/pdf;base64,${selectedCV.data}`;
+                    link.download = selectedCV.name;
+                    link.click();
+                  }}
+                  className="bg-neon-blue hover:bg-neon-blue/80"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Télécharger le CV
+                </Button>
+                <iframe
+                  src={`data:application/pdf;base64,${selectedCV.data}`}
+                  className="w-full h-[60vh] rounded-lg border border-white/10"
+                  title="CV Viewer"
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Reschedule Modal */}
       <Dialog open={rescheduleModal} onOpenChange={setRescheduleModal}>
