@@ -9,6 +9,7 @@ const Navbar = () => {
 
   const navLinks = [
     { label: "Accueil", path: "/" },
+    { label: "Combos", path: "/menu" },
     { label: "Livraison", path: "/livraison", icon: "truck" },
     { label: "Mon Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Avis", path: "/avis" },
