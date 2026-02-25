@@ -56,8 +56,8 @@ const MenuPage = () => {
         <div className="max-w-7xl mx-auto text-center">
           <UtensilsCrossed className="w-12 h-12 text-food-gold mx-auto mb-4" />
           <h1 className="font-orbitron font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tight mb-4">
-            <span className="text-white">Notre</span>{" "}
-            <span className="text-food-gold">Menu</span>
+            <span className="text-white">Nos</span>{" "}
+            <span className="text-food-gold">Combos</span>
           </h1>
           <p className="font-outfit text-lg text-gray-300 max-w-2xl mx-auto">
             Découvrez nos délicieux plats et combos exclusifs avec jeux VR inclus!
