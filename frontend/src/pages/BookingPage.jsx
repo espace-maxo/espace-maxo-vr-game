@@ -126,7 +126,7 @@ const BookingPage = () => {
   };
 
   const calculateTotal = () => {
-    const gamePrice = 1500;
+    const gamePrice = 2000;
     const reservationFee = 500;
     const totalGames = formData.numberOfPlayers * formData.numberOfGames;
     const gamesPrice = totalGames * gamePrice;
@@ -753,7 +753,7 @@ const BookingPage = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-400 font-outfit">
-                      {formData.numberOfPlayers} joueur(s) x {formData.numberOfGames} partie(s) x 1.500 FCFA
+                      {formData.numberOfPlayers} joueur(s) x {formData.numberOfGames} partie(s) x 2.000 FCFA
                     </span>
                     <span className="text-white font-rajdhani font-bold">
                       {formatPrice(calculateTotal().gamesPrice)} FCFA

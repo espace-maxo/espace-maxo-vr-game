@@ -129,7 +129,7 @@ const HomePage = () => {
                   Immergez-vous dans des mondes virtuels avec notre casque VR dernière génération.
                 </p>
                 <p className="font-rajdhani font-bold text-food-gold text-lg">
-                  1.500 FCFA / partie
+                  2.000 FCFA / partie
                 </p>
               </div>
             </div>
@@ -152,7 +152,7 @@ const HomePage = () => {
                   Vivez l'adrénaline de la course avec notre simulateur SONY professionnel.
                 </p>
                 <p className="font-rajdhani font-bold text-food-gold text-lg">
-                  1.500 FCFA / partie
+                  2.000 FCFA / partie
                 </p>
               </div>
             </div>
