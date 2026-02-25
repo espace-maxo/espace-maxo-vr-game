@@ -2112,9 +2112,14 @@ async def create_delivery_order(order: DeliveryOrder):
     if len(order.items) > 5:
         items_text += f"\n  ... et {len(order.items) - 5} autres"
     
+    # Determine zone and payment status
+    zone_label = "COTONOU" if order.delivery_zone == "cotonou" else "HORS COTONOU"
+    payment_label = "PAYE" if order.payment_status == "paid" else "A VALIDER"
+    
     # Send SMS notification to admin
-    notification_message = f"""NOUVELLE COMMANDE LIVRAISON
+    notification_message = f"""COMMANDE LIVRAISON [{zone_label}]
 
+Statut: {payment_label}
 Client: {order.customer_name}
 Tel: {order.customer_phone}
 
@@ -2122,10 +2127,11 @@ Articles:
 {items_text}
 
 Total: {int(order.total)} FCFA
+Livraison: {int(order.delivery_fee)} FCFA
 
-Adresse: {order.delivery_address[:100]}
+Adresse: {order.delivery_address[:80]}
 
-Notes: {order.notes[:50] if order.notes else 'Aucune'}"""
+{'PAIEMENT CONFIRME - A preparer!' if order.payment_status == 'paid' else 'HORS COTONOU - Contacter le client pour confirmer'}"""
     
     await send_whatsapp_notification(notification_message)
     logger.info(f"Delivery order created: {order.id}")
