@@ -100,7 +100,7 @@ class Game(BaseModel):
     name: str
     description: str
     game_type: str
-    price_per_game: float = 1500.0
+    price_per_game: float = 2000.0
     image_url: str
     duration_minutes: int = 15
 
