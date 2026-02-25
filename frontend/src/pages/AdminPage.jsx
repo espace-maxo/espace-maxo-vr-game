@@ -59,6 +59,8 @@ const AdminPage = () => {
   const [reviewStats, setReviewStats] = useState(null);
   const [locationRequests, setLocationRequests] = useState([]);
   const [locationStats, setLocationStats] = useState(null);
+  const [jobApplications, setJobApplications] = useState([]);
+  const [jobApplicationsStats, setJobApplicationsStats] = useState({ pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
   const [activeTab, setActiveTab] = useState("bookings");
@@ -79,6 +81,11 @@ const AdminPage = () => {
   const [deleteLocationModal, setDeleteLocationModal] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState(null);
   const [deleteLocationLoading, setDeleteLocationLoading] = useState(false);
+  
+  // CV viewer modal state
+  const [cvViewerModal, setCvViewerModal] = useState(false);
+  const [selectedCV, setSelectedCV] = useState(null);
+  const [cvLoading, setCvLoading] = useState(false);
 
   // Check authentication
   useEffect(() => {
