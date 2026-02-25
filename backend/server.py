@@ -1819,6 +1819,36 @@ async def send_whatsapp_notification(message: str):
     """Deprecated: Now sends SMS instead of WhatsApp"""
     return await send_admin_sms_notification(message)
 
+async def send_client_sms_confirmation(phone: str, message: str):
+    """Send SMS confirmation to client via Twilio"""
+    if not twilio_client:
+        logger.warning("Twilio not configured, skipping client SMS")
+        return False
+    
+    twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER', '')
+    if not twilio_phone_number:
+        logger.error("Twilio phone number not configured")
+        return False
+    
+    # Format phone number for Benin
+    clean_phone = phone.replace(" ", "").replace("+229", "")
+    formatted_phone = f"+229{clean_phone}"
+    
+    try:
+        # Clean message for SMS
+        clean_message = message.replace("✅", "[OK]").replace("🎮", "").replace("📅", "").replace("⏰", "").replace("👥", "").replace("💰", "").replace("📍", "").replace("🎯", "")
+        
+        msg_response = twilio_client.messages.create(
+            body=clean_message[:1600],
+            to=formatted_phone,
+            from_=twilio_phone_number
+        )
+        logger.info(f"Client SMS sent to {formatted_phone}, SID: {msg_response.sid}")
+        return True
+    except Exception as e:
+        logger.error(f"Error sending SMS to client {formatted_phone}: {e}")
+        return False
+
 # ============== REVIEWS ROUTES ==============
 
 @api_router.post("/reviews", response_model=Review)
