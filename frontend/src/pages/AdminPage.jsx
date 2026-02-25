@@ -654,6 +654,15 @@ const AdminPage = () => {
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="candidatures" className="data-[state=active]:bg-green-600 data-[state=active]:text-white font-rajdhani font-bold relative">
+                <Briefcase className="w-4 h-4 mr-2" />
+                Candidatures
+                {jobApplicationsStats.pending > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-food-orange text-white text-xs rounded-full flex items-center justify-center">
+                    {jobApplicationsStats.pending}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings">
