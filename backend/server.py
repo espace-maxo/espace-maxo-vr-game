@@ -289,6 +289,30 @@ class DeliveryOrder(BaseModel):
     payment_transaction_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# Job Application Models
+class JobApplicationCreate(BaseModel):
+    full_name: str
+    phone: str
+    email: str
+    position: str  # serveur, cuisinier, barman, etc.
+    message: str = ""
+    cv_filename: Optional[str] = None
+    cv_data: Optional[str] = None  # Base64 encoded PDF
+
+class JobApplication(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    full_name: str
+    phone: str
+    email: str
+    position: str
+    message: str = ""
+    cv_filename: Optional[str] = None
+    cv_url: Optional[str] = None
+    status: str = "pending"  # pending, reviewed, contacted, hired, rejected
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 # ============== SEED DATA ==============
 
 MENU_ITEMS = [
