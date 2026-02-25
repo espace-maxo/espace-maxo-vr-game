@@ -113,7 +113,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsRes, bookingsRes, loyaltyRes, reviewsRes, locationRes] = await Promise.all([
+      const [statsRes, bookingsRes, loyaltyRes, reviewsRes, locationRes, jobAppsRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, {
           headers,
@@ -125,7 +125,8 @@ const AdminPage = () => {
         }),
         axios.get(`${API}/admin/loyalty/accounts`, { headers }).catch(() => ({ data: { accounts: [], stats: {} } })),
         axios.get(`${API}/admin/reviews`, { headers }).catch(() => ({ data: { reviews: [], stats: {} } })),
-        axios.get(`${API}/admin/location-requests`, { headers }).catch(() => ({ data: { requests: [], stats: {} } }))
+        axios.get(`${API}/admin/location-requests`, { headers }).catch(() => ({ data: { requests: [], stats: {} } })),
+        axios.get(`${API}/admin/job-applications`, { headers }).catch(() => ({ data: [] }))
       ]);
       setStats(statsRes.data);
       setBookings(bookingsRes.data.bookings);
@@ -135,6 +136,14 @@ const AdminPage = () => {
       setReviewStats(reviewsRes.data.stats || {});
       setLocationRequests(locationRes.data.requests || []);
       setLocationStats(locationRes.data.stats || {});
+      
+      // Process job applications
+      const jobApps = jobAppsRes.data || [];
+      setJobApplications(jobApps);
+      setJobApplicationsStats({
+        pending: jobApps.filter(app => app.status === "pending").length,
+        total: jobApps.length
+      });
     } catch (error) {
       console.error("Error fetching admin data:", error);
       if (error.response?.status === 401) {
