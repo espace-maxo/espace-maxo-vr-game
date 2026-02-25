@@ -11,7 +11,7 @@ const Navbar = () => {
     { label: "Accueil", path: "/" },
     { label: "Combos", path: "/menu" },
     { label: "Livraison", path: "/livraison", icon: "truck" },
-    { label: "Mon Porte-Monnaie", path: "/provision", icon: "wallet" },
+    { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Avis", path: "/avis" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
     { label: "Admin", path: "/admin", icon: "lock" },
