@@ -23,21 +23,17 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Système d'avis avec validation
 - Location événementielle avec formulaire complet
 
+### Phase 10 - Suppression Demandes Location (25 Feb 2026)
+- **Endpoint DELETE** `/api/admin/location-requests/{id}` pour supprimer définitivement
+- **Bouton poubelle** dans l'admin pour chaque demande de location
+- **Modal de confirmation** avant suppression définitive
+- Action irréversible avec avertissement clair
+
 ### Phase 9 - Intégration Twilio SMS (25 Feb 2026)
 - **OTP par SMS** pour sécuriser l'accès au portefeuille/provision
-  - Utilise Twilio Verify API
-  - Code à 6 chiffres envoyé par SMS
-  - Remplace l'ancien système WhatsApp (CallMeBot)
-- **Notifications SMS Admin** pour :
-  - Nouvelles réservations payées
-  - Nouveaux avis clients
-  - Nouvelles demandes de location
-- **2 numéros admin configurés** :
-  - +229 97 72 08 08
-  - +229 91 00 50 84
+- **Notifications SMS Admin** pour : réservations, avis, locations
+- **2 numéros admin** : +229 97 72 08 08, +229 91 00 50 84
 - **SMS de confirmation au client** après paiement réussi
-  - Récapitulatif de la réservation (jeu, date, heure, montant)
-  - Adresse du lieu
 
 ### Phase 8 - Location Événementielle (23 Feb 2026)
 - Page dédiée /location avec formulaire complet
@@ -48,13 +44,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - Page `/provision` pour gérer son portefeuille
 - Sécurisé par OTP SMS
 - Recharge via MTN MoMo, Moov Money, Celtiis
-- Historique des transactions
-- Affichage des points de fidélité
 
 ### Phase 6 - Reprogrammation (Dec 2025)
 - Page `/reprogrammer` accessible depuis navbar et footer
 - Client et Admin peuvent reprogrammer
-- Gratuit si > 15 min avant session
 
 ### Refactorisation Backend (25 Feb 2026)
 - Création structure modulaire :
@@ -80,6 +73,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 
 ## APIs Backend
 
+### Location Requests (Admin)
+- GET /api/admin/location-requests - Liste des demandes
+- PUT /api/admin/location-requests/{id} - Mettre à jour statut
+- DELETE /api/admin/location-requests/{id} - Supprimer définitivement
+
 ### Wallet/OTP
 - POST /api/wallet/send-otp - Envoyer OTP par SMS
 - POST /api/wallet/verify-otp - Vérifier OTP
@@ -88,19 +86,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 
 ### Réservations
 - POST /api/bookings - Créer réservation
-- POST /api/bookings/find-for-reschedule - Trouver réservation
-- POST /api/bookings/reschedule-by-user - Reprogrammer (client)
-- POST /api/bookings/{id}/reschedule-admin - Reprogrammer (admin)
+- DELETE /api/admin/bookings/{id} - Supprimer définitivement
 
 ### Paiement
 - GET /api/payment/config - Configuration Kkiapay
-- POST /api/payment/verify - Vérifier paiement (déclenche SMS admin + client)
-
-### Admin
-- POST /api/admin/login - Connexion admin
-- GET /api/admin/bookings - Liste réservations
-- DELETE /api/admin/bookings/{id} - Supprimer définitivement
-- GET /api/admin/location-requests - Demandes de location
+- POST /api/payment/verify - Vérifier paiement (déclenche SMS)
 
 ## Frontend Routes
 - `/` - Accueil
@@ -127,6 +117,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de:
 - [x] OTP SMS via Twilio
 - [x] Notifications SMS Admin (2 numéros)
 - [x] SMS confirmation au client après paiement
+- [x] Suppression définitive des demandes de location
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer bouton **"Deploy"** pour mettre à jour espacemaxo.com
