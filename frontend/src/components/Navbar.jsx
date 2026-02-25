@@ -93,7 +93,6 @@ const Navbar = () => {
                   data-testid={`mobile-nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
                   {link.icon && getIcon(link.icon)}
-                  {link.label === "Livraison" && <Truck className="w-4 h-4" />}
                   {link.label}
                 </Link>
               ))}
