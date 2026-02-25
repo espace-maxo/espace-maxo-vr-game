@@ -266,6 +266,26 @@ class LoyaltyRedemption(BaseModel):
     phone: str
     free_games_to_use: int = 1
 
+# Delivery Order Models
+class DeliveryOrderItem(BaseModel):
+    name: str
+    price: float
+    quantity: int
+
+class DeliveryOrder(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_name: str
+    customer_phone: str
+    delivery_address: str
+    notes: str = ""
+    items: List[Dict] = []
+    subtotal: float
+    delivery_fee: float = 1000
+    total: float
+    status: str = "pending"  # pending, confirmed, preparing, delivered, cancelled
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # ============== SEED DATA ==============
 
 MENU_ITEMS = [
