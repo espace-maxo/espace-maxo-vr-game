@@ -2096,6 +2096,82 @@ async def create_location_request(request_data: LocationRequest):
     
     return {"message": "Demande envoyée avec succès", "id": request_data.id}
 
+# ============== DELIVERY ORDERS ROUTES ==============
+
+@api_router.post("/delivery-orders")
+async def create_delivery_order(order: DeliveryOrder):
+    """Create a new delivery order"""
+    order_dict = order.model_dump()
+    await db.delivery_orders.insert_one(order_dict)
+    
+    # Format items list for notification
+    items_text = "\n".join([f"  - {item['name']} x{item['quantity']}" for item in order.items[:5]])
+    if len(order.items) > 5:
+        items_text += f"\n  ... et {len(order.items) - 5} autres"
+    
+    # Send SMS notification to admin
+    notification_message = f"""NOUVELLE COMMANDE LIVRAISON
+
+Client: {order.customer_name}
+Tel: {order.customer_phone}
+
+Articles:
+{items_text}
+
+Total: {int(order.total)} FCFA
+
+Adresse: {order.delivery_address[:100]}
+
+Notes: {order.notes[:50] if order.notes else 'Aucune'}"""
+    
+    await send_whatsapp_notification(notification_message)
+    logger.info(f"Delivery order created: {order.id}")
+    
+    return {"message": "Commande créée avec succès", "id": order.id}
+
+@api_router.get("/admin/delivery-orders")
+async def get_delivery_orders(
+    status: Optional[str] = Query(None),
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Get all delivery orders (admin only)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    orders = await db.delivery_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=200)
+    
+    # Stats
+    total = len(orders)
+    pending = sum(1 for o in orders if o.get("status") == "pending")
+    
+    return {
+        "orders": orders,
+        "total": total,
+        "stats": {
+            "pending": pending,
+            "total": total
+        }
+    }
+
+@api_router.put("/admin/delivery-orders/{order_id}")
+async def update_delivery_order_status(
+    order_id: str, 
+    status: str = Query(...),
+    is_admin: bool = Depends(get_current_admin)
+):
+    """Update delivery order status (admin only)"""
+    order = await db.delivery_orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    await db.delivery_orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": status}}
+    )
+    
+    return {"message": "Statut mis à jour", "status": status}
+
 @api_router.get("/admin/location-requests")
 async def get_all_location_requests(
     status: Optional[str] = Query(None),
