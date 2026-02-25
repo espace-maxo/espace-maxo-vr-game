@@ -91,6 +91,7 @@ const Navbar = () => {
                   data-testid={`mobile-nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
                   {link.label === "Admin" && <Lock className="w-4 h-4" />}
+                  {link.label === "Livraison" && <Truck className="w-4 h-4" />}
                   {link.label}
                 </Link>
               ))}
