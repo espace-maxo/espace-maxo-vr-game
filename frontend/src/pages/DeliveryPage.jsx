@@ -314,7 +314,7 @@ const DeliveryPage = () => {
   const amountToPay = totalWithDelivery - walletAmountToUse;
 
   // Create order in backend
-  const createOrder = async (paymentStatus = "pending", transactionId = null) => {
+  const createOrder = async (paymentStatus = "pending", transactionId = null, walletAmount = 0) => {
     const orderData = {
       customer_name: orderForm.name,
       customer_phone: orderForm.phone,
@@ -330,7 +330,8 @@ const DeliveryPage = () => {
       delivery_fee: deliveryFee,
       total: totalWithDelivery,
       payment_status: paymentStatus,
-      payment_transaction_id: transactionId
+      payment_transaction_id: transactionId,
+      wallet_amount_used: walletAmount
     };
 
     const response = await axios.post(`${API}/delivery-orders`, orderData);
@@ -345,11 +346,44 @@ const DeliveryPage = () => {
     }
 
     if (orderForm.zone === "cotonou") {
-      // Cotonou: Payment required via Kkiapay
-      initiatePayment();
+      // If wallet covers entire amount
+      if (useWallet && amountToPay === 0) {
+        await handleWalletOnlyPayment();
+      } else {
+        // Cotonou: Payment required via Kkiapay (possibly partial after wallet)
+        initiatePayment();
+      }
     } else {
       // Outside Cotonou: Submit for validation
       await submitForValidation();
+    }
+  };
+
+  // Handle payment entirely from wallet
+  const handleWalletOnlyPayment = async () => {
+    setLoading(true);
+    try {
+      // Deduct from wallet
+      await axios.post(`${API}/wallet/use`, {
+        phone: orderForm.phone,
+        amount: walletAmountToUse,
+        description: `Commande livraison Espace Maxo`
+      });
+
+      // Create order with paid status
+      await createOrder("paid", "wallet_payment", walletAmountToUse);
+
+      setSuccessMessage(`Commande confirmée ! Paiement de ${formatPrice(walletAmountToUse)} FCFA effectué via votre porte-monnaie. Livraison sous 45-60 minutes.`);
+      setOrderSuccess(true);
+      setCart([]);
+      setShowOrderModal(false);
+      setUseWallet(false);
+      setWalletBalance(prev => prev - walletAmountToUse);
+    } catch (error) {
+      console.error("Wallet payment error:", error);
+      toast.error("Erreur lors du paiement. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -363,7 +397,7 @@ const DeliveryPage = () => {
     setAwaitingPayment(true);
 
     window.openKkiapayWidget({
-      amount: totalWithDelivery,
+      amount: amountToPay, // Amount after wallet deduction
       position: "center",
       callback: "",
       data: "",
@@ -372,7 +406,7 @@ const DeliveryPage = () => {
       sandbox: paymentConfig.sandbox,
       phone: orderForm.phone.replace(/\s/g, ''),
       name: orderForm.name,
-      description: `Commande Livraison Espace Maxo`
+      description: `Commande Livraison Espace Maxo${walletAmountToUse > 0 ? ` (${formatPrice(walletAmountToUse)} FCFA via porte-monnaie)` : ''}`
     });
 
     // Listen for payment success
