@@ -674,6 +674,15 @@ const AdminPage = () => {
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="livraisons" className="data-[state=active]:bg-food-orange data-[state=active]:text-white font-rajdhani font-bold relative">
+                <Truck className="w-4 h-4 mr-2" />
+                Livraisons
+                {deliveryOrders.filter(o => o.status === "pending").length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-blue text-white text-xs rounded-full flex items-center justify-center">
+                    {deliveryOrders.filter(o => o.status === "pending").length}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings">
