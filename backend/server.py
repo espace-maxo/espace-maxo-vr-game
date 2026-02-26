@@ -2192,13 +2192,17 @@ async def get_delivery_orders(
 @api_router.put("/admin/delivery-orders/{order_id}")
 async def update_delivery_order_status(
     order_id: str, 
-    status: str = Query(...),
+    update_data: dict,
     is_admin: bool = Depends(get_current_admin)
 ):
     """Update delivery order status (admin only)"""
     order = await db.delivery_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    status = update_data.get("status")
+    if not status:
+        raise HTTPException(status_code=400, detail="Statut requis")
     
     await db.delivery_orders.update_one(
         {"id": order_id},
