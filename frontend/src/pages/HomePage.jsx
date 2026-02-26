@@ -396,14 +396,14 @@ const HomePage = () => {
             <div className="relative">
               <div className="rounded-xl overflow-hidden border-2 border-white/10 shadow-2xl">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1982.8!2d2.3156!3d6.3478!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1024a9b5c3d5f7a7%3A0x8f7c5e7c5b5f5f5f!2sPharmacie%20Fidjross%C3%A8%20Plage!5e0!3m2!1sfr!2sbj!4v1700000000000!5m2!1sfr!2sbj"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3965.5!2d2.3156!3d6.3478!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNsKwMjAnNTIuMSJOIDLCsDE4JzU2LjIiRQ!5e0!3m2!1sfr!2sbj!4v1700000000000!5m2!1sfr!2sbj"
                   width="100%"
                   height="350"
                   style={{ border: 0 }}
                   allowFullScreen=""
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  title="Espace Maxo - À côté de la Pharmacie Fidjrossè Plage, Cotonou"
+                  title="Espace Maxo - Fidjrossè Plage, Cotonou"
                   className="grayscale hover:grayscale-0 transition-all duration-500"
                   data-testid="google-map-embed"
                 ></iframe>
