@@ -1,0 +1,193 @@
+<analysis>**original_problem_statement:**
+The user requested a full-stack application for their restaurant, Espace Maxo, located in Cotonou. The application's purpose is to showcase the restaurant's menu, enable customers to book gaming sessions (VR, simulators), manage reservations via a secure admin panel, process payments using local mobile money providers, and handle food delivery orders.
+
+**PRODUCT REQUIREMENTS:**
+*   **Application Name:** Espace Maxo
+*   **Core Features:**
+    *   Display restaurant menus (Combos) and a separate food delivery menu.
+    *   Book gaming sessions with a calendar showing available slots.
+    *   Secure, password-protected admin dashboard to manage reservations, customer reviews, loyalty accounts, event rentals, and delivery orders.
+    *   Image gallery, customer testimonials, and a partner section.
+    *   Google Maps integration.
+    *   A comprehensive form for renting the space for events.
+    *   A customer loyalty program based on phone numbers.
+    *   A customer wallet (Porte-Monnaie) system to pre-load credit, secured by SMS OTP.
+    *   Ability for clients and admins to reschedule bookings, with fees for last-minute changes.
+    *   Food delivery ordering system with online payment.
+    *   A Join Us section for job applications.
+*   **Games:** VR 360-degree games, SONY car racing simulators.
+*   **Payments:** Integration with Kkiapay for MTN, Moov, and Celtiis mobile money.
+*   **Notifications:** Admin should receive SMS notifications for new reviews, rental requests, paid bookings, and delivery orders. Clients should receive an SMS confirmation after a paid booking.
+
+**User's preferred language**: French. The next agent MUST respond in French only.
+
+**what currently exists?**
+A comprehensive full-stack application (React, FastAPI, MongoDB).
+*   **Frontend:** A responsive UI featuring a homepage, food delivery page, game booking, wallet management, a new careers page (), and a highly detailed admin panel.
+*   **Backend:** A monolithic  file containing API logic for JWT-secured admin endpoints, booking management, loyalty program, a full wallet system with Twilio SMS OTP, delivery orders, job applications, and admin notifications via Twilio SMS.
+*   **Admin Dashboard:** A feature-rich admin panel at  with two access levels (Full Access and Read-Only). It includes tabs for statistics, booking management, delivery orders, event rentals, reviews, loyalty accounts, and job applications. All sections now feature View Details modals for in-depth information. CSV export is available for most data types.
+*   **Integrations:**
+    *   **Kkiapay:** Integrated for mobile money payments.
+    *   **Twilio:** Fully integrated for all SMS notifications (wallet OTP, admin alerts, client confirmations).
+
+**Last working item**:
+-   **Last item agent was working:** The user requested two new features:
+    1.  **Online Combo Payment:** Allow users to pay for Combos online and book a game session simultaneously on the Combos page.
+    2.  **Table Reservation:** Allow users to reserve a table by paying a deductible deposit (from 5,000 to 25,000 FCFA).
+    The agent created backend models (, ), placeholder API endpoints, and a new but empty frontend page .
+-   **Status:** IN PROGRESS
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** Both. The backend agent needs to test the new endpoints for creating combo/table reservations, including payment logic. The frontend agent needs to test the UI for both features, from form submission to viewing the reservation in the admin panel.
+-   **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+-   **Issue 1:** Production environment is outdated, causing user confusion. (Priority: P0)
+-   **Issue 2:** Verify Kkiapay payment flow for all payment scenarios. (Priority: P1)
+
+**Issues Detail:**
+-   **Issue 1: Production environment is outdated.**
+    -   **Description:** The user repeatedly reports that new features or fixes do not work on their custom domain (). This is because the production environment is running old code.
+    -   **Next debug checklist:** This is **BLOCKED** on user action. The next agent **MUST** begin the interaction by politely but clearly reminding the user in French that to see any new features or fixes on , they must click the **Deploy** button after work is completed.
+    -   **Status:** BLOCKED
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** N/A (User action required).
+-   **Issue 2: Verify Kkiapay payment flow is stable.**
+    -   **Description:** This was a recurring issue. With new payment flows (delivery, rescheduling, and upcoming combo/table reservations), the payment logic has become more complex and has not been formally re-verified end-to-end.
+    -   **Next debug checklist:** Ask the user to perform test payments for a standard booking, a delivery order, a rescheduling fee, and (once implemented) a combo order and table reservation deposit.
+    -   **Status:** USER VERIFICATION PENDING
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Both.
+
+**In progress Task List**:
+-   **Task 1: Implement Online Combo Payment and Game Reservation.** (Priority: P0)
+    -   **Where to resume:** Modify  (the Combos page) to include a cart, game time slot selector, and a checkout flow. Implement the full logic in the  endpoint in . Add a new section to the admin panel to manage these orders.
+    -   **What will be achieved with this?** Allows users to purchase food and reserve a game session in a single transaction.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Both.
+    -   **Blocked on something:** None.
+-   **Task 2: Implement Table Reservation with Deposit.** (Priority: P0)
+    -   **Where to resume:** Build the UI in  with a form for date, time, number of people, and deposit amount. Implement the full logic in the  endpoint in , including wallet/Kkiapay payment. Add a new section to the admin panel to manage these reservations.
+    -   **What will be achieved with this?** Allows users to reserve tables by paying a deductible deposit online.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Both.
+    -   **Blocked on something:** None.
+-   **Task 3: Refactor  into modules** (Priority: P2)
+    -   **Where to resume:** The directory structure (, , ) exists. The next step is to methodically move the logic from the 2500+ line  into these modules and wire them up in a main .
+    -   **What will be achieved with this?** A more maintainable, scalable, and less error-prone backend architecture.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Backend.
+    -   **Blocked on something:** None.
+
+**Upcoming and Future Tasks**
+-   **Upcoming Tasks:**
+    -   **P0: Test SMS confirmation for clients:** The backend logic to send an SMS to the client after a successful booking payment ( in ) was implemented but has never been tested.
+    -   **P1: Add About Us Section:** Create a new page or section detailing the history of Espace Maxo.
+-   **Future Tasks:**
+    -   **Refactor :** The admin component is now over 1500 lines and extremely complex. It must be broken down into smaller sub-components for each management tab.
+    -   **Refactor :** This page has significant state and logic that could be modularized.
+
+**Completed work in this session**
+-   **Dual Admin Roles:** Implemented two admin access levels: Full Access () and Read-Only (). The UI hides/disables modification controls for the read-only role.
+-   **Admin View Details Modals:** Added comprehensive View Details modals for every section in the admin panel (Bookings, Rentals, Loyalty, Reviews, Applications, Deliveries).
+-   **Nous Rejoindre (Careers) Feature:** Created a full-featured careers section, including a frontend application form () and a backend management tab in the admin panel.
+-   **Wallet Payment for Delivery:** Integrated the wallet payment option into the food delivery checkout flow.
+-   **Wallet UX Improvement:** Added messages on booking and delivery pages to inform users when their wallet balance is insufficient, with a link to recharge.
+-   **Homepage Redesign:** Improved the readability of the PRÊT À JOUER section and rearranged the layout per user request.
+-   **Game Price Update:** Changed prices for VR 360 (2,000 FCFA) and Simulator (1,500 FCFA) across the entire application.
+-   **Navbar/Footer Updates:** Renamed and reordered navbar items. Investigated and clarified the Made with Emergent badge issue.
+
+**Earlier issues found/mentioned but not fixed**
+-   None.
+
+**Known issue recurrence from previous fork**
+-   **Issue recurrence in previous fork:** Production Deployment Confusion.
+-   **Recurrence count:** High. The user consistently checks their live domain instead of the preview URL.
+-   **Status:** BLOCKED (on user action/understanding).
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Frontend:** React, Tailwind CSS, shadcn/ui
+-   **Backend:** FastAPI (Python), PyJWT
+-   **Database:** MongoDB
+-   **Integrations:** Kkiapay (Payments), Twilio (SMS OTP & Notifications)
+
+**key DB schema**
+-   **admins:**  (new  field)
+-   **applications:** (New) 
+-   **delivery_orders:**  (new  field)
+-   **combo_orders:** (New Model, unused)
+-   **table_reservations:** (New Model, unused)
+
+**All files of reference**
+-   : The main monolithic backend file, significantly expanded.
+-   : The main monolithic admin dashboard, significantly expanded.
+-   : Updated with wallet payment logic.
+-   : Updated with wallet UX improvements.
+-   : Layout and style changes.
+-   : Link updates.
+-   : Added new routes.
+-   : New file for the careers page.
+-   : New (empty) file for table reservations.
+
+**Areas that need refactoring**:
+-   **:** Critically monolithic. The file has grown substantially, making refactoring an urgent priority for future maintainability.
+-   **:** Critically monolithic. At over 1500 lines, this component is becoming unmanageable and should be broken down into sub-components for each tab.
+
+**key api endpoints**
+-   **New Endpoints:**
+    -   : Full CRUD for job applications.
+    -   : CSV export for applications.
+    -    (placeholder)
+    -    (placeholder)
+-   **Modified Endpoints:**
+    -   : Now returns a  ( or ).
+    -   All state-modifying endpoints (e.g., , , status changes) are now protected by a write access dependency guard.
+
+**Critical Info for New Agent**
+-   **You MUST communicate in French.**
+-   **The immediate tasks are to implement Combo Payments and Table Reservations.** This is the highest priority.
+-   **Start by reminding the user about the Deploy button.** This is a recurring communication issue that blocks the user from seeing completed work on their live domain.
+-   **The  and  refactoring tasks are critical technical debt.** While not the immediate priority, they should be addressed soon to ensure the project's health.
+-   **Admin Access:** There are now two admin passwords:  for full access and  for read-only access.
+
+**documents and test reports created in this job**
+-    (updated)
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  ****: Request to show a message for insufficient wallet balance and improve homepage text readability. (Status: Completed).
+2.  ****: Request to add view details modals to the admin panel. (Status: Completed).
+3.  ****: Request to extend the view details feature to all admin sections. (Status: Completed).
+4.  ****: Request for two admin roles (full access and read-only). (Status: Completed).
+5.  ****: Request for online combo payment and table reservations. (Status: IN PROGRESS).
+6.  ****: Clarification of requirements for combo/table reservations. (Status: Acknowledged).
+7.  ****: Report about wallet payment not working and request to change VR price. (Status: Completed).
+8.  ****: Request to change the simulator price. (Status: Completed).
+9.  ****: Request to add wallet payment option for all orders, specifically delivery. (Status: Completed).
+10. ****: User reporting the Made with Emergent badge is still visible on their live site. (Status: Blocked/Advised user to contact support).
+
+**Project Health Check:**
+-   **Broken:**
+    -   The user's **production environment** () is out of sync due to not being deployed.
+-   **Mocked:**
+    -   None.
+
+**3rd Party Integrations**
+-   **Kkiapay:** For mobile money payments. User-provided keys are in use.
+-   **Twilio:** For all SMS functionalities. User-provided keys are configured.
+
+**Testing status**
+-   **Testing agent used after significant changes:** NO
+-   **Troubleshoot agent used after agent stuck in loop:** NO
+-   **Test files created:** None.
+-   **Known regressions:** None.
+
+**Credentials to test flow:**
+-   **Admin Dashboard:** 
+-   **Full Access Password:** 
+-   **Read-Only Password:** 
+
+**What agent forgot to execute**
+-   The agent has still not tested the client-facing SMS confirmation for paid bookings.
+-   The agent made no progress on the critical  refactoring task, instead adding more code to the monolithic file.</analysis>
