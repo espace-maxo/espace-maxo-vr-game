@@ -1571,19 +1571,21 @@ async def reschedule_booking_by_admin(
 @api_router.post("/auth/admin-login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest):
     """Authenticate admin and return JWT token"""
-    if not verify_admin_password(request.password):
+    role = verify_admin_password(request.password)
+    if not role:
         raise HTTPException(status_code=401, detail="Mot de passe incorrect")
     
-    token, expiration = create_admin_token()
+    token, expiration = create_admin_token(role)
     return AdminLoginResponse(
         token=token,
-        expires_at=expiration.isoformat()
+        expires_at=expiration.isoformat(),
+        role=role
     )
 
 @api_router.get("/auth/verify")
-async def verify_auth(is_admin: bool = Depends(get_current_admin)):
+async def verify_auth(admin_info: dict = Depends(get_current_admin)):
     """Verify if the current token is valid"""
-    return {"valid": True, "role": "admin"}
+    return {"valid": True, "role": admin_info.get("role", "admin_full")}
 
 @api_router.get("/admin/bookings")
 async def get_all_bookings(
