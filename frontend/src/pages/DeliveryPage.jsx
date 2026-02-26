@@ -597,7 +597,7 @@ const DeliveryPage = () => {
             data-testid="floating-cart-btn"
           >
             <ShoppingCart className="w-5 h-5 mr-2" />
-            {cart.reduce((sum, item) => sum + item.quantity, 0)} article{cart.reduce((sum, item) => sum + item.quantity, 0) > 1 ? 's' : ''} - {formatPrice(subtotal)} FCFA
+            {cart.reduce((sum, item) => sum + item.quantity, 0)} article{cart.reduce((sum, item) => sum + item.quantity, 0) > 1 ? 's' : ''} - {formatPrice(cartTotal)} FCFA
           </Button>
         </div>
       )}
