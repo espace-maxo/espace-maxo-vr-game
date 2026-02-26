@@ -880,6 +880,8 @@ const AdminPage = () => {
                             onClick={() => openRescheduleModal(booking)}
                             className="border-neon-blue text-neon-blue hover:bg-neon-blue/10"
                             data-testid={`reschedule-${booking.id}`}
+                            disabled={isReadOnly}
+                            title={isReadOnly ? "Accès en lecture seule" : "Reprogrammer"}
                           >
                             <CalendarClock className="w-4 h-4" />
                           </Button>
@@ -892,6 +894,8 @@ const AdminPage = () => {
                               onClick={() => updateBookingStatus(booking.id, "completed")}
                               className="bg-green-600 hover:bg-green-700"
                               data-testid={`complete-${booking.id}`}
+                              disabled={isReadOnly}
+                              title={isReadOnly ? "Accès en lecture seule" : "Marquer comme terminé"}
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
@@ -900,6 +904,8 @@ const AdminPage = () => {
                               variant="destructive"
                               onClick={() => cancelBooking(booking.id)}
                               data-testid={`cancel-${booking.id}`}
+                              disabled={isReadOnly}
+                              title={isReadOnly ? "Accès en lecture seule" : "Annuler"}
                             >
                               <XCircle className="w-4 h-4" />
                             </Button>
@@ -913,7 +919,8 @@ const AdminPage = () => {
                           onClick={() => deleteBookingPermanently(booking.id, booking.customer_name)}
                           className="border-red-800 text-red-500 hover:bg-red-900/20"
                           data-testid={`delete-${booking.id}`}
-                          title="Supprimer définitivement"
+                          title={isReadOnly ? "Accès en lecture seule" : "Supprimer définitivement"}
+                          disabled={isReadOnly}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
