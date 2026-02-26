@@ -119,8 +119,18 @@ const AdminPage = () => {
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("adminTokenExpires");
+    localStorage.removeItem("adminRole");
     toast.success("Déconnexion réussie");
     navigate("/admin");
+  };
+
+  // Check if write action is allowed
+  const checkWriteAccess = () => {
+    if (isReadOnly) {
+      toast.error("Accès en lecture seule - Modification non autorisée");
+      return false;
+    }
+    return true;
   };
 
   const fetchData = useCallback(async () => {
