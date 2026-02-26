@@ -166,17 +166,20 @@ const TableReservationPage = () => {
           await axios.post(`${API}/wallet/use`, {
             phone: formData.customer_phone,
             amount: walletAmountToUse,
+            service_type: "table_reservation",
             description: `Acompte réservation table (complément)`
           });
           setWalletBalance(prev => prev - walletAmountToUse);
         }
 
-        // Create reservation
-        await axios.post(`${API}/table-reservations`, {
+        // Create reservation - convert "aucune" to empty string
+        const reservationData = {
           ...formData,
+          special_occasion: formData.special_occasion === "aucune" ? "" : formData.special_occasion,
           payment_transaction_id: response.transactionId,
           wallet_amount_used: walletAmountToUse
-        });
+        };
+        await axios.post(`${API}/table-reservations`, reservationData);
 
         setSuccess(true);
       } catch (error) {
