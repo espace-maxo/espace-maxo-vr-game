@@ -17,6 +17,7 @@ import ReschedulePage from "@/pages/ReschedulePage";
 import WalletPage from "@/pages/WalletPage";
 import DeliveryPage from "@/pages/DeliveryPage";
 import JoinUsPage from "@/pages/JoinUsPage";
+import TableReservationPage from "@/pages/TableReservationPage";
 
 function App() {
   return (
