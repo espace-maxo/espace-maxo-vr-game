@@ -284,9 +284,6 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <TestimonialsSection />
-
       {/* Location / Événements Section */}
       <section className="py-20 px-4 bg-gradient-to-b from-neon-purple/10 to-dark-bg" data-testid="location-section">
         <div className="max-w-5xl mx-auto">
