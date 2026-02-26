@@ -1684,8 +1684,8 @@ async def get_admin_stats(is_admin: bool = Depends(get_current_admin)):
     }
 
 @api_router.put("/admin/bookings/{booking_id}")
-async def update_booking(booking_id: str, update_data: BookingUpdate, is_admin: bool = Depends(get_current_admin)):
-    """Update booking status (admin only)"""
+async def update_booking(booking_id: str, update_data: BookingUpdate, has_write_access: bool = Depends(get_admin_write_access)):
+    """Update booking status (admin with write access only)"""
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
         raise HTTPException(status_code=404, detail="Réservation non trouvée")
@@ -1703,8 +1703,8 @@ async def update_booking(booking_id: str, update_data: BookingUpdate, is_admin: 
     return updated
 
 @api_router.delete("/admin/bookings/{booking_id}")
-async def cancel_booking(booking_id: str, is_admin: bool = Depends(get_current_admin)):
-    """Cancel a booking (soft delete)"""
+async def cancel_booking(booking_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Cancel a booking (soft delete) - admin with write access only"""
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
         raise HTTPException(status_code=404, detail="Réservation non trouvée")
@@ -1717,8 +1717,8 @@ async def cancel_booking(booking_id: str, is_admin: bool = Depends(get_current_a
     return {"message": "Réservation annulée", "booking_id": booking_id}
 
 @api_router.delete("/admin/bookings/{booking_id}/permanent")
-async def delete_booking_permanently(booking_id: str, is_admin: bool = Depends(get_current_admin)):
-    """Permanently delete a booking from database"""
+async def delete_booking_permanently(booking_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Permanently delete a booking from database - admin with write access only"""
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
         raise HTTPException(status_code=404, detail="Réservation non trouvée")
