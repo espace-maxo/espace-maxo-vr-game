@@ -571,9 +571,15 @@ const MenuPage = () => {
                       <span className="text-white">{formatPrice(cartTotal)} FCFA</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-300">Jeux ({numberOfPlayers}x{numberOfGames})</span>
-                      <span className="text-green-400 font-semibold">INCLUS</span>
+                      <span className="text-gray-300">Joueurs inclus</span>
+                      <span className="text-green-400 font-semibold">{includedPlayers} joueur{includedPlayers > 1 ? 's' : ''} INCLUS</span>
                     </div>
+                    {extraPlayers > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-300">Joueurs supplémentaires ({extraPlayers}x{formatPrice(gamePrice)})</span>
+                        <span className="text-food-gold">{formatPrice(gameTotal)} FCFA</span>
+                      </div>
+                    )}
                     <div className="flex justify-between pt-2 border-t border-white/10">
                       <span className="text-white font-semibold">Total</span>
                       <span className="text-food-gold font-bold text-xl">{formatPrice(grandTotal)} FCFA</span>
