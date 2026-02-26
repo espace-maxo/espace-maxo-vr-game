@@ -156,9 +156,9 @@ const MenuPage = () => {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
   // Calculate included players from combos
-  // Only "2 Personnes" combos include 2 players, all others include 1 player
+  // Only "4 Personnes" combo includes 2 players, all others include 1 player
   const includedPlayers = cart.reduce((sum, item) => {
-    const playersPerCombo = item.name.toLowerCase().includes("2 personnes") ? 2 : 1;
+    const playersPerCombo = item.name.toLowerCase().includes("4 personnes") ? 2 : 1;
     return sum + (playersPerCombo * item.quantity);
   }, 0);
   
