@@ -682,8 +682,8 @@ const MenuPage = () => {
                       <span className="text-white">{formatPrice(cartTotal)} FCFA</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-300">Session jeu ({gameType === "VR_360" ? "VR" : "Simulateur"})</span>
-                      <span className="text-white">{formatPrice(gameTotal)} FCFA</span>
+                      <span className="text-gray-300">Session jeu ({gameType === "VR_360" ? "VR" : "Simulateur"}) {numberOfPlayers}x{numberOfGames}</span>
+                      <span className="text-green-400 font-semibold">INCLUS</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-300">Date</span>
