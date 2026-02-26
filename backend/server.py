@@ -493,50 +493,84 @@ GAMES = [
 
 # ============== HELPER FUNCTIONS ==============
 
-def create_admin_token() -> tuple[str, datetime]:
-    """Create a JWT token for admin access"""
+def create_admin_token(role: str = "admin_full") -> tuple[str, datetime]:
+    """Create a JWT token for admin access
+    role can be: admin_full (full access) or admin_readonly (read only)
+    """
     expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
-        "role": "admin",
+        "role": role,
         "exp": expiration,
         "iat": datetime.now(timezone.utc)
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token, expiration
 
-def verify_admin_token(token: str) -> bool:
-    """Verify a JWT token"""
+def verify_admin_token(token: str) -> dict:
+    """Verify a JWT token and return payload"""
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        return payload.get("role") == "admin"
+        role = payload.get("role", "")
+        if role in ["admin", "admin_full", "admin_readonly"]:
+            return {"valid": True, "role": role}
+        return {"valid": False, "role": None}
     except jwt.ExpiredSignatureError:
-        return False
+        return {"valid": False, "role": None}
     except jwt.InvalidTokenError:
-        return False
+        return {"valid": False, "role": None}
 
-def verify_admin_password(password: str) -> bool:
-    """Verify the admin password against the stored hash"""
-    # Direct password check as fallback (for production without env vars)
+# Admin passwords - Full access and Read-only
+ADMIN_PASSWORD_FULL = os.environ.get("ADMIN_PASSWORD_FULL", "Esp@ceM@xo2026")
+ADMIN_PASSWORD_READONLY = os.environ.get("ADMIN_PASSWORD_READONLY", "MaxoConsult2026")
+
+def verify_admin_password(password: str) -> str:
+    """Verify the admin password and return role type
+    Returns: 'admin_full', 'admin_readonly', or None if invalid
+    """
+    # Check full access password
+    if password == ADMIN_PASSWORD_FULL:
+        return "admin_full"
+    
+    # Check read-only password
+    if password == ADMIN_PASSWORD_READONLY:
+        return "admin_readonly"
+    
+    # Legacy password check
     ADMIN_PASSWORD_PLAIN = "Nikeland2016"
     if password == ADMIN_PASSWORD_PLAIN:
-        return True
+        return "admin_full"
     
-    if not ADMIN_PASSWORD_HASH:
-        return False
+    if ADMIN_PASSWORD_HASH:
+        try:
+            if bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH.encode('utf-8')):
+                return "admin_full"
+        except Exception as e:
+            logger.error(f"Password verification error: {e}")
     
-    try:
-        return bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH.encode('utf-8'))
-    except Exception as e:
-        logger.error(f"Password verification error: {e}")
-        return password == ADMIN_PASSWORD_PLAIN
+    return None
 
-async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
-    """Dependency to verify admin authentication"""
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Dependency to verify admin authentication - returns role info"""
     if credentials is None:
         raise HTTPException(status_code=401, detail="Authentification requise")
     
-    if not verify_admin_token(credentials.credentials):
+    token_info = verify_admin_token(credentials.credentials)
+    if not token_info["valid"]:
         raise HTTPException(status_code=401, detail="Token invalide ou expiré")
+    
+    return {"authenticated": True, "role": token_info["role"]}
+
+async def get_admin_write_access(credentials: HTTPAuthorizationCredentials = Depends(security)) -> bool:
+    """Dependency to verify admin has write access (not read-only)"""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentification requise")
+    
+    token_info = verify_admin_token(credentials.credentials)
+    if not token_info["valid"]:
+        raise HTTPException(status_code=401, detail="Token invalide ou expiré")
+    
+    if token_info["role"] == "admin_readonly":
+        raise HTTPException(status_code=403, detail="Accès en lecture seule - Modification non autorisée")
     
     return True
 
