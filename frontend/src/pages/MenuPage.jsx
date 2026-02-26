@@ -566,7 +566,7 @@ const MenuPage = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-300">Jeux ({numberOfPlayers}x{numberOfGames})</span>
-                      <span className="text-white">{formatPrice(gameTotal)} FCFA</span>
+                      <span className="text-green-400 font-semibold">INCLUS</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-white/10">
                       <span className="text-white font-semibold">Total</span>
