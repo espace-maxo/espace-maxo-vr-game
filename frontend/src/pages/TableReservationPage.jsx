@@ -115,15 +115,18 @@ const TableReservationPage = () => {
       await axios.post(`${API}/wallet/use`, {
         phone: formData.customer_phone,
         amount: walletAmountToUse,
+        service_type: "table_reservation",
         description: `Acompte réservation table Espace Maxo`
       });
 
-      // Create reservation
-      await axios.post(`${API}/table-reservations`, {
+      // Create reservation - convert "aucune" to empty string
+      const reservationData = {
         ...formData,
+        special_occasion: formData.special_occasion === "aucune" ? "" : formData.special_occasion,
         payment_transaction_id: "wallet_payment",
         wallet_amount_used: walletAmountToUse
-      });
+      };
+      await axios.post(`${API}/table-reservations`, reservationData);
 
       setSuccess(true);
       setWalletBalance(prev => prev - walletAmountToUse);
