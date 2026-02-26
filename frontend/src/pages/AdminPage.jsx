@@ -86,6 +86,15 @@ const AdminPage = () => {
   const [cvViewerModal, setCvViewerModal] = useState(false);
   const [selectedCV, setSelectedCV] = useState(null);
   const [cvLoading, setCvLoading] = useState(false);
+  
+  // Detail modals state
+  const [bookingDetailModal, setBookingDetailModal] = useState(false);
+  const [bookingDetail, setBookingDetail] = useState(null);
+  const [deliveryDetailModal, setDeliveryDetailModal] = useState(false);
+  const [deliveryDetail, setDeliveryDetail] = useState(null);
+  const [locationDetailModal, setLocationDetailModal] = useState(false);
+  const [locationDetail, setLocationDetail] = useState(null);
+  const [deliveryOrders, setDeliveryOrders] = useState([]);
 
   // Check authentication
   useEffect(() => {
