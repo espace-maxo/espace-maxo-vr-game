@@ -39,6 +39,7 @@ function App() {
             <Route path="/provision" element={<WalletPage />} />
             <Route path="/livraison" element={<DeliveryPage />} />
             <Route path="/rejoindre" element={<JoinUsPage />} />
+            <Route path="/reserver-table" element={<TableReservationPage />} />
           </Routes>
         </main>
         <Footer />
