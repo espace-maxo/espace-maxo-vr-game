@@ -740,6 +740,24 @@ const AdminPage = () => {
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="combos" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black font-rajdhani font-bold relative">
+                <Star className="w-4 h-4 mr-2" />
+                Combos
+                {comboOrders.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-blue text-white text-xs rounded-full flex items-center justify-center">
+                    {comboOrders.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="tables" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white font-rajdhani font-bold relative">
+                <BookOpen className="w-4 h-4 mr-2" />
+                Tables
+                {tableReservations.filter(r => r.status === "confirmed").length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-blue text-white text-xs rounded-full flex items-center justify-center">
+                    {tableReservations.filter(r => r.status === "confirmed").length}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings">
