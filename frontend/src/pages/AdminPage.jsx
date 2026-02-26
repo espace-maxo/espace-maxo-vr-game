@@ -2648,6 +2648,180 @@ const AdminPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Combo Order Detail Modal */}
+      <Dialog open={comboDetailModal} onOpenChange={setComboDetailModal}>
+        <DialogContent className="bg-dark-card border-yellow-500/30 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-yellow-400 flex items-center gap-2">
+              <Star className="w-5 h-5" />
+              Détails Commande Combo
+            </DialogTitle>
+          </DialogHeader>
+          {comboDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Client</p>
+                  <p className="text-white font-semibold">{comboDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{comboDetail.customer_phone}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Date & Heure</p>
+                  <p className="text-white font-semibold">{formatDateFR(comboDetail.booking_date)} à {comboDetail.time_slot}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Type de jeu</p>
+                  <p className="text-white font-semibold">{comboDetail.game_type === "VR_360" ? "VR 360°" : "Simulateur Course"}</p>
+                </div>
+              </div>
+              
+              <div className="border-t border-white/10 pt-4">
+                <p className="text-gray-400 text-sm mb-2">Articles commandés</p>
+                <div className="space-y-2">
+                  {comboDetail.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between bg-surface-highlight p-2 rounded">
+                      <span className="text-white">{item.name} x{item.quantity}</span>
+                      <span className="text-yellow-400">{(item.price * item.quantity).toLocaleString()} FCFA</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="border-t border-white/10 pt-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Sous-total combos</span>
+                  <span className="text-white">{comboDetail.combo_total?.toLocaleString()} FCFA</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Session jeux ({comboDetail.number_of_players}x{comboDetail.number_of_games})</span>
+                  <span className="text-white">{comboDetail.game_total?.toLocaleString()} FCFA</span>
+                </div>
+                {comboDetail.wallet_amount_used > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Porte-monnaie utilisé</span>
+                    <span className="text-neon-blue">-{comboDetail.wallet_amount_used?.toLocaleString()} FCFA</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-white/10 pt-2">
+                  <span className="text-white font-semibold">Total</span>
+                  <span className="text-yellow-400 font-bold text-xl">{comboDetail.total?.toLocaleString()} FCFA</span>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Statut</span>
+                <Badge className={comboDetail.status === "confirmed" ? "bg-green-500/20 text-green-400" : comboDetail.status === "cancelled" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}>
+                  {comboDetail.status === "confirmed" ? "Confirmé" : comboDetail.status === "cancelled" ? "Annulé" : "Terminé"}
+                </Badge>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {comboDetail.id} | Créé le: {comboDetail.created_at ? new Date(comboDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Table Reservation Detail Modal */}
+      <Dialog open={tableDetailModal} onOpenChange={setTableDetailModal}>
+        <DialogContent className="bg-dark-card border-pink-500/30 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-pink-400 flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              Détails Réservation Table
+            </DialogTitle>
+          </DialogHeader>
+          {tableDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Client</p>
+                  <p className="text-white font-semibold">{tableDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{tableDetail.customer_phone}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Date</p>
+                  <p className="text-white font-semibold">{formatDateFR(tableDetail.reservation_date)}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Heure</p>
+                  <p className="text-white font-semibold">{tableDetail.reservation_time}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Personnes</p>
+                  <p className="text-white font-semibold">{tableDetail.number_of_guests}</p>
+                </div>
+              </div>
+              
+              {tableDetail.special_occasion && (
+                <div className="bg-purple-500/10 border border-purple-500/30 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-purple-400">
+                    <PartyPopper className="w-5 h-5" />
+                    <span className="font-semibold">Occasion spéciale</span>
+                  </div>
+                  <p className="text-white mt-1 capitalize">{tableDetail.special_occasion}</p>
+                </div>
+              )}
+              
+              {tableDetail.notes && (
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-gray-400 text-sm">Notes</p>
+                  <p className="text-white italic bg-surface-highlight p-3 rounded-lg mt-2">
+                    "{tableDetail.notes}"
+                  </p>
+                </div>
+              )}
+              
+              <div className="bg-pink-500/10 border border-pink-500/30 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-pink-400 font-semibold">Acompte versé</p>
+                    <p className="text-gray-400 text-sm">Déductible de l'addition finale</p>
+                  </div>
+                  <p className="text-pink-400 font-bold text-2xl">{tableDetail.deposit_amount?.toLocaleString()} FCFA</p>
+                </div>
+                {tableDetail.wallet_amount_used > 0 && (
+                  <p className="text-neon-blue text-sm mt-2">
+                    Dont {tableDetail.wallet_amount_used?.toLocaleString()} FCFA payé avec le porte-monnaie
+                  </p>
+                )}
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Statut</span>
+                <Badge className={
+                  tableDetail.status === "confirmed" ? "bg-green-500/20 text-green-400" : 
+                  tableDetail.status === "completed" ? "bg-blue-500/20 text-blue-400" : 
+                  tableDetail.status === "no_show" ? "bg-orange-500/20 text-orange-400" :
+                  "bg-red-500/20 text-red-400"
+                }>
+                  {tableDetail.status === "confirmed" ? "Confirmé" : 
+                   tableDetail.status === "completed" ? "Terminé" : 
+                   tableDetail.status === "no_show" ? "No-show" : "Annulé"}
+                </Badge>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {tableDetail.id} | Créé le: {tableDetail.created_at ? new Date(tableDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
