@@ -1737,6 +1737,184 @@ const AdminPage = () => {
                 )}
               </div>
             </TabsContent>
+
+            {/* Combo Orders Tab */}
+            <TabsContent value="combos">
+              <div className="space-y-4" data-testid="combo-orders-section">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-orbitron text-lg text-yellow-400 flex items-center gap-2">
+                    <Star className="w-5 h-5" />
+                    Commandes Combos ({comboOrders.length})
+                  </h3>
+                </div>
+
+                {comboOrders.length === 0 ? (
+                  <div className="text-center py-12 bg-dark-card rounded-lg border border-white/10">
+                    <Star className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-400 font-outfit">Aucune commande combo</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {comboOrders.map((order) => (
+                      <Card key={order.id} className="bg-dark-card border-yellow-500/30" data-testid={`combo-order-${order.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h4 className="font-orbitron text-white">{order.customer_name}</h4>
+                                <Badge className={order.status === "confirmed" ? "bg-green-500/20 text-green-400" : order.status === "cancelled" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}>
+                                  {order.status === "confirmed" ? "Confirmé" : order.status === "cancelled" ? "Annulé" : "Terminé"}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {order.customer_phone}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {formatDateFR(order.booking_date)} à {order.time_slot}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Gamepad2 className="w-3 h-3" />
+                                  {order.game_type === "VR_360" ? "VR 360°" : "Simulateur"}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-sm">
+                                <span className="text-gray-400">Combos: </span>
+                                <span className="text-white">{order.items?.map(i => `${i.name} x${i.quantity}`).join(", ")}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="text-yellow-400 font-bold text-lg">{order.total?.toLocaleString()} FCFA</p>
+                                <p className="text-xs text-gray-500">
+                                  Combos: {order.combo_total?.toLocaleString()} + Jeux: {order.game_total?.toLocaleString()}
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setComboDetail(order); setComboDetailModal(true); }}
+                                className="border-white/20"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Table Reservations Tab */}
+            <TabsContent value="tables">
+              <div className="space-y-4" data-testid="table-reservations-section">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-orbitron text-lg text-pink-400 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    Réservations Tables ({tableReservations.length})
+                  </h3>
+                </div>
+
+                {tableReservations.length === 0 ? (
+                  <div className="text-center py-12 bg-dark-card rounded-lg border border-white/10">
+                    <BookOpen className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-400 font-outfit">Aucune réservation de table</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {tableReservations.map((reservation) => (
+                      <Card key={reservation.id} className="bg-dark-card border-pink-500/30" data-testid={`table-reservation-${reservation.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h4 className="font-orbitron text-white">{reservation.customer_name}</h4>
+                                <Badge className={
+                                  reservation.status === "confirmed" ? "bg-green-500/20 text-green-400" : 
+                                  reservation.status === "completed" ? "bg-blue-500/20 text-blue-400" : 
+                                  reservation.status === "no_show" ? "bg-orange-500/20 text-orange-400" :
+                                  "bg-red-500/20 text-red-400"
+                                }>
+                                  {reservation.status === "confirmed" ? "Confirmé" : 
+                                   reservation.status === "completed" ? "Terminé" : 
+                                   reservation.status === "no_show" ? "No-show" : "Annulé"}
+                                </Badge>
+                                {reservation.special_occasion && (
+                                  <Badge className="bg-purple-500/20 text-purple-400">
+                                    <PartyPopper className="w-3 h-3 mr-1" />
+                                    {reservation.special_occasion}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {reservation.customer_phone}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {formatDateFR(reservation.reservation_date)} à {reservation.reservation_time}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Users className="w-3 h-3" />
+                                  {reservation.number_of_guests} personne{reservation.number_of_guests > 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="text-pink-400 font-bold text-lg">{reservation.deposit_amount?.toLocaleString()} FCFA</p>
+                                <p className="text-xs text-gray-500">Acompte (déductible)</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => { setTableDetail(reservation); setTableDetailModal(true); }}
+                                  className="border-white/20"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                {!isReadOnly && (
+                                  <Select
+                                    value={reservation.status}
+                                    onValueChange={async (newStatus) => {
+                                      try {
+                                        const headers = getAuthHeaders();
+                                        await axios.put(`${API}/admin/table-reservations/${reservation.id}`, { status: newStatus }, { headers });
+                                        toast.success("Statut mis à jour");
+                                        fetchData();
+                                      } catch (error) {
+                                        toast.error("Erreur lors de la mise à jour");
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-32 bg-surface-highlight border-white/20 text-white text-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-dark-card border-white/20">
+                                      <SelectItem value="confirmed" className="text-green-400">Confirmé</SelectItem>
+                                      <SelectItem value="completed" className="text-blue-400">Terminé</SelectItem>
+                                      <SelectItem value="no_show" className="text-orange-400">No-show</SelectItem>
+                                      <SelectItem value="cancelled" className="text-red-400">Annulé</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
       </section>
