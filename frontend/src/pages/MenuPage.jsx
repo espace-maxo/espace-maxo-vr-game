@@ -155,11 +155,10 @@ const MenuPage = () => {
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  // Game price calculation
-  const gamePrice = gameType === "RACING_SIMULATOR" ? 1500 : 2000;
-  const gameTotal = gamePrice * numberOfPlayers * numberOfGames;
+  // Game sessions are INCLUDED in combo price - no extra charge
+  const gameTotal = 0; // Jeux inclus dans le prix du combo
   
-  const grandTotal = cartTotal + gameTotal;
+  const grandTotal = cartTotal; // Only combo price, game is free
   
   // Wallet calculation
   const walletAmountToUse = useWallet ? Math.min(walletBalance, grandTotal) : 0;
