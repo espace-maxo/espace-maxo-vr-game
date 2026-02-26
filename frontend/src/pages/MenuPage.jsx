@@ -359,14 +359,16 @@ const MenuPage = () => {
 
       {/* Floating Cart Button */}
       {cart.length > 0 && !showCheckout && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
           <Button
             onClick={() => setShowCheckout(true)}
-            className="bg-food-gold hover:bg-food-gold/80 text-black font-rajdhani font-bold px-6 py-6 rounded-full shadow-lg animate-bounce"
+            className="bg-food-gold hover:bg-food-gold/90 text-black font-rajdhani font-bold text-lg px-8 py-7 rounded-full shadow-[0_0_30px_rgba(255,191,0,0.6)] hover:shadow-[0_0_40px_rgba(255,191,0,0.8)] transition-all border-2 border-food-gold"
             data-testid="open-cart-btn"
           >
-            <ShoppingCart className="w-5 h-5 mr-2" />
-            {cart.length} - {formatPrice(cartTotal)} FCFA
+            <ShoppingCart className="w-6 h-6 mr-3" />
+            <span className="font-bold">{cart.length} article{cart.length > 1 ? 's' : ''}</span>
+            <span className="mx-2">•</span>
+            <span className="font-bold">{formatPrice(cartTotal)} FCFA</span>
           </Button>
         </div>
       )}
