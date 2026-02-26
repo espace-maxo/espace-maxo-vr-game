@@ -1014,6 +1014,20 @@ const AdminPage = () => {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2">
+                              {/* View details button */}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                onClick={() => {
+                                  setLocationDetail(request);
+                                  setLocationDetailModal(true);
+                                }}
+                                data-testid={`view-location-${request.id}`}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              
                               {/* WhatsApp Contact */}
                               <a 
                                 href={`https://wa.me/229${request.phone.replace(/\s/g, '')}?text=Bonjour ${request.fullName}, concernant votre demande de location pour ${request.eventType}...`}
