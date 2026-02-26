@@ -2928,11 +2928,14 @@ async def create_combo_order(order_data: ComboOrderCreate):
         number_of_games=order_data.number_of_games,
         date=order_data.booking_date,
         time_slot=order_data.time_slot,
+        total_game_price=game_total,
+        reservation_fee=0.0,  # No reservation fee for combo orders
         total_amount=total,
+        amount_to_pay=total,
+        payment_type="full_payment",
         payment_status="paid",
         booking_status="active",
-        payment_option="full",
-        transaction_id=order_data.payment_transaction_id
+        payment_session_id=order_data.payment_transaction_id
     )
     await db.bookings.insert_one(booking.model_dump())
     
