@@ -359,7 +359,7 @@ const MenuPage = () => {
 
       {/* Floating Cart Button */}
       {cart.length > 0 && !showCheckout && (
-        <div className="fixed bottom-24 right-4 z-50">
+        <div className="fixed bottom-40 right-4 z-50">
           <Button
             onClick={() => setShowCheckout(true)}
             className="bg-food-gold hover:bg-food-gold/80 text-black font-rajdhani font-bold px-6 py-6 rounded-full shadow-lg animate-bounce"
