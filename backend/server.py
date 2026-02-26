@@ -2872,6 +2872,198 @@ async def export_job_applications_csv(is_admin: bool = Depends(get_current_admin
 
 
 
+# ============== COMBO ORDERS ROUTES ==============
+
+@api_router.post("/combo-orders")
+async def create_combo_order(order_data: ComboOrderCreate):
+    """Create a combo order with game session"""
+    if not order_data.customer_name or not order_data.customer_phone:
+        raise HTTPException(status_code=400, detail="Nom et téléphone requis")
+    
+    if not order_data.items or len(order_data.items) == 0:
+        raise HTTPException(status_code=400, detail="Veuillez sélectionner au moins un combo")
+    
+    # Check if time slot is available
+    existing = await db.bookings.find_one({
+        "date": order_data.booking_date,
+        "time_slot": order_data.time_slot,
+        "booking_status": {"$in": ["active", "confirmed"]}
+    })
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Ce créneau horaire est déjà réservé")
+    
+    # Calculate totals
+    combo_total = sum(item.get("price", 0) * item.get("quantity", 1) for item in order_data.items)
+    game_price = 1500.0 if order_data.game_type == "RACING_SIMULATOR" else 2000.0
+    game_total = game_price * order_data.number_of_games * order_data.number_of_players
+    total = combo_total + game_total
+    
+    # Create combo order
+    combo_order = ComboOrder(
+        customer_name=order_data.customer_name,
+        customer_phone=order_data.customer_phone,
+        items=order_data.items,
+        combo_total=combo_total,
+        game_type=order_data.game_type,
+        number_of_players=order_data.number_of_players,
+        number_of_games=order_data.number_of_games,
+        game_total=game_total,
+        booking_date=order_data.booking_date,
+        time_slot=order_data.time_slot,
+        total=total,
+        notes=order_data.notes,
+        payment_transaction_id=order_data.payment_transaction_id,
+        wallet_amount_used=order_data.wallet_amount_used
+    )
+    
+    await db.combo_orders.insert_one(combo_order.model_dump())
+    
+    # Also create a booking entry for the game session
+    booking = Booking(
+        customer_name=order_data.customer_name,
+        customer_phone=order_data.customer_phone,
+        game_type=order_data.game_type,
+        number_of_players=order_data.number_of_players,
+        number_of_games=order_data.number_of_games,
+        date=order_data.booking_date,
+        time_slot=order_data.time_slot,
+        total_amount=total,
+        payment_status="paid",
+        booking_status="active",
+        payment_option="full",
+        transaction_id=order_data.payment_transaction_id
+    )
+    await db.bookings.insert_one(booking.model_dump())
+    
+    # Send SMS notification to admin
+    notification_message = f"""[COMBO+JEU] Nouvelle commande!
+
+Client: {order_data.customer_name}
+Tel: {order_data.customer_phone}
+Date: {order_data.booking_date}
+Heure: {order_data.time_slot}
+Combos: {combo_total} FCFA
+Jeux: {game_total} FCFA
+Total: {total} FCFA"""
+    
+    await send_admin_sms_notification(notification_message)
+    
+    return {
+        "success": True,
+        "message": "Commande confirmée! Vos combos vous attendent.",
+        "order_id": combo_order.id,
+        "total": total
+    }
+
+@api_router.get("/admin/combo-orders")
+async def get_combo_orders(admin_info: dict = Depends(get_current_admin)):
+    """Get all combo orders (admin only)"""
+    orders = await db.combo_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"orders": orders}
+
+
+# ============== TABLE RESERVATIONS ROUTES ==============
+
+@api_router.post("/table-reservations")
+async def create_table_reservation(reservation_data: TableReservationCreate):
+    """Create a table reservation with deposit"""
+    if not reservation_data.customer_name or not reservation_data.customer_phone:
+        raise HTTPException(status_code=400, detail="Nom et téléphone requis")
+    
+    # Validate deposit amount (multiples of 5000, max 25000)
+    valid_deposits = [5000, 10000, 15000, 20000, 25000]
+    if reservation_data.deposit_amount not in valid_deposits:
+        raise HTTPException(status_code=400, detail="Montant d'acompte invalide. Choisissez entre 5000, 10000, 15000, 20000 ou 25000 FCFA")
+    
+    # Create reservation
+    reservation = TableReservation(
+        customer_name=reservation_data.customer_name,
+        customer_phone=reservation_data.customer_phone,
+        reservation_date=reservation_data.reservation_date,
+        reservation_time=reservation_data.reservation_time,
+        number_of_guests=reservation_data.number_of_guests,
+        special_occasion=reservation_data.special_occasion,
+        notes=reservation_data.notes,
+        deposit_amount=reservation_data.deposit_amount,
+        payment_transaction_id=reservation_data.payment_transaction_id,
+        wallet_amount_used=reservation_data.wallet_amount_used
+    )
+    
+    await db.table_reservations.insert_one(reservation.model_dump())
+    
+    # Send SMS notification to admin
+    notification_message = f"""[TABLE] Nouvelle réservation!
+
+Client: {reservation_data.customer_name}
+Tel: {reservation_data.customer_phone}
+Date: {reservation_data.reservation_date}
+Heure: {reservation_data.reservation_time}
+Personnes: {reservation_data.number_of_guests}
+Acompte: {reservation_data.deposit_amount} FCFA
+{f"Occasion: {reservation_data.special_occasion}" if reservation_data.special_occasion else ""}"""
+    
+    await send_admin_sms_notification(notification_message)
+    
+    return {
+        "success": True,
+        "message": f"Table réservée! Acompte de {reservation_data.deposit_amount} FCFA sera déduit de votre addition.",
+        "reservation_id": reservation.id
+    }
+
+@api_router.get("/admin/table-reservations")
+async def get_table_reservations(admin_info: dict = Depends(get_current_admin)):
+    """Get all table reservations (admin only)"""
+    reservations = await db.table_reservations.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    
+    pending_count = await db.table_reservations.count_documents({"status": "confirmed"})
+    
+    return {
+        "reservations": reservations,
+        "stats": {
+            "pending": pending_count,
+            "total": len(reservations)
+        }
+    }
+
+@api_router.put("/admin/table-reservations/{reservation_id}")
+async def update_table_reservation(
+    reservation_id: str, 
+    update_data: dict,
+    has_write_access: bool = Depends(get_admin_write_access)
+):
+    """Update table reservation status (admin with write access only)"""
+    reservation = await db.table_reservations.find_one({"id": reservation_id})
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
+    
+    update_fields = {}
+    if "status" in update_data:
+        update_fields["status"] = update_data["status"]
+    if "deposit_used" in update_data:
+        update_fields["deposit_used"] = update_data["deposit_used"]
+    
+    if update_fields:
+        await db.table_reservations.update_one(
+            {"id": reservation_id},
+            {"$set": update_fields}
+        )
+    
+    return {"success": True, "message": "Réservation mise à jour"}
+
+@api_router.delete("/admin/table-reservations/{reservation_id}")
+async def delete_table_reservation(reservation_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Delete a table reservation (admin with write access only)"""
+    result = await db.table_reservations.delete_one({"id": reservation_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Réservation non trouvée")
+    
+    return {"success": True, "message": "Réservation supprimée"}
+
+
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
