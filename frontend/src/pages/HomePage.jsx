@@ -368,18 +368,6 @@ const HomePage = () => {
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 mt-6">
                 <a 
-                  href="https://maps.google.com/?q=Espace+Maxo+Fidjrosse+Cotonou+Benin"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-neon-blue text-black px-4 py-2 rounded-lg font-rajdhani font-bold hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all"
-                  data-testid="open-google-maps"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                  </svg>
-                  Itinéraire
-                </a>
-                <a 
                   href="https://wa.me/2290141470000"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -407,6 +395,19 @@ const HomePage = () => {
                   className="grayscale hover:grayscale-0 transition-all duration-500"
                   data-testid="google-map-embed"
                 ></iframe>
+                {/* Itinéraire button on the map */}
+                <a 
+                  href="https://maps.google.com/?q=Espace+Maxo+Fidjrosse+Cotonou+Benin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute bottom-4 left-1/2 transform -translate-x-1/2 inline-flex items-center gap-2 bg-neon-blue text-black px-6 py-3 rounded-full font-rajdhani font-bold text-lg shadow-[0_0_20px_rgba(0,240,255,0.6)] hover:shadow-[0_0_30px_rgba(0,240,255,0.8)] transition-all"
+                  data-testid="open-google-maps"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                  ITINÉRAIRE
+                </a>
               </div>
             </div>
           </div>
