@@ -1844,6 +1844,295 @@ const AdminPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Booking Detail Modal */}
+      <Dialog open={bookingDetailModal} onOpenChange={setBookingDetailModal}>
+        <DialogContent className="bg-dark-card border-neon-blue/30 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-neon-blue flex items-center gap-2">
+              <Gamepad2 className="w-5 h-5" />
+              Détails de la Réservation
+            </DialogTitle>
+          </DialogHeader>
+          {bookingDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Client</p>
+                  <p className="text-white font-semibold">{bookingDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{bookingDetail.customer_phone}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Date</p>
+                  <p className="text-white font-semibold">{formatDateFR(bookingDetail.date)}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Créneau</p>
+                  <p className="text-white font-semibold">{bookingDetail.time_slot}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Type de jeu</p>
+                  <p className="text-white font-semibold">
+                    {bookingDetail.game_type === "VR_360" ? "VR 360°" : "Simulateur Course"}
+                  </p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Joueurs / Parties</p>
+                  <p className="text-white font-semibold">
+                    {bookingDetail.number_of_players} joueur(s) x {bookingDetail.number_of_games} partie(s)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="border-t border-white/10 pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Montant total</span>
+                  <span className="font-rajdhani font-bold text-food-gold text-xl">
+                    {formatPrice(bookingDetail.total_amount)} FCFA
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-gray-400">Statut paiement</span>
+                  {getStatusBadge(bookingDetail.payment_status)}
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-gray-400">Statut réservation</span>
+                  {getBookingStatusBadge(bookingDetail.booking_status)}
+                </div>
+                {bookingDetail.has_been_rescheduled && (
+                  <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                    <p className="text-orange-400 text-sm">Cette réservation a été reprogrammée</p>
+                  </div>
+                )}
+                {bookingDetail.payment_option && (
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-gray-400">Option de paiement</span>
+                    <span className="text-white">{bookingDetail.payment_option === "full" ? "Paiement complet" : "Frais de réservation"}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {bookingDetail.id} | Créé le: {bookingDetail.created_at ? new Date(bookingDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delivery Detail Modal */}
+      <Dialog open={deliveryDetailModal} onOpenChange={setDeliveryDetailModal}>
+        <DialogContent className="bg-dark-card border-food-orange/30 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-food-orange flex items-center gap-2">
+              <Truck className="w-5 h-5" />
+              Détails de la Commande
+            </DialogTitle>
+          </DialogHeader>
+          {deliveryDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Client</p>
+                  <p className="text-white font-semibold">{deliveryDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{deliveryDetail.customer_phone}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg col-span-2">
+                  <p className="text-gray-400 text-sm">Adresse de livraison</p>
+                  <p className="text-white font-semibold">{deliveryDetail.delivery_address}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Zone</p>
+                  <p className="text-white font-semibold">
+                    {deliveryDetail.delivery_zone === "cotonou" ? "Cotonou" : "Hors Cotonou"}
+                  </p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Date commande</p>
+                  <p className="text-white font-semibold">
+                    {deliveryDetail.created_at ? new Date(deliveryDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Items List */}
+              <div className="border-t border-white/10 pt-4">
+                <p className="text-gray-400 text-sm mb-2">Articles commandés</p>
+                <div className="space-y-2">
+                  {deliveryDetail.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-surface-highlight p-2 rounded">
+                      <span className="text-white">{item.quantity}x {item.name}</span>
+                      <span className="text-food-gold">{(item.price * item.quantity).toLocaleString()} FCFA</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Totals */}
+              <div className="border-t border-white/10 pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Sous-total</span>
+                  <span className="text-white">{deliveryDetail.subtotal?.toLocaleString()} FCFA</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Frais de livraison</span>
+                  <span className="text-white">{deliveryDetail.delivery_fee?.toLocaleString()} FCFA</span>
+                </div>
+                {deliveryDetail.wallet_amount_used > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Payé via porte-monnaie</span>
+                    <span className="text-neon-blue">-{deliveryDetail.wallet_amount_used?.toLocaleString()} FCFA</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                  <span className="text-white font-semibold">Total</span>
+                  <span className="font-rajdhani font-bold text-food-gold text-xl">
+                    {deliveryDetail.total?.toLocaleString()} FCFA
+                  </span>
+                </div>
+              </div>
+              
+              {/* Status */}
+              <div className="border-t border-white/10 pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Statut paiement</span>
+                  <Badge className={
+                    deliveryDetail.payment_status === "paid" ? "bg-green-500/20 text-green-400" :
+                    "bg-yellow-500/20 text-yellow-400"
+                  }>
+                    {deliveryDetail.payment_status === "paid" ? "Payé" : "En attente"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-gray-400">Statut commande</span>
+                  <Badge className={
+                    deliveryDetail.status === "delivered" ? "bg-green-500/20 text-green-400" :
+                    deliveryDetail.status === "preparing" ? "bg-blue-500/20 text-blue-400" :
+                    "bg-yellow-500/20 text-yellow-400"
+                  }>
+                    {deliveryDetail.status === "delivered" ? "Livré" :
+                     deliveryDetail.status === "preparing" ? "En préparation" :
+                     deliveryDetail.status === "confirmed" ? "Confirmé" : "En attente"}
+                  </Badge>
+                </div>
+              </div>
+              
+              {deliveryDetail.notes && (
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-gray-400 text-sm">Notes</p>
+                  <p className="text-white italic">"{deliveryDetail.notes}"</p>
+                </div>
+              )}
+              
+              <div className="text-gray-500 text-xs">
+                ID: {deliveryDetail.id}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Location Detail Modal */}
+      <Dialog open={locationDetailModal} onOpenChange={setLocationDetailModal}>
+        <DialogContent className="bg-dark-card border-neon-red/30 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-neon-red flex items-center gap-2">
+              <PartyPopper className="w-5 h-5" />
+              Détails de la Demande de Location
+            </DialogTitle>
+          </DialogHeader>
+          {locationDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Nom complet</p>
+                  <p className="text-white font-semibold">{locationDetail.fullName}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{locationDetail.phone}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Email</p>
+                  <p className="text-white font-semibold">{locationDetail.email || "Non fourni"}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Type d'événement</p>
+                  <p className="text-white font-semibold">{locationDetail.eventType}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Date souhaitée</p>
+                  <p className="text-white font-semibold">{locationDetail.eventDate}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Nombre de personnes</p>
+                  <p className="text-white font-semibold">{locationDetail.numberOfGuests} invités</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Formule</p>
+                  <p className="text-white font-semibold">
+                    {locationDetail.formula === "location_simple" ? "Location simple" :
+                     locationDetail.formula === "location_restauration" ? "Location + Restauration" :
+                     locationDetail.formula === "location_boissons" ? "Location + Boissons" : "Formule personnalisée"}
+                  </p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Budget</p>
+                  <p className="text-white font-semibold">
+                    {locationDetail.budget?.replace("_", " - ").replace("moins", "< ").replace("plus", "> ")}
+                  </p>
+                </div>
+              </div>
+              
+              {locationDetail.services && locationDetail.services.length > 0 && (
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-gray-400 text-sm mb-2">Services demandés</p>
+                  <div className="flex flex-wrap gap-2">
+                    {locationDetail.services.map((service, idx) => (
+                      <Badge key={idx} className="bg-neon-purple/20 text-neon-purple">
+                        {service}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {locationDetail.message && (
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-gray-400 text-sm">Message</p>
+                  <p className="text-white italic bg-surface-highlight p-3 rounded-lg mt-2">
+                    "{locationDetail.message}"
+                  </p>
+                </div>
+              )}
+              
+              <div className="border-t border-white/10 pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Statut</span>
+                  <Badge className={
+                    locationDetail.status === "confirmed" ? "bg-green-500/20 text-green-400" :
+                    locationDetail.status === "rejected" ? "bg-red-500/20 text-red-400" :
+                    "bg-yellow-500/20 text-yellow-400"
+                  }>
+                    {locationDetail.status === "confirmed" ? "Confirmé" :
+                     locationDetail.status === "rejected" ? "Rejeté" : "En attente"}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {locationDetail.id} | Reçue le: {locationDetail.created_at ? new Date(locationDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
