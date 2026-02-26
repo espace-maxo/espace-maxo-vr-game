@@ -200,6 +200,7 @@ class AdminLoginRequest(BaseModel):
 class AdminLoginResponse(BaseModel):
     token: str
     expires_at: str
+    role: str  # admin_full or admin_readonly
 
 # Review Models
 class ReviewCreate(BaseModel):
