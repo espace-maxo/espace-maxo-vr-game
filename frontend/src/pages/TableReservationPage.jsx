@@ -48,7 +48,7 @@ const TableReservationPage = () => {
     reservation_date: "",
     reservation_time: "",
     number_of_guests: 2,
-    special_occasion: "",
+    special_occasion: "aucune",
     notes: "",
     deposit_amount: 5000
   });
