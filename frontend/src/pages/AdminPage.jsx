@@ -1273,6 +1273,17 @@ const AdminPage = () => {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                onClick={() => {
+                                  setReviewDetail(review);
+                                  setReviewDetailModal(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
                               {review.status === "pending" && (
                                 <>
                                   <Button
