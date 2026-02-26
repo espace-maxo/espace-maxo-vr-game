@@ -151,8 +151,13 @@ const TableReservationPage = () => {
   };
 
   const initiatePayment = () => {
-    if (!paymentConfig || !window.openKkiapayWidget) {
-      toast.error("Service de paiement non disponible");
+    if (!paymentConfig) {
+      toast.error("Configuration de paiement non disponible");
+      return;
+    }
+    
+    if (typeof window.openKkiapayWidget !== "function") {
+      toast.error("Service de paiement en cours de chargement. Réessayez dans quelques secondes.");
       return;
     }
 
@@ -167,39 +172,41 @@ const TableReservationPage = () => {
       description: `Acompte table Espace Maxo - ${formData.deposit_amount} FCFA`
     });
 
-    window.addSuccessListener(async (response) => {
-      toast.success("Paiement réussi!");
-      setLoading(true);
-      
-      try {
-        // Deduct wallet amount if used
-        if (useWallet && walletAmountToUse > 0) {
-          await axios.post(`${API}/wallet/use`, {
-            phone: formData.customer_phone,
-            amount: walletAmountToUse,
-            service_type: "table_reservation",
-            description: `Acompte réservation table (complément)`
-          });
-          setWalletBalance(prev => prev - walletAmountToUse);
+    if (typeof window.addSuccessListener === "function") {
+      window.addSuccessListener(async (response) => {
+        toast.success("Paiement réussi!");
+        setLoading(true);
+        
+        try {
+          // Deduct wallet amount if used
+          if (useWallet && walletAmountToUse > 0) {
+            await axios.post(`${API}/wallet/use`, {
+              phone: formData.customer_phone,
+              amount: walletAmountToUse,
+              service_type: "table_reservation",
+              description: `Acompte réservation table (complément)`
+            });
+            setWalletBalance(prev => prev - walletAmountToUse);
+          }
+
+          // Create reservation - convert "aucune" to empty string
+          const reservationData = {
+            ...formData,
+            special_occasion: formData.special_occasion === "aucune" ? "" : formData.special_occasion,
+            payment_transaction_id: response.transactionId,
+            wallet_amount_used: walletAmountToUse
+          };
+          await axios.post(`${API}/table-reservations`, reservationData);
+
+          setSuccess(true);
+        } catch (error) {
+          console.error("Error:", error);
+          toast.error("Erreur lors de l'enregistrement. Contactez-nous.");
+        } finally {
+          setLoading(false);
         }
-
-        // Create reservation - convert "aucune" to empty string
-        const reservationData = {
-          ...formData,
-          special_occasion: formData.special_occasion === "aucune" ? "" : formData.special_occasion,
-          payment_transaction_id: response.transactionId,
-          wallet_amount_used: walletAmountToUse
-        };
-        await axios.post(`${API}/table-reservations`, reservationData);
-
-        setSuccess(true);
-      } catch (error) {
-        console.error("Error:", error);
-        toast.error("Erreur lors de l'enregistrement. Contactez-nous.");
-      } finally {
-        setLoading(false);
-      }
-    });
+      });
+    }
   };
 
   const handleSubmit = (e) => {
