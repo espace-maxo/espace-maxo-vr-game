@@ -68,7 +68,7 @@ const TableReservationPage = () => {
     };
   });
 
-  // Fetch payment config
+  // Fetch payment config and load Kkiapay script
   useEffect(() => {
     const fetchPaymentConfig = async () => {
       try {
@@ -79,6 +79,17 @@ const TableReservationPage = () => {
       }
     };
     fetchPaymentConfig();
+
+    // Load Kkiapay script
+    const existingScript = document.querySelector('script[src*="kkiapay"]');
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.kkiapay.me/k.js";
+      script.async = true;
+      script.onload = () => console.log("Kkiapay script loaded successfully");
+      script.onerror = (err) => console.error("Failed to load Kkiapay:", err);
+      document.head.appendChild(script);
+    }
   }, []);
 
   // Fetch wallet balance when phone changes
