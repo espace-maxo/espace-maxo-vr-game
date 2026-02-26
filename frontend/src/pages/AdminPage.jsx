@@ -475,8 +475,24 @@ const AdminPage = () => {
             <h1 className="font-orbitron font-bold text-2xl md:text-3xl text-white flex items-center gap-3">
               <BarChart3 className="w-8 h-8 text-neon-blue" />
               Dashboard Admin
+              {/* Role Badge */}
+              {isReadOnly ? (
+                <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 ml-2">
+                  <BookOpen className="w-3 h-3 mr-1" />
+                  Consultation
+                </Badge>
+              ) : (
+                <Badge className="bg-green-500/20 text-green-400 border border-green-500/30 ml-2">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Accès Complet
+                </Badge>
+              )}
             </h1>
-            <p className="text-gray-400 font-outfit mt-1">Gérez vos réservations et suivez vos performances</p>
+            <p className="text-gray-400 font-outfit mt-1">
+              {isReadOnly 
+                ? "Mode consultation - Visualisation uniquement" 
+                : "Gérez vos réservations et suivez vos performances"}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <Button 
