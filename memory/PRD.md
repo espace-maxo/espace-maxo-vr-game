@@ -1,41 +1,41 @@
 # Espace Maxo - PRD
 
 ## Problem Statement
-Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, et gérer les réservations.
+Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, et gérer les réservations.
 
 ## What's Been Implemented
 
-### Phase 13 - Réduction Prix Livraison (Déc 2025)
-- **Annulé** - Les prix ont été remis à leur valeur originale à la demande de l'utilisateur
+### Phase 15 - Combos + Jeu et Réservation Table (Fév 2026)
+- **Paiement Combos en ligne** : Les clients peuvent commander des combos et réserver une session de jeu en un seul clic
+  - Page `/menu` affiche uniquement les combos (autres plats supprimés)
+  - Panier flottant avec récapitulatif
+  - Sélection du type de jeu (VR 360° / Simulateur) avec tarifs
+  - Sélection de date et créneau horaire
+  - Paiement via Kkiapay ou Porte-monnaie
+- **Réservation Table avec acompte** : Nouvelle fonctionnalité à `/reserver-table`
+  - Formulaire complet (nom, téléphone, date, heure, nombre de personnes, occasion)
+  - Acompte déductible de 5 000 à 25 000 FCFA
+  - Paiement via Kkiapay ou Porte-monnaie
+  - L'acompte est déduit de l'addition finale
+- **Admin Dashboard** : Nouveaux onglets
+  - Onglet "Combos" pour gérer les commandes combo+jeu
+  - Onglet "Tables" pour gérer les réservations de table
 
 ### Phase 14 - Section "Nous Rejoindre" (Déc 2025)
 - **Nouvelle page `/rejoindre`** : Formulaire de candidature complet
-- **Champs** : Nom, Téléphone, Email, Poste souhaité, CV (PDF), Message/Motivation
-- **Upload CV** : Support des fichiers PDF jusqu'à 5 Mo (stockage base64)
+- **Upload CV** : Support des fichiers PDF jusqu'à 5 Mo
 - **SMS Admin** : Notification automatique à chaque nouvelle candidature
-- **Panel Admin** : Nouvel onglet "Candidatures" avec gestion complète
-- **Fonctionnalités Admin** : Voir CV, changer statut, supprimer, export CSV
+- **Panel Admin** : Onglet "Candidatures" avec gestion complète
 
-### Phase 12 - Corrections (25 Feb 2026)
-- **Frais de reprogrammation** : Paiement Kkiapay obligatoire si < 15 min avant session (500 FCFA)
-- **Format date français** : jj/mm/aaaa partout dans l'application
-- **Nouveau mot de passe admin** : Esp@ceM@xo2026
-
-### Phase 11 - Export CSV & Refactorisation
-- Export CSV (réservations, locations, fidélité)
-- Refactorisation backend partielle
-
-### Phase 10 - Suppression définitive
-- Suppression des demandes de location avec confirmation
-
-### Phase 9 - Intégration Twilio SMS
-- OTP par SMS pour portefeuille
-- Notifications SMS Admin (2 numéros)
-- SMS de confirmation client après paiement
+### Phase 13 - Portefeuille Livraison (Déc 2025)
+- Intégration du paiement par porte-monnaie pour les livraisons
+- Message d'information si solde insuffisant
 
 ### Phases précédentes
+- Dual Admin Roles (accès complet / lecture seule)
+- Modales "Voir détails" pour toutes les sections admin
 - Location événementielle
-- Système Provision/Portefeuille
+- Système Provision/Portefeuille avec OTP SMS
 - Reprogrammation des réservations
 - MVP, Admin, Kkiapay, Fidélité, Avis
 
@@ -43,7 +43,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 
 ### Admin
 - URL: /admin
-- Password: **Esp@ceM@xo2026**
+- **Accès Complet**: `Esp@ceM@xo2026`
+- **Lecture Seule**: `MaxoConsult2026`
 
 ### Twilio SMS
 - Numéros admin: +22997720808, +22991005084
@@ -52,21 +53,32 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ### Kkiapay (Production)
 - KKIAPAY_SANDBOX: false
 
+## Prix des Jeux
+- **VR 360°**: 2 000 FCFA / partie
+- **Simulateur Course**: 1 500 FCFA / partie
+
 ## Frais de reprogrammation
 - **Gratuit** : Si > 15 min avant la session
-- **500 FCFA** : Si < 15 min avant la session (paiement Kkiapay obligatoire)
+- **500 FCFA** : Si < 15 min avant la session
 - **Maximum 1 reprogrammation** par réservation
 
 ## APIs Backend
 
-### Reprogrammation
-- POST /api/bookings/find-for-reschedule - Rechercher réservation
-- POST /api/bookings/{id}/reschedule-by-client - Reprogrammer (avec payment_transaction_id si frais requis)
+### Nouvelles APIs (Phase 15)
+- `POST /api/combo-orders` - Créer commande combo + jeu
+- `GET /api/admin/combo-orders` - Liste des commandes combo (admin)
+- `POST /api/table-reservations` - Créer réservation de table
+- `GET /api/admin/table-reservations` - Liste des réservations (admin)
+- `PUT /api/admin/table-reservations/{id}` - Mettre à jour le statut
+- `DELETE /api/admin/table-reservations/{id}` - Supprimer une réservation
 
-### Export CSV
-- GET /api/admin/export/bookings
-- GET /api/admin/export/location-requests
-- GET /api/admin/export/loyalty
+### APIs Existantes
+- `/api/bookings` - Réservations de jeux
+- `/api/bookings/find-for-reschedule` - Rechercher pour reprogrammer
+- `/api/wallet/*` - Gestion du porte-monnaie
+- `/api/delivery-orders` - Commandes de livraison
+- `/api/applications` - Candidatures
+- `/api/admin/export/*` - Export CSV
 
 ## Prioritized Backlog
 
@@ -74,18 +86,49 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [x] MVP + Admin + Kkiapay
 - [x] SMS OTP et notifications
 - [x] Export CSV
-- [x] Suppression demandes location
-- [x] **Frais reprogrammation avec paiement Kkiapay**
-- [x] **Format date jj/mm/aaaa**
-- [x] **Nouveau mot de passe admin**
-- [x] **Section "Nous Rejoindre" avec dépôt CV**
+- [x] Section "Nous Rejoindre" avec dépôt CV
+- [x] **Paiement Combos + Session de jeu**
+- [x] **Réservation Table avec acompte**
+- [x] **Admin tabs Combos et Tables**
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
+- [ ] Tester SMS de confirmation client après paiement
 
 ### P2 (Future)
 - [ ] Section "À propos de nous"
 - [ ] Graphiques de revenus
+- [ ] Refactorisation de `server.py` (2500+ lignes)
+- [ ] Refactorisation de `AdminPage.jsx` (1500+ lignes)
+
+## Architecture
+
+```
+/app/
+├── backend/
+│   ├── .env
+│   ├── requirements.txt
+│   ├── server.py
+│   └── tests/
+│       └── test_combo_table.py
+└── frontend/
+    ├── .env
+    ├── package.json
+    └── src/
+        ├── App.js
+        ├── components/
+        │   ├── Navbar.jsx
+        │   └── ...
+        └── pages/
+            ├── AdminPage.jsx
+            ├── BookingPage.jsx
+            ├── DeliveryPage.jsx
+            ├── HomePage.jsx
+            ├── MenuPage.jsx (Combos uniquement)
+            ├── RejoindrePage.jsx
+            ├── TableReservationPage.jsx (NOUVEAU)
+            └── WalletPage.jsx
+```
 
 ## Contact
 - SMS Admin: +229 97 72 08 08, +229 91 00 50 84
