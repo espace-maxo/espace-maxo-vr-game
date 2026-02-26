@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock, Eye, EyeOff, LogIn } from "lucide-react";
+import { Lock, Eye, EyeOff, LogIn, Shield, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -24,10 +24,13 @@ const AdminLoginPage = () => {
       });
 
       if (response.data.token) {
-        // Store the JWT token securely
+        // Store the JWT token and role securely
         localStorage.setItem("adminToken", response.data.token);
         localStorage.setItem("adminTokenExpires", response.data.expires_at);
-        toast.success("Connexion réussie !");
+        localStorage.setItem("adminRole", response.data.role);
+        
+        const roleName = response.data.role === "admin_readonly" ? "Consultation" : "Complet";
+        toast.success(`Connexion réussie ! Accès ${roleName}`);
         navigate("/admin/dashboard");
       }
     } catch (error) {
@@ -57,6 +60,20 @@ const AdminLoginPage = () => {
             <p className="text-gray-400 font-outfit mt-2">
               Entrez le mot de passe pour accéder au dashboard
             </p>
+          </div>
+
+          {/* Access Types Info */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+              <Shield className="w-5 h-5 text-green-400 mx-auto mb-1" />
+              <p className="text-green-400 text-sm font-semibold">Accès Complet</p>
+              <p className="text-gray-500 text-xs">Modifier & Supprimer</p>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
+              <BookOpen className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+              <p className="text-blue-400 text-sm font-semibold">Consultation</p>
+              <p className="text-gray-500 text-xs">Lecture seule</p>
+            </div>
           </div>
 
           {/* Form */}
