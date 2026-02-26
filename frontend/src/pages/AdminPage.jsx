@@ -2176,6 +2176,226 @@ const AdminPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Loyalty Detail Modal */}
+      <Dialog open={loyaltyDetailModal} onOpenChange={setLoyaltyDetailModal}>
+        <DialogContent className="bg-dark-card border-food-gold/30 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-food-gold flex items-center gap-2">
+              <Star className="w-5 h-5" />
+              Détails du Compte Fidélité
+            </DialogTitle>
+          </DialogHeader>
+          {loyaltyDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Nom du client</p>
+                  <p className="text-white font-semibold">{loyaltyDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{loyaltyDetail.phone}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-food-gold/10 border border-food-gold/30 p-4 rounded-lg text-center">
+                  <p className="text-3xl font-rajdhani font-bold text-food-gold">{loyaltyDetail.available_points || 0}</p>
+                  <p className="text-gray-400 text-sm">Points disponibles</p>
+                </div>
+                <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-lg text-center">
+                  <p className="text-3xl font-rajdhani font-bold text-green-400">
+                    {(loyaltyDetail.free_games_earned || 0) - (loyaltyDetail.free_games_used || 0)}
+                  </p>
+                  <p className="text-gray-400 text-sm">Parties gratuites</p>
+                </div>
+                <div className="bg-neon-blue/10 border border-neon-blue/30 p-4 rounded-lg text-center">
+                  <p className="text-3xl font-rajdhani font-bold text-neon-blue">{loyaltyDetail.total_games_played || 0}</p>
+                  <p className="text-gray-400 text-sm">Parties jouées</p>
+                </div>
+              </div>
+              
+              <div className="border-t border-white/10 pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Points totaux gagnés</span>
+                  <span className="text-white">{loyaltyDetail.total_points_earned || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Points utilisés</span>
+                  <span className="text-white">{loyaltyDetail.points_spent || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Parties gratuites gagnées</span>
+                  <span className="text-white">{loyaltyDetail.free_games_earned || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Parties gratuites utilisées</span>
+                  <span className="text-white">{loyaltyDetail.free_games_used || 0}</span>
+                </div>
+              </div>
+              
+              <div className="bg-neon-purple/10 border border-neon-purple/30 p-3 rounded-lg">
+                <p className="text-neon-purple text-sm">
+                  <Gift className="w-4 h-4 inline mr-1" />
+                  Rappel: 10 parties = 1 partie gratuite offerte
+                </p>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {loyaltyDetail.id} | Créé le: {loyaltyDetail.created_at ? new Date(loyaltyDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Detail Modal */}
+      <Dialog open={reviewDetailModal} onOpenChange={setReviewDetailModal}>
+        <DialogContent className="bg-dark-card border-neon-purple/30 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-neon-purple flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Détails de l'Avis
+            </DialogTitle>
+          </DialogHeader>
+          {reviewDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Nom du client</p>
+                  <p className="text-white font-semibold">{reviewDetail.customer_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{reviewDetail.phone || "Non fourni"}</p>
+                </div>
+              </div>
+              
+              <div className="bg-surface-highlight p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-gray-400 text-sm">Note</p>
+                  <div className="flex gap-1 ml-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-5 h-5 ${
+                          star <= reviewDetail.rating ? "text-food-gold fill-food-gold" : "text-gray-600"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-food-gold font-bold ml-2">{reviewDetail.rating}/5</span>
+                </div>
+              </div>
+              
+              <div className="bg-surface-highlight p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-2">Commentaire</p>
+                <p className="text-white text-lg italic">"{reviewDetail.comment}"</p>
+              </div>
+              
+              <div className="flex justify-between items-center border-t border-white/10 pt-4">
+                <span className="text-gray-400">Statut</span>
+                <Badge className={
+                  reviewDetail.status === "approved" ? "bg-green-500/20 text-green-400" :
+                  reviewDetail.status === "rejected" ? "bg-red-500/20 text-red-400" :
+                  "bg-yellow-500/20 text-yellow-400"
+                }>
+                  {reviewDetail.status === "approved" ? "Approuvé" :
+                   reviewDetail.status === "rejected" ? "Rejeté" : "En attente"}
+                </Badge>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {reviewDetail.id} | Reçu le: {reviewDetail.created_at ? new Date(reviewDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Application Detail Modal */}
+      <Dialog open={applicationDetailModal} onOpenChange={setApplicationDetailModal}>
+        <DialogContent className="bg-dark-card border-green-500/30 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-orbitron text-green-400 flex items-center gap-2">
+              <Briefcase className="w-5 h-5" />
+              Détails de la Candidature
+            </DialogTitle>
+          </DialogHeader>
+          {applicationDetail && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Nom complet</p>
+                  <p className="text-white font-semibold">{applicationDetail.full_name}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Poste souhaité</p>
+                  <p className="text-white font-semibold">
+                    {applicationDetail.position === "serveur" ? "Serveur/Serveuse" :
+                     applicationDetail.position === "cuisinier" ? "Cuisinier/Cuisinière" :
+                     applicationDetail.position === "barman" ? "Barman/Barmaid" :
+                     applicationDetail.position === "caissier" ? "Caissier/Caissière" :
+                     applicationDetail.position === "livreur" ? "Livreur" :
+                     applicationDetail.position === "animateur_vr" ? "Animateur VR" :
+                     applicationDetail.position === "manager" ? "Manager" : applicationDetail.position}
+                  </p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Téléphone</p>
+                  <p className="text-white font-semibold">{applicationDetail.phone}</p>
+                </div>
+                <div className="bg-surface-highlight p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">Email</p>
+                  <p className="text-white font-semibold">{applicationDetail.email}</p>
+                </div>
+              </div>
+              
+              {applicationDetail.message && (
+                <div className="bg-surface-highlight p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm mb-2">Message de motivation</p>
+                  <p className="text-white italic">"{applicationDetail.message}"</p>
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between border-t border-white/10 pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">CV joint:</span>
+                  {applicationDetail.cv_filename ? (
+                    <Badge className="bg-green-500/20 text-green-400">
+                      <FileText className="w-3 h-3 mr-1" />
+                      {applicationDetail.cv_filename}
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-gray-500/20 text-gray-400">Non fourni</Badge>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Statut</span>
+                <Badge className={
+                  applicationDetail.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                  applicationDetail.status === "reviewed" ? "bg-blue-500/20 text-blue-400" :
+                  applicationDetail.status === "contacted" ? "bg-purple-500/20 text-purple-400" :
+                  applicationDetail.status === "hired" ? "bg-green-500/20 text-green-400" :
+                  "bg-red-500/20 text-red-400"
+                }>
+                  {applicationDetail.status === "pending" ? "En attente" :
+                   applicationDetail.status === "reviewed" ? "Examiné" :
+                   applicationDetail.status === "contacted" ? "Contacté" :
+                   applicationDetail.status === "hired" ? "Embauché" : "Rejeté"}
+                </Badge>
+              </div>
+              
+              <div className="text-gray-500 text-xs">
+                ID: {applicationDetail.id} | Reçue le: {applicationDetail.created_at ? new Date(applicationDetail.created_at).toLocaleString('fr-FR') : 'N/A'}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
