@@ -2230,9 +2230,9 @@ async def get_delivery_orders(
 async def update_delivery_order_status(
     order_id: str, 
     update_data: dict,
-    is_admin: bool = Depends(get_current_admin)
+    has_write_access: bool = Depends(get_admin_write_access)
 ):
-    """Update delivery order status (admin only)"""
+    """Update delivery order status (admin with write access only)"""
     order = await db.delivery_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Commande non trouvée")
@@ -2251,7 +2251,7 @@ async def update_delivery_order_status(
 @api_router.get("/admin/location-requests")
 async def get_all_location_requests(
     status: Optional[str] = Query(None),
-    is_admin: bool = Depends(get_current_admin)
+    admin_info: dict = Depends(get_current_admin)
 ):
     """Get all location requests (admin only)"""
     query = {}
@@ -2272,8 +2272,8 @@ async def get_all_location_requests(
     }
 
 @api_router.put("/admin/location-requests/{request_id}")
-async def update_location_request(request_id: str, status: str, is_admin: bool = Depends(get_current_admin)):
-    """Update location request status (admin only)"""
+async def update_location_request(request_id: str, status: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Update location request status (admin with write access only)"""
     request = await db.location_requests.find_one({"id": request_id})
     if not request:
         raise HTTPException(status_code=404, detail="Demande non trouvée")
@@ -2286,8 +2286,8 @@ async def update_location_request(request_id: str, status: str, is_admin: bool =
     return {"message": "Statut mis à jour", "status": status}
 
 @api_router.delete("/admin/location-requests/{request_id}")
-async def delete_location_request(request_id: str, is_admin: bool = Depends(get_current_admin)):
-    """Permanently delete a location request (admin only)"""
+async def delete_location_request(request_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Permanently delete a location request (admin with write access only)"""
     request = await db.location_requests.find_one({"id": request_id})
     if not request:
         raise HTTPException(status_code=404, detail="Demande non trouvée")
