@@ -2065,8 +2065,8 @@ async def get_all_reviews(
     }
 
 @api_router.put("/admin/reviews/{review_id}")
-async def update_review_status(review_id: str, update_data: ReviewUpdate, is_admin: bool = Depends(get_current_admin)):
-    """Approve or reject a review (protected)"""
+async def update_review_status(review_id: str, update_data: ReviewUpdate, has_write_access: bool = Depends(get_admin_write_access)):
+    """Approve or reject a review (admin with write access only)"""
     if update_data.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Statut invalide. Utilisez 'approved' ou 'rejected'")
     
@@ -2083,8 +2083,8 @@ async def update_review_status(review_id: str, update_data: ReviewUpdate, is_adm
     return updated
 
 @api_router.delete("/admin/reviews/{review_id}")
-async def delete_review(review_id: str, is_admin: bool = Depends(get_current_admin)):
-    """Delete a review (protected)"""
+async def delete_review(review_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Delete a review (admin with write access only)"""
     review = await db.reviews.find_one({"id": review_id})
     if not review:
         raise HTTPException(status_code=404, detail="Avis non trouvé")
@@ -2094,8 +2094,8 @@ async def delete_review(review_id: str, is_admin: bool = Depends(get_current_adm
 
 # Reseed menu data
 @api_router.post("/admin/reseed-menu")
-async def reseed_menu(is_admin: bool = Depends(get_current_admin)):
-    """Reseed menu with updated items (admin only)"""
+async def reseed_menu(has_write_access: bool = Depends(get_admin_write_access)):
+    """Reseed menu with updated items (admin with write access only)"""
     await db.menu_items.delete_many({})
     for item in MENU_ITEMS:
         await db.menu_items.insert_one(item)
