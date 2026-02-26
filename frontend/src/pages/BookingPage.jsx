@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format, addDays, startOfToday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2, Smartphone, Gift } from "lucide-react";
+import { Calendar, Clock, User, Phone, Gamepad2, Users, CreditCard, Loader2, Smartphone, Gift, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
