@@ -798,7 +798,7 @@ const BookingPage = () => {
                   </label>
 
                   {/* Wallet Option */}
-                  {walletBalance > 0 && (
+                  {walletBalance > 0 ? (
                     <label className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30 cursor-pointer hover:border-green-500/50 transition-colors">
                       <input
                         type="checkbox"
@@ -808,15 +808,35 @@ const BookingPage = () => {
                       />
                       <div className="flex-1">
                         <span className="font-outfit text-white font-semibold flex items-center gap-2">
-                          Utiliser ma provision
+                          Utiliser mon porte-monnaie
                           <span className="text-green-400 text-sm">({formatPrice(walletBalance)} FCFA disponible)</span>
                         </span>
                         <p className="text-sm text-gray-400 mt-1">
-                          Déduire le montant de votre solde provision
+                          Déduire le montant de votre solde porte-monnaie
                         </p>
                       </div>
                     </label>
-                  )}
+                  ) : walletExists ? (
+                    <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <div className="flex items-start gap-3">
+                        <Wallet className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="font-outfit text-yellow-400 font-semibold">
+                            Solde porte-monnaie insuffisant
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Votre porte-monnaie est vide. Rechargez-le pour l'utiliser lors de vos prochaines réservations.
+                          </p>
+                          <a 
+                            href="/provision" 
+                            className="inline-flex items-center gap-1 text-neon-blue text-sm mt-2 hover:underline"
+                          >
+                            Recharger mon porte-monnaie →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Summary Box */}
