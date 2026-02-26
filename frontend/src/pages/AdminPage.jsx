@@ -177,6 +177,8 @@ const AdminPage = () => {
       setLocationRequests(locationRes.data.requests || []);
       setLocationStats(locationRes.data.stats || {});
       setDeliveryOrders(deliveryRes.data.orders || []);
+      setComboOrders(comboRes.data.orders || []);
+      setTableReservations(tableRes.data.reservations || []);
       
       // Process job applications
       const jobApps = jobAppsRes.data || [];
