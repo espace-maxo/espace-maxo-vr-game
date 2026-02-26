@@ -368,7 +368,7 @@ const HomePage = () => {
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 mt-6">
                 <a 
-                  href="https://maps.google.com/?q=Pharmacie+Fidjrosse+Plage+Cotonou+Benin"
+                  href="https://maps.google.com/?q=Espace+Maxo+Fidjrosse+Cotonou+Benin"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-neon-blue text-black px-4 py-2 rounded-lg font-rajdhani font-bold hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all"
