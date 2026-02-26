@@ -1473,8 +1473,6 @@ const AdminPage = () => {
                                   CV
                                 </Button>
                               )}
-                                </Button>
-                              )}
                               
                               <Select
                                 value={app.status}
