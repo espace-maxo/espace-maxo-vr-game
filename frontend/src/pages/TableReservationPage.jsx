@@ -27,7 +27,7 @@ const depositOptions = [
 ];
 
 const occasionOptions = [
-  { value: "", label: "Aucune occasion particulière" },
+  { value: "aucune", label: "Aucune occasion particulière" },
   { value: "anniversaire", label: "Anniversaire" },
   { value: "fiancailles", label: "Fiançailles" },
   { value: "mariage", label: "Célébration de mariage" },
