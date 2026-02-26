@@ -150,7 +150,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsRes, bookingsRes, loyaltyRes, reviewsRes, locationRes, jobAppsRes, deliveryRes] = await Promise.all([
+      const [statsRes, bookingsRes, loyaltyRes, reviewsRes, locationRes, jobAppsRes, deliveryRes, comboRes, tableRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, {
           headers,
@@ -164,7 +164,9 @@ const AdminPage = () => {
         axios.get(`${API}/admin/reviews`, { headers }).catch(() => ({ data: { reviews: [], stats: {} } })),
         axios.get(`${API}/admin/location-requests`, { headers }).catch(() => ({ data: { requests: [], stats: {} } })),
         axios.get(`${API}/admin/job-applications`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/admin/delivery-orders`, { headers }).catch(() => ({ data: { orders: [] } }))
+        axios.get(`${API}/admin/delivery-orders`, { headers }).catch(() => ({ data: { orders: [] } })),
+        axios.get(`${API}/admin/combo-orders`, { headers }).catch(() => ({ data: { orders: [] } })),
+        axios.get(`${API}/admin/table-reservations`, { headers }).catch(() => ({ data: { reservations: [] } }))
       ]);
       setStats(statsRes.data);
       setBookings(bookingsRes.data.bookings);
