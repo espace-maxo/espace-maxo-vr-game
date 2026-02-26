@@ -88,18 +88,23 @@ const BookingPage = () => {
   // Fetch wallet balance when phone changes
   useEffect(() => {
     const fetchWalletBalance = async () => {
-      if (formData.customerPhone && formData.customerPhone.length >= 10) {
+      if (formData.customerPhone && formData.customerPhone.length >= 8) {
         try {
           const response = await axios.get(`${API}/wallet/${formData.customerPhone}`);
           setWalletBalance(response.data.balance || 0);
-          setWalletExists(response.data.exists || false);
+          setWalletExists(true);
         } catch (error) {
           setWalletBalance(0);
-          setWalletExists(false);
+          setWalletExists(true); // Even if wallet doesn't exist, show the message
         }
+      } else {
+        setWalletBalance(0);
+        setWalletExists(false);
       }
     };
-    fetchWalletBalance();
+    
+    const timeoutId = setTimeout(fetchWalletBalance, 500);
+    return () => clearTimeout(timeoutId);
   }, [formData.customerPhone]);
 
   useEffect(() => {
