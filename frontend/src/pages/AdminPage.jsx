@@ -286,6 +286,8 @@ const AdminPage = () => {
     } catch (error) {
       if (error.response?.status === 401) {
         navigate("/admin");
+      } else if (error.response?.status === 403) {
+        toast.error("Accès en lecture seule - Modification non autorisée");
       } else {
         toast.error("Erreur lors de la suppression");
       }
@@ -293,6 +295,7 @@ const AdminPage = () => {
   };
 
   const updateLocationStatus = async (requestId, newStatus) => {
+    if (!checkWriteAccess()) return;
     try {
       const headers = getAuthHeaders();
       await axios.put(`${API}/admin/location-requests/${requestId}?status=${newStatus}`, {}, { headers });
@@ -304,6 +307,8 @@ const AdminPage = () => {
     } catch (error) {
       if (error.response?.status === 401) {
         navigate("/admin");
+      } else if (error.response?.status === 403) {
+        toast.error("Accès en lecture seule - Modification non autorisée");
       } else {
         toast.error("Erreur lors de la mise à jour");
       }
