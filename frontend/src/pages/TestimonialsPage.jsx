@@ -306,6 +306,18 @@ export const TestimonialsSection = () => {
             <p className="text-gray-500 text-sm font-outfit">Recommandent</p>
           </div>
         </div>
+
+        {/* Laisser un avis button */}
+        <div className="mt-12 text-center">
+          <a 
+            href="/avis" 
+            className="inline-flex items-center gap-2 bg-neon-blue hover:bg-neon-blue/80 text-black font-rajdhani font-bold text-lg px-8 py-4 rounded-full shadow-[0_0_20px_rgba(0,240,255,0.4)] hover:shadow-[0_0_30px_rgba(0,240,255,0.6)] transition-all"
+            data-testid="leave-review-btn"
+          >
+            <Star className="w-5 h-5" />
+            LAISSER UN AVIS
+          </a>
+        </div>
       </div>
     </section>
   );
