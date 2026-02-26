@@ -1488,6 +1488,138 @@ const AdminPage = () => {
                 )}
               </div>
             </TabsContent>
+
+            {/* Livraisons Tab */}
+            <TabsContent value="livraisons">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-orbitron font-bold text-xl text-white flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-food-orange" />
+                    Commandes Livraison ({deliveryOrders.length})
+                  </h2>
+                </div>
+
+                {loading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-8 h-8 text-food-orange animate-spin mx-auto" />
+                  </div>
+                ) : deliveryOrders.length === 0 ? (
+                  <Card className="bg-dark-card border-white/10">
+                    <CardContent className="p-8 text-center">
+                      <Truck className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                      <p className="text-gray-400">Aucune commande de livraison</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4">
+                    {deliveryOrders.map((order) => (
+                      <Card key={order.id} className="bg-dark-card border-white/10 hover:border-food-orange/30 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-outfit font-semibold text-white">{order.customer_name}</span>
+                                <Badge className={
+                                  order.payment_status === "paid" ? "bg-green-500/20 text-green-400" :
+                                  order.payment_status === "pending_validation" ? "bg-yellow-500/20 text-yellow-400" :
+                                  "bg-gray-500/20 text-gray-400"
+                                }>
+                                  {order.payment_status === "paid" ? "Payé" :
+                                   order.payment_status === "pending_validation" ? "Validation" : "En attente"}
+                                </Badge>
+                                <Badge className={
+                                  order.status === "delivered" ? "bg-green-500/20 text-green-400" :
+                                  order.status === "preparing" ? "bg-blue-500/20 text-blue-400" :
+                                  order.status === "confirmed" ? "bg-purple-500/20 text-purple-400" :
+                                  "bg-yellow-500/20 text-yellow-400"
+                                }>
+                                  {order.status === "delivered" ? "Livré" :
+                                   order.status === "preparing" ? "En préparation" :
+                                   order.status === "confirmed" ? "Confirmé" : "En attente"}
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {order.customer_phone}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {order.delivery_zone === "cotonou" ? "Cotonou" : "Hors Cotonou"}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {order.created_at ? new Date(order.created_at).toLocaleDateString('fr-FR') : "N/A"}
+                                </span>
+                              </div>
+                              
+                              <p className="text-gray-500 text-xs">
+                                {order.items?.length || 0} article(s) - {order.delivery_address?.substring(0, 50)}...
+                              </p>
+                            </div>
+                            
+                            <div className="text-right">
+                              <p className="font-rajdhani font-bold text-food-gold text-lg">
+                                {order.total?.toLocaleString()} FCFA
+                              </p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                onClick={() => {
+                                  setDeliveryDetail(order);
+                                  setDeliveryDetailModal(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              
+                              <a href={`https://wa.me/229${order.customer_phone?.replace(/\s/g, '')}`} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10">
+                                  <MessageCircle className="w-4 h-4" />
+                                </Button>
+                              </a>
+                              
+                              <Select
+                                value={order.status}
+                                onValueChange={async (newStatus) => {
+                                  try {
+                                    const headers = getAuthHeaders();
+                                    await axios.put(`${API}/admin/delivery-orders/${order.id}`, 
+                                      { status: newStatus }, 
+                                      { headers }
+                                    );
+                                    toast.success("Statut mis à jour");
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error("Erreur lors de la mise à jour");
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-32 bg-surface-highlight border-white/20 text-white text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-dark-card border-white/20">
+                                  <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
+                                  <SelectItem value="confirmed" className="text-purple-400">Confirmé</SelectItem>
+                                  <SelectItem value="preparing" className="text-blue-400">En préparation</SelectItem>
+                                  <SelectItem value="delivered" className="text-green-400">Livré</SelectItem>
+                                  <SelectItem value="cancelled" className="text-red-400">Annulé</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
       </section>
