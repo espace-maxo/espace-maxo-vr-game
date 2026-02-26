@@ -2718,9 +2718,9 @@ async def get_job_application_detail(application_id: str, is_admin: bool = Depen
 async def update_job_application_status(
     application_id: str, 
     status_update: dict,
-    is_admin: bool = Depends(get_current_admin)
+    has_write_access: bool = Depends(get_admin_write_access)
 ):
-    """Update job application status (admin only)"""
+    """Update job application status (admin with write access only)"""
     valid_statuses = ["pending", "reviewed", "contacted", "hired", "rejected"]
     new_status = status_update.get("status")
     
@@ -2739,8 +2739,8 @@ async def update_job_application_status(
 
 
 @api_router.delete("/admin/job-applications/{application_id}")
-async def delete_job_application(application_id: str, is_admin: bool = Depends(get_current_admin)):
-    """Delete a job application (admin only)"""
+async def delete_job_application(application_id: str, has_write_access: bool = Depends(get_admin_write_access)):
+    """Delete a job application (admin with write access only)"""
     result = await db.job_applications.delete_one({"id": application_id})
     
     if result.deleted_count == 0:
