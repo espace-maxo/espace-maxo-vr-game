@@ -257,6 +257,7 @@ const AdminPage = () => {
   };
 
   const updateReviewStatus = async (reviewId, status) => {
+    if (!checkWriteAccess()) return;
     try {
       const headers = getAuthHeaders();
       await axios.put(`${API}/admin/reviews/${reviewId}`, { status }, { headers });
@@ -265,6 +266,8 @@ const AdminPage = () => {
     } catch (error) {
       if (error.response?.status === 401) {
         navigate("/admin");
+      } else if (error.response?.status === 403) {
+        toast.error("Accès en lecture seule - Modification non autorisée");
       } else {
         toast.error("Erreur lors de la mise à jour");
       }
@@ -272,6 +275,7 @@ const AdminPage = () => {
   };
 
   const deleteReview = async (reviewId) => {
+    if (!checkWriteAccess()) return;
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet avis?")) return;
     
     try {
