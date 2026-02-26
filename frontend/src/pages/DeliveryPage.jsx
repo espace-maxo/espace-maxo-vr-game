@@ -590,14 +590,16 @@ const DeliveryPage = () => {
 
       {/* Floating Cart Button - Like Combos Page */}
       {cart.length > 0 && !showCart && !showOrderForm && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
           <Button
             onClick={() => setShowCart(true)}
-            className="bg-food-orange hover:bg-food-orange/80 text-white font-rajdhani font-bold px-6 py-6 rounded-full shadow-lg animate-bounce"
+            className="bg-food-orange hover:bg-food-orange/90 text-white font-rajdhani font-bold text-lg px-8 py-7 rounded-full shadow-[0_0_30px_rgba(255,107,0,0.6)] hover:shadow-[0_0_40px_rgba(255,107,0,0.8)] transition-all border-2 border-food-orange"
             data-testid="floating-cart-btn"
           >
-            <ShoppingCart className="w-5 h-5 mr-2" />
-            {cart.reduce((sum, item) => sum + item.quantity, 0)} article{cart.reduce((sum, item) => sum + item.quantity, 0) > 1 ? 's' : ''} - {formatPrice(cartTotal)} FCFA
+            <ShoppingCart className="w-6 h-6 mr-3" />
+            <span className="font-bold">{cart.reduce((sum, item) => sum + item.quantity, 0)} article{cart.reduce((sum, item) => sum + item.quantity, 0) > 1 ? 's' : ''}</span>
+            <span className="mx-2">•</span>
+            <span className="font-bold">{formatPrice(cartTotal)} FCFA</span>
           </Button>
         </div>
       )}
