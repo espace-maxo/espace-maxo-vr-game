@@ -412,6 +412,9 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+
+      {/* Testimonials Section - AVIS */}
+      <TestimonialsSection />
     </div>
   );
 };
