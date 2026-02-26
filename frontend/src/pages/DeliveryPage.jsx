@@ -801,7 +801,7 @@ const DeliveryPage = () => {
                     </div>
                     
                     {/* Wallet Option */}
-                    {walletBalance > 0 && (
+                    {walletBalance > 0 ? (
                       <div className="mt-3 p-3 rounded-lg bg-neon-blue/10 border border-neon-blue/30">
                         <label className="flex items-start gap-3 cursor-pointer">
                           <input
@@ -833,15 +833,13 @@ const DeliveryPage = () => {
                               Porte-monnaie non disponible
                             </p>
                             <p className="text-sm text-gray-400 mt-1">
-                              {walletBalance === 0 
-                                ? "Votre porte-monnaie est vide. Rechargez-le pour vos prochaines commandes."
-                                : "Créez votre porte-monnaie pour bénéficier d'un paiement simplifié."}
+                              Votre porte-monnaie est vide. Rechargez-le pour vos prochaines commandes.
                             </p>
                             <a 
                               href="/provision" 
                               className="inline-flex items-center gap-1 text-neon-blue text-sm mt-2 hover:underline"
                             >
-                              {walletBalance === 0 ? "Recharger" : "Créer"} mon porte-monnaie →
+                              Recharger mon porte-monnaie →
                             </a>
                           </div>
                         </div>
