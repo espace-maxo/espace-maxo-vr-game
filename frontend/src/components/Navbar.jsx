@@ -13,7 +13,6 @@ const Navbar = () => {
     { label: "Livraison", path: "/livraison", icon: "truck" },
     { label: "Réserver Table", path: "/reserver-table", icon: "table" },
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
-    { label: "Avis", path: "/avis" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
     { label: "Admin", path: "/admin", icon: "lock" },
   ];
