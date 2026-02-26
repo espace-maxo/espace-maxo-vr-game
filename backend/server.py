@@ -315,6 +315,74 @@ class JobApplication(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+
+# Combo Order Models (with game session)
+class ComboOrderCreate(BaseModel):
+    customer_name: str
+    customer_phone: str
+    items: List[Dict]  # [{name, price, quantity}]
+    game_type: str  # VR_360 or RACING_SIMULATOR
+    number_of_players: int = 1
+    number_of_games: int = 1
+    booking_date: str
+    time_slot: str
+    notes: str = ""
+    payment_transaction_id: Optional[str] = None
+    wallet_amount_used: float = 0.0
+
+class ComboOrder(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_name: str
+    customer_phone: str
+    items: List[Dict] = []
+    combo_total: float = 0.0
+    game_type: str
+    number_of_players: int = 1
+    number_of_games: int = 1
+    game_total: float = 0.0
+    booking_date: str
+    time_slot: str
+    total: float = 0.0
+    notes: str = ""
+    status: str = "confirmed"  # confirmed, completed, cancelled
+    payment_status: str = "paid"
+    payment_transaction_id: Optional[str] = None
+    wallet_amount_used: float = 0.0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Table Reservation Models
+class TableReservationCreate(BaseModel):
+    customer_name: str
+    customer_phone: str
+    reservation_date: str
+    reservation_time: str
+    number_of_guests: int
+    special_occasion: str = ""  # anniversaire, mariage, etc.
+    notes: str = ""
+    deposit_amount: float  # 5000, 10000, 15000, 20000, 25000
+    payment_transaction_id: Optional[str] = None
+    wallet_amount_used: float = 0.0
+
+class TableReservation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_name: str
+    customer_phone: str
+    reservation_date: str
+    reservation_time: str
+    number_of_guests: int
+    special_occasion: str = ""
+    notes: str = ""
+    deposit_amount: float
+    deposit_used: float = 0.0  # Amount already deducted from final bill
+    status: str = "confirmed"  # confirmed, completed, cancelled, no_show
+    payment_status: str = "paid"
+    payment_transaction_id: Optional[str] = None
+    wallet_amount_used: float = 0.0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 # ============== SEED DATA ==============
 
 MENU_ITEMS = [
