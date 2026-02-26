@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Gamepad2, Phone, Lock, CalendarClock, Truck, Wallet, Users } from "lucide-react";
+import { Menu, X, Gamepad2, Phone, Lock, CalendarClock, Truck, Wallet, Users, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -11,6 +11,7 @@ const Navbar = () => {
     { label: "Accueil", path: "/" },
     { label: "Combos", path: "/menu" },
     { label: "Livraison", path: "/livraison", icon: "truck" },
+    { label: "Réserver Table", path: "/reserver-table", icon: "table" },
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Avis", path: "/avis" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
@@ -29,6 +30,8 @@ const Navbar = () => {
         return <Truck className="w-4 h-4" />;
       case "users":
         return <Users className="w-4 h-4" />;
+      case "table":
+        return <UtensilsCrossed className="w-4 h-4" />;
       default:
         return null;
     }
