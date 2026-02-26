@@ -1178,6 +1178,17 @@ const AdminPage = () => {
                                   <p className="text-2xl font-rajdhani font-bold text-green-400">{freeGamesAvailable}</p>
                                   <p className="text-xs text-gray-500">Gratuites</p>
                                 </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                  onClick={() => {
+                                    setLoyaltyDetail(account);
+                                    setLoyaltyDetailModal(true);
+                                  }}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
                           </CardContent>
