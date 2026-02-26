@@ -95,6 +95,12 @@ const AdminPage = () => {
   const [locationDetailModal, setLocationDetailModal] = useState(false);
   const [locationDetail, setLocationDetail] = useState(null);
   const [deliveryOrders, setDeliveryOrders] = useState([]);
+  const [loyaltyDetailModal, setLoyaltyDetailModal] = useState(false);
+  const [loyaltyDetail, setLoyaltyDetail] = useState(null);
+  const [reviewDetailModal, setReviewDetailModal] = useState(false);
+  const [reviewDetail, setReviewDetail] = useState(null);
+  const [applicationDetailModal, setApplicationDetailModal] = useState(false);
+  const [applicationDetail, setApplicationDetail] = useState(null);
 
   // Check authentication
   useEffect(() => {
