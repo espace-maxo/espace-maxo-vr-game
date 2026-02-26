@@ -789,6 +789,20 @@ const AdminPage = () => {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2">
+                        {/* View details button */}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                          onClick={() => {
+                            setBookingDetail(booking);
+                            setBookingDetailModal(true);
+                          }}
+                          data-testid={`view-booking-${booking.id}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        
                         {booking.whatsapp_link && (
                           <a href={booking.whatsapp_link} target="_blank" rel="noopener noreferrer">
                             <Button 
