@@ -824,7 +824,29 @@ const DeliveryPage = () => {
                           </div>
                         </label>
                       </div>
-                    )}
+                    ) : orderForm.phone && orderForm.phone.length >= 8 ? (
+                      <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                        <div className="flex items-start gap-3">
+                          <Wallet className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-outfit text-yellow-400 font-semibold">
+                              Porte-monnaie non disponible
+                            </p>
+                            <p className="text-sm text-gray-400 mt-1">
+                              {walletBalance === 0 
+                                ? "Votre porte-monnaie est vide. Rechargez-le pour vos prochaines commandes."
+                                : "Créez votre porte-monnaie pour bénéficier d'un paiement simplifié."}
+                            </p>
+                            <a 
+                              href="/provision" 
+                              className="inline-flex items-center gap-1 text-neon-blue text-sm mt-2 hover:underline"
+                            >
+                              {walletBalance === 0 ? "Recharger" : "Créer"} mon porte-monnaie →
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                     
                     <div className="flex justify-between text-green-400 font-bold text-lg mt-2 pt-2 border-t border-green-500/30">
                       <span>{useWallet && amountToPay === 0 ? "Total (couvert par porte-monnaie)" : "Total à payer"}</span>
