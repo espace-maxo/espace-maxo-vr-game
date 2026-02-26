@@ -1429,6 +1429,19 @@ const AdminPage = () => {
                             </div>
                             
                             <div className="flex flex-wrap items-center gap-2">
+                              {/* View details button */}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                onClick={() => {
+                                  setApplicationDetail(app);
+                                  setApplicationDetailModal(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              
                               {app.cv_filename && (
                                 <Button
                                   size="sm"
@@ -1453,11 +1466,13 @@ const AdminPage = () => {
                                       setCvLoading(false);
                                     }
                                   }}
-                                  className="border-neon-blue/50 text-neon-blue hover:bg-neon-blue/10"
+                                  className="border-green-500/50 text-green-400 hover:bg-green-500/10"
                                   disabled={cvLoading}
                                 >
                                   <FileText className="w-4 h-4 mr-1" />
                                   CV
+                                </Button>
+                              )}
                                 </Button>
                               )}
                               
