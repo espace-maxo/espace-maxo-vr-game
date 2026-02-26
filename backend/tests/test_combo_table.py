@@ -111,10 +111,12 @@ class TestComboOrdersAPI:
     
     def test_create_combo_order_success(self, api_client):
         """POST /api/combo-orders should create order successfully"""
-        test_date = get_future_date(10)
+        import random
+        test_date = get_future_date(20 + random.randint(1, 10))  # Random date 20-30 days ahead
+        time_slot = f"{random.randint(10, 18):02d}:{random.choice(['00', '30'])}"  # Random time slot
         response = api_client.post(f"{BASE_URL}/api/combo-orders", json={
-            "customer_name": "TEST_ComboClient",
-            "customer_phone": "97111222",
+            "customer_name": f"TEST_ComboClient_{random.randint(1000, 9999)}",
+            "customer_phone": f"97{random.randint(100000, 999999)}",
             "items": [
                 {"name": "Super Combo Solo", "price": 3500, "quantity": 1}
             ],
@@ -122,9 +124,9 @@ class TestComboOrdersAPI:
             "number_of_players": 1,
             "number_of_games": 1,
             "booking_date": test_date,
-            "time_slot": "15:00",
+            "time_slot": time_slot,
             "notes": "Test order",
-            "payment_transaction_id": "test_tx_123",
+            "payment_transaction_id": f"test_tx_{random.randint(1000, 9999)}",
             "wallet_amount_used": 0
         })
         
@@ -138,10 +140,12 @@ class TestComboOrdersAPI:
     
     def test_create_combo_order_with_simulator(self, api_client):
         """POST /api/combo-orders with RACING_SIMULATOR should use 1500 FCFA game price"""
-        test_date = get_future_date(11)
+        import random
+        test_date = get_future_date(25 + random.randint(1, 5))  # Random date 25-30 days ahead
+        time_slot = f"{random.randint(10, 18):02d}:{random.choice(['00', '30'])}"  # Random time slot
         response = api_client.post(f"{BASE_URL}/api/combo-orders", json={
-            "customer_name": "TEST_SimClient",
-            "customer_phone": "97222333",
+            "customer_name": f"TEST_SimClient_{random.randint(1000, 9999)}",
+            "customer_phone": f"97{random.randint(100000, 999999)}",
             "items": [
                 {"name": "Super Combo 2 Personnes", "price": 6000, "quantity": 1}
             ],
@@ -149,8 +153,8 @@ class TestComboOrdersAPI:
             "number_of_players": 2,
             "number_of_games": 1,
             "booking_date": test_date,
-            "time_slot": "16:00",
-            "payment_transaction_id": "test_tx_456"
+            "time_slot": time_slot,
+            "payment_transaction_id": f"test_tx_{random.randint(1000, 9999)}"
         })
         
         assert response.status_code == 200
