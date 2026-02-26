@@ -694,9 +694,15 @@ const MenuPage = () => {
                       <span className="text-white">{formatPrice(cartTotal)} FCFA</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-300">Session jeu ({gameType === "VR_360" ? "VR" : "Simulateur"}) {numberOfPlayers}x{numberOfGames}</span>
+                      <span className="text-gray-300">Joueurs inclus ({includedPlayers})</span>
                       <span className="text-green-400 font-semibold">INCLUS</span>
                     </div>
+                    {extraPlayers > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-300">Joueurs supplémentaires ({extraPlayers})</span>
+                        <span className="text-food-gold">{formatPrice(gameTotal)} FCFA</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-300">Date</span>
                       <span className="text-white">{availableDates.find(d => d.value === selectedDate)?.label}</span>
