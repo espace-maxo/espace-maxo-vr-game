@@ -105,6 +105,14 @@ const AdminPage = () => {
   const [reviewDetail, setReviewDetail] = useState(null);
   const [applicationDetailModal, setApplicationDetailModal] = useState(false);
   const [applicationDetail, setApplicationDetail] = useState(null);
+  
+  // Combo orders and table reservations
+  const [comboOrders, setComboOrders] = useState([]);
+  const [tableReservations, setTableReservations] = useState([]);
+  const [comboDetailModal, setComboDetailModal] = useState(false);
+  const [comboDetail, setComboDetail] = useState(null);
+  const [tableDetailModal, setTableDetailModal] = useState(false);
+  const [tableDetail, setTableDetail] = useState(null);
 
   // Check authentication
   useEffect(() => {
