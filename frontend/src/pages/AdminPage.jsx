@@ -65,6 +65,10 @@ const AdminPage = () => {
   const [filter, setFilter] = useState({ status: "all", booking_status: "all" });
   const [activeTab, setActiveTab] = useState("bookings");
   
+  // Admin role state
+  const [adminRole, setAdminRole] = useState(localStorage.getItem("adminRole") || "admin_full");
+  const isReadOnly = adminRole === "admin_readonly";
+  
   // Reschedule modal state
   const [rescheduleModal, setRescheduleModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
