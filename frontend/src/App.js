@@ -18,6 +18,7 @@ import WalletPage from "@/pages/WalletPage";
 import DeliveryPage from "@/pages/DeliveryPage";
 import JoinUsPage from "@/pages/JoinUsPage";
 import TableReservationPage from "@/pages/TableReservationPage";
+import CaissePage from "@/pages/CaissePage";
 
 function App() {
   return (
