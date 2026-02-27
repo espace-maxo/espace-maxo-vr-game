@@ -382,6 +382,39 @@ class TableReservation(BaseModel):
     wallet_amount_used: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# Invoice Models (for Caisse/Billing)
+class InvoiceItemCreate(BaseModel):
+    id: str
+    name: str
+    price: float
+    quantity: int
+    department: str  # jeux, bar, jardin
+    unit: str = "unité"
+
+class InvoiceCreate(BaseModel):
+    customer_name: str = "Client"
+    items: List[Dict]
+    subtotal: float
+    discount: float = 0
+    discount_amount: float = 0
+    total: float
+    payment_method: str = "cash"  # cash, mobile, card
+    totals_by_department: Dict = {}
+
+class Invoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_number: str = ""
+    customer_name: str = "Client"
+    items: List[Dict] = []
+    subtotal: float = 0.0
+    discount: float = 0
+    discount_amount: float = 0
+    total: float = 0.0
+    payment_method: str = "cash"
+    totals_by_department: Dict = {}
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 
 # ============== SEED DATA ==============
 
