@@ -41,6 +41,7 @@ function App() {
             <Route path="/livraison" element={<DeliveryPage />} />
             <Route path="/rejoindre" element={<JoinUsPage />} />
             <Route path="/reserver-table" element={<TableReservationPage />} />
+            <Route path="/caisse" element={<CaissePage />} />
           </Routes>
         </main>
         <Footer />
