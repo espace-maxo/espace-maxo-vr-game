@@ -406,13 +406,75 @@ class Invoice(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     invoice_number: str = ""
     customer_name: str = "Client"
+    customer_phone: str = ""
     items: List[Dict] = []
     subtotal: float = 0.0
     discount: float = 0
     discount_amount: float = 0
     total: float = 0.0
-    payment_method: str = "cash"
+    payment_method: str = "cash"  # cash, card, mobile, check
+    payment_status: str = "paid"  # paid, pending, partial
     totals_by_department: Dict = {}
+    notes: str = ""
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Caisse User Model
+class CaisseUserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str = "server"  # admin, manager, server
+    full_name: str = ""
+
+class CaisseUser(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    username: str
+    email: str
+    password_hash: str
+    role: str = "server"
+    full_name: str = ""
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Caisse Product Model
+class CaisseProductCreate(BaseModel):
+    name: str
+    price: float
+    department: str  # jeux, bar, jardin
+    unit: str = "unité"
+    category: str = ""
+    is_available: bool = True
+
+class CaisseProduct(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    price: float
+    department: str
+    unit: str = "unité"
+    category: str = ""
+    is_available: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# Caisse Client Model
+class CaisseClientCreate(BaseModel):
+    name: str
+    phone: str = ""
+    email: str = ""
+    notes: str = ""
+
+class CaisseClient(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    phone: str = ""
+    email: str = ""
+    notes: str = ""
+    total_spent: float = 0.0
+    visit_count: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
