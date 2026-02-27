@@ -272,14 +272,17 @@ const CaissePage = () => {
   // Login screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen pt-20 bg-dark-bg flex items-center justify-center" data-testid="caisse-login">
-        <Card className="bg-dark-card border-white/10 w-full max-w-md">
-          <CardHeader className="text-center">
-            <Receipt className="w-12 h-12 text-food-gold mx-auto mb-4" />
-            <CardTitle className="font-orbitron text-2xl text-white">Caisse Espace Maxo</CardTitle>
-            <p className="text-gray-400">Logiciel de facturation</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4" data-testid="caisse-login">
+        <Card className="bg-gray-800/50 border-food-gold/30 w-full max-w-md backdrop-blur-sm">
+          <CardHeader className="text-center pb-2">
+            <div className="w-20 h-20 bg-food-gold/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Receipt className="w-10 h-10 text-food-gold" />
+            </div>
+            <CardTitle className="font-orbitron text-3xl text-food-gold">CAISSE</CardTitle>
+            <p className="text-xl text-white font-semibold">Espace Maxo</p>
+            <p className="text-gray-400 text-sm">Logiciel de facturation</p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label className="text-gray-300">Mot de passe</Label>
               <Input
@@ -287,13 +290,16 @@ const CaissePage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="bg-surface-highlight border-white/20 text-white"
+                className="bg-gray-700/50 border-gray-600 text-white text-lg py-6"
                 placeholder="Entrez le mot de passe"
               />
             </div>
-            <Button onClick={handleLogin} className="w-full bg-food-gold hover:bg-food-gold/80 text-black font-bold">
+            <Button onClick={handleLogin} className="w-full bg-food-gold hover:bg-food-gold/80 text-black font-bold py-6 text-lg">
               Accéder à la Caisse
             </Button>
+            <p className="text-center text-gray-500 text-xs mt-4">
+              Version 1.0 - Espace Maxo
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -301,7 +307,7 @@ const CaissePage = () => {
   }
 
   return (
-    <div className="min-h-screen pt-20 bg-dark-bg" data-testid="caisse-page">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" data-testid="caisse-page">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
