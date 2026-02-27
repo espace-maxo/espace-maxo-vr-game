@@ -24,28 +24,37 @@ function App() {
   return (
     <div className="min-h-screen bg-dark-bg">
       <BrowserRouter>
-        <Navbar />
-        <main>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/menu" element={<MenuPage />} />
-            <Route path="/games" element={<GamesPage />} />
-            <Route path="/booking" element={<BookingPage />} />
-            <Route path="/booking/confirmation" element={<ConfirmationPage />} />
-            <Route path="/admin" element={<AdminLoginPage />} />
-            <Route path="/admin/dashboard" element={<AdminPage />} />
-            <Route path="/avis" element={<TestimonialsPage />} />
-            <Route path="/location" element={<LocationPage />} />
-            <Route path="/reprogrammer" element={<ReschedulePage />} />
-            <Route path="/provision" element={<WalletPage />} />
-            <Route path="/livraison" element={<DeliveryPage />} />
-            <Route path="/rejoindre" element={<JoinUsPage />} />
-            <Route path="/reserver-table" element={<TableReservationPage />} />
-            <Route path="/caisse" element={<CaissePage />} />
-          </Routes>
-        </main>
-        <Footer />
-        <HelpButton />
+        <Routes>
+          {/* Standalone Caisse - No navbar/footer */}
+          <Route path="/caisse" element={<CaissePage />} />
+          
+          {/* Main website with navbar/footer */}
+          <Route path="/*" element={
+            <>
+              <Navbar />
+              <main>
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/menu" element={<MenuPage />} />
+                  <Route path="/games" element={<GamesPage />} />
+                  <Route path="/booking" element={<BookingPage />} />
+                  <Route path="/booking/confirmation" element={<ConfirmationPage />} />
+                  <Route path="/admin" element={<AdminLoginPage />} />
+                  <Route path="/admin/dashboard" element={<AdminPage />} />
+                  <Route path="/avis" element={<TestimonialsPage />} />
+                  <Route path="/location" element={<LocationPage />} />
+                  <Route path="/reprogrammer" element={<ReschedulePage />} />
+                  <Route path="/provision" element={<WalletPage />} />
+                  <Route path="/livraison" element={<DeliveryPage />} />
+                  <Route path="/rejoindre" element={<JoinUsPage />} />
+                  <Route path="/reserver-table" element={<TableReservationPage />} />
+                </Routes>
+              </main>
+              <Footer />
+              <HelpButton />
+            </>
+          } />
+        </Routes>
         <Toaster position="top-right" richColors />
       </BrowserRouter>
     </div>
