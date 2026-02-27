@@ -3100,6 +3100,102 @@ async def delete_table_reservation(reservation_id: str, has_write_access: bool =
 
 
 
+# ============== INVOICE/BILLING ENDPOINTS ==============
+
+@api_router.post("/invoices")
+async def create_invoice(invoice_data: InvoiceCreate):
+    """Create a new invoice"""
+    try:
+        # Generate invoice number
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        count = await db.invoices.count_documents({
+            "created_at": {"$regex": f"^{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"}
+        })
+        invoice_number = f"EM-{today}-{count + 1:04d}"
+        
+        invoice = Invoice(
+            invoice_number=invoice_number,
+            customer_name=invoice_data.customer_name,
+            items=invoice_data.items,
+            subtotal=invoice_data.subtotal,
+            discount=invoice_data.discount,
+            discount_amount=invoice_data.discount_amount,
+            total=invoice_data.total,
+            payment_method=invoice_data.payment_method,
+            totals_by_department=invoice_data.totals_by_department
+        )
+        
+        invoice_dict = invoice.model_dump()
+        await db.invoices.insert_one(invoice_dict)
+        
+        return {"success": True, "invoice": {k: v for k, v in invoice_dict.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/invoices")
+async def get_invoices(date: str = Query(None)):
+    """Get invoices, optionally filtered by date"""
+    try:
+        query = {}
+        if date:
+            query["created_at"] = {"$regex": f"^{date}"}
+        
+        invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        return {"invoices": invoices}
+    except Exception as e:
+        logger.error(f"Error fetching invoices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/invoices/stats")
+async def get_invoice_stats(date: str = Query(None)):
+    """Get invoice statistics by date"""
+    try:
+        query = {}
+        if date:
+            query["created_at"] = {"$regex": f"^{date}"}
+        
+        invoices = await db.invoices.find(query, {"_id": 0}).to_list(1000)
+        
+        total_revenue = sum(inv.get("total", 0) for inv in invoices)
+        total_discounts = sum(inv.get("discount_amount", 0) for inv in invoices)
+        
+        by_department = {"jeux": 0, "bar": 0, "jardin": 0}
+        for inv in invoices:
+            dept_totals = inv.get("totals_by_department", {})
+            by_department["jeux"] += dept_totals.get("jeux", 0)
+            by_department["bar"] += dept_totals.get("bar", 0)
+            by_department["jardin"] += dept_totals.get("jardin", 0)
+        
+        invoice_count = len(invoices)
+        average_ticket = total_revenue / invoice_count if invoice_count > 0 else 0
+        
+        return {
+            "total_revenue": total_revenue,
+            "total_discounts": total_discounts,
+            "by_department": by_department,
+            "invoice_count": invoice_count,
+            "average_ticket": average_ticket
+        }
+    except Exception as e:
+        logger.error(f"Error fetching invoice stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str):
+    """Get a single invoice by ID"""
+    try:
+        invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+        return invoice
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
