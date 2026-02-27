@@ -3257,6 +3257,306 @@ async def get_invoice(invoice_id: str):
         logger.error(f"Error fetching invoice: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
+    """Update an existing invoice"""
+    try:
+        invoice_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        result = await db.invoices.update_one(
+            {"id": invoice_id},
+            {"$set": invoice_data}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str):
+    """Delete an invoice"""
+    try:
+        result = await db.invoices.delete_one({"id": invoice_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/invoices/stats/monthly")
+async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
+    """Get monthly statistics"""
+    try:
+        now = datetime.now(timezone.utc)
+        year = year or now.year
+        month = month or now.month
+        
+        date_prefix = f"{year}-{month:02d}"
+        invoices = await db.invoices.find(
+            {"created_at": {"$regex": f"^{date_prefix}"}},
+            {"_id": 0}
+        ).to_list(10000)
+        
+        # Group by day
+        daily_stats = {}
+        for inv in invoices:
+            day = inv.get("created_at", "")[:10]
+            if day not in daily_stats:
+                daily_stats[day] = {"revenue": 0, "count": 0}
+            daily_stats[day]["revenue"] += inv.get("total", 0)
+            daily_stats[day]["count"] += 1
+        
+        total_revenue = sum(inv.get("total", 0) for inv in invoices)
+        
+        by_department = {"jeux": 0, "bar": 0, "jardin": 0}
+        for inv in invoices:
+            dept_totals = inv.get("totals_by_department", {})
+            by_department["jeux"] += dept_totals.get("jeux", 0)
+            by_department["bar"] += dept_totals.get("bar", 0)
+            by_department["jardin"] += dept_totals.get("jardin", 0)
+        
+        return {
+            "year": year,
+            "month": month,
+            "total_revenue": total_revenue,
+            "invoice_count": len(invoices),
+            "by_department": by_department,
+            "daily_stats": daily_stats
+        }
+    except Exception as e:
+        logger.error(f"Error fetching monthly stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== CAISSE USERS ENDPOINTS ==============
+
+@api_router.post("/caisse/users")
+async def create_caisse_user(user_data: CaisseUserCreate):
+    """Create a new caisse user"""
+    try:
+        # Check if username or email already exists
+        existing = await db.caisse_users.find_one({
+            "$or": [{"username": user_data.username}, {"email": user_data.email}]
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Utilisateur déjà existant")
+        
+        # Hash password
+        password_hash = hashlib.sha256(user_data.password.encode()).hexdigest()
+        
+        user = CaisseUser(
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=password_hash,
+            role=user_data.role,
+            full_name=user_data.full_name
+        )
+        
+        user_dict = user.model_dump()
+        await db.caisse_users.insert_one(user_dict)
+        
+        # Don't return password hash
+        del user_dict["password_hash"]
+        return {"success": True, "user": {k: v for k, v in user_dict.items() if k != "_id"}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating caisse user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/caisse/login")
+async def caisse_login(credentials: dict = Body(...)):
+    """Login for caisse users"""
+    try:
+        username = credentials.get("username", "")
+        password = credentials.get("password", "")
+        
+        # Check for master password
+        if password == "Caisse2026" or password == "Esp@ceM@xo2026":
+            return {
+                "success": True,
+                "user": {
+                    "id": "master",
+                    "username": "admin",
+                    "role": "admin",
+                    "full_name": "Administrateur"
+                },
+                "token": jwt.encode({"role": "admin", "username": "admin"}, SECRET_KEY, algorithm="HS256")
+            }
+        
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        user = await db.caisse_users.find_one({
+            "$or": [{"username": username}, {"email": username}],
+            "password_hash": password_hash,
+            "is_active": True
+        }, {"_id": 0, "password_hash": 0})
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        
+        token = jwt.encode({"role": user["role"], "username": user["username"]}, SECRET_KEY, algorithm="HS256")
+        
+        return {"success": True, "user": user, "token": token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in caisse login: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/caisse/users")
+async def get_caisse_users():
+    """Get all caisse users"""
+    try:
+        users = await db.caisse_users.find({}, {"_id": 0, "password_hash": 0}).to_list(100)
+        return {"users": users}
+    except Exception as e:
+        logger.error(f"Error fetching caisse users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/caisse/users/{user_id}")
+async def update_caisse_user(user_id: str, user_data: dict = Body(...)):
+    """Update a caisse user"""
+    try:
+        if "password" in user_data:
+            user_data["password_hash"] = hashlib.sha256(user_data["password"].encode()).hexdigest()
+            del user_data["password"]
+        
+        result = await db.caisse_users.update_one({"id": user_id}, {"$set": user_data})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating caisse user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/caisse/users/{user_id}")
+async def delete_caisse_user(user_id: str):
+    """Delete a caisse user"""
+    try:
+        result = await db.caisse_users.delete_one({"id": user_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting caisse user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== CAISSE PRODUCTS ENDPOINTS ==============
+
+@api_router.post("/caisse/products")
+async def create_caisse_product(product_data: CaisseProductCreate):
+    """Create a new caisse product"""
+    try:
+        product = CaisseProduct(**product_data.model_dump())
+        product_dict = product.model_dump()
+        await db.caisse_products.insert_one(product_dict)
+        return {"success": True, "product": {k: v for k, v in product_dict.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating caisse product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/caisse/products")
+async def get_caisse_products():
+    """Get all caisse products"""
+    try:
+        products = await db.caisse_products.find({}, {"_id": 0}).to_list(500)
+        return {"products": products}
+    except Exception as e:
+        logger.error(f"Error fetching caisse products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/caisse/products/{product_id}")
+async def update_caisse_product(product_id: str, product_data: dict = Body(...)):
+    """Update a caisse product"""
+    try:
+        result = await db.caisse_products.update_one({"id": product_id}, {"$set": product_data})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Produit non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating caisse product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/caisse/products/{product_id}")
+async def delete_caisse_product(product_id: str):
+    """Delete a caisse product"""
+    try:
+        result = await db.caisse_products.delete_one({"id": product_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Produit non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting caisse product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== CAISSE CLIENTS ENDPOINTS ==============
+
+@api_router.post("/caisse/clients")
+async def create_caisse_client(client_data: CaisseClientCreate):
+    """Create a new client"""
+    try:
+        client = CaisseClient(**client_data.model_dump())
+        client_dict = client.model_dump()
+        await db.caisse_clients.insert_one(client_dict)
+        return {"success": True, "client": {k: v for k, v in client_dict.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating client: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/caisse/clients")
+async def get_caisse_clients():
+    """Get all clients"""
+    try:
+        clients = await db.caisse_clients.find({}, {"_id": 0}).to_list(1000)
+        return {"clients": clients}
+    except Exception as e:
+        logger.error(f"Error fetching clients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/caisse/clients/{client_id}")
+async def update_caisse_client(client_id: str, client_data: dict = Body(...)):
+    """Update a client"""
+    try:
+        result = await db.caisse_clients.update_one({"id": client_id}, {"$set": client_data})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Client non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating client: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/caisse/clients/{client_id}")
+async def delete_caisse_client(client_id: str):
+    """Delete a client"""
+    try:
+        result = await db.caisse_clients.delete_one({"id": client_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Client non trouvé")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting client: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Include the router in the main app
 app.include_router(api_router)
