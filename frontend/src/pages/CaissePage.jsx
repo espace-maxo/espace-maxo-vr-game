@@ -308,14 +308,31 @@ const CaissePage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" data-testid="caisse-page">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm border border-gray-700/50">
           <div className="flex items-center gap-4">
-            <Receipt className="w-10 h-10 text-food-gold" />
-            <div>
-              <h1 className="font-orbitron text-2xl text-white">Caisse Espace Maxo</h1>
-              <p className="text-gray-400">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
+            <div className="w-12 h-12 bg-food-gold/20 rounded-lg flex items-center justify-center">
+              <Receipt className="w-7 h-7 text-food-gold" />
             </div>
+            <div>
+              <h1 className="font-orbitron text-2xl text-food-gold">CAISSE</h1>
+              <p className="text-gray-400 text-sm">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden md:block">
+              <p className="text-white font-semibold">Espace Maxo</p>
+              <p className="text-gray-500 text-xs">Fidjrossè Plage, Cotonou</p>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsAuthenticated(false)}
+              className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Déconnexion
+            </Button>
           </div>
         </div>
 
