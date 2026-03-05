@@ -9,13 +9,19 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - **Système POS Complet** : `/caisse` - Application standalone de facturation
   - Connexion par mot de passe (Caisse2026 ou Esp@ceM@xo2026)
   - Interface avec 6 onglets : Caisse, Factures, Statistiques, Produits, Clients, Utilisateurs
-  - 3 départements : Salle de Jeux, Bar, Jardin
+  - **5 départements** : Salle & Jardin, Jeux, Bar, Location, Autres
+  - **Saisie manuelle** : Département "Autres" permet de saisir librement nom et prix
+  - **Traçabilité serveur** : Chaque facture enregistre le nom du serveur
+  - **Validation gérante** : Toutes les factures nécessitent validation par un admin
+    - Statuts : "⏳ En attente" (pending) → "✓ Validée" (validated)
+    - Nom du validateur affiché sur la facture validée
+  - **Impression ticket 80mm** : Format compact pour imprimante thermique à rouleau
   - Gestion CRUD des factures avec numérotation automatique (EM-YYYYMMDD-XXXX)
   - Gestion des produits avec prix et unités
   - Gestion des clients
-  - Gestion multi-utilisateurs (admin, manager, server)
+  - Gestion multi-utilisateurs (serveurs, managers, admins)
   - Statistiques journalières et mensuelles par département
-  - Export PDF des factures (via reportlab)
+  - Export PDF A4 des factures (via reportlab)
   - Modes de paiement : Espèces, Carte, Mobile Money, Chèque
   - Remises en pourcentage
 - **Lien discret** : "•" dans le footer du site principal vers /caisse

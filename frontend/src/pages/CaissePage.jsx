@@ -1098,8 +1098,8 @@ const CaissePage = () => {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
-                        {deptProducts.map(product => (
-                          <div key={product.id} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2">
+                        {deptProducts.map((product, idx) => (
+                          <div key={`${dept}-${product.id}-${idx}`} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2">
                             <div>
                               <p className="text-white text-sm">{product.name}</p>
                               <p className="text-slate-400 text-xs">{formatPrice(product.price)} F/{product.unit}</p>
