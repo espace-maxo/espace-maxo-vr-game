@@ -66,6 +66,7 @@ const PAYMENT_METHODS = [
   { value: "cash", label: "Espèces", icon: Banknote },
   { value: "card", label: "Carte bancaire", icon: CreditCard },
   { value: "mobile", label: "Mobile Money", icon: Smartphone },
+  { value: "wallet", label: "Porte-monnaie", icon: Wallet },
   { value: "check", label: "Chèque", icon: FileText },
 ];
 
@@ -116,6 +117,8 @@ const CaissePage = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
+  const [pendingInvoiceData, setPendingInvoiceData] = useState(null);
   const [editProduct, setEditProduct] = useState(null);
   const [editClient, setEditClient] = useState(null);
   const [editUser, setEditUser] = useState(null);
@@ -358,7 +361,8 @@ const CaissePage = () => {
       return;
     }
 
-    try {
+    // If Mobile Money payment, show payment options modal
+    if (paymentMethod === "mobile") {
       const invoiceData = {
         customer_name: selectedClient?.name || "Client",
         customer_phone: selectedClient?.phone || "",
@@ -371,15 +375,37 @@ const CaissePage = () => {
         totals_by_department: totalByDepartment,
         notes,
         created_by: currentUser?.full_name || currentUser?.username || "admin",
-        validation_status: "pending" // New: needs manager validation
+        validation_status: "pending"
       };
+      setPendingInvoiceData(invoiceData);
+      setShowMobilePaymentModal(true);
+      return;
+    }
 
+    await createInvoice({
+      customer_name: selectedClient?.name || "Client",
+      customer_phone: selectedClient?.phone || "",
+      items: currentBill,
+      subtotal,
+      discount,
+      discount_amount: discountAmount,
+      total,
+      payment_method: paymentMethod,
+      totals_by_department: totalByDepartment,
+      notes,
+      created_by: currentUser?.full_name || currentUser?.username || "admin",
+      validation_status: "pending"
+    });
+  };
+
+  const createInvoice = async (invoiceData) => {
+    try {
       await axios.post(`${API}/invoices`, invoiceData);
       
       // Update client stats if selected
       if (selectedClient) {
         await axios.put(`${API}/caisse/clients/${selectedClient.id}`, {
-          total_spent: (selectedClient.total_spent || 0) + total,
+          total_spent: (selectedClient.total_spent || 0) + invoiceData.total,
           visit_count: (selectedClient.visit_count || 0) + 1
         });
       }
@@ -387,10 +413,89 @@ const CaissePage = () => {
       toast.success("Facture enregistrée !");
       clearBill();
       fetchAllData();
+      setPendingInvoiceData(null);
     } catch (error) {
       console.error("Error saving invoice:", error);
       toast.error("Erreur lors de l'enregistrement");
     }
+  };
+
+  // Kkiapay payment handler
+  const handleKkiapayPayment = () => {
+    if (!pendingInvoiceData) return;
+    
+    // Load Kkiapay widget
+    if (window.openKkiapayWidget) {
+      window.openKkiapayWidget({
+        amount: pendingInvoiceData.total,
+        position: "center",
+        callback: "",
+        data: "",
+        theme: "#d4a500",
+        key: "7e29f6c0-4774-11ef-9418-15e99f93808d"
+      });
+      
+      // Listen for payment success
+      window.addEventListener('successKkiapay', async (event) => {
+        const { transactionId } = event.detail;
+        pendingInvoiceData.payment_reference = transactionId;
+        pendingInvoiceData.payment_status = "paid";
+        await createInvoice(pendingInvoiceData);
+        setShowMobilePaymentModal(false);
+        toast.success("Paiement Kkiapay réussi !");
+      }, { once: true });
+      
+      window.addEventListener('failedKkiapay', () => {
+        toast.error("Paiement échoué");
+      }, { once: true });
+    } else {
+      toast.error("Kkiapay non disponible");
+    }
+    setShowMobilePaymentModal(false);
+  };
+
+  // Wallet payment handler
+  const handleWalletPayment = async () => {
+    if (!pendingInvoiceData || !selectedClient) {
+      toast.error("Veuillez sélectionner un client avec un porte-monnaie");
+      return;
+    }
+    
+    // Check wallet balance
+    try {
+      const walletRes = await axios.get(`${API}/wallet/${selectedClient.phone}`);
+      const walletBalance = walletRes.data.balance || 0;
+      
+      if (walletBalance < pendingInvoiceData.total) {
+        toast.error(`Solde insuffisant (${formatPrice(walletBalance)} F disponible)`);
+        return;
+      }
+      
+      // Deduct from wallet
+      await axios.post(`${API}/wallet/debit`, {
+        phone: selectedClient.phone,
+        amount: pendingInvoiceData.total,
+        description: `Facture Caisse - ${pendingInvoiceData.items.length} articles`
+      });
+      
+      pendingInvoiceData.payment_method = "wallet";
+      pendingInvoiceData.payment_status = "paid";
+      await createInvoice(pendingInvoiceData);
+      setShowMobilePaymentModal(false);
+      toast.success("Paiement par porte-monnaie réussi !");
+    } catch (error) {
+      console.error("Wallet payment error:", error);
+      toast.error("Erreur lors du paiement par porte-monnaie");
+    }
+  };
+
+  // Pay later (mark as pending payment)
+  const handlePayLater = async () => {
+    if (!pendingInvoiceData) return;
+    pendingInvoiceData.payment_status = "pending";
+    await createInvoice(pendingInvoiceData);
+    setShowMobilePaymentModal(false);
+    toast.info("Facture créée - Paiement en attente");
   };
 
   const validateInvoice = async (invoiceId) => {
@@ -1605,6 +1710,72 @@ const CaissePage = () => {
               </div>
             </div>
             <Button onClick={saveUser} className="w-full bg-red-500 hover:bg-red-600">Enregistrer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mobile Payment Options Modal */}
+      <Dialog open={showMobilePaymentModal} onOpenChange={setShowMobilePaymentModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-500 text-xl">Paiement Mobile Money</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center mb-4">
+              <p className="text-slate-400">Montant à payer</p>
+              <p className="text-3xl font-bold text-amber-500">{formatPrice(pendingInvoiceData?.total || 0)} FCFA</p>
+            </div>
+            
+            <div className="space-y-3">
+              {/* Kkiapay Option */}
+              <Button 
+                onClick={handleKkiapayPayment}
+                className="w-full h-16 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+              >
+                <div className="flex items-center justify-center gap-3">
+                  <Smartphone className="w-6 h-6" />
+                  <div className="text-left">
+                    <p className="font-bold">Payer avec Kkiapay</p>
+                    <p className="text-xs opacity-80">MTN, Moov, Wave, Carte</p>
+                  </div>
+                </div>
+              </Button>
+
+              {/* Wallet Option */}
+              <Button 
+                onClick={handleWalletPayment}
+                disabled={!selectedClient?.phone}
+                className="w-full h-16 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white disabled:opacity-50"
+              >
+                <div className="flex items-center justify-center gap-3">
+                  <Wallet className="w-6 h-6" />
+                  <div className="text-left">
+                    <p className="font-bold">Porte-monnaie Client</p>
+                    <p className="text-xs opacity-80">
+                      {selectedClient?.phone ? `Client: ${selectedClient.name}` : "Sélectionnez un client"}
+                    </p>
+                  </div>
+                </div>
+              </Button>
+
+              {/* Pay Later Option */}
+              <Button 
+                onClick={handlePayLater}
+                variant="outline"
+                className="w-full h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Paiement différé (créer la facture)
+              </Button>
+            </div>
+
+            <Button 
+              onClick={() => setShowMobilePaymentModal(false)}
+              variant="ghost"
+              className="w-full text-slate-400 hover:text-white"
+            >
+              Annuler
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
