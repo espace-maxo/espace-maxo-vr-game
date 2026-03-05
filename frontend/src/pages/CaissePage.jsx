@@ -6,7 +6,8 @@ import {
   CreditCard, Wallet, CheckCircle, X, Eye, Download,
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
-  DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw
+  DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
+  MessageCircle, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -381,6 +382,48 @@ const CaissePage = () => {
       console.error("Error generating rapport PDF:", error);
       toast.error("Erreur lors de la génération du PDF");
     }
+  };
+
+  // Send rapport summary via WhatsApp to Marcel HOUNHANOU
+  const sendRapportWhatsApp = () => {
+    if (!rapportData) {
+      toast.error("Données du rapport non disponibles");
+      return;
+    }
+    
+    const phoneNumber = "2290162396239"; // Marcel HOUNHANOU
+    
+    // Build summary message
+    const deptSummary = Object.entries(rapportData.byDepartment)
+      .filter(([_, v]) => v > 0)
+      .map(([dept, amount]) => `• ${DEPARTMENT_CONFIG[dept]?.label || dept}: ${formatPrice(amount)} F`)
+      .join('\n');
+    
+    const message = `📊 *RAPPORT JOURNALIER - ESPACE MAXO*
+📅 Date: ${rapportData.date}
+
+*RÉSUMÉ:*
+• Factures Total: ${rapportData.totalInvoices}
+• ✅ Validées: ${rapportData.validatedInvoices}
+• ⏳ En attente: ${rapportData.pendingInvoices}
+• 💰 CA Validé: ${formatPrice(rapportData.validatedRevenue)} FCFA
+
+*PAR DÉPARTEMENT:*
+${deptSummary}
+
+*Signé par:* ${signature || 'Mères AHOUANDJINOU'}
+_Gérante - Espace Maxo_
+
+---
+📄 Le rapport PDF complet est disponible sur demande.`;
+
+    // Encode message for URL
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+    
+    // Open WhatsApp
+    window.open(whatsappUrl, '_blank');
+    toast.success("WhatsApp ouvert - Envoyez le message à Marcel HOUNHANOU");
   };
 
   // ============== BILL MANAGEMENT ==============
@@ -1829,8 +1872,15 @@ const CaissePage = () => {
                             Télécharger PDF
                           </Button>
                         </div>
+                        <Button 
+                          onClick={sendRapportWhatsApp}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <MessageCircle className="w-5 h-5 mr-2" />
+                          Envoyer par WhatsApp à Marcel HOUNHANOU
+                        </Button>
                         <p className="text-slate-400 text-sm text-center">
-                          Ce rapport sera envoyé à <strong>Marcel HOUNHANOU</strong> (Administrateur)
+                          📱 +229 01 62 39 62 39
                         </p>
                       </CardContent>
                     </Card>
