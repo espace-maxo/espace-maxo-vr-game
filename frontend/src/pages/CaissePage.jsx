@@ -913,21 +913,93 @@ const CaissePage = () => {
                           </div>
 
                           {/* Actions */}
-                          <div className="grid grid-cols-2 gap-2 pt-2">
-                            <Button onClick={() => generatePDF({ ...{ items: currentBill, subtotal, discount, discount_amount: discountAmount, total, payment_method: paymentMethod, customer_name: selectedClient?.name || "Client", customer_phone: selectedClient?.phone || "", invoice_number: "PREVIEW", created_at: new Date().toISOString(), totals_by_department: totalByDepartment } })} variant="outline" className="border-slate-600 text-slate-300">
-                              <Printer className="w-4 h-4 mr-2" />
-                              Imprimer
+                          <div className="pt-2">
+                            <Button onClick={saveInvoice} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold py-6 text-lg">
+                              <FileText className="w-5 h-5 mr-2" />
+                              CRÉER FACTURE
                             </Button>
-                            <Button onClick={saveInvoice} className="bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold">
-                              <Save className="w-4 h-4 mr-2" />
-                              Enregistrer
-                            </Button>
+                            <p className="text-slate-500 text-xs text-center mt-2">La facture sera envoyée à la gérante pour validation</p>
                           </div>
                         </div>
                       </>
                     )}
                   </CardContent>
                 </Card>
+
+                {/* ============== FACTURES À IMPRIMER (Validated invoices) ============== */}
+                {invoices.filter(i => i.validation_status === 'validated' && 
+                  (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                ).length > 0 && (
+                  <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-green-400 flex items-center gap-2">
+                        <Printer className="w-5 h-5" />
+                        FACTURES À IMPRIMER
+                        <Badge className="bg-green-500/30 text-green-300 ml-2">
+                          {invoices.filter(i => i.validation_status === 'validated' && 
+                            (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                          ).length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {invoices.filter(i => i.validation_status === 'validated' && 
+                        (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                      ).slice(0, 5).map(invoice => (
+                        <div key={invoice.id} className="flex items-center justify-between bg-green-900/30 rounded-lg p-3 border border-green-500/30">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-bold">{invoice.invoice_number}</span>
+                              <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Validée</Badge>
+                            </div>
+                            <p className="text-slate-400 text-sm">
+                              {invoice.customer_name} • {formatPrice(invoice.total)} FCFA
+                            </p>
+                          </div>
+                          <Button 
+                            onClick={() => printTicket(invoice)} 
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Printer className="w-4 h-4 mr-2" />
+                            IMPRIMER
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ============== FACTURES EN ATTENTE (Pending validation) ============== */}
+                {invoices.filter(i => i.validation_status === 'pending' && 
+                  (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                ).length > 0 && (
+                  <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-500/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-yellow-400 flex items-center gap-2 text-sm">
+                        <Clock className="w-4 h-4" />
+                        En attente de validation
+                        <Badge className="bg-yellow-500/20 text-yellow-300 ml-2">
+                          {invoices.filter(i => i.validation_status === 'pending' && 
+                            (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                          ).length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1 max-h-[150px] overflow-y-auto">
+                      {invoices.filter(i => i.validation_status === 'pending' && 
+                        (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                      ).slice(0, 5).map(invoice => (
+                        <div key={invoice.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg p-2 border border-yellow-500/20">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white text-sm">{invoice.invoice_number}</span>
+                            <span className="text-slate-400 text-xs">{formatPrice(invoice.total)} F</span>
+                          </div>
+                          <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>
