@@ -831,13 +831,13 @@ _Gérante - Espace Maxo_
     }
   };
 
-  // Cancel validated invoice (admin or manager) - keeps history
+  // Cancel validated invoice (admin ONLY) - keeps history
   const cancelValidatedInvoice = async (invoiceId) => {
     const invoice = invoices.find(i => i.id === invoiceId);
     if (!invoice) return;
     
-    if (currentUser?.role !== 'admin' && currentUser?.role !== 'manager') {
-      toast.error("Seuls l'administrateur ou le manager peuvent annuler une facture validée");
+    if (currentUser?.role !== 'admin') {
+      toast.error("Seul l'administrateur principal peut annuler une facture validée");
       return;
     }
     
@@ -847,7 +847,7 @@ _Gérante - Espace Maxo_
     try {
       await axios.put(`${API}/invoices/${invoiceId}`, {
         validation_status: "cancelled",
-        cancelled_by: currentUser?.full_name || currentUser?.username || "Manager",
+        cancelled_by: currentUser?.full_name || currentUser?.username || "Admin",
         cancelled_at: new Date().toISOString(),
         cancellation_reason: reason
       });
@@ -1326,8 +1326,8 @@ _Gérante - Espace Maxo_
                                 <Printer className="w-4 h-4 mr-2" />
                                 IMPRIMER
                               </Button>
-                              {/* Admin and Manager can cancel validated invoices */}
-                              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                              {/* Only admin can cancel validated invoices */}
+                              {currentUser?.role === 'admin' && (
                                 <Button 
                                   size="sm"
                                   variant="ghost"
