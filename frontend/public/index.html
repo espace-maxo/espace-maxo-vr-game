@@ -109,6 +109,45 @@
                 Made with Emergent
             </p>
         </a>
+        <style>
+            /* Hide Emergent badge on all pages except homepage */
+            body:not([data-homepage="true"]) #emergent-badge {
+                display: none !important;
+            }
+        </style>
+        <script>
+            // Hide Emergent badge on all pages except homepage
+            (function() {
+                function updateBadgeVisibility() {
+                    var badge = document.getElementById('emergent-badge');
+                    var path = window.location.pathname;
+                    
+                    // Show only on homepage (/ or empty)
+                    if (path === '/' || path === '' || path === '/index.html') {
+                        if (badge) badge.style.setProperty('display', 'inline-flex', 'important');
+                        document.body.setAttribute('data-homepage', 'true');
+                    } else {
+                        if (badge) badge.style.setProperty('display', 'none', 'important');
+                        document.body.removeAttribute('data-homepage');
+                    }
+                }
+                
+                // Run immediately
+                updateBadgeVisibility();
+                
+                // Run on DOMContentLoaded
+                document.addEventListener('DOMContentLoaded', updateBadgeVisibility);
+                
+                // Run on load
+                window.addEventListener('load', updateBadgeVisibility);
+                
+                // Run on navigation (for SPA)
+                window.addEventListener('popstate', updateBadgeVisibility);
+                
+                // Check periodically for SPA route changes
+                setInterval(updateBadgeVisibility, 500);
+            })();
+        </script>
         <script>
             !(function (t, e) {
                 var o, n, p, r;
