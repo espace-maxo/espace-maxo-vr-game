@@ -715,7 +715,7 @@ _Gérante - Espace Maxo_
         });
       }
       
-      toast.success("Facture enregistrée !");
+      toast.success("Bon de commande envoyé à la cuisine !");
       
       // Close the table after invoice is created
       if (activeTableId) {
@@ -1025,13 +1025,150 @@ _Gérante - Espace Maxo_
         items: editingItems,
         total: newTotal
       });
-      toast.success("Facture modifiée avec succès");
+      toast.success("Bon de commande modifié avec succès");
       setEditingInvoice(null);
       setEditingItems([]);
       fetchAllData();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de la modification");
     }
+  };
+
+  // ============== BON DE COMMANDE CUISINE (80mm) ==============
+  const printKitchenOrder = (invoice) => {
+    const printWindow = window.open('', '_blank', 'width=300,height=500');
+    
+    // Group items by department
+    const itemsByDept = {};
+    (invoice.items || []).forEach(item => {
+      const dept = item.department || 'autres';
+      if (!itemsByDept[dept]) itemsByDept[dept] = [];
+      itemsByDept[dept].push(item);
+    });
+    
+    const itemsHtml = Object.entries(itemsByDept).map(([dept, items]) => `
+      <div class="dept-section">
+        <div class="dept-header">${DEPARTMENT_CONFIG[dept]?.label || dept}</div>
+        ${items.map(item => `
+          <div class="item-row">
+            <span class="qty">${item.quantity}x</span>
+            <span class="name">${item.name}</span>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+
+    // Get table number from invoice or use order number
+    const tableInfo = invoice.table_number ? `TABLE ${invoice.table_number}` : invoice.invoice_number;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Commande ${invoice.invoice_number}</title>
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Courier New', monospace; 
+              width: 80mm; 
+              padding: 5mm; 
+              font-size: 14px;
+              line-height: 1.4;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 10px; 
+              border-bottom: 3px double #000; 
+              padding-bottom: 10px; 
+            }
+            .header h1 { 
+              font-size: 24px; 
+              font-weight: bold; 
+              letter-spacing: 2px;
+            }
+            .header .order-num { 
+              font-size: 18px; 
+              font-weight: bold;
+              margin-top: 5px;
+            }
+            .header .table-num { 
+              font-size: 28px; 
+              font-weight: bold;
+              background: #000;
+              color: #fff;
+              padding: 5px 15px;
+              margin: 8px auto;
+              display: inline-block;
+            }
+            .meta { 
+              display: flex; 
+              justify-content: space-between; 
+              font-size: 12px; 
+              margin: 8px 0;
+              padding-bottom: 8px;
+              border-bottom: 1px dashed #000;
+            }
+            .dept-section { margin: 10px 0; }
+            .dept-header { 
+              font-weight: bold; 
+              font-size: 12px; 
+              background: #eee; 
+              padding: 3px 5px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .item-row { 
+              display: flex; 
+              padding: 5px 0;
+              border-bottom: 1px dotted #ccc;
+              font-size: 16px;
+            }
+            .qty { 
+              font-weight: bold; 
+              min-width: 35px;
+              font-size: 18px;
+            }
+            .name { flex: 1; }
+            .footer { 
+              text-align: center; 
+              margin-top: 15px; 
+              font-size: 11px; 
+              border-top: 3px double #000; 
+              padding-top: 10px; 
+            }
+            .urgent { font-size: 14px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>🍽️ CUISINE</h1>
+            <div class="table-num">${tableInfo}</div>
+            <div class="order-num">${invoice.invoice_number}</div>
+          </div>
+          
+          <div class="meta">
+            <span>Serveur: ${invoice.created_by || 'N/A'}</span>
+            <span>${new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</span>
+          </div>
+          
+          ${itemsHtml}
+          
+          <div class="footer">
+            <div class="urgent">*** BON DE COMMANDE ***</div>
+            <div>${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   // ============== TICKET THERMIQUE (80mm) ==============
@@ -1510,37 +1647,47 @@ _Gérante - Espace Maxo_
                   </Card>
                 )}
 
-                {/* Priority Section: Invoices to Validate */}
-                <Card className="bg-gradient-to-br from-yellow-900/30 to-orange-900/20 border-yellow-500/50">
+                {/* Priority Section: Kitchen Orders (Pending validation) */}
+                <Card className="bg-gradient-to-br from-orange-900/30 to-amber-900/20 border-orange-500/50">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-yellow-400 flex items-center gap-2">
-                      <Clock className="w-6 h-6" />
-                      FACTURES À VALIDER
-                      <Badge className="bg-yellow-500/30 text-yellow-300 ml-2 text-lg px-3">
+                    <CardTitle className="text-orange-400 flex items-center gap-2">
+                      <FileText className="w-6 h-6" />
+                      BONS DE COMMANDE - CUISINE
+                      <Badge className="bg-orange-500/30 text-orange-300 ml-2 text-lg px-3">
                         {invoices.filter(i => i.validation_status === 'pending').length}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {invoices.filter(i => i.validation_status === 'pending').length === 0 ? (
-                      <p className="text-slate-400 text-center py-4">Aucune facture en attente de validation</p>
+                      <p className="text-slate-400 text-center py-4">Aucun bon de commande en attente</p>
                     ) : (
                       <div className="space-y-2 max-h-[350px] overflow-y-auto">
                         {invoices.filter(i => i.validation_status === 'pending').map(invoice => (
-                          <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-yellow-900/30 rounded-lg p-3 border border-yellow-500/30">
+                          <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-orange-900/30 rounded-lg p-3 border border-orange-500/30">
                             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewInvoice(invoice)}>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-white font-bold">{invoice.invoice_number}</span>
-                                <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                                <Badge className="bg-orange-500/20 text-orange-400 text-xs">🍽️ Commande</Badge>
                               </div>
                               <p className="text-slate-400 text-sm">
                                 {invoice.customer_name} • <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
                               </p>
                               <p className="text-slate-500 text-xs">
-                                Par: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                                Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
                               </p>
                             </div>
-                            <div className="flex gap-2 shrink-0">
+                            <div className="flex gap-2 shrink-0 flex-wrap">
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => printKitchenOrder(invoice)}
+                                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                title="Imprimer pour la cuisine"
+                              >
+                                <Printer className="w-4 h-4 mr-1" />
+                                Cuisine
+                              </Button>
                               <Button 
                                 size="sm"
                                 variant="ghost"
@@ -2126,12 +2273,12 @@ _Gérante - Espace Maxo_
                 {invoices.filter(i => i.validation_status === 'pending' && 
                   (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                 ).length > 0 && (
-                  <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-500/30 mt-4">
+                  <Card className="bg-gradient-to-br from-orange-900/20 to-amber-800/10 border-orange-500/30 mt-4">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-yellow-400 flex items-center gap-2 text-sm">
-                        <Clock className="w-4 h-4" />
-                        En attente de validation
-                        <Badge className="bg-yellow-500/20 text-yellow-300 ml-2">
+                      <CardTitle className="text-orange-400 flex items-center gap-2 text-sm">
+                        <FileText className="w-4 h-4" />
+                        Mes Bons de Commande
+                        <Badge className="bg-orange-500/20 text-orange-300 ml-2">
                           {invoices.filter(i => i.validation_status === 'pending' && 
                             (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                           ).length}
@@ -2142,24 +2289,33 @@ _Gérante - Espace Maxo_
                       {invoices.filter(i => i.validation_status === 'pending' && 
                         (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                       ).slice(0, 10).map(invoice => (
-                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-yellow-900/20 rounded-lg p-3 border border-yellow-500/20 hover:bg-yellow-900/30 transition-colors">
+                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-orange-900/20 rounded-lg p-3 border border-orange-500/20 hover:bg-orange-900/30 transition-colors">
                           <div 
                             className="flex-1 cursor-pointer min-w-0"
                             onClick={() => setViewInvoice(invoice)}
                           >
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-white font-medium text-sm">{invoice.invoice_number}</span>
-                              <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                              <Badge className="bg-orange-500/20 text-orange-400 text-xs">🍽️ Commande</Badge>
                               {invoice.modification_allowed && (
                                 <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Modif. autorisée</Badge>
                               )}
                             </div>
                             <p className="text-slate-400 text-xs truncate">
                               {invoice.customer_name} • {formatPrice(invoice.total)} F
-                              {invoice.created_by && ` • ${invoice.created_by}`}
                             </p>
                           </div>
                           <div className="flex gap-2 shrink-0 flex-wrap">
+                            {/* Print kitchen order button for servers */}
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => printKitchenOrder(invoice)}
+                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                              title="Imprimer pour la cuisine"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </Button>
                             <Button 
                               size="sm"
                               variant="ghost"
