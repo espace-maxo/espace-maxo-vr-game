@@ -3989,9 +3989,11 @@ async def reject_modification_request(request_id: str, rejected_by: str = "Manag
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.put("/invoices/{invoice_id}/update-items")
-async def update_invoice_items(invoice_id: str, items: list, total: float):
+async def update_invoice_items(invoice_id: str, data: dict = Body(...)):
     """Update invoice items (only if modification_allowed)"""
     try:
+        items = data.get("items", [])
+        
         invoice = await db.invoices.find_one({"id": invoice_id})
         if not invoice:
             raise HTTPException(status_code=404, detail="Facture non trouvée")
