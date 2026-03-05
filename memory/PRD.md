@@ -152,6 +152,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Cliquer sur un serveur affiche toutes ses factures du jour
   - Résumé des performances (nombre, total, statuts)
   - Actions: voir détails, imprimer, valider
+- [x] **Graphiques visuels dans Rapport Journalier** (Mars 2026)
+  - Camembert: Répartition par Département (avec couleurs et pourcentages)
+  - Barres horizontales: Performance par Serveur (top 6)
+  - Camembert + Détails: Répartition par Mode de Paiement
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**

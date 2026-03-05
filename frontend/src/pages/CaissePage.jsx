@@ -7,8 +7,9 @@ import {
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
-  MessageCircle, Send
+  MessageCircle, Send, PieChart as PieChartIcon
 } from "lucide-react";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1942,41 +1943,199 @@ _Gérante - Espace Maxo_
                       </Card>
                     )}
 
-                    {/* By Department & Payment Method */}
+                    {/* Charts Section */}
                     <div className="grid md:grid-cols-2 gap-4">
+                      {/* Pie Chart - By Department */}
                       <Card className="bg-slate-800/50 border-slate-700">
                         <CardHeader>
-                          <CardTitle className="text-white text-lg">Par Département</CardTitle>
+                          <CardTitle className="text-white text-lg flex items-center gap-2">
+                            <PieChartIcon className="w-5 h-5 text-amber-400" />
+                            Répartition par Département
+                          </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                          {Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => (
-                            <div key={dept} className="flex justify-between items-center">
-                              <span className="text-slate-300">{DEPARTMENT_CONFIG[dept]?.label || dept}</span>
-                              <Badge className={`${DEPARTMENT_CONFIG[dept]?.bgColor || 'bg-slate-500/20'} ${DEPARTMENT_CONFIG[dept]?.color || 'text-slate-400'}`}>
-                                {formatPrice(amount)} F
-                              </Badge>
-                            </div>
-                          ))}
+                        <CardContent>
+                          {(() => {
+                            const DEPT_COLORS = {
+                              salle_jardin: '#22c55e',
+                              jeux: '#3b82f6', 
+                              bar: '#f97316',
+                              location: '#a855f7',
+                              autres: '#64748b'
+                            };
+                            const deptData = Object.entries(rapportData.byDepartment)
+                              .filter(([_, v]) => v > 0)
+                              .map(([dept, amount]) => ({
+                                name: DEPARTMENT_CONFIG[dept]?.label || dept,
+                                value: amount,
+                                color: DEPT_COLORS[dept] || '#64748b'
+                              }));
+                            
+                            if (deptData.length === 0) {
+                              return <p className="text-slate-400 text-center py-8">Aucune donnée</p>;
+                            }
+                            
+                            return (
+                              <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={deptData}
+                                      cx="50%"
+                                      cy="50%"
+                                      innerRadius={50}
+                                      outerRadius={80}
+                                      paddingAngle={3}
+                                      dataKey="value"
+                                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                      labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                                    >
+                                      {deptData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip 
+                                      formatter={(value) => [`${formatPrice(value)} F`, 'Montant']}
+                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                                      labelStyle={{ color: '#f1f5f9' }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            );
+                          })()}
+                          <div className="grid grid-cols-2 gap-2 mt-4">
+                            {Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => (
+                              <div key={dept} className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${dept === 'salle_jardin' ? 'bg-green-500' : dept === 'jeux' ? 'bg-blue-500' : dept === 'bar' ? 'bg-orange-500' : dept === 'location' ? 'bg-purple-500' : 'bg-slate-500'}`} />
+                                <span className="text-slate-300 text-sm truncate">{DEPARTMENT_CONFIG[dept]?.label}</span>
+                                <span className="text-amber-400 text-sm font-bold ml-auto">{formatPrice(amount)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </CardContent>
                       </Card>
 
+                      {/* Bar Chart - By Server Performance */}
                       <Card className="bg-slate-800/50 border-slate-700">
                         <CardHeader>
-                          <CardTitle className="text-white text-lg">Par Mode de Paiement</CardTitle>
+                          <CardTitle className="text-white text-lg flex items-center gap-2">
+                            <BarChart3 className="w-5 h-5 text-blue-400" />
+                            Performance par Serveur
+                          </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                          {Object.entries(rapportData.byPayment).map(([method, data]) => (
-                            <div key={method} className="flex justify-between items-center">
-                              <span className="text-slate-300">{PAYMENT_METHODS.find(p => p.value === method)?.label || method}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-500 text-sm">x{data.count}</span>
-                                <Badge className="bg-amber-500/20 text-amber-400">{formatPrice(data.total)} F</Badge>
+                        <CardContent>
+                          {(() => {
+                            const serverData = Object.entries(rapportData.byServer)
+                              .map(([server, data]) => ({
+                                name: server.length > 12 ? server.slice(0, 12) + '...' : server,
+                                fullName: server,
+                                total: data.total,
+                                validated: data.validated,
+                                pending: data.pending
+                              }))
+                              .sort((a, b) => b.total - a.total)
+                              .slice(0, 6);
+                            
+                            if (serverData.length === 0) {
+                              return <p className="text-slate-400 text-center py-8">Aucune donnée</p>;
+                            }
+                            
+                            return (
+                              <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={serverData} layout="vertical" margin={{ left: 10, right: 10 }}>
+                                    <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => formatPrice(v)} fontSize={10} />
+                                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={80} />
+                                    <Tooltip 
+                                      formatter={(value) => [`${formatPrice(value)} F`, 'CA Total']}
+                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                                      labelStyle={{ color: '#f1f5f9' }}
+                                      labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label}
+                                    />
+                                    <Bar dataKey="total" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                                  </BarChart>
+                                </ResponsiveContainer>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })()}
                         </CardContent>
                       </Card>
                     </div>
+
+                    {/* Payment Methods Pie Chart */}
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader>
+                        <CardTitle className="text-white text-lg flex items-center gap-2">
+                          <CreditCard className="w-5 h-5 text-green-400" />
+                          Répartition par Mode de Paiement
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {(() => {
+                            const PAYMENT_COLORS = {
+                              cash: '#22c55e',
+                              card: '#3b82f6',
+                              mobile: '#f97316',
+                              wallet: '#a855f7',
+                              check: '#64748b'
+                            };
+                            const paymentData = Object.entries(rapportData.byPayment)
+                              .map(([method, data]) => ({
+                                name: PAYMENT_METHODS.find(p => p.value === method)?.label || method,
+                                value: data.total,
+                                count: data.count,
+                                color: PAYMENT_COLORS[method] || '#64748b'
+                              }));
+                            
+                            if (paymentData.length === 0) {
+                              return <p className="text-slate-400 text-center py-8 col-span-2">Aucun paiement validé</p>;
+                            }
+                            
+                            return (
+                              <>
+                                <div className="h-48">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                      <Pie
+                                        data={paymentData}
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius={70}
+                                        dataKey="value"
+                                        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                      >
+                                        {paymentData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                      </Pie>
+                                      <Tooltip 
+                                        formatter={(value, name, props) => [`${formatPrice(value)} F (${props.payload.count} factures)`, 'Montant']}
+                                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                                      />
+                                    </PieChart>
+                                  </ResponsiveContainer>
+                                </div>
+                                <div className="space-y-3">
+                                  {paymentData.map((payment, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-700/30">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: payment.color }} />
+                                        <span className="text-slate-300">{payment.name}</span>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-amber-400 font-bold">{formatPrice(payment.value)} F</p>
+                                        <p className="text-slate-500 text-xs">{payment.count} facture(s)</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Signature & Generate PDF */}
                     <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
