@@ -73,7 +73,8 @@ const CaissePage = () => {
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ pin: "", password: "" });
+  const [loginMode, setLoginMode] = useState("pin"); // pin or admin
   
   // Main state
   const [activeTab, setActiveTab] = useState("caisse");
@@ -118,7 +119,7 @@ const CaissePage = () => {
   // Forms
   const [productForm, setProductForm] = useState({ name: "", price: 0, department: "bar", unit: "unité", category: "" });
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", notes: "" });
-  const [userForm, setUserForm] = useState({ username: "", email: "", password: "", role: "server", full_name: "" });
+  const [userForm, setUserForm] = useState({ username: "", email: "", password: "", pin: "", role: "server", full_name: "" });
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -146,8 +147,15 @@ const CaissePage = () => {
   // ============== DATA FETCHING ==============
   const fetchAllData = async () => {
     try {
+      // Build query params for invoices based on user role
+      const invoiceParams = { date: filterDate };
+      if (currentUser?.role === 'server') {
+        invoiceParams.role = 'server';
+        invoiceParams.created_by = currentUser?.full_name || currentUser?.username;
+      }
+
       const [invoicesRes, clientsRes, usersRes, productsRes, statsRes] = await Promise.all([
-        axios.get(`${API}/invoices`, { params: { date: filterDate } }),
+        axios.get(`${API}/invoices`, { params: invoiceParams }),
         axios.get(`${API}/caisse/clients`),
         axios.get(`${API}/caisse/users`),
         axios.get(`${API}/caisse/products`),
@@ -517,6 +525,19 @@ const CaissePage = () => {
 
   const saveUser = async () => {
     try {
+      if (!userForm.username) {
+        toast.error("Le nom d'utilisateur est requis");
+        return;
+      }
+      if (!editUser && !userForm.pin) {
+        toast.error("Le code PIN est requis");
+        return;
+      }
+      if (userForm.pin && (userForm.pin.length < 4 || userForm.pin.length > 6)) {
+        toast.error("Le code PIN doit contenir 4 à 6 chiffres");
+        return;
+      }
+      
       if (editUser) {
         await axios.put(`${API}/caisse/users/${editUser.id}`, userForm);
         toast.success("Utilisateur modifié");
@@ -526,7 +547,7 @@ const CaissePage = () => {
       }
       setShowUserModal(false);
       setEditUser(null);
-      setUserForm({ username: "", email: "", password: "", role: "server", full_name: "" });
+      setUserForm({ username: "", email: "", password: "", pin: "", role: "server", full_name: "" });
       fetchAllData();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur");
@@ -558,26 +579,58 @@ const CaissePage = () => {
             <p className="text-slate-400 text-sm">Système de facturation</p>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Identifiant</Label>
-              <Input
-                value={loginForm.username}
-                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                className="bg-slate-700/50 border-slate-600 text-white text-lg py-6"
-                placeholder="Email ou nom d'utilisateur"
-              />
+            {/* Toggle between PIN and Admin login */}
+            <div className="flex gap-2 mb-4">
+              <Button 
+                variant={loginMode === "pin" ? "default" : "outline"}
+                onClick={() => setLoginMode("pin")}
+                className={loginMode === "pin" ? "flex-1 bg-amber-500 hover:bg-amber-600" : "flex-1 border-slate-600 text-slate-400"}
+              >
+                Serveur (PIN)
+              </Button>
+              <Button 
+                variant={loginMode === "admin" ? "default" : "outline"}
+                onClick={() => setLoginMode("admin")}
+                className={loginMode === "admin" ? "flex-1 bg-amber-500 hover:bg-amber-600" : "flex-1 border-slate-600 text-slate-400"}
+              >
+                Admin
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Mot de passe</Label>
-              <Input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="bg-slate-700/50 border-slate-600 text-white text-lg py-6"
-                placeholder="••••••••"
-              />
-            </div>
+
+            {loginMode === "pin" ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Code PIN (4-6 chiffres)</Label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={loginForm.pin}
+                    onChange={(e) => setLoginForm({ ...loginForm, pin: e.target.value.replace(/\D/g, '') })}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    className="bg-slate-700/50 border-slate-600 text-white text-3xl py-8 text-center tracking-[0.5em] font-mono"
+                    placeholder="••••••"
+                  />
+                </div>
+                <p className="text-slate-500 text-xs text-center">Entrez votre code PIN personnel</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Mot de passe administrateur</Label>
+                  <Input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    className="bg-slate-700/50 border-slate-600 text-white text-lg py-6"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+            )}
+
             <Button onClick={handleLogin} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-6 text-lg shadow-lg">
               Se connecter
             </Button>
@@ -1186,7 +1239,7 @@ const CaissePage = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-bold text-white">Gestion des utilisateurs</h2>
-                  <Button onClick={() => { setEditUser(null); setUserForm({ username: "", email: "", password: "", role: "server", full_name: "" }); setShowUserModal(true); }} className="bg-red-500 hover:bg-red-600">
+                  <Button onClick={() => { setEditUser(null); setUserForm({ username: "", email: "", password: "", pin: "", role: "server", full_name: "" }); setShowUserModal(true); }} className="bg-red-500 hover:bg-red-600">
                     <UserPlus className="w-4 h-4 mr-2" />
                     Ajouter un utilisateur
                   </Button>
@@ -1205,10 +1258,13 @@ const CaissePage = () => {
                               </Badge>
                               {!user.is_active && <Badge className="bg-red-500/20 text-red-400">Inactif</Badge>}
                             </div>
-                            <p className="text-slate-400 text-sm">@{user.username} • {user.email}</p>
+                            <p className="text-slate-400 text-sm">
+                              @{user.username}
+                              {user.pin && <span className="ml-2 font-mono bg-slate-700 px-2 py-0.5 rounded text-xs">PIN: {user.pin}</span>}
+                            </p>
                           </div>
                           <div className="flex gap-1">
-                            <Button size="icon" variant="ghost" onClick={() => { setEditUser(user); setUserForm({ ...user, password: "" }); setShowUserModal(true); }} className="text-slate-400">
+                            <Button size="icon" variant="ghost" onClick={() => { setEditUser(user); setUserForm({ ...user, password: "", pin: user.pin || "" }); setShowUserModal(true); }} className="text-slate-400">
                               <Edit2 className="w-4 h-4" />
                             </Button>
                             <Button size="icon" variant="ghost" onClick={() => deleteUser(user.id)} className="text-red-400">
@@ -1368,14 +1424,23 @@ const CaissePage = () => {
                 <Input value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} className="bg-slate-700 border-slate-600" />
               </div>
               <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} className="bg-slate-700 border-slate-600" />
+                <Label>Code PIN (4-6 chiffres) *</Label>
+                <Input 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={userForm.pin} 
+                  onChange={(e) => setUserForm({ ...userForm, pin: e.target.value.replace(/\D/g, '') })} 
+                  className="bg-slate-700 border-slate-600 font-mono tracking-widest" 
+                  placeholder="Ex: 1234"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{editUser ? "Nouveau mot de passe" : "Mot de passe *"}</Label>
-                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} className="bg-slate-700 border-slate-600" />
+                <Label>Email (optionnel)</Label>
+                <Input value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} className="bg-slate-700 border-slate-600" />
               </div>
               <div className="space-y-2">
                 <Label>Rôle</Label>

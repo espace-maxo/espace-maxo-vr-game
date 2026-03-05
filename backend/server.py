@@ -431,8 +431,9 @@ class Invoice(BaseModel):
 # Caisse User Model
 class CaisseUserCreate(BaseModel):
     username: str
-    email: str
-    password: str
+    email: str = ""
+    password: str = ""
+    pin: str = ""  # 4-6 digit PIN for quick login
     role: str = "server"  # admin, manager, server
     full_name: str = ""
 
@@ -440,8 +441,9 @@ class CaisseUser(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     username: str
-    email: str
-    password_hash: str
+    email: str = ""
+    password_hash: str = ""
+    pin: str = ""  # Stored as plain text for simplicity (4-6 digits)
     role: str = "server"
     full_name: str = ""
     is_active: bool = True
@@ -3208,12 +3210,16 @@ async def create_invoice(invoice_data: InvoiceCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/invoices")
-async def get_invoices(date: str = Query(None)):
-    """Get invoices, optionally filtered by date"""
+async def get_invoices(date: str = Query(None), user_id: str = Query(None), role: str = Query(None), created_by: str = Query(None)):
+    """Get invoices, optionally filtered by date and user (servers only see their own invoices)"""
     try:
         query = {}
         if date:
             query["created_at"] = {"$regex": f"^{date}"}
+        
+        # If user is a server (not admin/manager), only show their invoices
+        if role == "server" and created_by:
+            query["created_by"] = created_by
         
         invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
         return {"invoices": invoices}
@@ -3356,20 +3362,27 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
 async def create_caisse_user(user_data: CaisseUserCreate):
     """Create a new caisse user"""
     try:
-        # Check if username or email already exists
-        existing = await db.caisse_users.find_one({
-            "$or": [{"username": user_data.username}, {"email": user_data.email}]
-        })
+        # Check if username already exists
+        existing = await db.caisse_users.find_one({"username": user_data.username})
         if existing:
-            raise HTTPException(status_code=400, detail="Utilisateur déjà existant")
+            raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà existant")
         
-        # Hash password
-        password_hash = hashlib.sha256(user_data.password.encode()).hexdigest()
+        # Check if PIN already exists (if provided)
+        if user_data.pin:
+            existing_pin = await db.caisse_users.find_one({"pin": user_data.pin})
+            if existing_pin:
+                raise HTTPException(status_code=400, detail="Ce PIN est déjà utilisé")
+        
+        # Hash password if provided
+        password_hash = ""
+        if user_data.password:
+            password_hash = hashlib.sha256(user_data.password.encode()).hexdigest()
         
         user = CaisseUser(
             username=user_data.username,
             email=user_data.email,
             password_hash=password_hash,
+            pin=user_data.pin,
             role=user_data.role,
             full_name=user_data.full_name
         )
@@ -3388,12 +3401,12 @@ async def create_caisse_user(user_data: CaisseUserCreate):
 
 @api_router.post("/caisse/login")
 async def caisse_login(credentials: dict = Body(...)):
-    """Login for caisse users"""
+    """Login for caisse users - supports PIN or password"""
     try:
-        username = credentials.get("username", "")
+        pin = credentials.get("pin", "")
         password = credentials.get("password", "")
         
-        # Check for master password
+        # Check for master admin password
         if password == "Caisse2026" or password == "Esp@ceM@xo2026":
             return {
                 "success": True,
@@ -3403,22 +3416,43 @@ async def caisse_login(credentials: dict = Body(...)):
                     "role": "admin",
                     "full_name": "Administrateur"
                 },
-                "token": jwt.encode({"role": "admin", "username": "admin"}, JWT_SECRET_KEY, algorithm="HS256")
+                "token": jwt.encode({"role": "admin", "username": "admin", "user_id": "master"}, JWT_SECRET_KEY, algorithm="HS256")
             }
         
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        user = await db.caisse_users.find_one({
-            "$or": [{"username": username}, {"email": username}],
-            "password_hash": password_hash,
-            "is_active": True
-        }, {"_id": 0, "password_hash": 0})
+        # Check for PIN login (for servers)
+        if pin:
+            user = await db.caisse_users.find_one({
+                "pin": pin,
+                "is_active": True
+            }, {"_id": 0, "password_hash": 0})
+            
+            if user:
+                token = jwt.encode({
+                    "role": user["role"], 
+                    "username": user["username"],
+                    "user_id": user["id"],
+                    "full_name": user.get("full_name", user["username"])
+                }, JWT_SECRET_KEY, algorithm="HS256")
+                return {"success": True, "user": user, "token": token}
         
-        if not user:
-            raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        # Check for password login (legacy)
+        if password:
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            user = await db.caisse_users.find_one({
+                "password_hash": password_hash,
+                "is_active": True
+            }, {"_id": 0, "password_hash": 0})
+            
+            if user:
+                token = jwt.encode({
+                    "role": user["role"], 
+                    "username": user["username"],
+                    "user_id": user["id"],
+                    "full_name": user.get("full_name", user["username"])
+                }, JWT_SECRET_KEY, algorithm="HS256")
+                return {"success": True, "user": user, "token": token}
         
-        token = jwt.encode({"role": user["role"], "username": user["username"]}, JWT_SECRET_KEY, algorithm="HS256")
-        
-        return {"success": True, "user": user, "token": token}
+        raise HTTPException(status_code=401, detail="PIN ou mot de passe incorrect")
     except HTTPException:
         raise
     except Exception as e:
@@ -3439,8 +3473,19 @@ async def get_caisse_users():
 async def update_caisse_user(user_id: str, user_data: dict = Body(...)):
     """Update a caisse user"""
     try:
-        if "password" in user_data:
+        # Check if PIN already exists for another user
+        if "pin" in user_data and user_data["pin"]:
+            existing_pin = await db.caisse_users.find_one({
+                "pin": user_data["pin"],
+                "id": {"$ne": user_id}
+            })
+            if existing_pin:
+                raise HTTPException(status_code=400, detail="Ce PIN est déjà utilisé")
+        
+        if "password" in user_data and user_data["password"]:
             user_data["password_hash"] = hashlib.sha256(user_data["password"].encode()).hexdigest()
+            del user_data["password"]
+        elif "password" in user_data:
             del user_data["password"]
         
         result = await db.caisse_users.update_one({"id": user_id}, {"$set": user_data})
