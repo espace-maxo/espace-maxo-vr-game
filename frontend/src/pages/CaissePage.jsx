@@ -146,6 +146,11 @@ const CaissePage = () => {
   
   // Cancellation requests
   const [cancellationRequests, setCancellationRequests] = useState([]);
+  
+  // Modification requests
+  const [modificationRequests, setModificationRequests] = useState([]);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [editingItems, setEditingItems] = useState([]);
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -430,6 +435,13 @@ const CaissePage = () => {
   useEffect(() => {
     if (isAuthenticated && currentUser?.role === 'admin') {
       fetchCancellationRequests();
+    }
+  }, [isAuthenticated, currentUser]);
+
+  // Fetch modification requests for managers
+  useEffect(() => {
+    if (isAuthenticated && (currentUser?.role === 'manager' || currentUser?.role === 'admin')) {
+      fetchModificationRequests();
     }
   }, [isAuthenticated, currentUser]);
 
@@ -923,6 +935,105 @@ _Gérante - Espace Maxo_
     }
   };
 
+  // ============== MODIFICATION REQUESTS ==============
+  
+  // Request modification (for servers)
+  const requestModification = async (invoice) => {
+    const reason = prompt("Motif de la demande de modification :");
+    if (!reason) return;
+    
+    try {
+      await axios.post(`${API}/modification-requests`, {
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        reason: reason,
+        requested_by: currentUser?.full_name || currentUser?.username || "Serveur"
+      });
+      toast.success("Demande de modification envoyée à la gérante");
+      fetchModificationRequests();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Erreur lors de l'envoi de la demande");
+    }
+  };
+
+  // Fetch modification requests (for managers)
+  const fetchModificationRequests = async () => {
+    try {
+      const response = await axios.get(`${API}/modification-requests`);
+      setModificationRequests(response.data.requests || []);
+    } catch (error) {
+      console.error("Error fetching modification requests:", error);
+    }
+  };
+
+  // Approve modification request (manager only)
+  const approveModificationRequest = async (requestId) => {
+    if (!confirm("Autoriser la modification de cette facture ?")) return;
+    try {
+      await axios.put(`${API}/modification-requests/${requestId}/approve?approved_by=${encodeURIComponent(currentUser?.full_name || 'Manager')}`);
+      toast.success("Modification autorisée - Le serveur peut maintenant modifier la facture");
+      fetchAllData();
+      fetchModificationRequests();
+    } catch (error) {
+      toast.error("Erreur lors de l'approbation");
+    }
+  };
+
+  // Reject modification request (manager only)
+  const rejectModificationRequest = async (requestId) => {
+    if (!confirm("Rejeter cette demande de modification ?")) return;
+    try {
+      await axios.put(`${API}/modification-requests/${requestId}/reject?rejected_by=${encodeURIComponent(currentUser?.full_name || 'Manager')}`);
+      toast.success("Demande rejetée");
+      fetchModificationRequests();
+    } catch (error) {
+      toast.error("Erreur lors du rejet");
+    }
+  };
+
+  // Start editing invoice (for servers with modification_allowed)
+  const startEditingInvoice = (invoice) => {
+    setEditingInvoice(invoice);
+    setEditingItems([...invoice.items]);
+  };
+
+  // Update item quantity in editing mode
+  const updateEditingItemQuantity = (index, delta) => {
+    const newItems = [...editingItems];
+    newItems[index].quantity = Math.max(1, newItems[index].quantity + delta);
+    setEditingItems(newItems);
+  };
+
+  // Remove item in editing mode
+  const removeEditingItem = (index) => {
+    if (editingItems.length <= 1) {
+      toast.error("La facture doit contenir au moins un article");
+      return;
+    }
+    const newItems = editingItems.filter((_, i) => i !== index);
+    setEditingItems(newItems);
+  };
+
+  // Save modified invoice
+  const saveModifiedInvoice = async () => {
+    if (!editingInvoice) return;
+    
+    const newTotal = editingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    try {
+      await axios.put(`${API}/invoices/${editingInvoice.id}/update-items`, {
+        items: editingItems,
+        total: newTotal
+      });
+      toast.success("Facture modifiée avec succès");
+      setEditingInvoice(null);
+      setEditingItems([]);
+      fetchAllData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Erreur lors de la modification");
+    }
+  };
+
   // ============== TICKET THERMIQUE (80mm) ==============
   const printTicket = (invoice) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
@@ -1336,6 +1447,61 @@ _Gérante - Espace Maxo_
                             >
                               <X className="w-4 h-4 mr-1" />
                               Rejeter
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* MANAGER: Modification Requests from Servers */}
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && modificationRequests.length > 0 && (
+                  <Card className="bg-gradient-to-br from-blue-900/30 to-cyan-900/20 border-blue-500/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-blue-400 flex items-center gap-2">
+                        <Edit2 className="w-6 h-6" />
+                        DEMANDES DE MODIFICATION
+                        <Badge className="bg-blue-500/30 text-blue-300 ml-2 text-lg px-3 animate-pulse">
+                          {modificationRequests.length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {modificationRequests.map(request => (
+                        <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-900/30 rounded-lg p-3 border border-blue-500/30">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-bold">{request.invoice_number}</span>
+                              <Badge className="bg-blue-500/20 text-blue-400 text-xs">Demande de modification</Badge>
+                            </div>
+                            <p className="text-slate-400 text-sm mt-1">
+                              <strong>Demandé par:</strong> {request.requested_by}
+                            </p>
+                            <p className="text-blue-300 text-sm">
+                              <strong>Motif:</strong> {request.reason}
+                            </p>
+                            <p className="text-slate-500 text-xs mt-1">
+                              {request.created_at && format(new Date(request.created_at), "dd/MM/yyyy HH:mm")}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <Button 
+                              size="sm"
+                              onClick={() => approveModificationRequest(request.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Autoriser
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => rejectModificationRequest(request.id)}
+                              className="text-red-400 hover:bg-red-500/20"
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Refuser
                             </Button>
                           </div>
                         </div>
@@ -1984,13 +2150,16 @@ _Gérante - Espace Maxo_
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-white font-medium text-sm">{invoice.invoice_number}</span>
                               <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                              {invoice.modification_allowed && (
+                                <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Modif. autorisée</Badge>
+                              )}
                             </div>
                             <p className="text-slate-400 text-xs truncate">
                               {invoice.customer_name} • {formatPrice(invoice.total)} F
                               {invoice.created_by && ` • ${invoice.created_by}`}
                             </p>
                           </div>
-                          <div className="flex gap-2 shrink-0">
+                          <div className="flex gap-2 shrink-0 flex-wrap">
                             <Button 
                               size="sm"
                               variant="ghost"
@@ -1999,6 +2168,36 @@ _Gérante - Espace Maxo_
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
+                            {/* Server: can request modification or edit if allowed */}
+                            {currentUser?.role === 'server' && invoice.created_by === (currentUser?.full_name || currentUser?.username) && (
+                              invoice.modification_allowed ? (
+                                <Button 
+                                  size="sm"
+                                  onClick={() => startEditingInvoice(invoice)}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                  <Edit2 className="w-4 h-4 mr-1" />
+                                  Modifier
+                                </Button>
+                              ) : (
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => requestModification(invoice)}
+                                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                                  disabled={modificationRequests.some(r => r.invoice_id === invoice.id)}
+                                >
+                                  {modificationRequests.some(r => r.invoice_id === invoice.id) ? (
+                                    <span className="text-xs">Demande envoyée</span>
+                                  ) : (
+                                    <>
+                                      <Edit2 className="w-4 h-4 mr-1" />
+                                      <span className="text-xs">Demander modif.</span>
+                                    </>
+                                  )}
+                                </Button>
+                              )
+                            )}
                             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
                               <Button 
                                 size="sm"
@@ -3142,6 +3341,82 @@ _Gérante - Espace Maxo_
           >
             Annuler
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Edit Modal */}
+      <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-blue-400 flex items-center gap-2">
+              <Edit2 className="w-5 h-5" />
+              Modifier la Facture {editingInvoice?.invoice_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {editingItems.map((item, index) => (
+                <div key={index} className="flex items-center justify-between gap-2 bg-slate-700/50 rounded-lg p-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">{item.name}</p>
+                    <p className="text-amber-400 text-sm">{formatPrice(item.price)} F/unité</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => updateEditingItemQuantity(index, -1)}
+                      className="border-slate-600 text-white h-8 w-8 p-0"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="text-white font-bold w-8 text-center">{item.quantity}</span>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => updateEditingItemQuantity(index, 1)}
+                      className="border-slate-600 text-white h-8 w-8 p-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => removeEditingItem(index)}
+                      className="text-red-400 hover:text-red-300 h-8 w-8 p-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="border-t border-slate-700 pt-4">
+              <div className="flex justify-between items-center text-lg">
+                <span className="text-slate-400">Nouveau Total:</span>
+                <span className="text-amber-500 font-bold">
+                  {formatPrice(editingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0))} FCFA
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              onClick={saveModifiedInvoice}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Enregistrer les modifications
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setEditingInvoice(null)}
+              className="border-slate-600 text-slate-400"
+            >
+              Annuler
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

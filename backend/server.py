@@ -3877,6 +3877,152 @@ async def reject_cancellation_request(request_id: str, rejected_by: str = "Admin
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== MODIFICATION REQUESTS ==============
+
+class ModificationRequest(BaseModel):
+    invoice_id: str
+    invoice_number: str
+    reason: str
+    requested_by: str
+
+@api_router.get("/modification-requests")
+async def get_modification_requests():
+    """Get all pending modification requests"""
+    try:
+        requests = await db.modification_requests.find(
+            {"status": "pending"}, 
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(100)
+        return {"requests": requests}
+    except Exception as e:
+        logger.error(f"Error fetching modification requests: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/modification-requests")
+async def create_modification_request(request: ModificationRequest):
+    """Create a new modification request"""
+    try:
+        # Check if request already exists for this invoice
+        existing = await db.modification_requests.find_one({
+            "invoice_id": request.invoice_id,
+            "status": "pending"
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Une demande est déjà en attente pour cette facture")
+        
+        request_doc = {
+            "id": str(uuid.uuid4()),
+            "invoice_id": request.invoice_id,
+            "invoice_number": request.invoice_number,
+            "reason": request.reason,
+            "requested_by": request.requested_by,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.modification_requests.insert_one(request_doc)
+        if "_id" in request_doc:
+            del request_doc["_id"]
+        return {"success": True, "request": request_doc}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating modification request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/modification-requests/{request_id}/approve")
+async def approve_modification_request(request_id: str, approved_by: str = "Manager"):
+    """Approve a modification request - marks invoice as editable"""
+    try:
+        request_doc = await db.modification_requests.find_one({"id": request_id})
+        if not request_doc:
+            raise HTTPException(status_code=404, detail="Demande non trouvée")
+        
+        # Mark the invoice as editable (add modification_allowed flag)
+        await db.invoices.update_one(
+            {"id": request_doc["invoice_id"]},
+            {"$set": {
+                "modification_allowed": True,
+                "modification_allowed_by": approved_by,
+                "modification_allowed_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Update request status
+        await db.modification_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "approved_by": approved_by,
+                "approved_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return {"success": True, "message": "Modification autorisée"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving modification request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/modification-requests/{request_id}/reject")
+async def reject_modification_request(request_id: str, rejected_by: str = "Manager"):
+    """Reject a modification request"""
+    try:
+        result = await db.modification_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "rejected",
+                "rejected_by": rejected_by,
+                "rejected_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Demande non trouvée")
+        
+        return {"success": True, "message": "Demande rejetée"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rejecting modification request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/invoices/{invoice_id}/update-items")
+async def update_invoice_items(invoice_id: str, items: list, total: float):
+    """Update invoice items (only if modification_allowed)"""
+    try:
+        invoice = await db.invoices.find_one({"id": invoice_id})
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+        
+        if not invoice.get("modification_allowed"):
+            raise HTTPException(status_code=403, detail="Modification non autorisée")
+        
+        # Calculate new totals
+        subtotal = sum(item.get("price", 0) * item.get("quantity", 1) for item in items)
+        discount_amount = invoice.get("discount_amount", 0)
+        new_total = subtotal - discount_amount
+        
+        await db.invoices.update_one(
+            {"id": invoice_id},
+            {"$set": {
+                "items": items,
+                "subtotal": subtotal,
+                "total": new_total,
+                "modification_allowed": False,  # Reset after modification
+                "modified_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return {"success": True, "message": "Facture modifiée"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating invoice items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============== PDF EXPORT ==============
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
