@@ -1036,7 +1036,7 @@ _Gérante - Espace Maxo_
 
   // ============== BON DE COMMANDE CUISINE (80mm) ==============
   const printKitchenOrder = (invoice) => {
-    const printWindow = window.open('', '_blank', 'width=300,height=500');
+    const printWindow = window.open('', '_blank', 'width=320,height=600');
     
     // Group items by department
     const itemsByDept = {};
@@ -1046,118 +1046,218 @@ _Gérante - Espace Maxo_
       itemsByDept[dept].push(item);
     });
     
+    // Calculate total items
+    const totalItems = (invoice.items || []).reduce((sum, item) => sum + item.quantity, 0);
+    
     const itemsHtml = Object.entries(itemsByDept).map(([dept, items]) => `
       <div class="dept-section">
-        <div class="dept-header">${DEPARTMENT_CONFIG[dept]?.label || dept}</div>
+        <div class="dept-header">
+          <span class="dept-icon">${dept === 'bar' ? '🍺' : dept === 'salle_jardin' ? '🍽️' : dept === 'jeux' ? '🎮' : '📦'}</span>
+          ${DEPARTMENT_CONFIG[dept]?.label || dept}
+        </div>
         ${items.map(item => `
           <div class="item-row">
-            <span class="qty">${item.quantity}x</span>
-            <span class="name">${item.name}</span>
+            <div class="qty-box">${item.quantity}</div>
+            <div class="item-name">${item.name}</div>
           </div>
         `).join('')}
       </div>
     `).join('');
 
-    // Get table number from invoice or use order number
-    const tableInfo = invoice.table_number ? `TABLE ${invoice.table_number}` : invoice.invoice_number;
+    // Get table number
+    const tableNum = invoice.table_number || 'N/A';
+    const orderTime = new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Commande ${invoice.invoice_number}</title>
+          <title>BON ${invoice.invoice_number}</title>
           <style>
             @page { size: 80mm auto; margin: 0; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', monospace; 
+              font-family: 'Arial', sans-serif; 
               width: 80mm; 
-              padding: 5mm; 
-              font-size: 14px;
-              line-height: 1.4;
+              padding: 3mm; 
+              font-size: 12px;
+              line-height: 1.3;
+              background: #fff;
             }
+            
+            /* Header */
             .header { 
               text-align: center; 
-              margin-bottom: 10px; 
-              border-bottom: 3px double #000; 
-              padding-bottom: 10px; 
+              padding: 8px 0;
+              border-bottom: 3px solid #000;
+              margin-bottom: 8px;
             }
-            .header h1 { 
-              font-size: 24px; 
-              font-weight: bold; 
-              letter-spacing: 2px;
+            .kitchen-title {
+              font-size: 28px;
+              font-weight: 900;
+              letter-spacing: 3px;
+              text-transform: uppercase;
             }
-            .header .order-num { 
-              font-size: 18px; 
-              font-weight: bold;
-              margin-top: 5px;
+            .order-num {
+              font-size: 11px;
+              color: #666;
+              margin-top: 2px;
             }
-            .header .table-num { 
-              font-size: 28px; 
-              font-weight: bold;
+            
+            /* Table Box */
+            .table-box {
               background: #000;
               color: #fff;
-              padding: 5px 15px;
-              margin: 8px auto;
-              display: inline-block;
-            }
-            .meta { 
-              display: flex; 
-              justify-content: space-between; 
-              font-size: 12px; 
+              text-align: center;
+              padding: 12px 8px;
               margin: 8px 0;
-              padding-bottom: 8px;
-              border-bottom: 1px dashed #000;
             }
-            .dept-section { margin: 10px 0; }
-            .dept-header { 
-              font-weight: bold; 
-              font-size: 12px; 
-              background: #eee; 
-              padding: 3px 5px;
+            .table-label {
+              font-size: 14px;
+              font-weight: bold;
+              letter-spacing: 2px;
+            }
+            .table-number {
+              font-size: 48px;
+              font-weight: 900;
+              line-height: 1;
+              margin-top: 4px;
+            }
+            
+            /* Meta Info */
+            .meta-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 6px 0;
+              border-bottom: 1px dashed #999;
+              font-size: 11px;
+            }
+            .meta-row strong {
+              color: #000;
+            }
+            
+            /* Items */
+            .dept-section {
+              margin: 10px 0;
+            }
+            .dept-header {
+              background: linear-gradient(90deg, #333 0%, #666 100%);
+              color: #fff;
+              padding: 6px 8px;
+              font-size: 11px;
+              font-weight: bold;
               text-transform: uppercase;
               letter-spacing: 1px;
+              display: flex;
+              align-items: center;
+              gap: 6px;
             }
-            .item-row { 
-              display: flex; 
-              padding: 5px 0;
+            .dept-icon {
+              font-size: 14px;
+            }
+            .item-row {
+              display: flex;
+              align-items: center;
+              padding: 8px 4px;
               border-bottom: 1px dotted #ccc;
-              font-size: 16px;
             }
-            .qty { 
-              font-weight: bold; 
-              min-width: 35px;
+            .qty-box {
+              background: #000;
+              color: #fff;
+              min-width: 32px;
+              height: 32px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
               font-size: 18px;
+              font-weight: bold;
+              margin-right: 10px;
             }
-            .name { flex: 1; }
-            .footer { 
-              text-align: center; 
-              margin-top: 15px; 
-              font-size: 11px; 
-              border-top: 3px double #000; 
-              padding-top: 10px; 
+            .item-name {
+              flex: 1;
+              font-size: 16px;
+              font-weight: 600;
             }
-            .urgent { font-size: 14px; font-weight: bold; }
+            
+            /* Summary */
+            .summary {
+              background: #f5f5f5;
+              padding: 8px;
+              margin-top: 10px;
+              text-align: center;
+              border: 2px solid #000;
+            }
+            .summary-title {
+              font-size: 12px;
+              color: #666;
+            }
+            .summary-count {
+              font-size: 24px;
+              font-weight: 900;
+            }
+            
+            /* Footer */
+            .footer {
+              text-align: center;
+              margin-top: 10px;
+              padding-top: 8px;
+              border-top: 3px solid #000;
+            }
+            .footer-title {
+              font-size: 16px;
+              font-weight: 900;
+              letter-spacing: 2px;
+            }
+            .footer-time {
+              font-size: 10px;
+              color: #666;
+              margin-top: 4px;
+            }
+            
+            /* Cut line */
+            .cut-line {
+              border-top: 1px dashed #000;
+              margin: 10px 0;
+              position: relative;
+            }
+            .cut-line::before {
+              content: '✂';
+              position: absolute;
+              left: -2px;
+              top: -10px;
+              font-size: 14px;
+            }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>🍽️ CUISINE</h1>
-            <div class="table-num">${tableInfo}</div>
+            <div class="kitchen-title">🍳 CUISINE</div>
             <div class="order-num">${invoice.invoice_number}</div>
           </div>
           
-          <div class="meta">
-            <span>Serveur: ${invoice.created_by || 'N/A'}</span>
-            <span>${new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</span>
+          <div class="table-box">
+            <div class="table-label">TABLE</div>
+            <div class="table-number">${tableNum}</div>
+          </div>
+          
+          <div class="meta-row">
+            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Heure:</strong> ${orderTime}</span>
           </div>
           
           ${itemsHtml}
           
-          <div class="footer">
-            <div class="urgent">*** BON DE COMMANDE ***</div>
-            <div>${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+          <div class="summary">
+            <div class="summary-title">TOTAL ARTICLES</div>
+            <div class="summary-count">${totalItems}</div>
           </div>
+          
+          <div class="footer">
+            <div class="footer-title">★ BON DE COMMANDE ★</div>
+            <div class="footer-time">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+          </div>
+          
+          <div class="cut-line"></div>
           
           <script>
             window.onload = function() {
