@@ -6,7 +6,7 @@ import {
   CreditCard, Wallet, CheckCircle, X, Eye, Download,
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
-  DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus
+  DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,6 +127,12 @@ const CaissePage = () => {
   const [productForm, setProductForm] = useState({ name: "", price: 0, department: "bar", unit: "unité", category: "" });
   const [clientForm, setClientForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const [userForm, setUserForm] = useState({ username: "", email: "", password: "", pin: "", role: "server", full_name: "" });
+  
+  // Rapport Journalier
+  const [rapportDate, setRapportDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [rapportData, setRapportData] = useState(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signature, setSignature] = useState("");
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -288,6 +294,230 @@ const CaissePage = () => {
     }
   }, [filterMonth, activeTab, isAuthenticated]);
 
+  // Fetch rapport data when rapport tab is active
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "rapport") {
+      fetchRapportData();
+    }
+  }, [rapportDate, activeTab, isAuthenticated]);
+
+  const fetchRapportData = async () => {
+    try {
+      const [invoicesRes, statsRes] = await Promise.all([
+        axios.get(`${API}/invoices`, { params: { date: rapportDate } }),
+        axios.get(`${API}/invoices/stats`, { params: { date: rapportDate } })
+      ]);
+      
+      const dayInvoices = invoicesRes.data.invoices || [];
+      const validatedInvoices = dayInvoices.filter(i => i.validation_status === 'validated');
+      const pendingInvoices = dayInvoices.filter(i => i.validation_status === 'pending');
+      
+      // Group by server
+      const byServer = {};
+      dayInvoices.forEach(inv => {
+        const server = inv.created_by || 'Non assigné';
+        if (!byServer[server]) {
+          byServer[server] = { count: 0, total: 0, validated: 0, pending: 0 };
+        }
+        byServer[server].count++;
+        byServer[server].total += inv.total || 0;
+        if (inv.validation_status === 'validated') byServer[server].validated++;
+        else byServer[server].pending++;
+      });
+      
+      // Group by payment method
+      const byPayment = {};
+      validatedInvoices.forEach(inv => {
+        const method = inv.payment_method || 'cash';
+        if (!byPayment[method]) byPayment[method] = { count: 0, total: 0 };
+        byPayment[method].count++;
+        byPayment[method].total += inv.total || 0;
+      });
+      
+      setRapportData({
+        date: rapportDate,
+        totalInvoices: dayInvoices.length,
+        validatedInvoices: validatedInvoices.length,
+        pendingInvoices: pendingInvoices.length,
+        totalRevenue: statsRes.data.total_revenue || 0,
+        validatedRevenue: validatedInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0),
+        byDepartment: statsRes.data.by_department || {},
+        byServer,
+        byPayment,
+        invoices: dayInvoices
+      });
+    } catch (error) {
+      console.error("Error fetching rapport data:", error);
+      toast.error("Erreur lors du chargement du rapport");
+    }
+  };
+
+  // Generate PDF report with signature
+  const generateRapportPDF = () => {
+    if (!rapportData) return;
+    
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    const serverRows = Object.entries(rapportData.byServer).map(([server, data]) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${server}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.count}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.validated}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.pending}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">${formatPrice(data.total)} F</td>
+      </tr>
+    `).join('');
+    
+    const deptRows = Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => `
+      <tr>
+        <td style="padding: 6px; border-bottom: 1px solid #eee;">${DEPARTMENT_CONFIG[dept]?.label || dept}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(amount)} F</td>
+      </tr>
+    `).join('');
+    
+    const paymentRows = Object.entries(rapportData.byPayment).map(([method, data]) => `
+      <tr>
+        <td style="padding: 6px; border-bottom: 1px solid #eee;">${PAYMENT_METHODS.find(p => p.value === method)?.label || method}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: center;">${data.count}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(data.total)} F</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Rapport Journalier - ${format(new Date(rapportData.date), "dd/MM/yyyy")}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; max-width: 800px; margin: 0 auto; color: #333; font-size: 12px; }
+            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #d4a500; }
+            .header h1 { font-size: 24px; color: #d4a500; margin-bottom: 5px; }
+            .header h2 { font-size: 18px; color: #333; margin-bottom: 10px; }
+            .header p { color: #666; font-size: 12px; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+            .summary-card { background: #f8f8f8; padding: 15px; border-radius: 8px; text-align: center; }
+            .summary-card .value { font-size: 24px; font-weight: bold; color: #d4a500; }
+            .summary-card .label { font-size: 11px; color: #666; margin-top: 5px; }
+            .section { margin-bottom: 25px; }
+            .section h3 { font-size: 14px; color: #333; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid #eee; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #f0f0f0; padding: 10px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+            .signature-section { margin-top: 40px; padding-top: 20px; border-top: 2px solid #eee; }
+            .signature-row { display: flex; justify-content: space-between; margin-top: 30px; }
+            .signature-box { width: 45%; }
+            .signature-box p { font-size: 11px; color: #666; margin-bottom: 5px; }
+            .signature-line { border-bottom: 1px solid #333; height: 60px; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; }
+            .signature-name { font-weight: bold; text-align: center; }
+            .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; }
+            .stamp { color: #d4a500; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>ESPACE MAXO</h1>
+            <h2>RAPPORT JOURNALIER DE CAISSE</h2>
+            <p>Date: ${format(new Date(rapportData.date), "EEEE dd MMMM yyyy", { locale: { code: 'fr' } })}</p>
+            <p>Généré le: ${format(new Date(), "dd/MM/yyyy à HH:mm")}</p>
+          </div>
+          
+          <div class="summary">
+            <div class="summary-card">
+              <div class="value">${rapportData.totalInvoices}</div>
+              <div class="label">Factures Total</div>
+            </div>
+            <div class="summary-card">
+              <div class="value" style="color: #22c55e;">${rapportData.validatedInvoices}</div>
+              <div class="label">Validées</div>
+            </div>
+            <div class="summary-card">
+              <div class="value" style="color: #eab308;">${rapportData.pendingInvoices}</div>
+              <div class="label">En attente</div>
+            </div>
+            <div class="summary-card">
+              <div class="value">${formatPrice(rapportData.validatedRevenue)} F</div>
+              <div class="label">Chiffre d'Affaires Validé</div>
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3>Récapitulatif par Serveur</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Serveur</th>
+                  <th style="text-align: center;">Nb Factures</th>
+                  <th style="text-align: center;">Validées</th>
+                  <th style="text-align: center;">En attente</th>
+                  <th style="text-align: right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${serverRows}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="section">
+            <h3>Récapitulatif par Département</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Département</th>
+                  <th style="text-align: right;">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${deptRows}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="section">
+            <h3>Récapitulatif par Mode de Paiement</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Mode</th>
+                  <th style="text-align: center;">Nb</th>
+                  <th style="text-align: right;">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${paymentRows}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="signature-section">
+            <h3>Validation et Signatures</h3>
+            <div class="signature-row">
+              <div class="signature-box">
+                <p>La Gérante:</p>
+                <div class="signature-line">
+                  ${signature ? `<span style="font-family: cursive; font-size: 18px;">${signature}</span>` : ''}
+                </div>
+                <p class="signature-name">Mères AHOUANDJINOU</p>
+              </div>
+              <div class="signature-box">
+                <p>L'Administrateur:</p>
+                <div class="signature-line"></div>
+                <p class="signature-name">Marcel HOUNHANOU</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p class="stamp">Document généré automatiquement par CAISSE PRO - Espace Maxo</p>
+            <p>Fidjrossè Plage, Cotonou | Tél: 01 41 47 00 00</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
+  };
+
   // ============== BILL MANAGEMENT ==============
   const addToBill = (item, department) => {
     const existingIndex = currentBill.findIndex(i => i.id === item.id && i.department === department);
@@ -430,26 +660,32 @@ const CaissePage = () => {
         amount: pendingInvoiceData.total,
         position: "center",
         callback: "",
-        data: "",
+        data: JSON.stringify({ invoice: pendingInvoiceData }),
         theme: "#d4a500",
-        key: "7e29f6c0-4774-11ef-9418-15e99f93808d"
+        key: "4b3fe59844c0f4291c1b285a9485024a1d668c96",
+        sandbox: false
       });
       
       // Listen for payment success
-      window.addEventListener('successKkiapay', async (event) => {
+      const successHandler = async (event) => {
         const { transactionId } = event.detail;
         pendingInvoiceData.payment_reference = transactionId;
         pendingInvoiceData.payment_status = "paid";
         await createInvoice(pendingInvoiceData);
         setShowMobilePaymentModal(false);
         toast.success("Paiement Kkiapay réussi !");
-      }, { once: true });
+        window.removeEventListener('successKkiapay', successHandler);
+      };
       
-      window.addEventListener('failedKkiapay', () => {
+      const failHandler = () => {
         toast.error("Paiement échoué");
-      }, { once: true });
+        window.removeEventListener('failedKkiapay', failHandler);
+      };
+      
+      window.addEventListener('successKkiapay', successHandler);
+      window.addEventListener('failedKkiapay', failHandler);
     } else {
-      toast.error("Kkiapay non disponible");
+      toast.error("Kkiapay non disponible - Veuillez rafraîchir la page");
     }
     setShowMobilePaymentModal(false);
   };
@@ -876,6 +1112,11 @@ const CaissePage = () => {
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="users" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
                 <Settings className="w-4 h-4 mr-2" />Utilisateurs
+              </TabsTrigger>
+            )}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <TabsTrigger value="rapport" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white">
+                <FileText className="w-4 h-4 mr-2" />Rapport Journalier
               </TabsTrigger>
             )}
           </TabsList>
@@ -1559,6 +1800,184 @@ const CaissePage = () => {
                     </Card>
                   ))}
                 </div>
+              </div>
+            </TabsContent>
+          )}
+
+          {/* ==================== RAPPORT JOURNALIER TAB ==================== */}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+            <TabsContent value="rapport">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Rapport Journalier</h2>
+                    <p className="text-slate-400 text-sm">Point de caisse quotidien</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      type="date"
+                      value={rapportDate}
+                      onChange={(e) => setRapportDate(e.target.value)}
+                      className="bg-slate-800/50 border-slate-700 text-white"
+                    />
+                    <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300">
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Actualiser
+                    </Button>
+                  </div>
+                </div>
+
+                {rapportData ? (
+                  <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
+                        <CardContent className="p-4 text-center">
+                          <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
+                          <p className="text-slate-400 text-sm">Factures Total</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+                        <CardContent className="p-4 text-center">
+                          <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-green-400">{rapportData.validatedInvoices}</p>
+                          <p className="text-slate-400 text-sm">Validées</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30">
+                        <CardContent className="p-4 text-center">
+                          <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-yellow-400">{rapportData.pendingInvoices}</p>
+                          <p className="text-slate-400 text-sm">En attente</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+                        <CardContent className="p-4 text-center">
+                          <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                          <p className="text-2xl font-bold text-amber-500">{formatPrice(rapportData.validatedRevenue)} F</p>
+                          <p className="text-slate-400 text-sm">CA Validé</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* By Server */}
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          <Users className="w-5 h-5 text-blue-400" />
+                          Récapitulatif par Serveur
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-700">
+                              <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Validées</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
+                              <th className="text-right py-2 text-slate-400 text-sm">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(rapportData.byServer).map(([server, data]) => (
+                              <tr key={server} className="border-b border-slate-700/50">
+                                <td className="py-3 text-white font-medium">{server}</td>
+                                <td className="py-3 text-center text-slate-300">{data.count}</td>
+                                <td className="py-3 text-center text-green-400">{data.validated}</td>
+                                <td className="py-3 text-center text-yellow-400">{data.pending}</td>
+                                <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+
+                    {/* By Department & Payment Method */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader>
+                          <CardTitle className="text-white text-lg">Par Département</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => (
+                            <div key={dept} className="flex justify-between items-center">
+                              <span className="text-slate-300">{DEPARTMENT_CONFIG[dept]?.label || dept}</span>
+                              <Badge className={`${DEPARTMENT_CONFIG[dept]?.bgColor || 'bg-slate-500/20'} ${DEPARTMENT_CONFIG[dept]?.color || 'text-slate-400'}`}>
+                                {formatPrice(amount)} F
+                              </Badge>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader>
+                          <CardTitle className="text-white text-lg">Par Mode de Paiement</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.entries(rapportData.byPayment).map(([method, data]) => (
+                            <div key={method} className="flex justify-between items-center">
+                              <span className="text-slate-300">{PAYMENT_METHODS.find(p => p.value === method)?.label || method}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-500 text-sm">x{data.count}</span>
+                                <Badge className="bg-amber-500/20 text-amber-400">{formatPrice(data.total)} F</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Signature & Generate PDF */}
+                    <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
+                      <CardHeader>
+                        <CardTitle className="text-amber-400">Générer le Rapport PDF</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-300">Signature numérique (Gérante)</Label>
+                          <Input
+                            value={signature}
+                            onChange={(e) => setSignature(e.target.value)}
+                            placeholder="Tapez votre nom pour signer..."
+                            className="bg-slate-700/50 border-slate-600 text-white font-serif italic text-lg"
+                          />
+                          <p className="text-slate-500 text-xs">Cette signature apparaîtra sur le rapport PDF</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button 
+                            onClick={generateRapportPDF}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                          >
+                            <Printer className="w-4 h-4 mr-2" />
+                            Imprimer le Rapport
+                          </Button>
+                          <Button 
+                            onClick={generateRapportPDF}
+                            variant="outline"
+                            className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Télécharger PDF
+                          </Button>
+                        </div>
+                        <p className="text-slate-400 text-sm text-center">
+                          Ce rapport sera envoyé à <strong>Marcel HOUNHANOU</strong> (Administrateur)
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </>
+                ) : (
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardContent className="py-12 text-center">
+                      <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-400">Chargement du rapport...</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </TabsContent>
           )}
