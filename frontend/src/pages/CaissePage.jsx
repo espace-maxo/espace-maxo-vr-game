@@ -87,7 +87,13 @@ const CaissePage = () => {
   const [products, setProducts] = useState([]);
   const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
   
-  // Current bill
+  // Multi-table system
+  const [openTables, setOpenTables] = useState([]); // All open tables from DB
+  const [activeTableId, setActiveTableId] = useState(null); // Currently active table ID
+  const [showNewTableModal, setShowNewTableModal] = useState(false);
+  const [availableTableNumbers, setAvailableTableNumbers] = useState([]);
+  
+  // Current bill (derived from active table)
   const [currentBill, setCurrentBill] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -205,7 +211,125 @@ const CaissePage = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setCurrentBill([]);
+    setOpenTables([]);
+    setActiveTableId(null);
   };
+
+  // ============== MULTI-TABLE MANAGEMENT ==============
+  const fetchOpenTables = async () => {
+    if (!currentUser) return;
+    try {
+      const serverId = currentUser.id || currentUser.username;
+      const [tablesRes, availableRes] = await Promise.all([
+        axios.get(`${API}/caisse/tables`, { params: { server_id: serverId } }),
+        axios.get(`${API}/caisse/tables/available`, { params: { server_id: serverId } })
+      ]);
+      
+      setOpenTables(tablesRes.data.tables || []);
+      setAvailableTableNumbers(availableRes.data.available_tables || []);
+      
+      // If no active table but tables exist, select the first one
+      if (!activeTableId && tablesRes.data.tables?.length > 0) {
+        selectTable(tablesRes.data.tables[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching tables:", error);
+    }
+  };
+
+  const createNewTable = async (tableNumber) => {
+    if (!currentUser) return;
+    try {
+      const response = await axios.post(`${API}/caisse/tables`, {
+        table_number: tableNumber,
+        server_id: currentUser.id || currentUser.username,
+        server_name: currentUser.full_name || currentUser.username,
+        items: [],
+        client_name: "Client",
+        payment_method: "cash",
+        discount: 0,
+        notes: ""
+      });
+      
+      if (response.data.success) {
+        toast.success(`Table ${tableNumber} ouverte !`);
+        await fetchOpenTables();
+        selectTable(response.data.table);
+        setShowNewTableModal(false);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Erreur lors de l'ouverture de la table");
+    }
+  };
+
+  const selectTable = (table) => {
+    if (!table) {
+      setActiveTableId(null);
+      setCurrentBill([]);
+      setSelectedClient(null);
+      setPaymentMethod("cash");
+      setDiscount(0);
+      setNotes("");
+      return;
+    }
+    
+    setActiveTableId(table.id);
+    setCurrentBill(table.items || []);
+    setSelectedClient(table.client_id ? clients.find(c => c.id === table.client_id) : null);
+    setPaymentMethod(table.payment_method || "cash");
+    setDiscount(table.discount || 0);
+    setNotes(table.notes || "");
+  };
+
+  const saveCurrentTableToDb = async () => {
+    if (!activeTableId) return;
+    try {
+      await axios.put(`${API}/caisse/tables/${activeTableId}`, {
+        items: currentBill,
+        client_id: selectedClient?.id || null,
+        client_name: selectedClient?.name || "Client",
+        payment_method: paymentMethod,
+        discount: discount,
+        notes: notes
+      });
+    } catch (error) {
+      console.error("Error saving table:", error);
+    }
+  };
+
+  const closeTable = async (tableId) => {
+    try {
+      await axios.delete(`${API}/caisse/tables/${tableId}`);
+      
+      // If closing active table, switch to another or clear
+      if (tableId === activeTableId) {
+        const remainingTables = openTables.filter(t => t.id !== tableId);
+        if (remainingTables.length > 0) {
+          selectTable(remainingTables[0]);
+        } else {
+          selectTable(null);
+        }
+      }
+      
+      await fetchOpenTables();
+    } catch (error) {
+      console.error("Error closing table:", error);
+    }
+  };
+
+  // Auto-save table when bill changes (debounced)
+  useEffect(() => {
+    if (activeTableId && currentBill.length >= 0) {
+      const timeoutId = setTimeout(() => {
+        saveCurrentTableToDb();
+      }, 500); // Save after 500ms of no changes
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentBill, selectedClient, paymentMethod, discount, notes, activeTableId]);
+
+  // Get current active table object
+  const activeTable = openTables.find(t => t.id === activeTableId);
 
   // ============== DATA FETCHING ==============
   const fetchAllData = async () => {
@@ -278,6 +402,7 @@ const CaissePage = () => {
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllData();
+      fetchOpenTables();
     }
   }, [filterDate, isAuthenticated]);
 
@@ -569,8 +694,16 @@ _Gérante - Espace Maxo_
       }
       
       toast.success("Facture enregistrée !");
-      clearBill();
+      
+      // Close the table after invoice is created
+      if (activeTableId) {
+        await closeTable(activeTableId);
+      } else {
+        clearBill();
+      }
+      
       fetchAllData();
+      fetchOpenTables();
       setPendingInvoiceData(null);
     } catch (error) {
       console.error("Error saving invoice:", error);
@@ -1051,6 +1184,63 @@ _Gérante - Espace Maxo_
 
           {/* ==================== CAISSE TAB ==================== */}
           <TabsContent value="caisse">
+            {/* Multi-Table Bar */}
+            <div className="mb-4 bg-slate-800/70 rounded-lg border border-slate-700 p-2">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-slate-400 text-sm font-medium px-2 whitespace-nowrap">Tables:</span>
+                
+                {openTables.map(table => (
+                  <div
+                    key={table.id}
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
+                      activeTableId === table.id
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                    }`}
+                    onClick={() => selectTable(table)}
+                  >
+                    <span className="font-bold">T{table.table_number}</span>
+                    {table.items?.length > 0 && (
+                      <Badge className={`ml-1 ${activeTableId === table.id ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-400'}`}>
+                        {table.items.length}
+                      </Badge>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (table.items?.length > 0) {
+                          if (confirm(`Fermer la Table ${table.table_number} ? Les articles non facturés seront perdus.`)) {
+                            closeTable(table.id);
+                          }
+                        } else {
+                          closeTable(table.id);
+                        }
+                      }}
+                      className={`ml-1 p-0.5 rounded hover:bg-red-500/30 ${activeTableId === table.id ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-red-400'}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                
+                {/* New Table Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNewTableModal(true)}
+                  className="border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-amber-500 whitespace-nowrap"
+                  disabled={availableTableNumbers.length === 0}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Nouvelle Table
+                </Button>
+                
+                {openTables.length === 0 && (
+                  <span className="text-slate-500 text-sm italic">Aucune table ouverte - Cliquez sur "Nouvelle Table" pour commencer</span>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Left: Products */}
               <div className="lg:col-span-2 space-y-4">
@@ -1067,6 +1257,7 @@ _Gérante - Espace Maxo_
                           ? `bg-gradient-to-r ${key === 'jeux' ? 'from-blue-500 to-blue-600' : key === 'bar' ? 'from-orange-500 to-orange-600' : 'from-green-500 to-green-600'} text-white` 
                           : "text-slate-300 hover:text-white"
                         }
+                        disabled={!activeTableId}
                       >
                         <Icon className="w-4 h-4 mr-2" />
                         {config.label}
@@ -1076,25 +1267,38 @@ _Gérante - Espace Maxo_
                 </div>
 
                 {/* Products grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {(catalog[activeDepartment] || []).map((item) => {
-                    const config = DEPARTMENT_CONFIG[activeDepartment];
-                    return (
-                      <button
-                        key={`${activeDepartment}-${item.id}`}
-                        onClick={() => addToBill(item, activeDepartment)}
-                        className={`p-3 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
-                      >
-                        <p className={`font-semibold text-sm ${config.color}`}>{item.name}</p>
-                        <p className="text-white font-bold">{formatPrice(item.price)} F</p>
-                        <p className="text-slate-500 text-xs">/{item.unit}</p>
-                      </button>
-                    );
-                  })}
-                </div>
+                {activeTableId ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {(catalog[activeDepartment] || []).map((item) => {
+                      const config = DEPARTMENT_CONFIG[activeDepartment];
+                      return (
+                        <button
+                          key={`${activeDepartment}-${item.id}`}
+                          onClick={() => addToBill(item, activeDepartment)}
+                          className={`p-3 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
+                        >
+                          <p className={`font-semibold text-sm ${config.color}`}>{item.name}</p>
+                          <p className="text-white font-bold">{formatPrice(item.price)} F</p>
+                          <p className="text-slate-500 text-xs">/{item.unit}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Card className="bg-slate-800/30 border-slate-700 border-dashed">
+                    <CardContent className="py-12 text-center">
+                      <Calculator className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-400 mb-4">Sélectionnez ou créez une table pour commencer</p>
+                      <Button onClick={() => setShowNewTableModal(true)} className="bg-amber-500 hover:bg-amber-600">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Ouvrir une Table
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
                 
                 {/* Custom item form for "Autres" department */}
-                {activeDepartment === "autres" && (
+                {activeDepartment === "autres" && activeTableId && (
                   <Card className="mt-4 bg-slate-700/30 border-slate-600">
                     <CardContent className="p-4">
                       <h4 className="text-slate-300 font-semibold mb-3">Saisie manuelle</h4>
@@ -1139,7 +1343,7 @@ _Gérante - Espace Maxo_
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
                         <Receipt className="w-5 h-5" />
-                        Facture
+                        {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
                       </CardTitle>
                       {currentBill.length > 0 && (
                         <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
@@ -1149,7 +1353,11 @@ _Gérante - Espace Maxo_
                     </div>
                     
                     {/* Client selector */}
-                    <Select value={selectedClient?.id || "anonymous"} onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}>
+                    <Select 
+                      value={selectedClient?.id || "anonymous"} 
+                      onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}
+                      disabled={!activeTableId}
+                    >
                       <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white mt-2">
                         <SelectValue placeholder="Sélectionner un client (optionnel)" />
                       </SelectTrigger>
@@ -1165,7 +1373,9 @@ _Gérante - Espace Maxo_
                   </CardHeader>
                   
                   <CardContent className="p-3">
-                    {currentBill.length === 0 ? (
+                    {!activeTableId ? (
+                      <p className="text-slate-500 text-center py-8">Ouvrez une table pour commencer</p>
+                    ) : currentBill.length === 0 ? (
                       <p className="text-slate-500 text-center py-8">Aucun article</p>
                     ) : (
                       <div className="space-y-2 max-h-[250px] overflow-y-auto">
@@ -2437,6 +2647,61 @@ _Gérante - Espace Maxo_
               Annuler
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Table Modal */}
+      <Dialog open={showNewTableModal} onOpenChange={setShowNewTableModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-500 flex items-center gap-2">
+              <Plus className="w-5 h-5" />
+              Ouvrir une Nouvelle Table
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-slate-400 text-sm mb-4">
+              Sélectionnez un numéro de table (1-20) :
+            </p>
+            <div className="grid grid-cols-5 gap-2">
+              {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
+                const isAvailable = availableTableNumbers.includes(num);
+                const isUsed = !isAvailable;
+                return (
+                  <Button
+                    key={num}
+                    variant={isUsed ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => isAvailable && createNewTable(num)}
+                    disabled={isUsed}
+                    className={isUsed 
+                      ? "bg-slate-700/50 text-slate-500 cursor-not-allowed" 
+                      : "border-amber-500/50 text-amber-400 hover:bg-amber-500 hover:text-white"
+                    }
+                  >
+                    T{num}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-700">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-amber-500/30 border border-amber-500/50" />
+                <span className="text-slate-400 text-xs">Disponible</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-slate-700/50" />
+                <span className="text-slate-400 text-xs">Occupée</span>
+              </div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowNewTableModal(false)}
+            className="w-full border-slate-600 text-slate-400"
+          >
+            Annuler
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

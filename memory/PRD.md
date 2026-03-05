@@ -156,6 +156,12 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Camembert: Répartition par Département (avec couleurs et pourcentages)
   - Barres horizontales: Performance par Serveur (top 6)
   - Camembert + Détails: Répartition par Mode de Paiement
+- [x] **Système de Tables Multiples** (Mars 2026)
+  - Les serveurs peuvent ouvrir jusqu'à 20 tables simultanées (T1-T20)
+  - Barre d'onglets cliquable pour basculer entre tables
+  - Badge indiquant le nombre d'articles par table
+  - Sauvegarde automatique en base de données (persistance)
+  - Fermeture automatique de la table après création de facture
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
