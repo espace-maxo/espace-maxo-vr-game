@@ -7,7 +7,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 
 ### Phase 16 - Logiciel Caisse Pro (Mars 2026)
 - **Système POS Complet** : `/caisse` - Application standalone de facturation
-  - Connexion par mot de passe (Caisse2026 ou Esp@ceM@xo2026)
+  - **Système de sessions par serveur** :
+    - Connexion par code PIN (4-6 chiffres) pour les serveurs
+    - Connexion par mot de passe pour les admins (Caisse2026 ou Esp@ceM@xo2026)
+    - Les serveurs ne voient QUE leurs propres factures
+    - Les managers et admins voient TOUTES les factures
   - Interface avec 6 onglets : Caisse, Factures, Statistiques, Produits, Clients, Utilisateurs
   - **5 départements** : Salle & Jardin, Jeux, Bar, Location, Autres
   - **Saisie manuelle** : Département "Autres" permet de saisir librement nom et prix
@@ -19,7 +23,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Gestion CRUD des factures avec numérotation automatique (EM-YYYYMMDD-XXXX)
   - Gestion des produits avec prix et unités
   - Gestion des clients
-  - Gestion multi-utilisateurs (serveurs, managers, admins)
+  - Gestion multi-utilisateurs (serveurs, managers, admins) avec PIN unique
   - Statistiques journalières et mensuelles par département
   - Export PDF A4 des factures (via reportlab)
   - Modes de paiement : Espèces, Carte, Mobile Money, Chèque
