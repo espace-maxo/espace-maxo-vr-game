@@ -1337,8 +1337,8 @@ _Gérante - Espace Maxo_
               </div>
 
               {/* Right: Current Bill */}
-              <div className="lg:col-span-1">
-                <Card className="bg-slate-800/50 border-amber-500/30 sticky top-20">
+              <div className="lg:col-span-1 space-y-4">
+                <Card className="bg-slate-800/50 border-amber-500/30 lg:sticky lg:top-20">
                   <CardHeader className="border-b border-slate-700 py-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
@@ -1492,9 +1492,9 @@ _Gérante - Espace Maxo_
                 {invoices.filter(i => i.validation_status === 'validated' && 
                   (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                 ).length > 0 && (
-                  <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/50">
+                  <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/50 mt-4">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-green-400 flex items-center gap-2">
+                      <CardTitle className="text-green-400 flex items-center gap-2 text-base">
                         <Printer className="w-5 h-5" />
                         FACTURES À IMPRIMER
                         <Badge className="bg-green-500/30 text-green-300 ml-2">
@@ -1504,23 +1504,24 @@ _Gérante - Espace Maxo_
                         </Badge>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 max-h-[200px] overflow-y-auto">
+                    <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
                       {invoices.filter(i => i.validation_status === 'validated' && 
                         (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                       ).slice(0, 5).map(invoice => (
-                        <div key={invoice.id} className="flex items-center justify-between bg-green-900/30 rounded-lg p-3 border border-green-500/30">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-white font-bold">{invoice.invoice_number}</span>
+                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/30 rounded-lg p-3 border border-green-500/30">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-bold text-sm">{invoice.invoice_number}</span>
                               <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Validée</Badge>
                             </div>
-                            <p className="text-slate-400 text-sm">
+                            <p className="text-slate-400 text-xs mt-1 truncate">
                               {invoice.customer_name} • {formatPrice(invoice.total)} FCFA
                             </p>
                           </div>
                           <Button 
                             onClick={() => printTicket(invoice)} 
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto shrink-0"
+                            size="sm"
                           >
                             <Printer className="w-4 h-4 mr-2" />
                             IMPRIMER
@@ -1535,7 +1536,7 @@ _Gérante - Espace Maxo_
                 {invoices.filter(i => i.validation_status === 'pending' && 
                   (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                 ).length > 0 && (
-                  <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-500/30">
+                  <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-500/30 mt-4">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-yellow-400 flex items-center gap-2 text-sm">
                         <Clock className="w-4 h-4" />
@@ -1547,25 +1548,25 @@ _Gérante - Espace Maxo_
                         </Badge>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
+                    <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
                       {invoices.filter(i => i.validation_status === 'pending' && 
                         (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
                       ).slice(0, 10).map(invoice => (
-                        <div key={invoice.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg p-3 border border-yellow-500/20 hover:bg-yellow-900/30 transition-colors">
+                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-yellow-900/20 rounded-lg p-3 border border-yellow-500/20 hover:bg-yellow-900/30 transition-colors">
                           <div 
-                            className="flex-1 cursor-pointer"
+                            className="flex-1 cursor-pointer min-w-0"
                             onClick={() => setViewInvoice(invoice)}
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="text-white font-medium">{invoice.invoice_number}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-medium text-sm">{invoice.invoice_number}</span>
                               <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
                             </div>
-                            <p className="text-slate-400 text-xs">
+                            <p className="text-slate-400 text-xs truncate">
                               {invoice.customer_name} • {formatPrice(invoice.total)} F
                               {invoice.created_by && ` • ${invoice.created_by}`}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 shrink-0">
                             <Button 
                               size="sm"
                               variant="ghost"
