@@ -1,9 +1,24 @@
 # Espace Maxo - PRD
 
 ## Problem Statement
-Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, et gérer les réservations.
+Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ## What's Been Implemented
+
+### Phase 16 - Logiciel Caisse Pro (Mars 2026)
+- **Système POS Complet** : `/caisse` - Application standalone de facturation
+  - Connexion par mot de passe (Caisse2026 ou Esp@ceM@xo2026)
+  - Interface avec 6 onglets : Caisse, Factures, Statistiques, Produits, Clients, Utilisateurs
+  - 3 départements : Salle de Jeux, Bar, Jardin
+  - Gestion CRUD des factures avec numérotation automatique (EM-YYYYMMDD-XXXX)
+  - Gestion des produits avec prix et unités
+  - Gestion des clients
+  - Gestion multi-utilisateurs (admin, manager, server)
+  - Statistiques journalières et mensuelles par département
+  - Export PDF des factures (via reportlab)
+  - Modes de paiement : Espèces, Carte, Mobile Money, Chèque
+  - Remises en pourcentage
+- **Lien discret** : "•" dans le footer du site principal vers /caisse
 
 ### Phase 15 - Combos + Jeu et Réservation Table (Fév 2026)
 - **Paiement Combos en ligne** : Les clients peuvent commander des combos et réserver une session de jeu en un seul clic
@@ -46,6 +61,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - **Accès Complet**: `Esp@ceM@xo2026`
 - **Lecture Seule**: `MaxoConsult2026`
 
+### Caisse Pro
+- URL: /caisse
+- **Mot de passe**: `Caisse2026` ou `Esp@ceM@xo2026`
+
 ### Twilio SMS
 - Numéros admin: +22997720808, +22991005084
 - TWILIO_PHONE_NUMBER: +14475742763
@@ -64,7 +83,28 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 
 ## APIs Backend
 
-### Nouvelles APIs (Phase 15)
+### Nouvelles APIs (Phase 16 - Caisse Pro)
+- `POST /api/caisse/login` - Connexion au POS
+- `GET /api/invoices` - Liste des factures (avec paramètre date)
+- `POST /api/invoices` - Créer une facture
+- `GET /api/invoices/{id}` - Détails d'une facture
+- `GET /api/invoices/{id}/pdf` - Export PDF d'une facture
+- `GET /api/invoices/stats` - Statistiques journalières
+- `GET /api/invoices/stats/monthly` - Statistiques mensuelles
+- `GET /api/caisse/products` - Liste des produits
+- `POST /api/caisse/products` - Créer un produit
+- `PUT /api/caisse/products/{id}` - Modifier un produit
+- `DELETE /api/caisse/products/{id}` - Supprimer un produit
+- `GET /api/caisse/clients` - Liste des clients
+- `POST /api/caisse/clients` - Créer un client
+- `PUT /api/caisse/clients/{id}` - Modifier un client
+- `DELETE /api/caisse/clients/{id}` - Supprimer un client
+- `GET /api/caisse/users` - Liste des utilisateurs
+- `POST /api/caisse/users` - Créer un utilisateur
+- `PUT /api/caisse/users/{id}` - Modifier un utilisateur
+- `DELETE /api/caisse/users/{id}` - Supprimer un utilisateur
+
+### APIs (Phase 15)
 - `POST /api/combo-orders` - Créer commande combo + jeu
 - `GET /api/admin/combo-orders` - Liste des commandes combo (admin)
 - `POST /api/table-reservations` - Créer réservation de table
@@ -90,6 +130,9 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [x] **Paiement Combos + Session de jeu**
 - [x] **Réservation Table avec acompte**
 - [x] **Admin tabs Combos et Tables**
+- [x] **Caisse Pro - Logiciel de facturation POS**
+- [x] **Export PDF des factures**
+- [x] **Lien discret vers caisse sur page d'accueil**
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
@@ -108,9 +151,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ├── backend/
 │   ├── .env
 │   ├── requirements.txt
-│   ├── server.py
+│   ├── server.py (~3700 lignes)
 │   └── tests/
-│       └── test_combo_table.py
+│       ├── test_combo_table.py
+│       └── test_caisse.py (NOUVEAU)
 └── frontend/
     ├── .env
     ├── package.json
@@ -118,15 +162,17 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
         ├── App.js
         ├── components/
         │   ├── Navbar.jsx
+        │   ├── Footer.jsx (lien discret vers /caisse)
         │   └── ...
         └── pages/
             ├── AdminPage.jsx
             ├── BookingPage.jsx
+            ├── CaissePage.jsx (NOUVEAU - POS System)
             ├── DeliveryPage.jsx
             ├── HomePage.jsx
             ├── MenuPage.jsx (Combos uniquement)
             ├── RejoindrePage.jsx
-            ├── TableReservationPage.jsx (NOUVEAU)
+            ├── TableReservationPage.jsx
             └── WalletPage.jsx
 ```
 

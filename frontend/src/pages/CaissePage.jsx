@@ -631,7 +631,7 @@ const CaissePage = () => {
                     const config = DEPARTMENT_CONFIG[activeDepartment];
                     return (
                       <button
-                        key={item.id}
+                        key={`${activeDepartment}-${item.id}`}
                         onClick={() => addToBill(item, activeDepartment)}
                         className={`p-3 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
                       >
