@@ -101,6 +101,10 @@ const CaissePage = () => {
   const [stats, setStats] = useState(null);
   const [monthlyStats, setMonthlyStats] = useState(null);
   
+  // Notification sound for validated invoices
+  const [lastValidatedCount, setLastValidatedCount] = useState(0);
+  const audioRef = useRef(null);
+  
   // Filters
   const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -122,6 +126,52 @@ const CaissePage = () => {
   const [userForm, setUserForm] = useState({ username: "", email: "", password: "", pin: "", role: "server", full_name: "" });
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
+
+  // ============== NOTIFICATION SOUND ==============
+  const playNotificationSound = () => {
+    try {
+      // Create a pleasant "ding" notification sound using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Create oscillator for the main tone
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Pleasant bell-like sound (C5 note = 523.25 Hz)
+      oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
+      oscillator.type = 'sine';
+      
+      // Fade in and out for a nice bell effect
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.8);
+      
+      // Second tone for a richer sound (E5 = 659.25 Hz)
+      const oscillator2 = audioContext.createOscillator();
+      const gainNode2 = audioContext.createGain();
+      
+      oscillator2.connect(gainNode2);
+      gainNode2.connect(audioContext.destination);
+      
+      oscillator2.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
+      oscillator2.type = 'sine';
+      
+      gainNode2.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
+      gainNode2.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.15);
+      gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.9);
+      
+      oscillator2.start(audioContext.currentTime + 0.1);
+      oscillator2.stop(audioContext.currentTime + 0.9);
+    } catch (error) {
+      console.log("Audio notification not available");
+    }
+  };
 
   // ============== AUTH ==============
   const handleLogin = async () => {
@@ -167,6 +217,23 @@ const CaissePage = () => {
       setUsers(usersRes.data.users || []);
       setStats(statsRes.data);
       
+      // Check for new validated invoices and play notification sound
+      const newInvoices = invoicesRes.data.invoices || [];
+      const myValidatedInvoices = newInvoices.filter(i => 
+        i.validation_status === 'validated' && 
+        (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+      );
+      
+      if (myValidatedInvoices.length > lastValidatedCount && lastValidatedCount > 0) {
+        // New invoice validated! Play sound and show notification
+        playNotificationSound();
+        toast.success("🔔 Nouvelle facture validée ! Prête à imprimer", {
+          duration: 5000,
+          style: { background: '#166534', color: 'white' }
+        });
+      }
+      setLastValidatedCount(myValidatedInvoices.length);
+      
       // Merge custom products with default catalog
       const customProducts = productsRes.data.products || [];
       if (customProducts.length > 0) {
@@ -200,6 +267,17 @@ const CaissePage = () => {
       fetchAllData();
     }
   }, [filterDate, isAuthenticated]);
+
+  // Auto-refresh every 10 seconds to check for validated invoices (for servers)
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'server') {
+      const interval = setInterval(() => {
+        fetchAllData();
+      }, 10000); // Check every 10 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, currentUser]);
 
   useEffect(() => {
     if (isAuthenticated && activeTab === "stats") {

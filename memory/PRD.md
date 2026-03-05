@@ -16,6 +16,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
     1. Serveur crée facture → Bouton "CRÉER FACTURE" → Statut "En attente"
     2. Gérante valide la facture (onglet Factures)
     3. Facture revient au serveur dans "FACTURES À IMPRIMER" avec bouton "IMPRIMER"
+  - **Notification sonore** : Son de cloche + toast vert quand une facture est validée (auto-refresh toutes les 10s)
   - Interface avec 6 onglets : Caisse, Factures, Statistiques, Produits, Clients, Utilisateurs
   - **5 départements** : Salle & Jardin, Jeux, Bar, Location, Autres
   - **Saisie manuelle** : Département "Autres" permet de saisir librement nom et prix
