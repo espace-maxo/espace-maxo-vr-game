@@ -1,107 +1,99 @@
 <analysis>**original_problem_statement:**
-The user requested a full-stack application for their restaurant, Espace Maxo, located in Cotonou. The application's purpose is to showcase the restaurant's menu, enable customers to book gaming sessions (VR, simulators), manage reservations via a secure admin panel, process payments using local mobile money providers, and handle food delivery orders.
+The user initially requested a full-stack application for their restaurant, Espace Maxo. The application needed to showcase menus, handle game bookings (VR, simulators), manage reservations via a secure admin panel, process mobile money payments, and manage food delivery orders.
 
-**PRODUCT REQUIREMENTS:**
-*   **Application Name:** Espace Maxo
-*   **Core Features:**
-    *   Display restaurant menus (Combos) and a separate food delivery menu.
-    *   Book gaming sessions with a calendar showing available slots.
-    *   Secure, password-protected admin dashboard to manage reservations, customer reviews, loyalty accounts, event rentals, and delivery orders.
-    *   Image gallery, customer testimonials, and a partner section.
-    *   Google Maps integration.
-    *   A comprehensive form for renting the space for events.
-    *   A customer loyalty program based on phone numbers.
-    *   A customer wallet (Porte-Monnaie) system to pre-load credit, secured by SMS OTP.
-    *   Ability for clients and admins to reschedule bookings, with fees for last-minute changes.
-    *   Food delivery ordering system with online payment.
-    *   A Join Us section for job applications.
-*   **Games:** VR 360-degree games, SONY car racing simulators.
-*   **Payments:** Integration with Kkiapay for MTN, Moov, and Celtiis mobile money.
-*   **Notifications:** Admin should receive SMS notifications for new reviews, rental requests, paid bookings, and delivery orders. Clients should receive an SMS confirmation after a paid booking.
+Recently, the scope has expanded significantly with a request for a comprehensive, standalone Point of Sale (POS) / invoicing software, separate from the main customer-facing website.
+
+**PRODUCT REQUIREMENTS (for the new Invoicing Software):**
+*   **Application Name:** Caisse Pro
+*   **Core Management:**
+    *   Full CRUD (Create, Read, Update, Delete) for invoices.
+    *   Full CRUD for products/menu items.
+    *   Full CRUD for customer data.
+*   **Authentication:**
+    *   Simple email/password login (JWT).
+    *   Multi-user roles (e.g., servers, managers).
+*   **Features:**
+    *   Dashboard with key statistics (e.g., daily/monthly revenue).
+    *   Ability to export invoices to PDF.
+*   **Payment Tracking:**
+    *   Manual tracking for payments made by cash, credit card, etc.
 
 **User's preferred language**: French. The next agent MUST respond in French only.
 
 **what currently exists?**
-A comprehensive full-stack application (React, FastAPI, MongoDB).
-*   **Frontend:** A responsive UI featuring a homepage, food delivery page, game booking, wallet management, a new careers page (), and a highly detailed admin panel.
-*   **Backend:** A monolithic  file containing API logic for JWT-secured admin endpoints, booking management, loyalty program, a full wallet system with Twilio SMS OTP, delivery orders, job applications, and admin notifications via Twilio SMS.
-*   **Admin Dashboard:** A feature-rich admin panel at  with two access levels (Full Access and Read-Only). It includes tabs for statistics, booking management, delivery orders, event rentals, reviews, loyalty accounts, and job applications. All sections now feature View Details modals for in-depth information. CSV export is available for most data types.
-*   **Integrations:**
-    *   **Kkiapay:** Integrated for mobile money payments.
-    *   **Twilio:** Fully integrated for all SMS notifications (wallet OTP, admin alerts, client confirmations).
+A comprehensive full-stack application for Espace Maxo (React, FastAPI, MongoDB) that includes a customer-facing website and an admin panel. Key integrations with Kkiapay (payments) and Twilio (SMS) are in place.
+
+A new, standalone POS application has been started at the  route. The agent was in the process of creating a more advanced version (Caisse Pro) based on new user requirements, creating new files  and , along with corresponding backend models and placeholder endpoints in . The basic structure for the new Caisse Pro is in place, but the login is currently broken.
 
 **Last working item**:
--   **Last item agent was working:** The user requested two new features:
-    1.  **Online Combo Payment:** Allow users to pay for Combos online and book a game session simultaneously on the Combos page.
-    2.  **Table Reservation:** Allow users to reserve a table by paying a deductible deposit (from 5,000 to 25,000 FCFA).
-    The agent created backend models (, ), placeholder API endpoints, and a new but empty frontend page .
+-   **Last item agent was working:** The agent was implementing the new, feature-rich Caisse Pro invoicing software. After creating the basic frontend pages and backend endpoints, the agent attempted to test the login for this new  route. The login failed with an Identifiants incorrects error. The agent hypothesized that the frontend was incorrectly sending a username, while the backend likely only expected a password for this simple login mechanism.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Both. The backend agent needs to test the new endpoints for creating combo/table reservations, including payment logic. The frontend agent needs to test the UI for both features, from form submission to viewing the reservation in the admin panel.
+-   **Which testing method agent to use?** Both. The backend requires thorough testing for the new CRUD APIs for invoices, products, clients, and user management. The frontend requires testing of the entire Caisse Pro interface once the login is fixed.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** Production environment is outdated, causing user confusion. (Priority: P0)
--   **Issue 2:** Verify Kkiapay payment flow for all payment scenarios. (Priority: P1)
+-   **Issue 1:** The login for the new Caisse Pro application is broken. (Priority: P0)
+-   **Issue 2:** Add a discreet link to the cash register application on the homepage. (Priority: P1)
+-   **Issue 3:** The user's production environment () is outdated, leading to confusion. (Priority: P2)
 
 **Issues Detail:**
--   **Issue 1: Production environment is outdated.**
-    -   **Description:** The user repeatedly reports that new features or fixes do not work on their custom domain (). This is because the production environment is running old code.
-    -   **Next debug checklist:** This is **BLOCKED** on user action. The next agent **MUST** begin the interaction by politely but clearly reminding the user in French that to see any new features or fixes on , they must click the **Deploy** button after work is completed.
-    -   **Status:** BLOCKED
+-   **Issue 1: Caisse Pro login is broken.**
+    -   **Attempted fixes:** None. The agent identified the likely cause but did not attempt a fix.
+    -   **Next debug checklist:**
+        1.  Examine  and the  function.
+        2.  Correct the payload sent to the  endpoint to match the backend's expectation (likely just ).
+        3.  Modify the  and container classes in  and  to ensure the layout is fully standalone and not expecting the main site's navbar.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a complete blocker for the development and testing of the new invoicing software, which is the user's current top priority.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** Frontend (to confirm login works).
+    -   **Blocked on other issue:** None.
+-   **Issue 2: Add a discreet link to the cash register application on the homepage.**
+    -   **Description:** The user requested a subtle link to the  (or ) route from the main homepage so staff can access it easily.
+    -   **Next debug checklist:** Edit  and add a  component to  in a discreet location, such as the footer, next to the copyright notice.
+    -   **Status:** NOT STARTED
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** Frontend (screenshot).
+-   **Issue 3: Production environment is outdated.**
+    -   **Description:** The user consistently reports that new features are missing on their live domain. This is a recurring communication problem because they are not using the Deploy button after work is completed.
+    -   **Next debug checklist:** The next agent MUST begin the interaction by politely reminding the user in French that to see any new features on , they must click the **Deploy** button.
+    -   **Status:** BLOCKED (on user action).
     -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** N/A (User action required).
--   **Issue 2: Verify Kkiapay payment flow is stable.**
-    -   **Description:** This was a recurring issue. With new payment flows (delivery, rescheduling, and upcoming combo/table reservations), the payment logic has become more complex and has not been formally re-verified end-to-end.
-    -   **Next debug checklist:** Ask the user to perform test payments for a standard booking, a delivery order, a rescheduling fee, and (once implemented) a combo order and table reservation deposit.
-    -   **Status:** USER VERIFICATION PENDING
-    -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** Both.
 
 **In progress Task List**:
--   **Task 1: Implement Online Combo Payment and Game Reservation.** (Priority: P0)
-    -   **Where to resume:** Modify  (the Combos page) to include a cart, game time slot selector, and a checkout flow. Implement the full logic in the  endpoint in . Add a new section to the admin panel to manage these orders.
-    -   **What will be achieved with this?** Allows users to purchase food and reserve a game session in a single transaction.
+-   **Task 1: Complete Caisse Pro Invoicing Software.** (Priority: P0)
+    -   **Where to resume:** Start by fixing the login bug (Issue #1). Once access is restored, systematically implement the remaining features from the PRODUCT REQUIREMENTS section: Product Management, Client Management, advanced Statistics Dashboard, PDF export, and multi-user roles. This will involve creating new UI components and implementing the logic for the backend endpoints in .
+    -   **What will be achieved with this?** A complete, standalone POS system that meets all of the user's detailed requirements.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** Both.
-    -   **Blocked on something:** None.
--   **Task 2: Implement Table Reservation with Deposit.** (Priority: P0)
-    -   **Where to resume:** Build the UI in  with a form for date, time, number of people, and deposit amount. Implement the full logic in the  endpoint in , including wallet/Kkiapay payment. Add a new section to the admin panel to manage these reservations.
-    -   **What will be achieved with this?** Allows users to reserve tables by paying a deductible deposit online.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both.
-    -   **Blocked on something:** None.
--   **Task 3: Refactor  into modules** (Priority: P2)
-    -   **Where to resume:** The directory structure (, , ) exists. The next step is to methodically move the logic from the 2500+ line  into these modules and wire them up in a main .
-    -   **What will be achieved with this?** A more maintainable, scalable, and less error-prone backend architecture.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Backend.
-    -   **Blocked on something:** None.
+    -   **Blocked on something:** Blocked by Caisse Pro login is broken (Issue #1).
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P0: Test SMS confirmation for clients:** The backend logic to send an SMS to the client after a successful booking payment ( in ) was implemented but has never been tested.
-    -   **P1: Add About Us Section:** Create a new page or section detailing the history of Espace Maxo.
+    -   **P1: Refactor  into modules:** This is a critical technical debt item. The monolithic file is now extremely large and difficult to maintain. The directory structure (, ) exists and should be used.
+    -   **P2: Test client-facing SMS confirmation:** The logic for sending an SMS to the client after a paid booking was implemented but never formally tested.
 -   **Future Tasks:**
-    -   **Refactor :** The admin component is now over 1500 lines and extremely complex. It must be broken down into smaller sub-components for each management tab.
-    -   **Refactor :** This page has significant state and logic that could be modularized.
+    -   **Refactor :** This component is over 1500 lines and should be broken into smaller sub-components for each tab.
+    -   **Add About Us Section:** Create a new page detailing the history of Espace Maxo.
 
 **Completed work in this session**
--   **Dual Admin Roles:** Implemented two admin access levels: Full Access () and Read-Only (). The UI hides/disables modification controls for the read-only role.
--   **Admin View Details Modals:** Added comprehensive View Details modals for every section in the admin panel (Bookings, Rentals, Loyalty, Reviews, Applications, Deliveries).
--   **Nous Rejoindre (Careers) Feature:** Created a full-featured careers section, including a frontend application form () and a backend management tab in the admin panel.
--   **Wallet Payment for Delivery:** Integrated the wallet payment option into the food delivery checkout flow.
--   **Wallet UX Improvement:** Added messages on booking and delivery pages to inform users when their wallet balance is insufficient, with a link to recharge.
--   **Homepage Redesign:** Improved the readability of the PRÊT À JOUER section and rearranged the layout per user request.
--   **Game Price Update:** Changed prices for VR 360 (2,000 FCFA) and Simulator (1,500 FCFA) across the entire application.
--   **Navbar/Footer Updates:** Renamed and reordered navbar items. Investigated and clarified the Made with Emergent badge issue.
+-   **Online Combo Payment System:** Implemented a full checkout flow on a dedicated Combos page, allowing users to purchase a food combo and book an included game session in one transaction. This included a complex, user-guided logic to handle the number of included vs. paid extra players.
+-   **Table Reservation System:** Fully implemented the table reservation page, allowing users to pay a deposit via Kkiapay or their wallet. Fixed a critical bug where the Kkiapay payment script was not loading.
+-   **Floating Cart UI:** Added a highly visible, persistent floating cart button to both the Delivery and Combos pages, with styling adjusted multiple times based on user feedback.
+-   **POS Software (V1):** Created the initial standalone POS application at , including a separate login, a tabbed interface (Caisse, History, Stats), and separation of revenue by department (Games, Bar, Garden).
+-   **Homepage & Navigation UX:**
+    -   Fixed the Google Maps itinerary link to point to the correct address and moved the button directly onto the map overlay.
+    -   Moved the Avis (Reviews) section to the bottom of the homepage.
+    -   Added a Laisser un Avis button to the reviews section.
+    -   Removed the Avis link from the main navbar.
 
 **Earlier issues found/mentioned but not fixed**
--   None.
+-   None. All raised issues in the session were addressed or are listed in the pending section.
 
 **Known issue recurrence from previous fork**
 -   **Issue recurrence in previous fork:** Production Deployment Confusion.
--   **Recurrence count:** High. The user consistently checks their live domain instead of the preview URL.
+-   **Recurrence count:** High. The user continues to check their live domain instead of the preview URL and forgets to use the Deploy button.
 -   **Status:** BLOCKED (on user action/understanding).
 
 **Code Architecture**
@@ -111,83 +103,85 @@ A comprehensive full-stack application (React, FastAPI, MongoDB).
 -   **Frontend:** React, Tailwind CSS, shadcn/ui
 -   **Backend:** FastAPI (Python), PyJWT
 -   **Database:** MongoDB
--   **Integrations:** Kkiapay (Payments), Twilio (SMS OTP & Notifications)
+-   **Integrations:** Kkiapay (Payments), Twilio (SMS)
 
 **key DB schema**
--   **admins:**  (new  field)
--   **applications:** (New) 
--   **delivery_orders:**  (new  field)
--   **combo_orders:** (New Model, unused)
--   **table_reservations:** (New Model, unused)
+-   **combo_orders:**  (New model for combo purchases)
+-   **table_reservations:**  (New model for table bookings)
+-   **invoices:**  (New model for V1 POS system)
+-   **caisse_users:**  (New model for Caisse Pro users)
+-   **products:**  (New model for Caisse Pro products)
 
 **All files of reference**
--   : The main monolithic backend file, significantly expanded.
--   : The main monolithic admin dashboard, significantly expanded.
--   : Updated with wallet payment logic.
--   : Updated with wallet UX improvements.
--   : Layout and style changes.
--   : Link updates.
--   : Added new routes.
--   : New file for the careers page.
--   : New (empty) file for table reservations.
+-   : Heavily modified with all new backend logic.
+-   : New file for the combo checkout feature.
+-   : Implemented and fixed.
+-   : Modified for the new floating cart UI.
+-   : Modified for map link and review section placement.
+-   : Modified to remove the Avis link.
+-   : New routes added for , , .
+-   : New file for the advanced POS, currently has a broken login.
+-   : New file for the advanced POS login.
 
 **Areas that need refactoring**:
--   **:** Critically monolithic. The file has grown substantially, making refactoring an urgent priority for future maintainability.
--   **:** Critically monolithic. At over 1500 lines, this component is becoming unmanageable and should be broken down into sub-components for each tab.
+-   **:** Refactoring is now urgent. The file has become unmanageably large, increasing the risk of bugs and slowing down development. This is the highest priority technical debt.
+-   **:** Still a monolithic component that is difficult to work with.
 
 **key api endpoints**
--   **New Endpoints:**
-    -   : Full CRUD for job applications.
-    -   : CSV export for applications.
-    -    (placeholder)
-    -    (placeholder)
--   **Modified Endpoints:**
-    -   : Now returns a  ( or ).
-    -   All state-modifying endpoints (e.g., , , status changes) are now protected by a write access dependency guard.
+-    (POST)
+-    (POST)
+-    (CRUD endpoints for V1 POS)
+-    (POST)
+-    (New placeholder endpoints for product/client/user management)
 
 **Critical Info for New Agent**
 -   **You MUST communicate in French.**
--   **The immediate tasks are to implement Combo Payments and Table Reservations.** This is the highest priority.
--   **Start by reminding the user about the Deploy button.** This is a recurring communication issue that blocks the user from seeing completed work on their live domain.
--   **The  and  refactoring tasks are critical technical debt.** While not the immediate priority, they should be addressed soon to ensure the project's health.
--   **Admin Access:** There are now two admin passwords:  for full access and  for read-only access.
+-   **The absolute top priority is to build the Caisse Pro software.** Start by fixing the login bug in , then implement the full feature set from the user's detailed request.
+-   Do not forget the small pending task: adding a discreet link to the POS on the homepage.
+-   **Start your interaction by reminding the user about the Deploy button.** This is a critical communication step to manage user expectations.
+-   The refactoring of  should be proposed to the user as the next major task after the Caisse Pro software is complete, explaining that it's necessary for the stability and future development of the application.
 
 **documents and test reports created in this job**
+-   
 -    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  ****: Request to show a message for insufficient wallet balance and improve homepage text readability. (Status: Completed).
-2.  ****: Request to add view details modals to the admin panel. (Status: Completed).
-3.  ****: Request to extend the view details feature to all admin sections. (Status: Completed).
-4.  ****: Request for two admin roles (full access and read-only). (Status: Completed).
-5.  ****: Request for online combo payment and table reservations. (Status: IN PROGRESS).
-6.  ****: Clarification of requirements for combo/table reservations. (Status: Acknowledged).
-7.  ****: Report about wallet payment not working and request to change VR price. (Status: Completed).
-8.  ****: Request to change the simulator price. (Status: Completed).
-9.  ****: Request to add wallet payment option for all orders, specifically delivery. (Status: Completed).
-10. ****: User reporting the Made with Emergent badge is still visible on their live site. (Status: Blocked/Advised user to contact support).
+1.  **Request:** Detailed specifications for a Caisse Pro invoicing software (product/client management, stats, PDF export, multi-user). (Status: IN PROGRESS)
+2.  **Request:** the combos have disappeared. (Status: Addressed - user likely looking at outdated production site).
+3.  **Request:** Provide URL for the POS app. (Status: Completed).
+4.  **Request:** I want a separate software from the website. (Status: Completed).
+5.  **Request:** make me an invoicing software.... (Status: In Progress - this led to Caisse V1).
+6.  **Clarification:** A series of back-and-forth messages to define the exact business rules for how many free game sessions are included with each specific combo. (Status: Completed).
+7.  **Request:** put the itinerary on the map. (Status: Completed).
+8.  **Request:** the floating cart is not very visible -> followed by requests to change its color to red, then yellow. (Status: Completed).
+9.  **Request:** LEAVE A REVIEW has disappeared. (Status: Completed).
+10. **Request:** remove REVIEWS from the menu and put it at the very bottom. (Status: Completed).
+11. **PENDING Request:** put the cash register menu discreetly on the home page. (Status: NOT STARTED)
 
 **Project Health Check:**
 -   **Broken:**
-    -   The user's **production environment** () is out of sync due to not being deployed.
+    -   The login for the new  application.
+    -   The user's production deployment is out of sync.
 -   **Mocked:**
     -   None.
 
 **3rd Party Integrations**
--   **Kkiapay:** For mobile money payments. User-provided keys are in use.
--   **Twilio:** For all SMS functionalities. User-provided keys are configured.
+-   **Kkiapay:** For mobile money payments. User-provided keys are configured.
+-   **Twilio:** For SMS notifications and wallet OTP. User-provided keys are configured.
 
 **Testing status**
--   **Testing agent used after significant changes:** NO
+-   **Testing agent used after significant changes:** YES, the agent was used to validate the new combo and table reservation flows. It found and fixed a critical backend bug.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None.
+-   **Test files created:**
+    -   
 -   **Known regressions:** None.
 
 **Credentials to test flow:**
 -   **Admin Dashboard:** 
--   **Full Access Password:** 
--   **Read-Only Password:** 
+    -   Full Access Password: 
+    -   Read-Only Password: 
+-   **POS Software (V1):** 
+    -   Password: 
 
 **What agent forgot to execute**
--   The agent has still not tested the client-facing SMS confirmation for paid bookings.
--   The agent made no progress on the critical  refactoring task, instead adding more code to the monolithic file.</analysis>
+-   The agent did not implement the user's request to add a discreet link to the cash register application on the homepage.</analysis>

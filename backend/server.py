@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Query, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Query, Depends, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
@@ -17,6 +17,7 @@ import bcrypt
 import jwt
 import csv
 import io
+import hashlib
 from twilio.rest import Client as TwilioClient
 
 ROOT_DIR = Path(__file__).parent
@@ -3387,7 +3388,7 @@ async def caisse_login(credentials: dict = Body(...)):
                     "role": "admin",
                     "full_name": "Administrateur"
                 },
-                "token": jwt.encode({"role": "admin", "username": "admin"}, SECRET_KEY, algorithm="HS256")
+                "token": jwt.encode({"role": "admin", "username": "admin"}, JWT_SECRET_KEY, algorithm="HS256")
             }
         
         password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -3400,7 +3401,7 @@ async def caisse_login(credentials: dict = Body(...)):
         if not user:
             raise HTTPException(status_code=401, detail="Identifiants incorrects")
         
-        token = jwt.encode({"role": user["role"], "username": user["username"]}, SECRET_KEY, algorithm="HS256")
+        token = jwt.encode({"role": user["role"], "username": user["username"]}, JWT_SECRET_KEY, algorithm="HS256")
         
         return {"success": True, "user": user, "token": token}
     except HTTPException:
@@ -3555,6 +3556,125 @@ async def delete_caisse_client(client_id: str):
         raise
     except Exception as e:
         logger.error(f"Error deleting client: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== PDF EXPORT ==============
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+@api_router.get("/invoices/{invoice_id}/pdf")
+async def generate_invoice_pdf(invoice_id: str):
+    """Generate PDF for an invoice"""
+    try:
+        invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+        
+        # Create PDF in memory
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20*mm, leftMargin=20*mm, topMargin=20*mm, bottomMargin=20*mm)
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, alignment=1, spaceAfter=10)
+        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=10, alignment=1, spaceAfter=20)
+        
+        elements = []
+        
+        # Header
+        elements.append(Paragraph("ESPACE MAXO", title_style))
+        elements.append(Paragraph("Restaurant & Centre de Jeux VR", subtitle_style))
+        elements.append(Paragraph(f"Facture N° {invoice.get('invoice_number', invoice['id'][:8].upper())}", 
+                                  ParagraphStyle('InvoiceNum', parent=styles['Heading2'], alignment=1)))
+        elements.append(Spacer(1, 10*mm))
+        
+        # Date and client info
+        date_str = invoice.get('created_at', '')[:10] if invoice.get('created_at') else ''
+        info_data = [
+            [f"Date: {date_str}", f"Client: {invoice.get('customer_name', 'Client')}"],
+            [f"Mode de paiement: {invoice.get('payment_method', 'cash').upper()}", f"Tél: {invoice.get('customer_phone', '-')}"]
+        ]
+        info_table = Table(info_data, colWidths=[90*mm, 80*mm])
+        info_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(info_table)
+        elements.append(Spacer(1, 10*mm))
+        
+        # Items table
+        items_data = [['Article', 'Qté', 'Prix Unit.', 'Total']]
+        for item in invoice.get('items', []):
+            items_data.append([
+                item.get('name', ''),
+                str(item.get('quantity', 1)),
+                f"{int(item.get('price', 0)):,} FCFA".replace(',', ' '),
+                f"{int(item.get('price', 0) * item.get('quantity', 1)):,} FCFA".replace(',', ' ')
+            ])
+        
+        items_table = Table(items_data, colWidths=[80*mm, 20*mm, 35*mm, 35*mm])
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 0), (-1, 0), 10),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]))
+        elements.append(items_table)
+        elements.append(Spacer(1, 5*mm))
+        
+        # Totals
+        subtotal = invoice.get('subtotal', 0)
+        discount_amount = invoice.get('discount_amount', 0)
+        total = invoice.get('total', 0)
+        
+        totals_data = [
+            ['', '', 'Sous-total:', f"{int(subtotal):,} FCFA".replace(',', ' ')],
+        ]
+        if discount_amount > 0:
+            totals_data.append(['', '', f"Remise ({invoice.get('discount', 0)}%):", f"-{int(discount_amount):,} FCFA".replace(',', ' ')])
+        totals_data.append(['', '', 'TOTAL:', f"{int(total):,} FCFA".replace(',', ' ')])
+        
+        totals_table = Table(totals_data, colWidths=[80*mm, 20*mm, 35*mm, 35*mm])
+        totals_table.setStyle(TableStyle([
+            ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, -2), 10),
+            ('FONTSIZE', (0, -1), (-1, -1), 12),
+            ('FONTNAME', (2, -1), (-1, -1), 'Helvetica-Bold'),
+            ('LINEABOVE', (2, -1), (-1, -1), 1, colors.black),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(totals_table)
+        elements.append(Spacer(1, 15*mm))
+        
+        # Footer
+        footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=9, alignment=1, textColor=colors.grey)
+        elements.append(Paragraph("Merci de votre visite chez Espace Maxo!", footer_style))
+        elements.append(Paragraph("Adresse: À côté de la Pharmacie Fidjrossè Plage, Cotonou", footer_style))
+        elements.append(Paragraph("Tél: 01 41 47 00 00 / 01 62 39 62 39", footer_style))
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        filename = f"facture_{invoice.get('invoice_number', invoice['id'][:8])}.pdf"
+        
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

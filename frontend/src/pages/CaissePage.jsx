@@ -386,6 +386,31 @@ const CaissePage = () => {
     printWindow.print();
   };
 
+  // Download PDF from backend
+  const downloadPDF = async (invoice) => {
+    if (!invoice.id || invoice.id === "PREVIEW") {
+      toast.error("Veuillez d'abord enregistrer la facture");
+      return;
+    }
+    try {
+      const response = await axios.get(`${API}/invoices/${invoice.id}/pdf`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `facture_${invoice.invoice_number || invoice.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF téléchargé");
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      toast.error("Erreur lors du téléchargement du PDF");
+    }
+  };
+
   // ============== CRUD OPERATIONS ==============
   const saveProduct = async () => {
     try {
@@ -636,12 +661,12 @@ const CaissePage = () => {
                     </div>
                     
                     {/* Client selector */}
-                    <Select value={selectedClient?.id || ""} onValueChange={(v) => setSelectedClient(clients.find(c => c.id === v) || null)}>
+                    <Select value={selectedClient?.id || "anonymous"} onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}>
                       <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white mt-2">
                         <SelectValue placeholder="Sélectionner un client (optionnel)" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
-                        <SelectItem value="" className="text-white">Client anonyme</SelectItem>
+                        <SelectItem value="anonymous" className="text-white">Client anonyme</SelectItem>
                         {clients.map(client => (
                           <SelectItem key={client.id} value={client.id} className="text-white">
                             {client.name} {client.phone && `(${client.phone})`}
@@ -1100,10 +1125,16 @@ const CaissePage = () => {
                 {viewInvoice.discount > 0 && <div className="flex justify-between"><span className="text-slate-400">Remise ({viewInvoice.discount}%)</span><span className="text-green-400">-{formatPrice(viewInvoice.discount_amount)} F</span></div>}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700"><span>TOTAL</span><span className="text-amber-500">{formatPrice(viewInvoice.total)} FCFA</span></div>
               </div>
-              <Button onClick={() => generatePDF(viewInvoice)} className="w-full bg-amber-500 hover:bg-amber-600">
-                <Download className="w-4 h-4 mr-2" />
-                Télécharger PDF
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={() => generatePDF(viewInvoice)} variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-500/10">
+                  <Printer className="w-4 h-4 mr-2" />
+                  Imprimer
+                </Button>
+                <Button onClick={() => downloadPDF(viewInvoice)} className="bg-amber-500 hover:bg-amber-600">
+                  <Download className="w-4 h-4 mr-2" />
+                  Télécharger PDF
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
