@@ -3738,6 +3738,195 @@ async def generate_invoice_pdf(invoice_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== DAILY REPORT PDF ==============
+@api_router.get("/rapport/pdf")
+async def generate_rapport_pdf(date: str = Query(...), signature: str = Query("")):
+    """Generate daily report PDF"""
+    try:
+        # Get all invoices for the date
+        invoices = await db.invoices.find(
+            {"created_at": {"$regex": f"^{date}"}},
+            {"_id": 0}
+        ).to_list(1000)
+        
+        validated_invoices = [i for i in invoices if i.get('validation_status') == 'validated']
+        pending_invoices = [i for i in invoices if i.get('validation_status') == 'pending']
+        
+        # Calculate stats
+        total_revenue = sum(i.get('total', 0) for i in invoices)
+        validated_revenue = sum(i.get('total', 0) for i in validated_invoices)
+        
+        # Group by server
+        by_server = {}
+        for inv in invoices:
+            server = inv.get('created_by') or 'Non assigné'
+            if server not in by_server:
+                by_server[server] = {'count': 0, 'total': 0, 'validated': 0, 'pending': 0}
+            by_server[server]['count'] += 1
+            by_server[server]['total'] += inv.get('total', 0)
+            if inv.get('validation_status') == 'validated':
+                by_server[server]['validated'] += 1
+            else:
+                by_server[server]['pending'] += 1
+        
+        # Group by department
+        by_dept = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+        for inv in validated_invoices:
+            dept_totals = inv.get('totals_by_department', {})
+            by_dept["salle_jardin"] += dept_totals.get("salle_jardin", 0) + dept_totals.get("jardin", 0)
+            by_dept["jeux"] += dept_totals.get("jeux", 0)
+            by_dept["bar"] += dept_totals.get("bar", 0)
+            by_dept["location"] += dept_totals.get("location", 0)
+            by_dept["autres"] += dept_totals.get("autres", 0)
+        
+        # Group by payment method
+        by_payment = {}
+        for inv in validated_invoices:
+            method = inv.get('payment_method', 'cash')
+            if method not in by_payment:
+                by_payment[method] = {'count': 0, 'total': 0}
+            by_payment[method]['count'] += 1
+            by_payment[method]['total'] += inv.get('total', 0)
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=20, alignment=1, spaceAfter=5, textColor=colors.HexColor('#d4a500'))
+        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Heading2'], fontSize=14, alignment=1, spaceAfter=15)
+        section_style = ParagraphStyle('Section', parent=styles['Heading3'], fontSize=12, spaceAfter=8, spaceBefore=15, textColor=colors.HexColor('#333333'))
+        
+        elements = []
+        
+        # Header
+        elements.append(Paragraph("ESPACE MAXO", title_style))
+        elements.append(Paragraph("RAPPORT JOURNALIER DE CAISSE", subtitle_style))
+        elements.append(Paragraph(f"Date: {date}", ParagraphStyle('Date', parent=styles['Normal'], fontSize=11, alignment=1)))
+        elements.append(Paragraph(f"Généré le: {datetime.now(timezone.utc).strftime('%d/%m/%Y à %H:%M')}", ParagraphStyle('Generated', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.grey)))
+        elements.append(Spacer(1, 10*mm))
+        
+        # Summary table
+        summary_data = [
+            ['Factures Total', 'Validées', 'En attente', 'CA Validé'],
+            [str(len(invoices)), str(len(validated_invoices)), str(len(pending_invoices)), f"{int(validated_revenue):,} F".replace(',', ' ')]
+        ]
+        summary_table = Table(summary_data, colWidths=[45*mm, 45*mm, 45*mm, 45*mm])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, 1), 14),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(summary_table)
+        elements.append(Spacer(1, 8*mm))
+        
+        # By Server
+        elements.append(Paragraph("Récapitulatif par Serveur", section_style))
+        server_data = [['Serveur', 'Factures', 'Validées', 'En attente', 'Total']]
+        for server, data in by_server.items():
+            server_data.append([server, str(data['count']), str(data['validated']), str(data['pending']), f"{int(data['total']):,} F".replace(',', ' ')])
+        server_table = Table(server_data, colWidths=[50*mm, 30*mm, 30*mm, 30*mm, 40*mm])
+        server_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]))
+        elements.append(server_table)
+        elements.append(Spacer(1, 6*mm))
+        
+        # By Department
+        dept_labels = {"salle_jardin": "Salle & Jardin", "jeux": "Jeux", "bar": "Bar", "location": "Location", "autres": "Autres"}
+        elements.append(Paragraph("Par Département", section_style))
+        dept_data = [['Département', 'Montant']]
+        for dept, amount in by_dept.items():
+            if amount > 0:
+                dept_data.append([dept_labels.get(dept, dept), f"{int(amount):,} F".replace(',', ' ')])
+        dept_table = Table(dept_data, colWidths=[100*mm, 80*mm])
+        dept_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+            ('ALIGN', (-1, 0), (-1, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ]))
+        elements.append(dept_table)
+        elements.append(Spacer(1, 6*mm))
+        
+        # By Payment
+        payment_labels = {"cash": "Espèces", "card": "Carte", "mobile": "Mobile Money", "wallet": "Porte-monnaie", "check": "Chèque"}
+        elements.append(Paragraph("Par Mode de Paiement", section_style))
+        payment_data = [['Mode', 'Nb', 'Montant']]
+        for method, data in by_payment.items():
+            payment_data.append([payment_labels.get(method, method), str(data['count']), f"{int(data['total']):,} F".replace(',', ' ')])
+        payment_table = Table(payment_data, colWidths=[80*mm, 40*mm, 60*mm])
+        payment_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ]))
+        elements.append(payment_table)
+        elements.append(Spacer(1, 15*mm))
+        
+        # Signatures section
+        elements.append(Paragraph("Validation et Signatures", section_style))
+        elements.append(Spacer(1, 5*mm))
+        
+        sig_data = [
+            ['La Gérante:', '', "L'Administrateur:", ''],
+            ['', '', '', ''],
+            [signature if signature else '____________________', '', '____________________', ''],
+            ['Mères AHOUANDJINOU', '', 'Marcel HOUNHANOU', '']
+        ]
+        sig_table = Table(sig_data, colWidths=[60*mm, 30*mm, 60*mm, 30*mm])
+        sig_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 2), (0, 2), 'Times-Italic'),
+            ('FONTSIZE', (0, 2), (0, 2), 14),
+            ('FONTNAME', (0, 3), (0, 3), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 3), (2, 3), 'Helvetica-Bold'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, 1), 20),
+        ]))
+        elements.append(sig_table)
+        
+        # Footer
+        elements.append(Spacer(1, 10*mm))
+        footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, alignment=1, textColor=colors.grey)
+        elements.append(Paragraph("Document généré automatiquement par CAISSE PRO - Espace Maxo", footer_style))
+        elements.append(Paragraph("Fidjrossè Plage, Cotonou | Tél: 01 41 47 00 00", footer_style))
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        filename = f"rapport_journalier_{date}.pdf"
+        
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        logger.error(f"Error generating rapport PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 

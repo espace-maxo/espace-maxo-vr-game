@@ -352,170 +352,35 @@ const CaissePage = () => {
     }
   };
 
-  // Generate PDF report with signature
-  const generateRapportPDF = () => {
-    if (!rapportData) return;
+  // Generate PDF report with signature - Download from backend
+  const generateRapportPDF = async () => {
+    if (!rapportData) {
+      toast.error("Données du rapport non disponibles");
+      return;
+    }
     
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    
-    const serverRows = Object.entries(rapportData.byServer).map(([server, data]) => `
-      <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${server}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.count}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.validated}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${data.pending}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">${formatPrice(data.total)} F</td>
-      </tr>
-    `).join('');
-    
-    const deptRows = Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => `
-      <tr>
-        <td style="padding: 6px; border-bottom: 1px solid #eee;">${DEPARTMENT_CONFIG[dept]?.label || dept}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(amount)} F</td>
-      </tr>
-    `).join('');
-    
-    const paymentRows = Object.entries(rapportData.byPayment).map(([method, data]) => `
-      <tr>
-        <td style="padding: 6px; border-bottom: 1px solid #eee;">${PAYMENT_METHODS.find(p => p.value === method)?.label || method}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: center;">${data.count}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(data.total)} F</td>
-      </tr>
-    `).join('');
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Rapport Journalier - ${format(new Date(rapportData.date), "dd/MM/yyyy")}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; max-width: 800px; margin: 0 auto; color: #333; font-size: 12px; }
-            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #d4a500; }
-            .header h1 { font-size: 24px; color: #d4a500; margin-bottom: 5px; }
-            .header h2 { font-size: 18px; color: #333; margin-bottom: 10px; }
-            .header p { color: #666; font-size: 12px; }
-            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
-            .summary-card { background: #f8f8f8; padding: 15px; border-radius: 8px; text-align: center; }
-            .summary-card .value { font-size: 24px; font-weight: bold; color: #d4a500; }
-            .summary-card .label { font-size: 11px; color: #666; margin-top: 5px; }
-            .section { margin-bottom: 25px; }
-            .section h3 { font-size: 14px; color: #333; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid #eee; }
-            table { width: 100%; border-collapse: collapse; }
-            th { background: #f0f0f0; padding: 10px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
-            .signature-section { margin-top: 40px; padding-top: 20px; border-top: 2px solid #eee; }
-            .signature-row { display: flex; justify-content: space-between; margin-top: 30px; }
-            .signature-box { width: 45%; }
-            .signature-box p { font-size: 11px; color: #666; margin-bottom: 5px; }
-            .signature-line { border-bottom: 1px solid #333; height: 60px; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; }
-            .signature-name { font-weight: bold; text-align: center; }
-            .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; }
-            .stamp { color: #d4a500; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>ESPACE MAXO</h1>
-            <h2>RAPPORT JOURNALIER DE CAISSE</h2>
-            <p>Date: ${format(new Date(rapportData.date), "EEEE dd MMMM yyyy", { locale: { code: 'fr' } })}</p>
-            <p>Généré le: ${format(new Date(), "dd/MM/yyyy à HH:mm")}</p>
-          </div>
-          
-          <div class="summary">
-            <div class="summary-card">
-              <div class="value">${rapportData.totalInvoices}</div>
-              <div class="label">Factures Total</div>
-            </div>
-            <div class="summary-card">
-              <div class="value" style="color: #22c55e;">${rapportData.validatedInvoices}</div>
-              <div class="label">Validées</div>
-            </div>
-            <div class="summary-card">
-              <div class="value" style="color: #eab308;">${rapportData.pendingInvoices}</div>
-              <div class="label">En attente</div>
-            </div>
-            <div class="summary-card">
-              <div class="value">${formatPrice(rapportData.validatedRevenue)} F</div>
-              <div class="label">Chiffre d'Affaires Validé</div>
-            </div>
-          </div>
-          
-          <div class="section">
-            <h3>Récapitulatif par Serveur</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Serveur</th>
-                  <th style="text-align: center;">Nb Factures</th>
-                  <th style="text-align: center;">Validées</th>
-                  <th style="text-align: center;">En attente</th>
-                  <th style="text-align: right;">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${serverRows}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="section">
-            <h3>Récapitulatif par Département</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Département</th>
-                  <th style="text-align: right;">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${deptRows}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="section">
-            <h3>Récapitulatif par Mode de Paiement</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Mode</th>
-                  <th style="text-align: center;">Nb</th>
-                  <th style="text-align: right;">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${paymentRows}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="signature-section">
-            <h3>Validation et Signatures</h3>
-            <div class="signature-row">
-              <div class="signature-box">
-                <p>La Gérante:</p>
-                <div class="signature-line">
-                  ${signature ? `<span style="font-family: cursive; font-size: 18px;">${signature}</span>` : ''}
-                </div>
-                <p class="signature-name">Mères AHOUANDJINOU</p>
-              </div>
-              <div class="signature-box">
-                <p>L'Administrateur:</p>
-                <div class="signature-line"></div>
-                <p class="signature-name">Marcel HOUNHANOU</p>
-              </div>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <p class="stamp">Document généré automatiquement par CAISSE PRO - Espace Maxo</p>
-            <p>Fidjrossè Plage, Cotonou | Tél: 01 41 47 00 00</p>
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+    try {
+      const response = await axios.get(`${API}/rapport/pdf`, {
+        params: { 
+          date: rapportDate,
+          signature: signature || ""
+        },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `rapport_journalier_${rapportDate}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Rapport PDF téléchargé !");
+    } catch (error) {
+      console.error("Error generating rapport PDF:", error);
+      toast.error("Erreur lors de la génération du PDF");
+    }
   };
 
   // ============== BILL MANAGEMENT ==============
