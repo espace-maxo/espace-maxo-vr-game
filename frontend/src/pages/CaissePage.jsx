@@ -143,6 +143,9 @@ const CaissePage = () => {
   const [signature, setSignature] = useState("");
   const [selectedServerDetail, setSelectedServerDetail] = useState(null);
   const [serverInvoices, setServerInvoices] = useState([]);
+  
+  // Cancellation requests
+  const [cancellationRequests, setCancellationRequests] = useState([]);
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -422,6 +425,13 @@ const CaissePage = () => {
       fetchMonthlyStats();
     }
   }, [filterMonth, activeTab, isAuthenticated]);
+
+  // Fetch cancellation requests for admin
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'admin') {
+      fetchCancellationRequests();
+    }
+  }, [isAuthenticated, currentUser]);
 
   // Fetch rapport data when rapport tab is active
   useEffect(() => {
@@ -853,8 +863,63 @@ _Gérante - Espace Maxo_
       });
       toast.success("Facture annulée et archivée");
       fetchAllData();
+      fetchCancellationRequests();
     } catch (error) {
       toast.error("Erreur lors de l'annulation");
+    }
+  };
+
+  // Request cancellation (for managers)
+  const requestCancellation = async (invoice) => {
+    const reason = prompt("Motif de la demande d'annulation :");
+    if (!reason) return;
+    
+    try {
+      await axios.post(`${API}/cancellation-requests`, {
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        reason: reason,
+        requested_by: currentUser?.full_name || currentUser?.username || "Manager"
+      });
+      toast.success("Demande d'annulation envoyée à l'administrateur");
+      fetchCancellationRequests();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Erreur lors de l'envoi de la demande");
+    }
+  };
+
+  // Fetch cancellation requests (for admin)
+  const fetchCancellationRequests = async () => {
+    try {
+      const response = await axios.get(`${API}/cancellation-requests`);
+      setCancellationRequests(response.data.requests || []);
+    } catch (error) {
+      console.error("Error fetching cancellation requests:", error);
+    }
+  };
+
+  // Approve cancellation request (admin only)
+  const approveCancellationRequest = async (requestId) => {
+    if (!confirm("Approuver cette demande d'annulation ?")) return;
+    try {
+      await axios.put(`${API}/cancellation-requests/${requestId}/approve?approved_by=${encodeURIComponent(currentUser?.full_name || 'Admin')}`);
+      toast.success("Demande approuvée - Facture annulée");
+      fetchAllData();
+      fetchCancellationRequests();
+    } catch (error) {
+      toast.error("Erreur lors de l'approbation");
+    }
+  };
+
+  // Reject cancellation request (admin only)
+  const rejectCancellationRequest = async (requestId) => {
+    if (!confirm("Rejeter cette demande d'annulation ?")) return;
+    try {
+      await axios.put(`${API}/cancellation-requests/${requestId}/reject?rejected_by=${encodeURIComponent(currentUser?.full_name || 'Admin')}`);
+      toast.success("Demande rejetée");
+      fetchCancellationRequests();
+    } catch (error) {
+      toast.error("Erreur lors du rejet");
     }
   };
 
@@ -1224,6 +1289,61 @@ _Gérante - Espace Maxo_
             {/* ============== MANAGER/ADMIN VIEW: Priority on validations ============== */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') ? (
               <div className="space-y-4">
+                {/* ADMIN ONLY: Cancellation Requests */}
+                {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
+                  <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-red-400 flex items-center gap-2">
+                        <MessageCircle className="w-6 h-6" />
+                        DEMANDES D'ANNULATION
+                        <Badge className="bg-red-500/30 text-red-300 ml-2 text-lg px-3 animate-pulse">
+                          {cancellationRequests.length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {cancellationRequests.map(request => (
+                        <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-red-900/30 rounded-lg p-3 border border-red-500/30">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-bold">{request.invoice_number}</span>
+                              <Badge className="bg-orange-500/20 text-orange-400 text-xs">Demande d'annulation</Badge>
+                            </div>
+                            <p className="text-slate-400 text-sm mt-1">
+                              <strong>Demandé par:</strong> {request.requested_by}
+                            </p>
+                            <p className="text-red-300 text-sm">
+                              <strong>Motif:</strong> {request.reason}
+                            </p>
+                            <p className="text-slate-500 text-xs mt-1">
+                              {request.created_at && format(new Date(request.created_at), "dd/MM/yyyy HH:mm")}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <Button 
+                              size="sm"
+                              onClick={() => approveCancellationRequest(request.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Approuver
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => rejectCancellationRequest(request.id)}
+                              className="text-red-400 hover:bg-red-500/20"
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Rejeter
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Priority Section: Invoices to Validate */}
                 <Card className="bg-gradient-to-br from-yellow-900/30 to-orange-900/20 border-yellow-500/50">
                   <CardHeader className="pb-2">
@@ -1326,8 +1446,8 @@ _Gérante - Espace Maxo_
                                 <Printer className="w-4 h-4 mr-2" />
                                 IMPRIMER
                               </Button>
-                              {/* Only admin can cancel validated invoices */}
-                              {currentUser?.role === 'admin' && (
+                              {/* Admin can cancel directly, Manager can request cancellation */}
+                              {currentUser?.role === 'admin' ? (
                                 <Button 
                                   size="sm"
                                   variant="ghost"
@@ -1336,6 +1456,24 @@ _Gérante - Espace Maxo_
                                   title="Annuler cette facture"
                                 >
                                   <Trash2 className="w-4 h-4" />
+                                </Button>
+                              ) : currentUser?.role === 'manager' && (
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => requestCancellation(invoice)}
+                                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                  title="Demander l'annulation à l'admin"
+                                  disabled={cancellationRequests.some(r => r.invoice_id === invoice.id)}
+                                >
+                                  {cancellationRequests.some(r => r.invoice_id === invoice.id) ? (
+                                    <span className="text-xs">Demande envoyée</span>
+                                  ) : (
+                                    <>
+                                      <MessageCircle className="w-4 h-4 mr-1" />
+                                      <span className="text-xs">Demander</span>
+                                    </>
+                                  )}
                                 </Button>
                               )}
                             </div>
