@@ -1168,16 +1168,44 @@ const CaissePage = () => {
                         </Badge>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-1 max-h-[150px] overflow-y-auto">
+                    <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
                       {invoices.filter(i => i.validation_status === 'pending' && 
                         (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                      ).slice(0, 5).map(invoice => (
-                        <div key={invoice.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg p-2 border border-yellow-500/20">
-                          <div className="flex items-center gap-2">
-                            <span className="text-white text-sm">{invoice.invoice_number}</span>
-                            <span className="text-slate-400 text-xs">{formatPrice(invoice.total)} F</span>
+                      ).slice(0, 10).map(invoice => (
+                        <div key={invoice.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg p-3 border border-yellow-500/20 hover:bg-yellow-900/30 transition-colors">
+                          <div 
+                            className="flex-1 cursor-pointer"
+                            onClick={() => setViewInvoice(invoice)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-medium">{invoice.invoice_number}</span>
+                              <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                            </div>
+                            <p className="text-slate-400 text-xs">
+                              {invoice.customer_name} • {formatPrice(invoice.total)} F
+                              {invoice.created_by && ` • ${invoice.created_by}`}
+                            </p>
                           </div>
-                          <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setViewInvoice(invoice)}
+                              className="text-slate-400 hover:text-white"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                              <Button 
+                                size="sm"
+                                onClick={() => validateInvoice(invoice.id)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Valider
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </CardContent>
