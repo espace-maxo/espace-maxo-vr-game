@@ -1036,7 +1036,7 @@ _Gérante - Espace Maxo_
 
   // ============== BON DE COMMANDE CUISINE (80mm) ==============
   const printKitchenOrder = (invoice) => {
-    const printWindow = window.open('', '_blank', 'width=320,height=600');
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
     
     // Group items by department
     const itemsByDept = {};
@@ -1049,220 +1049,340 @@ _Gérante - Espace Maxo_
     // Calculate total items
     const totalItems = (invoice.items || []).reduce((sum, item) => sum + item.quantity, 0);
     
-    const itemsHtml = Object.entries(itemsByDept).map(([dept, items]) => `
-      <div class="dept-section">
-        <div class="dept-header">
-          <span class="dept-icon">${dept === 'bar' ? '🍺' : dept === 'salle_jardin' ? '🍽️' : dept === 'jeux' ? '🎮' : '📦'}</span>
-          ${DEPARTMENT_CONFIG[dept]?.label || dept}
-        </div>
-        ${items.map(item => `
-          <div class="item-row">
-            <div class="qty-box">${item.quantity}</div>
-            <div class="item-name">${item.name}</div>
+    // Order of departments for kitchen
+    const deptOrder = ['salle_jardin', 'bar', 'jeux', 'location', 'autres'];
+    const sortedDepts = Object.entries(itemsByDept).sort((a, b) => {
+      return deptOrder.indexOf(a[0]) - deptOrder.indexOf(b[0]);
+    });
+    
+    const itemsHtml = sortedDepts.map(([dept, items]) => {
+      const deptConfig = {
+        bar: { icon: '🍺', name: 'BAR', color: '#f97316' },
+        salle_jardin: { icon: '🍽️', name: 'RESTAURANT', color: '#22c55e' },
+        jeux: { icon: '🎮', name: 'JEUX', color: '#3b82f6' },
+        location: { icon: '📍', name: 'LOCATION', color: '#a855f7' },
+        autres: { icon: '📦', name: 'AUTRES', color: '#64748b' }
+      };
+      const config = deptConfig[dept] || deptConfig.autres;
+      
+      return `
+        <div class="dept-section">
+          <div class="dept-header" style="background: ${config.color};">
+            <span class="dept-icon">${config.icon}</span>
+            <span class="dept-name">${config.name}</span>
+            <span class="dept-count">${items.reduce((s, i) => s + i.quantity, 0)}</span>
           </div>
-        `).join('')}
-      </div>
-    `).join('');
+          <div class="items-list">
+            ${items.map(item => `
+              <div class="item-row">
+                <div class="qty-badge">${item.quantity}</div>
+                <div class="item-details">
+                  <div class="item-name">${item.name}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
 
-    // Get table number
-    const tableNum = invoice.table_number || 'N/A';
+    // Get table number and time
+    const tableNum = invoice.table_number || '—';
     const orderTime = new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+    const orderDate = new Date(invoice.created_at).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'});
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>BON ${invoice.invoice_number}</title>
+          <title>CUISINE - ${invoice.invoice_number}</title>
+          <meta charset="UTF-8">
           <style>
             @page { size: 80mm auto; margin: 0; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Arial', sans-serif; 
+              font-family: 'Segoe UI', Arial, sans-serif; 
               width: 80mm; 
-              padding: 3mm; 
+              padding: 2mm; 
               font-size: 12px;
-              line-height: 1.3;
+              line-height: 1.2;
               background: #fff;
-            }
-            
-            /* Header */
-            .header { 
-              text-align: center; 
-              padding: 8px 0;
-              border-bottom: 3px solid #000;
-              margin-bottom: 8px;
-            }
-            .kitchen-title {
-              font-size: 28px;
-              font-weight: 900;
-              letter-spacing: 3px;
-              text-transform: uppercase;
-            }
-            .order-num {
-              font-size: 11px;
-              color: #666;
-              margin-top: 2px;
-            }
-            
-            /* Table Box */
-            .table-box {
-              background: #000;
-              color: #fff;
-              text-align: center;
-              padding: 12px 8px;
-              margin: 8px 0;
-            }
-            .table-label {
-              font-size: 14px;
-              font-weight: bold;
-              letter-spacing: 2px;
-            }
-            .table-number {
-              font-size: 48px;
-              font-weight: 900;
-              line-height: 1;
-              margin-top: 4px;
-            }
-            
-            /* Meta Info */
-            .meta-row {
-              display: flex;
-              justify-content: space-between;
-              padding: 6px 0;
-              border-bottom: 1px dashed #999;
-              font-size: 11px;
-            }
-            .meta-row strong {
               color: #000;
             }
             
-            /* Items */
-            .dept-section {
-              margin: 10px 0;
+            /* ===== HEADER ===== */
+            .header { 
+              text-align: center; 
+              padding: 6px 0 10px;
+              border-bottom: 4px double #000;
+              margin-bottom: 6px;
             }
-            .dept-header {
-              background: linear-gradient(90deg, #333 0%, #666 100%);
-              color: #fff;
-              padding: 6px 8px;
-              font-size: 11px;
-              font-weight: bold;
-              text-transform: uppercase;
-              letter-spacing: 1px;
+            .logo-row {
               display: flex;
               align-items: center;
-              gap: 6px;
+              justify-content: center;
+              gap: 8px;
+              margin-bottom: 4px;
             }
-            .dept-icon {
+            .chef-icon { font-size: 32px; }
+            .kitchen-title {
+              font-size: 32px;
+              font-weight: 900;
+              letter-spacing: 4px;
+              text-transform: uppercase;
+            }
+            .subtitle {
+              font-size: 10px;
+              color: #666;
+              letter-spacing: 2px;
+              text-transform: uppercase;
+            }
+            
+            /* ===== TABLE BOX ===== */
+            .table-box {
+              background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+              color: #fff;
+              text-align: center;
+              padding: 10px 8px;
+              margin: 6px 0;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            }
+            .table-label {
+              font-size: 12px;
+              font-weight: 600;
+              letter-spacing: 3px;
+              text-transform: uppercase;
+              opacity: 0.8;
+            }
+            .table-number {
+              font-size: 64px;
+              font-weight: 900;
+              line-height: 1;
+              margin: 4px 0;
+              text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+            }
+            .table-time {
               font-size: 14px;
+              font-weight: 600;
+              background: rgba(255,255,255,0.2);
+              display: inline-block;
+              padding: 3px 12px;
+              border-radius: 12px;
+              margin-top: 4px;
+            }
+            
+            /* ===== META INFO ===== */
+            .meta-section {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 8px 4px;
+              border-bottom: 1px solid #ddd;
+              margin-bottom: 6px;
+            }
+            .meta-item {
+              text-align: center;
+            }
+            .meta-label {
+              font-size: 8px;
+              color: #999;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .meta-value {
+              font-size: 12px;
+              font-weight: 700;
+              color: #333;
+            }
+            .order-num {
+              font-family: monospace;
+              font-size: 11px;
+              background: #f0f0f0;
+              padding: 2px 6px;
+              border-radius: 4px;
+            }
+            
+            /* ===== DEPARTMENTS ===== */
+            .dept-section {
+              margin: 8px 0;
+              border: 2px solid #e0e0e0;
+              border-radius: 6px;
+              overflow: hidden;
+            }
+            .dept-header {
+              color: #fff;
+              padding: 6px 10px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            .dept-icon { font-size: 18px; }
+            .dept-name {
+              flex: 1;
+              font-size: 13px;
+              font-weight: 800;
+              letter-spacing: 2px;
+              text-transform: uppercase;
+            }
+            .dept-count {
+              background: rgba(255,255,255,0.3);
+              padding: 2px 10px;
+              border-radius: 12px;
+              font-size: 14px;
+              font-weight: 900;
+            }
+            .items-list {
+              background: #fff;
             }
             .item-row {
               display: flex;
               align-items: center;
-              padding: 8px 4px;
-              border-bottom: 1px dotted #ccc;
+              padding: 8px 10px;
+              border-bottom: 1px dashed #e0e0e0;
             }
-            .qty-box {
+            .item-row:last-child {
+              border-bottom: none;
+            }
+            .qty-badge {
               background: #000;
               color: #fff;
-              min-width: 32px;
-              height: 32px;
+              min-width: 36px;
+              height: 36px;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 18px;
-              font-weight: bold;
-              margin-right: 10px;
+              font-size: 20px;
+              font-weight: 900;
+              border-radius: 6px;
+              margin-right: 12px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             }
             .item-name {
-              flex: 1;
               font-size: 16px;
               font-weight: 600;
+              color: #222;
             }
             
-            /* Summary */
-            .summary {
-              background: #f5f5f5;
-              padding: 8px;
-              margin-top: 10px;
+            /* ===== SUMMARY ===== */
+            .summary-box {
+              background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+              border: 3px solid #f59e0b;
+              border-radius: 8px;
+              padding: 10px;
+              margin: 10px 0;
               text-align: center;
-              border: 2px solid #000;
             }
-            .summary-title {
-              font-size: 12px;
-              color: #666;
-            }
-            .summary-count {
-              font-size: 24px;
-              font-weight: 900;
-            }
-            
-            /* Footer */
-            .footer {
-              text-align: center;
-              margin-top: 10px;
-              padding-top: 8px;
-              border-top: 3px solid #000;
-            }
-            .footer-title {
-              font-size: 16px;
-              font-weight: 900;
-              letter-spacing: 2px;
-            }
-            .footer-time {
+            .summary-label {
               font-size: 10px;
-              color: #666;
+              color: #92400e;
+              text-transform: uppercase;
+              letter-spacing: 2px;
+              font-weight: 600;
+            }
+            .summary-value {
+              font-size: 36px;
+              font-weight: 900;
+              color: #92400e;
+              line-height: 1;
               margin-top: 4px;
             }
+            .summary-text {
+              font-size: 11px;
+              color: #b45309;
+              margin-top: 2px;
+            }
             
-            /* Cut line */
+            /* ===== FOOTER ===== */
+            .footer {
+              text-align: center;
+              margin-top: 8px;
+              padding-top: 8px;
+              border-top: 4px double #000;
+            }
+            .footer-badge {
+              display: inline-block;
+              background: #000;
+              color: #fff;
+              padding: 6px 16px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 800;
+              letter-spacing: 2px;
+              text-transform: uppercase;
+            }
+            .footer-time {
+              font-size: 9px;
+              color: #999;
+              margin-top: 6px;
+            }
+            
+            /* ===== CUT LINE ===== */
             .cut-line {
-              border-top: 1px dashed #000;
-              margin: 10px 0;
-              position: relative;
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 2px dashed #ccc;
+              text-align: center;
+              font-size: 10px;
+              color: #aaa;
             }
-            .cut-line::before {
-              content: '✂';
-              position: absolute;
-              left: -2px;
-              top: -10px;
-              font-size: 14px;
-            }
+            .scissors { font-size: 14px; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="kitchen-title">🍳 CUISINE</div>
-            <div class="order-num">${invoice.invoice_number}</div>
+            <div class="logo-row">
+              <span class="chef-icon">👨‍🍳</span>
+              <span class="kitchen-title">CUISINE</span>
+            </div>
+            <div class="subtitle">Bon de Commande</div>
           </div>
           
           <div class="table-box">
-            <div class="table-label">TABLE</div>
+            <div class="table-label">Table N°</div>
             <div class="table-number">${tableNum}</div>
+            <div class="table-time">⏰ ${orderTime}</div>
           </div>
           
-          <div class="meta-row">
-            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
-            <span><strong>Heure:</strong> ${orderTime}</span>
+          <div class="meta-section">
+            <div class="meta-item">
+              <div class="meta-label">Serveur</div>
+              <div class="meta-value">${invoice.created_by || 'N/A'}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Date</div>
+              <div class="meta-value">${orderDate}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">N° Commande</div>
+              <div class="order-num">${invoice.invoice_number.split('-').pop()}</div>
+            </div>
           </div>
           
           ${itemsHtml}
           
-          <div class="summary">
-            <div class="summary-title">TOTAL ARTICLES</div>
-            <div class="summary-count">${totalItems}</div>
+          <div class="summary-box">
+            <div class="summary-label">Total Articles</div>
+            <div class="summary-value">${totalItems}</div>
+            <div class="summary-text">article${totalItems > 1 ? 's' : ''} à préparer</div>
           </div>
           
           <div class="footer">
-            <div class="footer-title">★ BON DE COMMANDE ★</div>
-            <div class="footer-time">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+            <div class="footer-badge">★ Nouvelle Commande ★</div>
+            <div class="footer-time">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit', second: '2-digit'})}</div>
           </div>
           
-          <div class="cut-line"></div>
+          <div class="cut-line">
+            <span class="scissors">✂</span> ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ <span class="scissors">✂</span>
+          </div>
           
           <script>
             window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
+              setTimeout(function() { window.print(); }, 300);
+              setTimeout(function() { window.close(); }, 1000);
             }
           </script>
         </body>

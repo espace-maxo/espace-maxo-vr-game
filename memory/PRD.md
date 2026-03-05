@@ -171,8 +171,9 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ### P2 (Future)
 - [ ] Section "À propos de nous"
 - [ ] Graphiques de revenus
-- [ ] Refactorisation de `server.py` (2500+ lignes)
+- [ ] Refactorisation de `server.py` (4350+ lignes) - Structure modulaire préparée
 - [ ] Refactorisation de `AdminPage.jsx` (1500+ lignes)
+- [ ] Intégration complète des composants modulaires frontend
 
 ## Architecture
 
@@ -181,10 +182,21 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ├── backend/
 │   ├── .env
 │   ├── requirements.txt
-│   ├── server.py (~3700 lignes)
+│   ├── server.py (~4350 lignes - refactorisation en cours)
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── caisse.py (Modèles Pydantic - NOUVEAU)
+│   ├── routers/ (Structure modulaire préparée - NOUVEAU)
+│   │   ├── __init__.py
+│   │   ├── invoices.py
+│   │   ├── users.py
+│   │   ├── products.py
+│   │   ├── clients.py
+│   │   ├── tables.py
+│   │   └── requests.py
 │   └── tests/
 │       ├── test_combo_table.py
-│       └── test_caisse.py (NOUVEAU)
+│       └── test_caisse.py
 └── frontend/
     ├── .env
     ├── package.json
@@ -197,7 +209,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
         └── pages/
             ├── AdminPage.jsx
             ├── BookingPage.jsx
-            ├── CaissePage.jsx (NOUVEAU - POS System)
+            ├── CaissePage.jsx (~3800 lignes - Bug CSS corrigé)
+            ├── caisse/ (Composants modulaires - NOUVEAU)
+            │   ├── constants.js
+            │   └── components/
+            │       ├── LoginView.jsx
+            │       ├── TableBar.jsx
+            │       ├── BillPanel.jsx
+            │       └── index.js
             ├── DeliveryPage.jsx
             ├── HomePage.jsx
             ├── MenuPage.jsx (Combos uniquement)
