@@ -24,6 +24,12 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 // Default catalog items
 const DEFAULT_CATALOG = {
+  salle_jardin: [
+    { id: "table_jardin", name: "Table jardin (1h)", price: 2000, unit: "heure", category: "Mobilier" },
+    { id: "parasol", name: "Parasol", price: 500, unit: "unité", category: "Mobilier" },
+    { id: "chaise_longue", name: "Chaise longue", price: 1000, unit: "heure", category: "Mobilier" },
+    { id: "espace_prive", name: "Espace privé (2h)", price: 5000, unit: "réservation", category: "Réservation" },
+  ],
   jeux: [
     { id: "vr360", name: "VR 360°", price: 2000, unit: "partie", category: "Jeux VR" },
     { id: "simulateur", name: "Simulateur Course", price: 1500, unit: "partie", category: "Simulateur" },
@@ -40,18 +46,20 @@ const DEFAULT_CATALOG = {
     { id: "cafe", name: "Café", price: 500, unit: "tasse", category: "Chaud" },
     { id: "the", name: "Thé", price: 400, unit: "tasse", category: "Chaud" },
   ],
-  jardin: [
-    { id: "table_jardin", name: "Table jardin (1h)", price: 2000, unit: "heure", category: "Mobilier" },
-    { id: "parasol", name: "Parasol", price: 500, unit: "unité", category: "Mobilier" },
-    { id: "chaise_longue", name: "Chaise longue", price: 1000, unit: "heure", category: "Mobilier" },
-    { id: "espace_prive", name: "Espace privé (2h)", price: 5000, unit: "réservation", category: "Réservation" },
-  ]
+  location: [
+    { id: "salle_complete", name: "Location salle complète", price: 50000, unit: "journée", category: "Location" },
+    { id: "salle_demi", name: "Location demi-journée", price: 30000, unit: "demi-journée", category: "Location" },
+    { id: "espace_vip", name: "Espace VIP", price: 25000, unit: "soirée", category: "Location" },
+  ],
+  autres: []
 };
 
 const DEPARTMENT_CONFIG = {
-  jeux: { label: "Salle de Jeux", icon: Gamepad2, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
+  salle_jardin: { label: "Salle & Jardin", icon: TreePine, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  jeux: { label: "Jeux", icon: Gamepad2, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
   bar: { label: "Bar", icon: Wine, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
-  jardin: { label: "Jardin", icon: TreePine, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" }
+  location: { label: "Location", icon: Calendar, color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/30" },
+  autres: { label: "Autres", icon: Package, color: "text-slate-400", bgColor: "bg-slate-500/10", borderColor: "border-slate-500/30" }
 };
 
 const PAYMENT_METHODS = [
@@ -69,7 +77,7 @@ const CaissePage = () => {
   
   // Main state
   const [activeTab, setActiveTab] = useState("caisse");
-  const [activeDepartment, setActiveDepartment] = useState("jeux");
+  const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -82,6 +90,9 @@ const CaissePage = () => {
   const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState("");
   
+  // Custom item form (for "Autres" department)
+  const [customItem, setCustomItem] = useState({ name: "", price: 0 });
+  
   // Data
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
@@ -92,6 +103,7 @@ const CaissePage = () => {
   // Filters
   const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [filterValidation, setFilterValidation] = useState("all"); // all, pending, validated
   
   // Modals
   const [viewInvoice, setViewInvoice] = useState(null);
@@ -227,9 +239,30 @@ const CaissePage = () => {
   const total = subtotal - discountAmount;
 
   const totalByDepartment = {
+    salle_jardin: currentBill.filter(i => i.department === "salle_jardin").reduce((sum, i) => sum + (i.price * i.quantity), 0),
     jeux: currentBill.filter(i => i.department === "jeux").reduce((sum, i) => sum + (i.price * i.quantity), 0),
     bar: currentBill.filter(i => i.department === "bar").reduce((sum, i) => sum + (i.price * i.quantity), 0),
-    jardin: currentBill.filter(i => i.department === "jardin").reduce((sum, i) => sum + (i.price * i.quantity), 0)
+    location: currentBill.filter(i => i.department === "location").reduce((sum, i) => sum + (i.price * i.quantity), 0),
+    autres: currentBill.filter(i => i.department === "autres").reduce((sum, i) => sum + (i.price * i.quantity), 0)
+  };
+
+  // Add custom item to bill (for "Autres" department)
+  const addCustomItem = () => {
+    if (!customItem.name || customItem.price <= 0) {
+      toast.error("Veuillez saisir un nom et un prix valide");
+      return;
+    }
+    const newItem = {
+      id: `custom-${Date.now()}`,
+      name: customItem.name,
+      price: customItem.price,
+      unit: "unité",
+      department: "autres",
+      quantity: 1
+    };
+    setCurrentBill([...currentBill, newItem]);
+    setCustomItem({ name: "", price: 0 });
+    toast.success(`${customItem.name} ajouté`);
   };
 
   // ============== INVOICE ACTIONS ==============
@@ -251,7 +284,8 @@ const CaissePage = () => {
         payment_method: paymentMethod,
         totals_by_department: totalByDepartment,
         notes,
-        created_by: currentUser?.username || "admin"
+        created_by: currentUser?.full_name || currentUser?.username || "admin",
+        validation_status: "pending" // New: needs manager validation
       };
 
       await axios.post(`${API}/invoices`, invoiceData);
@@ -273,6 +307,21 @@ const CaissePage = () => {
     }
   };
 
+  const validateInvoice = async (invoiceId) => {
+    try {
+      await axios.put(`${API}/invoices/${invoiceId}`, {
+        validation_status: "validated",
+        validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        validated_at: new Date().toISOString()
+      });
+      toast.success("Facture validée !");
+      fetchAllData();
+    } catch (error) {
+      console.error("Error validating invoice:", error);
+      toast.error("Erreur lors de la validation");
+    }
+  };
+
   const deleteInvoice = async (invoiceId) => {
     if (!confirm("Supprimer cette facture ?")) return;
     try {
@@ -284,15 +333,14 @@ const CaissePage = () => {
     }
   };
 
-  // ============== PDF GENERATION ==============
-  const generatePDF = (invoice) => {
-    const printWindow = window.open('', '_blank');
+  // ============== TICKET THERMIQUE (80mm) ==============
+  const printTicket = (invoice) => {
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
     const itemsHtml = (invoice.items || []).map(item => `
       <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(item.price)} F</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatPrice(item.price * item.quantity)} F</td>
+        <td style="padding: 2px 0; font-size: 11px;">${item.name}</td>
+        <td style="padding: 2px 0; text-align: center; font-size: 11px;">${item.quantity}</td>
+        <td style="padding: 2px 0; text-align: right; font-size: 11px;">${formatPrice(item.price * item.quantity)}</td>
       </tr>
     `).join('');
 
@@ -300,57 +348,50 @@ const CaissePage = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Facture ${invoice.invoice_number}</title>
+          <title>Ticket ${invoice.invoice_number}</title>
           <style>
+            @page { size: 80mm auto; margin: 0; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; }
-            .header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #f0f0f0; }
-            .header h1 { font-size: 28px; color: #d4a500; margin-bottom: 5px; }
-            .header p { color: #666; font-size: 14px; }
-            .invoice-info { display: flex; justify-content: space-between; margin-bottom: 30px; }
-            .invoice-info div { flex: 1; }
-            .invoice-info h3 { font-size: 12px; color: #999; text-transform: uppercase; margin-bottom: 5px; }
-            .invoice-info p { font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th { background: #f8f8f8; padding: 12px 8px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; }
-            .totals { margin-top: 30px; text-align: right; }
-            .totals div { padding: 8px 0; display: flex; justify-content: flex-end; gap: 50px; }
-            .totals .grand-total { font-size: 20px; font-weight: bold; color: #d4a500; border-top: 2px solid #d4a500; padding-top: 15px; margin-top: 10px; }
-            .footer { margin-top: 50px; text-align: center; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px; }
-            .dept-summary { margin: 20px 0; padding: 15px; background: #f8f8f8; border-radius: 8px; }
-            .dept-summary h4 { margin-bottom: 10px; font-size: 14px; color: #666; }
-            .dept-summary .dept-row { display: flex; justify-content: space-between; padding: 5px 0; }
+            body { 
+              font-family: 'Courier New', monospace; 
+              width: 80mm; 
+              padding: 5mm; 
+              font-size: 12px;
+              line-height: 1.3;
+            }
+            .header { text-align: center; margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
+            .header h1 { font-size: 16px; font-weight: bold; }
+            .header p { font-size: 10px; }
+            .info { margin: 8px 0; font-size: 11px; }
+            .info div { display: flex; justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+            th { text-align: left; font-size: 10px; border-bottom: 1px solid #000; padding: 2px 0; }
+            .totals { border-top: 1px dashed #000; margin-top: 8px; padding-top: 8px; }
+            .totals div { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }
+            .grand-total { font-size: 14px !important; font-weight: bold; border-top: 1px solid #000; padding-top: 5px; margin-top: 5px; }
+            .footer { text-align: center; margin-top: 10px; font-size: 10px; border-top: 1px dashed #000; padding-top: 8px; }
+            .server { font-size: 10px; margin-top: 5px; }
+            .validation { font-size: 10px; margin-top: 3px; }
           </style>
         </head>
         <body>
           <div class="header">
             <h1>ESPACE MAXO</h1>
-            <p>Restaurant & Centre de Jeux VR</p>
-            <p>Fidjrossè Plage, Cotonou | Tél: 01 41 47 00 00</p>
+            <p>Restaurant & Jeux VR</p>
+            <p>Tel: 01 41 47 00 00</p>
           </div>
           
-          <div class="invoice-info">
-            <div>
-              <h3>Facture N°</h3>
-              <p style="font-size: 18px; font-weight: bold;">${invoice.invoice_number}</p>
-            </div>
-            <div>
-              <h3>Date</h3>
-              <p>${format(new Date(invoice.created_at), "dd/MM/yyyy HH:mm")}</p>
-            </div>
-            <div>
-              <h3>Client</h3>
-              <p>${invoice.customer_name}</p>
-              ${invoice.customer_phone ? `<p style="color: #666;">${invoice.customer_phone}</p>` : ''}
-            </div>
+          <div class="info">
+            <div><span>N°:</span><span><b>${invoice.invoice_number}</b></span></div>
+            <div><span>Date:</span><span>${format(new Date(invoice.created_at), "dd/MM/yy HH:mm")}</span></div>
+            <div><span>Client:</span><span>${invoice.customer_name}</span></div>
           </div>
           
           <table>
             <thead>
               <tr>
-                <th style="width: 50%;">Désignation</th>
+                <th style="width: 50%;">Article</th>
                 <th style="text-align: center;">Qté</th>
-                <th style="text-align: right;">P.U.</th>
                 <th style="text-align: right;">Total</th>
               </tr>
             </thead>
@@ -359,21 +400,25 @@ const CaissePage = () => {
             </tbody>
           </table>
           
-          <div class="dept-summary">
-            <h4>Récapitulatif par département</h4>
-            ${invoice.totals_by_department?.jeux ? `<div class="dept-row"><span>Salle de Jeux</span><span>${formatPrice(invoice.totals_by_department.jeux)} FCFA</span></div>` : ''}
-            ${invoice.totals_by_department?.bar ? `<div class="dept-row"><span>Bar</span><span>${formatPrice(invoice.totals_by_department.bar)} FCFA</span></div>` : ''}
-            ${invoice.totals_by_department?.jardin ? `<div class="dept-row"><span>Jardin</span><span>${formatPrice(invoice.totals_by_department.jardin)} FCFA</span></div>` : ''}
-          </div>
-          
           <div class="totals">
-            <div><span>Sous-total:</span><span>${formatPrice(invoice.subtotal)} FCFA</span></div>
-            ${invoice.discount > 0 ? `<div><span>Remise (${invoice.discount}%):</span><span>-${formatPrice(invoice.discount_amount)} FCFA</span></div>` : ''}
-            <div class="grand-total"><span>TOTAL À PAYER:</span><span>${formatPrice(invoice.total)} FCFA</span></div>
-            <div style="font-size: 12px; color: #666;"><span>Mode de paiement:</span><span>${PAYMENT_METHODS.find(p => p.value === invoice.payment_method)?.label || invoice.payment_method}</span></div>
+            <div><span>Sous-total:</span><span>${formatPrice(invoice.subtotal)} F</span></div>
+            ${invoice.discount > 0 ? `<div><span>Remise (${invoice.discount}%):</span><span>-${formatPrice(invoice.discount_amount)} F</span></div>` : ''}
+            <div class="grand-total"><span>TOTAL:</span><span>${formatPrice(invoice.total)} FCFA</span></div>
+            <div><span>Paiement:</span><span>${PAYMENT_METHODS.find(p => p.value === invoice.payment_method)?.label || invoice.payment_method}</span></div>
           </div>
           
-          ${invoice.notes ? `<div style="margin-top: 30px; padding: 15px; background: #fff8e1; border-radius: 8px;"><strong>Notes:</strong> ${invoice.notes}</div>` : ''}
+          <div class="server">
+            Serveur: ${invoice.created_by || '-'}
+          </div>
+          ${invoice.validation_status === 'validated' ? `
+          <div class="validation">
+            ✓ Validé par: ${invoice.validated_by || 'Gérante'}
+          </div>
+          ` : `
+          <div class="validation" style="color: red;">
+            ⏳ En attente de validation
+          </div>
+          `}
           
           <div class="footer">
             <p>Merci de votre visite !</p>
@@ -383,7 +428,7 @@ const CaissePage = () => {
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
+    setTimeout(() => printWindow.print(), 250);
   };
 
   // Download PDF from backend
@@ -642,6 +687,44 @@ const CaissePage = () => {
                     );
                   })}
                 </div>
+                
+                {/* Custom item form for "Autres" department */}
+                {activeDepartment === "autres" && (
+                  <Card className="mt-4 bg-slate-700/30 border-slate-600">
+                    <CardContent className="p-4">
+                      <h4 className="text-slate-300 font-semibold mb-3">Saisie manuelle</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-slate-400 text-xs">Nom du produit</Label>
+                          <Input
+                            value={customItem.name}
+                            onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
+                            placeholder="Ex: Service spécial"
+                            className="bg-slate-800 border-slate-600 text-white mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-slate-400 text-xs">Prix (FCFA)</Label>
+                          <Input
+                            type="number"
+                            value={customItem.price || ""}
+                            onChange={(e) => setCustomItem({ ...customItem, price: parseInt(e.target.value) || 0 })}
+                            placeholder="0"
+                            className="bg-slate-800 border-slate-600 text-white mt-1"
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={addCustomItem} 
+                        className="w-full mt-3 bg-slate-600 hover:bg-slate-500"
+                        disabled={!customItem.name || customItem.price <= 0}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Ajouter à la facture
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Right: Current Bill */}
@@ -809,8 +892,18 @@ const CaissePage = () => {
                     className="bg-slate-800/50 border-slate-700 text-white w-auto"
                   />
                 </div>
+                <Select value={filterValidation} onValueChange={setFilterValidation}>
+                  <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all" className="text-white">Toutes</SelectItem>
+                    <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
+                    <SelectItem value="validated" className="text-green-400">Validées</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Badge className="bg-blue-500/20 text-blue-400">
-                  {invoices.length} facture{invoices.length > 1 ? 's' : ''}
+                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} facture(s)
                 </Badge>
                 {stats && (
                   <Badge className="bg-amber-500/20 text-amber-400">
@@ -819,7 +912,7 @@ const CaissePage = () => {
                 )}
               </div>
 
-              {invoices.length === 0 ? (
+              {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length === 0 ? (
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
@@ -828,31 +921,47 @@ const CaissePage = () => {
                 </Card>
               ) : (
                 <div className="grid gap-3">
-                  {invoices.map((invoice) => (
-                    <Card key={invoice.id} className="bg-slate-800/50 border-slate-700">
+                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).map((invoice) => (
+                    <Card key={invoice.id} className={`bg-slate-800/50 ${invoice.validation_status === 'validated' ? 'border-green-500/30' : 'border-yellow-500/30'}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="flex items-center gap-3 mb-1">
+                            <div className="flex items-center gap-3 mb-1 flex-wrap">
                               <span className="font-bold text-white">{invoice.invoice_number}</span>
                               <Badge className="bg-amber-500/20 text-amber-400">{formatPrice(invoice.total)} F</Badge>
                               <Badge className={invoice.payment_method === 'cash' ? 'bg-green-500/20 text-green-400' : invoice.payment_method === 'card' ? 'bg-blue-500/20 text-blue-400' : invoice.payment_method === 'mobile' ? 'bg-purple-500/20 text-purple-400' : 'bg-slate-500/20 text-slate-400'}>
                                 {PAYMENT_METHODS.find(p => p.value === invoice.payment_method)?.label}
                               </Badge>
+                              {invoice.validation_status === 'validated' ? (
+                                <Badge className="bg-green-500/20 text-green-400">✓ Validée</Badge>
+                              ) : (
+                                <Badge className="bg-yellow-500/20 text-yellow-400">⏳ En attente</Badge>
+                              )}
                             </div>
                             <p className="text-slate-400 text-sm">
                               {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
-                              {invoice.created_by && ` • par ${invoice.created_by}`}
+                              {invoice.created_by && ` • Serveur: ${invoice.created_by}`}
                             </p>
-                            <div className="flex gap-2 mt-2">
+                            {invoice.validated_by && (
+                              <p className="text-green-400 text-xs mt-1">
+                                Validé par: {invoice.validated_by}
+                              </p>
+                            )}
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              {invoice.totals_by_department?.salle_jardin > 0 && (
+                                <Badge className="bg-green-500/20 text-green-400 text-xs">Salle&Jardin: {formatPrice(invoice.totals_by_department.salle_jardin)}</Badge>
+                              )}
                               {invoice.totals_by_department?.jeux > 0 && (
                                 <Badge className="bg-blue-500/20 text-blue-400 text-xs">Jeux: {formatPrice(invoice.totals_by_department.jeux)}</Badge>
                               )}
                               {invoice.totals_by_department?.bar > 0 && (
                                 <Badge className="bg-orange-500/20 text-orange-400 text-xs">Bar: {formatPrice(invoice.totals_by_department.bar)}</Badge>
                               )}
-                              {invoice.totals_by_department?.jardin > 0 && (
-                                <Badge className="bg-green-500/20 text-green-400 text-xs">Jardin: {formatPrice(invoice.totals_by_department.jardin)}</Badge>
+                              {invoice.totals_by_department?.location > 0 && (
+                                <Badge className="bg-purple-500/20 text-purple-400 text-xs">Location: {formatPrice(invoice.totals_by_department.location)}</Badge>
+                              )}
+                              {invoice.totals_by_department?.autres > 0 && (
+                                <Badge className="bg-slate-500/20 text-slate-400 text-xs">Autres: {formatPrice(invoice.totals_by_department.autres)}</Badge>
                               )}
                             </div>
                           </div>
@@ -860,9 +969,14 @@ const CaissePage = () => {
                             <Button variant="ghost" size="sm" onClick={() => setViewInvoice(invoice)} className="text-slate-400 hover:text-white">
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => generatePDF(invoice)} className="text-slate-400 hover:text-white">
-                              <Download className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" onClick={() => printTicket(invoice)} className="text-slate-400 hover:text-white" title="Imprimer ticket">
+                              <Printer className="w-4 h-4" />
                             </Button>
+                            {invoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
+                              <Button variant="ghost" size="sm" onClick={() => validateInvoice(invoice.id)} className="text-green-400 hover:text-green-300" title="Valider">
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                            )}
                             {currentUser?.role === 'admin' && (
                               <Button variant="ghost" size="sm" onClick={() => deleteInvoice(invoice.id)} className="text-red-400 hover:text-red-300">
                                 <Trash2 className="w-4 h-4" />
@@ -892,7 +1006,7 @@ const CaissePage = () => {
 
               {monthlyStats && (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
                       <CardContent className="p-4 text-center">
                         <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
@@ -900,25 +1014,39 @@ const CaissePage = () => {
                         <p className="text-2xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
                       </CardContent>
                     </Card>
+                    <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+                      <CardContent className="p-4 text-center">
+                        <TreePine className="w-6 h-6 text-green-400 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs">Salle & Jardin</p>
+                        <p className="text-xl font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
+                      </CardContent>
+                    </Card>
                     <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
                       <CardContent className="p-4 text-center">
-                        <Gamepad2 className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-sm">Salle de Jeux</p>
-                        <p className="text-2xl font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
+                        <Gamepad2 className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs">Jeux</p>
+                        <p className="text-xl font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
                       <CardContent className="p-4 text-center">
-                        <Wine className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-sm">Bar</p>
-                        <p className="text-2xl font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
+                        <Wine className="w-6 h-6 text-orange-400 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs">Bar</p>
+                        <p className="text-xl font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+                    <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
                       <CardContent className="p-4 text-center">
-                        <TreePine className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-sm">Jardin</p>
-                        <p className="text-2xl font-bold text-green-400">{formatPrice(monthlyStats.by_department?.jardin || 0)} F</p>
+                        <Calendar className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs">Location</p>
+                        <p className="text-xl font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30">
+                      <CardContent className="p-4 text-center">
+                        <Package className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs">Autres</p>
+                        <p className="text-xl font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
                       </CardContent>
                     </Card>
                   </div>
@@ -1111,6 +1239,15 @@ const CaissePage = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-slate-400">Client:</span> {viewInvoice.customer_name}</div>
                 <div><span className="text-slate-400">Date:</span> {format(new Date(viewInvoice.created_at), "dd/MM/yyyy HH:mm")}</div>
+                <div><span className="text-slate-400">Serveur:</span> {viewInvoice.created_by || '-'}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Statut:</span>
+                  {viewInvoice.validation_status === 'validated' ? (
+                    <Badge className="bg-green-500/20 text-green-400">✓ Validée par {viewInvoice.validated_by}</Badge>
+                  ) : (
+                    <Badge className="bg-yellow-500/20 text-yellow-400">⏳ En attente de validation</Badge>
+                  )}
+                </div>
               </div>
               <div className="border-t border-slate-700 pt-4">
                 {viewInvoice.items?.map((item, idx) => (
@@ -1126,15 +1263,21 @@ const CaissePage = () => {
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700"><span>TOTAL</span><span className="text-amber-500">{formatPrice(viewInvoice.total)} FCFA</span></div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => generatePDF(viewInvoice)} variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-500/10">
+                <Button onClick={() => printTicket(viewInvoice)} variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-500/10">
                   <Printer className="w-4 h-4 mr-2" />
-                  Imprimer
+                  Ticket 80mm
                 </Button>
                 <Button onClick={() => downloadPDF(viewInvoice)} className="bg-amber-500 hover:bg-amber-600">
                   <Download className="w-4 h-4 mr-2" />
-                  Télécharger PDF
+                  PDF A4
                 </Button>
               </div>
+              {viewInvoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
+                <Button onClick={() => { validateInvoice(viewInvoice.id); setViewInvoice(null); }} className="w-full bg-green-600 hover:bg-green-700">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Valider cette facture
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
@@ -1166,9 +1309,10 @@ const CaissePage = () => {
               <Select value={productForm.department} onValueChange={(v) => setProductForm({ ...productForm, department: v })}>
                 <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="jeux">Salle de Jeux</SelectItem>
+                  <SelectItem value="salle_jardin">Salle & Jardin</SelectItem>
+                  <SelectItem value="jeux">Jeux</SelectItem>
                   <SelectItem value="bar">Bar</SelectItem>
-                  <SelectItem value="jardin">Jardin</SelectItem>
+                  <SelectItem value="location">Location</SelectItem>
                 </SelectContent>
               </Select>
             </div>

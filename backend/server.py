@@ -394,6 +394,7 @@ class InvoiceItemCreate(BaseModel):
 
 class InvoiceCreate(BaseModel):
     customer_name: str = "Client"
+    customer_phone: str = ""
     items: List[Dict]
     subtotal: float
     discount: float = 0
@@ -401,6 +402,9 @@ class InvoiceCreate(BaseModel):
     total: float
     payment_method: str = "cash"  # cash, mobile, card
     totals_by_department: Dict = {}
+    notes: str = ""
+    created_by: str = ""  # Server/cashier name
+    validation_status: str = "pending"  # pending, validated
 
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -418,6 +422,9 @@ class Invoice(BaseModel):
     totals_by_department: Dict = {}
     notes: str = ""
     created_by: str = ""
+    validation_status: str = "pending"  # pending, validated
+    validated_by: str = ""
+    validated_at: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -3179,13 +3186,17 @@ async def create_invoice(invoice_data: InvoiceCreate):
         invoice = Invoice(
             invoice_number=invoice_number,
             customer_name=invoice_data.customer_name,
+            customer_phone=invoice_data.customer_phone,
             items=invoice_data.items,
             subtotal=invoice_data.subtotal,
             discount=invoice_data.discount,
             discount_amount=invoice_data.discount_amount,
             total=invoice_data.total,
             payment_method=invoice_data.payment_method,
-            totals_by_department=invoice_data.totals_by_department
+            totals_by_department=invoice_data.totals_by_department,
+            notes=invoice_data.notes,
+            created_by=invoice_data.created_by,
+            validation_status=invoice_data.validation_status
         )
         
         invoice_dict = invoice.model_dump()
@@ -3223,12 +3234,14 @@ async def get_invoice_stats(date: str = Query(None)):
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
         total_discounts = sum(inv.get("discount_amount", 0) for inv in invoices)
         
-        by_department = {"jeux": 0, "bar": 0, "jardin": 0}
+        by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
         for inv in invoices:
             dept_totals = inv.get("totals_by_department", {})
+            by_department["salle_jardin"] += dept_totals.get("salle_jardin", 0) + dept_totals.get("jardin", 0)
             by_department["jeux"] += dept_totals.get("jeux", 0)
             by_department["bar"] += dept_totals.get("bar", 0)
-            by_department["jardin"] += dept_totals.get("jardin", 0)
+            by_department["location"] += dept_totals.get("location", 0)
+            by_department["autres"] += dept_totals.get("autres", 0)
         
         invoice_count = len(invoices)
         average_ticket = total_revenue / invoice_count if invoice_count > 0 else 0
@@ -3315,12 +3328,14 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
         
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
         
-        by_department = {"jeux": 0, "bar": 0, "jardin": 0}
+        by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
         for inv in invoices:
             dept_totals = inv.get("totals_by_department", {})
+            by_department["salle_jardin"] += dept_totals.get("salle_jardin", 0) + dept_totals.get("jardin", 0)
             by_department["jeux"] += dept_totals.get("jeux", 0)
             by_department["bar"] += dept_totals.get("bar", 0)
-            by_department["jardin"] += dept_totals.get("jardin", 0)
+            by_department["location"] += dept_totals.get("location", 0)
+            by_department["autres"] += dept_totals.get("autres", 0)
         
         return {
             "year": year,
