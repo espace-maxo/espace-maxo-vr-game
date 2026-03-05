@@ -810,7 +810,17 @@ _Gérante - Espace Maxo_
     }
   };
 
+  // Delete pending invoice (servers can delete their own pending, managers can delete any pending)
   const deleteInvoice = async (invoiceId) => {
+    const invoice = invoices.find(i => i.id === invoiceId);
+    if (!invoice) return;
+    
+    // Only admin can delete validated invoices
+    if (invoice.validation_status === 'validated' && currentUser?.role !== 'admin') {
+      toast.error("Seul l'administrateur peut supprimer une facture validée");
+      return;
+    }
+    
     if (!confirm("Supprimer cette facture ?")) return;
     try {
       await axios.delete(`${API}/invoices/${invoiceId}`);
@@ -818,6 +828,33 @@ _Gérante - Espace Maxo_
       fetchAllData();
     } catch (error) {
       toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // Cancel validated invoice (admin only) - keeps history
+  const cancelValidatedInvoice = async (invoiceId) => {
+    const invoice = invoices.find(i => i.id === invoiceId);
+    if (!invoice) return;
+    
+    if (currentUser?.role !== 'admin') {
+      toast.error("Seul l'administrateur peut annuler une facture validée");
+      return;
+    }
+    
+    const reason = prompt("Motif d'annulation de la facture :");
+    if (!reason) return;
+    
+    try {
+      await axios.put(`${API}/invoices/${invoiceId}`, {
+        validation_status: "cancelled",
+        cancelled_by: currentUser?.full_name || currentUser?.username || "Admin",
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: reason
+      });
+      toast.success("Facture annulée et archivée");
+      fetchAllData();
+    } catch (error) {
+      toast.error("Erreur lors de l'annulation");
     }
   };
 
@@ -1289,14 +1326,18 @@ _Gérante - Espace Maxo_
                                 <Printer className="w-4 h-4 mr-2" />
                                 IMPRIMER
                               </Button>
-                              <Button 
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => deleteInvoice(invoice.id)}
-                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {/* Only admin can cancel validated invoices */}
+                              {currentUser?.role === 'admin' && (
+                                <Button 
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => cancelValidatedInvoice(invoice.id)}
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                  title="Annuler cette facture"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1863,6 +1904,7 @@ _Gérante - Espace Maxo_
                     <SelectItem value="all" className="text-white">Toutes</SelectItem>
                     <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
                     <SelectItem value="validated" className="text-green-400">Validées</SelectItem>
+                    <SelectItem value="cancelled" className="text-red-400">Annulées</SelectItem>
                   </SelectContent>
                 </Select>
                 <Badge className="bg-blue-500/20 text-blue-400">
@@ -1885,7 +1927,7 @@ _Gérante - Espace Maxo_
               ) : (
                 <div className="grid gap-3">
                   {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).map((invoice) => (
-                    <Card key={invoice.id} className={`bg-slate-800/50 ${invoice.validation_status === 'validated' ? 'border-green-500/30' : 'border-yellow-500/30'}`}>
+                    <Card key={invoice.id} className={`bg-slate-800/50 ${invoice.validation_status === 'validated' ? 'border-green-500/30' : invoice.validation_status === 'cancelled' ? 'border-red-500/30' : 'border-yellow-500/30'}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
@@ -1897,6 +1939,8 @@ _Gérante - Espace Maxo_
                               </Badge>
                               {invoice.validation_status === 'validated' ? (
                                 <Badge className="bg-green-500/20 text-green-400">✓ Validée</Badge>
+                              ) : invoice.validation_status === 'cancelled' ? (
+                                <Badge className="bg-red-500/20 text-red-400">✗ Annulée</Badge>
                               ) : (
                                 <Badge className="bg-yellow-500/20 text-yellow-400">⏳ En attente</Badge>
                               )}
@@ -1909,6 +1953,16 @@ _Gérante - Espace Maxo_
                               <p className="text-green-400 text-xs mt-1">
                                 Validé par: {invoice.validated_by}
                               </p>
+                            )}
+                            {invoice.validation_status === 'cancelled' && (
+                              <div className="mt-2 p-2 bg-red-900/30 rounded border border-red-500/30">
+                                <p className="text-red-400 text-xs">
+                                  <strong>Annulée par:</strong> {invoice.cancelled_by} le {invoice.cancelled_at ? format(new Date(invoice.cancelled_at), "dd/MM/yyyy HH:mm") : 'N/A'}
+                                </p>
+                                <p className="text-red-300 text-xs mt-1">
+                                  <strong>Motif:</strong> {invoice.cancellation_reason || 'Non spécifié'}
+                                </p>
+                              </div>
                             )}
                             <div className="flex gap-2 mt-2 flex-wrap">
                               {invoice.totals_by_department?.salle_jardin > 0 && (
