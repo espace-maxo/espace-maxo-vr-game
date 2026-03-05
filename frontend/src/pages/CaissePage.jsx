@@ -7,7 +7,7 @@ import {
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
-  MessageCircle, Send, PieChart as PieChartIcon
+  MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,7 @@ const DEFAULT_CATALOG = {
 };
 
 const DEPARTMENT_CONFIG = {
-  salle_jardin: { label: "Salle & Jardin", icon: TreePine, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  salle_jardin: { label: "Salle & Jardin", icon: UtensilsCrossed, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
   jeux: { label: "Jeux", icon: Gamepad2, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
   bar: { label: "Bar", icon: Wine, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
   location: { label: "Location", icon: Calendar, color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/30" },
@@ -1488,26 +1488,21 @@ _Gérante - Espace Maxo_
                   </CardContent>
                 </Card>
 
-                {/* ============== FACTURES À IMPRIMER (Validated invoices) ============== */}
-                {invoices.filter(i => i.validation_status === 'validated' && 
-                  (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                ).length > 0 && (
+                {/* ============== FACTURES À IMPRIMER (Validated invoices) - Admin/Manager only ============== */}
+                {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && 
+                  invoices.filter(i => i.validation_status === 'validated').length > 0 && (
                   <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/50 mt-4">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-green-400 flex items-center gap-2 text-base">
                         <Printer className="w-5 h-5" />
                         FACTURES À IMPRIMER
                         <Badge className="bg-green-500/30 text-green-300 ml-2">
-                          {invoices.filter(i => i.validation_status === 'validated' && 
-                            (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                          ).length}
+                          {invoices.filter(i => i.validation_status === 'validated').length}
                         </Badge>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
-                      {invoices.filter(i => i.validation_status === 'validated' && 
-                        (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                      ).slice(0, 5).map(invoice => (
+                      {invoices.filter(i => i.validation_status === 'validated').slice(0, 5).map(invoice => (
                         <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/30 rounded-lg p-3 border border-green-500/30">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
