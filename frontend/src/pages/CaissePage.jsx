@@ -134,6 +134,8 @@ const CaissePage = () => {
   const [rapportData, setRapportData] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signature, setSignature] = useState("");
+  const [selectedServerDetail, setSelectedServerDetail] = useState(null);
+  const [serverInvoices, setServerInvoices] = useState([]);
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -424,6 +426,23 @@ _Gérante - Espace Maxo_
     // Open WhatsApp
     window.open(whatsappUrl, '_blank');
     toast.success("WhatsApp ouvert - Envoyez le message à Marcel HOUNHANOU");
+  };
+
+  // View server detail - show all invoices for a specific server
+  const viewServerDetail = (serverName) => {
+    if (!rapportData) return;
+    
+    const serverInvs = rapportData.invoices.filter(inv => 
+      (inv.created_by || 'Non assigné') === serverName
+    );
+    
+    setSelectedServerDetail(serverName);
+    setServerInvoices(serverInvs);
+  };
+
+  const closeServerDetail = () => {
+    setSelectedServerDetail(null);
+    setServerInvoices([]);
   };
 
   // ============== BILL MANAGEMENT ==============
@@ -1775,6 +1794,7 @@ _Gérante - Espace Maxo_
                         <CardTitle className="text-white flex items-center gap-2">
                           <Users className="w-5 h-5 text-blue-400" />
                           Récapitulatif par Serveur
+                          <span className="text-slate-500 text-sm font-normal ml-2">(Cliquez pour voir le détail)</span>
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -1786,22 +1806,141 @@ _Gérante - Espace Maxo_
                               <th className="text-center py-2 text-slate-400 text-sm">Validées</th>
                               <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
                               <th className="text-right py-2 text-slate-400 text-sm">Total</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Action</th>
                             </tr>
                           </thead>
                           <tbody>
                             {Object.entries(rapportData.byServer).map(([server, data]) => (
-                              <tr key={server} className="border-b border-slate-700/50">
+                              <tr 
+                                key={server} 
+                                className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition-colors"
+                                onClick={() => viewServerDetail(server)}
+                              >
                                 <td className="py-3 text-white font-medium">{server}</td>
                                 <td className="py-3 text-center text-slate-300">{data.count}</td>
                                 <td className="py-3 text-center text-green-400">{data.validated}</td>
                                 <td className="py-3 text-center text-yellow-400">{data.pending}</td>
                                 <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
+                                <td className="py-3 text-center">
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="text-blue-400 hover:text-blue-300"
+                                    onClick={(e) => { e.stopPropagation(); viewServerDetail(server); }}
+                                  >
+                                    <Eye className="w-4 h-4 mr-1" />
+                                    Détail
+                                  </Button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </CardContent>
                     </Card>
+
+                    {/* Server Detail View */}
+                    {selectedServerDetail && (
+                      <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-500/30">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                          <div>
+                            <CardTitle className="text-blue-400 flex items-center gap-2">
+                              <User className="w-5 h-5" />
+                              Détail des factures - {selectedServerDetail}
+                            </CardTitle>
+                            <p className="text-slate-400 text-sm mt-1">
+                              {serverInvoices.length} facture(s) • Total: {formatPrice(serverInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
+                            </p>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={closeServerDetail}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <X className="w-5 h-5" />
+                          </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
+                          {serverInvoices.length === 0 ? (
+                            <p className="text-slate-400 text-center py-4">Aucune facture pour ce serveur</p>
+                          ) : (
+                            serverInvoices.map(invoice => (
+                              <div 
+                                key={invoice.id} 
+                                className={`p-3 rounded-lg border ${invoice.validation_status === 'validated' ? 'bg-green-900/20 border-green-500/30' : 'bg-yellow-900/20 border-yellow-500/30'}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-white font-bold">{invoice.invoice_number}</span>
+                                      {invoice.validation_status === 'validated' ? (
+                                        <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Validée</Badge>
+                                      ) : (
+                                        <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-slate-400 text-sm">
+                                      {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
+                                    </p>
+                                    <div className="flex gap-2 mt-1 flex-wrap">
+                                      {invoice.totals_by_department?.salle_jardin > 0 && (
+                                        <Badge className="bg-green-500/20 text-green-400 text-xs">S&J: {formatPrice(invoice.totals_by_department.salle_jardin)}</Badge>
+                                      )}
+                                      {invoice.totals_by_department?.jeux > 0 && (
+                                        <Badge className="bg-blue-500/20 text-blue-400 text-xs">Jeux: {formatPrice(invoice.totals_by_department.jeux)}</Badge>
+                                      )}
+                                      {invoice.totals_by_department?.bar > 0 && (
+                                        <Badge className="bg-orange-500/20 text-orange-400 text-xs">Bar: {formatPrice(invoice.totals_by_department.bar)}</Badge>
+                                      )}
+                                      {invoice.totals_by_department?.location > 0 && (
+                                        <Badge className="bg-purple-500/20 text-purple-400 text-xs">Loc: {formatPrice(invoice.totals_by_department.location)}</Badge>
+                                      )}
+                                      {invoice.totals_by_department?.autres > 0 && (
+                                        <Badge className="bg-slate-500/20 text-slate-400 text-xs">Autres: {formatPrice(invoice.totals_by_department.autres)}</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xl font-bold text-amber-500">{formatPrice(invoice.total)} F</p>
+                                    <p className="text-slate-500 text-xs">
+                                      {PAYMENT_METHODS.find(p => p.value === invoice.payment_method)?.label || invoice.payment_method}
+                                    </p>
+                                    <div className="flex gap-1 mt-2 justify-end">
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        onClick={() => setViewInvoice(invoice)}
+                                        className="text-slate-400 hover:text-white h-7 px-2"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        onClick={() => printTicket(invoice)}
+                                        className="text-slate-400 hover:text-white h-7 px-2"
+                                      >
+                                        <Printer className="w-3 h-3" />
+                                      </Button>
+                                      {invoice.validation_status !== 'validated' && (
+                                        <Button 
+                                          size="sm" 
+                                          onClick={() => validateInvoice(invoice.id)}
+                                          className="bg-green-600 hover:bg-green-700 h-7 px-2"
+                                        >
+                                          <CheckCircle className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {/* By Department & Payment Method */}
                     <div className="grid md:grid-cols-2 gap-4">

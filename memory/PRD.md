@@ -148,10 +148,15 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [x] **Caisse Pro - Logiciel de facturation POS**
 - [x] **Export PDF des factures**
 - [x] **Lien discret vers caisse sur page d'accueil**
+- [x] **Vue détaillée par serveur dans Rapport Journalier** (Mars 2026)
+  - Cliquer sur un serveur affiche toutes ses factures du jour
+  - Résumé des performances (nombre, total, statuts)
+  - Actions: voir détails, imprimer, valider
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
 - [ ] Tester SMS de confirmation client après paiement
+- [ ] **Vérifier le paiement Kkiapay en production** - Tester manuellement un paiement Mobile Money
 
 ### P2 (Future)
 - [ ] Section "À propos de nous"
