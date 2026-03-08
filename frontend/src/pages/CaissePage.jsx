@@ -267,6 +267,13 @@ const CaissePage = () => {
     planned_date: format(new Date(), "yyyy-MM-dd"),
     receipt_image: null
   });
+  
+  // Liste d'achats multiple
+  const [shoppingList, setShoppingList] = useState([]);
+  const [showShoppingListModal, setShowShoppingListModal] = useState(false);
+  const [shoppingListSupplier, setShoppingListSupplier] = useState("");
+  const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", amount: 0 });
 
   // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
@@ -699,6 +706,56 @@ const CaissePage = () => {
       console.error("Error deleting expense:", error);
       toast.error("Erreur lors de la suppression");
     }
+  };
+
+  // ============== SHOPPING LIST FUNCTIONS ==============
+  
+  const addToShoppingList = () => {
+    if (!newListItem.description || newListItem.amount <= 0) {
+      toast.error("Veuillez remplir la description et le montant");
+      return;
+    }
+    setShoppingList([...shoppingList, { ...newListItem, id: Date.now() }]);
+    setNewListItem({ category: "cuisine", description: "", amount: 0 });
+    toast.success("Article ajouté à la liste");
+  };
+
+  const removeFromShoppingList = (itemId) => {
+    setShoppingList(shoppingList.filter(item => item.id !== itemId));
+  };
+
+  const submitShoppingList = async () => {
+    if (shoppingList.length === 0) {
+      toast.error("La liste est vide");
+      return;
+    }
+    
+    try {
+      // Create each expense from the shopping list
+      for (const item of shoppingList) {
+        await axios.post(`${API}/expenses`, {
+          category: item.category,
+          description: item.description,
+          amount: item.amount,
+          supplier: shoppingListSupplier,
+          planned_date: shoppingListDate,
+          requested_by: currentUser?.full_name || currentUser?.username || "Gérante"
+        });
+      }
+      
+      toast.success(`${shoppingList.length} demande(s) d'achat créée(s) !`);
+      setShoppingList([]);
+      setShoppingListSupplier("");
+      setShowShoppingListModal(false);
+      fetchExpenses();
+    } catch (error) {
+      console.error("Error submitting shopping list:", error);
+      toast.error("Erreur lors de la soumission");
+    }
+  };
+
+  const getShoppingListTotal = () => {
+    return shoppingList.reduce((sum, item) => sum + item.amount, 0);
   };
 
   // ============== WEEKLY REPORT FUNCTIONS ==============
@@ -4277,13 +4334,25 @@ _Gérante - Espace Maxo_
                   Achats & Dépenses
                 </h2>
                 {currentUser?.role === 'manager' && (
-                  <Button 
-                    onClick={() => setShowExpenseModal(true)}
-                    className="bg-purple-600 hover:bg-purple-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nouvelle demande
-                  </Button>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button 
+                      onClick={() => setShowExpenseModal(true)}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Demande unique
+                    </Button>
+                    <Button 
+                      onClick={() => setShowShoppingListModal(true)}
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                    >
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Liste d'achats
+                      {shoppingList.length > 0 && (
+                        <Badge className="ml-2 bg-white/20 text-white">{shoppingList.length}</Badge>
+                      )}
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -5507,6 +5576,181 @@ _Gérante - Espace Maxo_
                 Annuler
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Shopping List Modal */}
+      <Dialog open={showShoppingListModal} onOpenChange={(open) => {
+        if (!open && shoppingList.length > 0) {
+          if (!confirm("Vous avez des articles dans la liste. Voulez-vous vraiment fermer ?")) {
+            return;
+          }
+        }
+        setShowShoppingListModal(open);
+      }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-indigo-400 flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              Liste d'Achats
+              {shoppingList.length > 0 && (
+                <Badge className="bg-indigo-500/30 text-indigo-300 ml-2">
+                  {shoppingList.length} article(s) • Total: {formatPrice(getShoppingListTotal())} F
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Global settings for the list */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-700/30 rounded-lg p-3">
+              <div>
+                <Label className="text-slate-300 text-sm">Fournisseur (commun)</Label>
+                <Input
+                  value={shoppingListSupplier}
+                  onChange={(e) => setShoppingListSupplier(e.target.value)}
+                  placeholder="Nom du fournisseur"
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-300 text-sm">Date prévue (commune)</Label>
+                <Input
+                  type="date"
+                  value={shoppingListDate}
+                  onChange={(e) => setShoppingListDate(e.target.value)}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+            </div>
+
+            {/* Add new item form */}
+            <Card className="bg-indigo-900/20 border-indigo-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-indigo-300 text-sm flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Ajouter un article
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Select 
+                    value={newListItem.category} 
+                    onValueChange={(v) => setNewListItem({...newListItem, category: v})}
+                  >
+                    <SelectTrigger className="w-full sm:w-[130px] bg-slate-700/50 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                      <SelectItem value="bar">🍹 Bar</SelectItem>
+                      <SelectItem value="paiement">💳 Paiement</SelectItem>
+                      <SelectItem value="autres">📦 Autres</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={newListItem.description}
+                    onChange={(e) => setNewListItem({...newListItem, description: e.target.value})}
+                    placeholder="Description de l'article"
+                    className="flex-1 bg-slate-700/50 border-slate-600 text-white"
+                  />
+                  <Input
+                    type="number"
+                    value={newListItem.amount || ""}
+                    onChange={(e) => setNewListItem({...newListItem, amount: parseFloat(e.target.value) || 0})}
+                    placeholder="Montant"
+                    className="w-full sm:w-[120px] bg-slate-700/50 border-slate-600 text-white"
+                  />
+                  <Button 
+                    onClick={addToShoppingList}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Shopping list items */}
+            {shoppingList.length > 0 ? (
+              <Card className="bg-slate-700/30 border-slate-600">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-slate-300 text-sm">Articles dans la liste</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
+                  {shoppingList.map((item, index) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 bg-slate-600/30 rounded-lg p-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-slate-400 text-sm font-mono">{index + 1}.</span>
+                        <Badge className={`text-xs shrink-0 ${
+                          item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                          item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                          item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-slate-500/20 text-slate-400'
+                        }`}>{item.category}</Badge>
+                        <span className="text-white truncate">{item.description}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => removeFromShoppingList(item.id)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="text-center py-8 text-slate-500">
+                <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Aucun article dans la liste</p>
+                <p className="text-sm">Ajoutez des articles ci-dessus</p>
+              </div>
+            )}
+
+            {/* Summary and submit */}
+            {shoppingList.length > 0 && (
+              <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg p-4 border border-indigo-500/30">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-slate-300">Total de la liste:</span>
+                  <span className="text-2xl font-bold text-indigo-400">{formatPrice(getShoppingListTotal())} F</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={submitShoppingList}
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Soumettre {shoppingList.length} demande(s)
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      if (confirm("Vider toute la liste ?")) {
+                        setShoppingList([]);
+                      }
+                    }}
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <Button 
+              variant="outline" 
+              onClick={() => setShowShoppingListModal(false)}
+              className="w-full border-slate-600 text-slate-400"
+            >
+              Fermer
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

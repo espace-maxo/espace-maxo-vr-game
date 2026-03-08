@@ -210,6 +210,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Upload de photo de reçu/facture
   - Historique des achats complétés
   - **Onglet Commande masqué pour la gérante** (elle n'en a pas besoin)
+  - **Liste d'achats multiple** : La gérante peut créer une longue liste d'articles avec fournisseur et date communs, puis soumettre toutes les demandes en une seule fois
 - [x] **Point Hebdomadaire** (Mars 2026)
   - Nouvel onglet "Hebdo" pour manager et admin
   - Affiche Recettes, Dépenses et Résultat de la semaine
