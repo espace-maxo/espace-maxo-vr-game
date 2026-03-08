@@ -146,11 +146,16 @@ const CaissePage = () => {
   
   // Cancellation requests
   const [cancellationRequests, setCancellationRequests] = useState([]);
+  const [lastCancellationCount, setLastCancellationCount] = useState(0);
   
   // Modification requests
   const [modificationRequests, setModificationRequests] = useState([]);
+  const [lastModificationCount, setLastModificationCount] = useState(0);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [editingItems, setEditingItems] = useState([]);
+  
+  // Pending orders count for servers
+  const [lastPendingCount, setLastPendingCount] = useState(0);
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -362,7 +367,7 @@ const CaissePage = () => {
       setUsers(usersRes.data.users || []);
       setStats(statsRes.data);
       
-      // Check for new validated invoices and play notification sound
+      // Check for new validated invoices (for servers)
       const newInvoices = invoicesRes.data.invoices || [];
       const myValidatedInvoices = newInvoices.filter(i => 
         i.validation_status === 'validated' && 
@@ -378,6 +383,19 @@ const CaissePage = () => {
         });
       }
       setLastValidatedCount(myValidatedInvoices.length);
+      
+      // Check for new pending invoices (for managers/admins)
+      if (currentUser?.role === 'manager' || currentUser?.role === 'admin') {
+        const pendingInvoices = newInvoices.filter(i => i.validation_status === 'pending');
+        if (pendingInvoices.length > lastPendingCount && lastPendingCount > 0) {
+          playNotificationSound();
+          toast.info("🔔 Nouvelle commande à valider !", {
+            duration: 5000,
+            style: { background: '#f59e0b', color: 'white' }
+          });
+        }
+        setLastPendingCount(pendingInvoices.length);
+      }
       
       // Merge custom products with default catalog
       const customProducts = productsRes.data.products || [];
@@ -414,16 +432,33 @@ const CaissePage = () => {
     }
   }, [filterDate, isAuthenticated]);
 
-  // Auto-refresh every 10 seconds to check for validated invoices (for servers)
+  // Auto-refresh every 5 seconds for ALL users to see updates in real-time
   useEffect(() => {
-    if (isAuthenticated && currentUser?.role === 'server') {
+    if (isAuthenticated) {
       const interval = setInterval(() => {
+        // Refresh invoices and tables for everyone
         fetchAllData();
-      }, 10000); // Check every 10 seconds
+        fetchOpenTables();
+        
+        // Refresh cancellation requests for admin
+        if (currentUser?.role === 'admin') {
+          fetchCancellationRequests();
+        }
+        
+        // Refresh modification requests for managers/admin
+        if (currentUser?.role === 'manager' || currentUser?.role === 'admin') {
+          fetchModificationRequests();
+        }
+        
+        // Refresh rapport data if on rapport tab
+        if (activeTab === 'rapport') {
+          fetchRapportData();
+        }
+      }, 5000); // Refresh every 5 seconds
       
       return () => clearInterval(interval);
     }
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser, activeTab, rapportDate, filterDate]);
 
   useEffect(() => {
     if (isAuthenticated && activeTab === "stats") {
@@ -904,7 +939,18 @@ _Gérante - Espace Maxo_
   const fetchCancellationRequests = async () => {
     try {
       const response = await axios.get(`${API}/cancellation-requests`);
-      setCancellationRequests(response.data.requests || []);
+      const newRequests = response.data.requests || [];
+      
+      // Notify admin of new cancellation requests
+      if (newRequests.length > lastCancellationCount && lastCancellationCount > 0) {
+        playNotificationSound();
+        toast.info("🔔 Nouvelle demande d'annulation reçue !", {
+          duration: 5000,
+          style: { background: '#dc2626', color: 'white' }
+        });
+      }
+      setLastCancellationCount(newRequests.length);
+      setCancellationRequests(newRequests);
     } catch (error) {
       console.error("Error fetching cancellation requests:", error);
     }
@@ -960,7 +1006,18 @@ _Gérante - Espace Maxo_
   const fetchModificationRequests = async () => {
     try {
       const response = await axios.get(`${API}/modification-requests`);
-      setModificationRequests(response.data.requests || []);
+      const newRequests = response.data.requests || [];
+      
+      // Notify manager of new modification requests
+      if (newRequests.length > lastModificationCount && lastModificationCount > 0) {
+        playNotificationSound();
+        toast.info("🔔 Nouvelle demande de modification reçue !", {
+          duration: 5000,
+          style: { background: '#2563eb', color: 'white' }
+        });
+      }
+      setLastModificationCount(newRequests.length);
+      setModificationRequests(newRequests);
     } catch (error) {
       console.error("Error fetching modification requests:", error);
     }
@@ -1038,37 +1095,54 @@ _Gérante - Espace Maxo_
   const printKitchenOrder = (invoice) => {
     const printWindow = window.open('', '_blank', 'width=350,height=700');
     
-    // Group items by department
+    // EXCLUDE bar and jeux departments - kitchen only needs food/location items
+    const excludedDepts = ['bar', 'jeux'];
+    
+    // Filter and group items by department (excluding bar & jeux)
     const itemsByDept = {};
     (invoice.items || []).forEach(item => {
       const dept = item.department || 'autres';
+      if (excludedDepts.includes(dept)) return; // Skip bar and jeux
       if (!itemsByDept[dept]) itemsByDept[dept] = [];
       itemsByDept[dept].push(item);
     });
     
-    // Calculate total items
-    const totalItems = (invoice.items || []).reduce((sum, item) => sum + item.quantity, 0);
+    // Calculate total items (only kitchen items)
+    const kitchenItems = (invoice.items || []).filter(item => !excludedDepts.includes(item.department || 'autres'));
+    const totalItems = kitchenItems.reduce((sum, item) => sum + item.quantity, 0);
+    
+    // If no kitchen items, show message
+    if (totalItems === 0) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html><head><title>Aucun article cuisine</title></head>
+        <body style="font-family: Arial; padding: 20px; text-align: center;">
+          <h2>Aucun article pour la cuisine</h2>
+          <p>Cette commande ne contient que des articles Bar/Jeux.</p>
+          <script>setTimeout(function() { window.close(); }, 2000);</script>
+        </body></html>
+      `);
+      printWindow.document.close();
+      return;
+    }
     
     // Order of departments for kitchen
-    const deptOrder = ['salle_jardin', 'bar', 'jeux', 'location', 'autres'];
+    const deptOrder = ['salle_jardin', 'location', 'autres'];
     const sortedDepts = Object.entries(itemsByDept).sort((a, b) => {
       return deptOrder.indexOf(a[0]) - deptOrder.indexOf(b[0]);
     });
     
     const itemsHtml = sortedDepts.map(([dept, items]) => {
       const deptConfig = {
-        bar: { icon: '🍺', name: 'BAR', color: '#f97316' },
-        salle_jardin: { icon: '🍽️', name: 'RESTAURANT', color: '#22c55e' },
-        jeux: { icon: '🎮', name: 'JEUX', color: '#3b82f6' },
-        location: { icon: '📍', name: 'LOCATION', color: '#a855f7' },
-        autres: { icon: '📦', name: 'AUTRES', color: '#64748b' }
+        salle_jardin: { name: 'RESTAURANT' },
+        location: { name: 'LOCATION' },
+        autres: { name: 'AUTRES' }
       };
       const config = deptConfig[dept] || deptConfig.autres;
       
       return `
         <div class="dept-section">
-          <div class="dept-header" style="background: ${config.color};">
-            <span class="dept-icon">${config.icon}</span>
+          <div class="dept-header">
             <span class="dept-name">${config.name}</span>
             <span class="dept-count">${items.reduce((s, i) => s + i.quantity, 0)}</span>
           </div>
@@ -1076,9 +1150,7 @@ _Gérante - Espace Maxo_
             ${items.map(item => `
               <div class="item-row">
                 <div class="qty-badge">${item.quantity}</div>
-                <div class="item-details">
-                  <div class="item-name">${item.name}</div>
-                </div>
+                <div class="item-name">${item.name}</div>
               </div>
             `).join('')}
           </div>
@@ -1104,11 +1176,11 @@ _Gérante - Espace Maxo_
             }
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Arial, sans-serif; 
+              font-family: 'Courier New', monospace; 
               width: 80mm; 
-              padding: 2mm; 
+              padding: 3mm; 
               font-size: 12px;
-              line-height: 1.2;
+              line-height: 1.3;
               background: #fff;
               color: #000;
             }
@@ -1116,62 +1188,39 @@ _Gérante - Espace Maxo_
             /* ===== HEADER ===== */
             .header { 
               text-align: center; 
-              padding: 6px 0 10px;
-              border-bottom: 4px double #000;
-              margin-bottom: 6px;
+              padding: 8px 0;
+              border-bottom: 3px solid #000;
+              margin-bottom: 8px;
             }
-            .logo-row {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 8px;
-              margin-bottom: 4px;
-            }
-            .chef-icon { font-size: 32px; }
             .kitchen-title {
-              font-size: 32px;
+              font-size: 28px;
               font-weight: 900;
-              letter-spacing: 4px;
-              text-transform: uppercase;
+              letter-spacing: 3px;
             }
             .subtitle {
-              font-size: 10px;
-              color: #666;
-              letter-spacing: 2px;
-              text-transform: uppercase;
+              font-size: 11px;
+              margin-top: 2px;
             }
             
             /* ===== TABLE BOX ===== */
             .table-box {
-              background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
-              color: #fff;
+              border: 3px solid #000;
               text-align: center;
-              padding: 10px 8px;
-              margin: 6px 0;
-              border-radius: 8px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              padding: 8px;
+              margin: 8px 0;
             }
             .table-label {
               font-size: 12px;
               font-weight: 600;
-              letter-spacing: 3px;
-              text-transform: uppercase;
-              opacity: 0.8;
             }
             .table-number {
-              font-size: 64px;
+              font-size: 56px;
               font-weight: 900;
               line-height: 1;
-              margin: 4px 0;
-              text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
             }
             .table-time {
               font-size: 14px;
               font-weight: 600;
-              background: rgba(255,255,255,0.2);
-              display: inline-block;
-              padding: 3px 12px;
-              border-radius: 12px;
               margin-top: 4px;
             }
             
@@ -1179,60 +1228,38 @@ _Gérante - Espace Maxo_
             .meta-section {
               display: flex;
               justify-content: space-between;
-              align-items: center;
-              padding: 8px 4px;
-              border-bottom: 1px solid #ddd;
-              margin-bottom: 6px;
-            }
-            .meta-item {
-              text-align: center;
-            }
-            .meta-label {
-              font-size: 8px;
-              color: #999;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-            }
-            .meta-value {
-              font-size: 12px;
-              font-weight: 700;
-              color: #333;
-            }
-            .order-num {
-              font-family: monospace;
+              padding: 6px 0;
+              border-bottom: 1px dashed #000;
+              margin-bottom: 8px;
               font-size: 11px;
-              background: #f0f0f0;
-              padding: 2px 6px;
-              border-radius: 4px;
+            }
+            .meta-item strong {
+              font-weight: 700;
             }
             
             /* ===== DEPARTMENTS ===== */
             .dept-section {
               margin: 8px 0;
-              border: 2px solid #e0e0e0;
-              border-radius: 6px;
-              overflow: hidden;
+              border: 2px solid #000;
             }
             .dept-header {
+              background: #000;
               color: #fff;
-              padding: 6px 10px;
+              padding: 6px 8px;
               display: flex;
               align-items: center;
-              gap: 8px;
+              justify-content: space-between;
             }
-            .dept-icon { font-size: 18px; }
             .dept-name {
-              flex: 1;
               font-size: 13px;
               font-weight: 800;
-              letter-spacing: 2px;
-              text-transform: uppercase;
+              letter-spacing: 1px;
             }
             .dept-count {
-              background: rgba(255,255,255,0.3);
-              padding: 2px 10px;
-              border-radius: 12px;
-              font-size: 14px;
+              background: #fff;
+              color: #000;
+              padding: 2px 8px;
+              font-size: 12px;
               font-weight: 900;
             }
             .items-list {
@@ -1241,8 +1268,8 @@ _Gérante - Espace Maxo_
             .item-row {
               display: flex;
               align-items: center;
-              padding: 8px 10px;
-              border-bottom: 1px dashed #e0e0e0;
+              padding: 6px 8px;
+              border-bottom: 1px dashed #ccc;
             }
             .item-row:last-child {
               border-bottom: none;
@@ -1250,49 +1277,38 @@ _Gérante - Espace Maxo_
             .qty-badge {
               background: #000;
               color: #fff;
-              min-width: 36px;
-              height: 36px;
+              min-width: 32px;
+              height: 32px;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 20px;
+              font-size: 18px;
               font-weight: 900;
-              border-radius: 6px;
-              margin-right: 12px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+              margin-right: 10px;
             }
             .item-name {
-              font-size: 16px;
+              font-size: 14px;
               font-weight: 600;
-              color: #222;
             }
             
             /* ===== SUMMARY ===== */
             .summary-box {
-              background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-              border: 3px solid #f59e0b;
-              border-radius: 8px;
-              padding: 10px;
+              border: 3px solid #000;
+              padding: 8px;
               margin: 10px 0;
               text-align: center;
             }
             .summary-label {
-              font-size: 10px;
-              color: #92400e;
-              text-transform: uppercase;
-              letter-spacing: 2px;
+              font-size: 11px;
               font-weight: 600;
             }
             .summary-value {
-              font-size: 36px;
+              font-size: 32px;
               font-weight: 900;
-              color: #92400e;
               line-height: 1;
-              margin-top: 4px;
             }
             .summary-text {
-              font-size: 11px;
-              color: #b45309;
+              font-size: 10px;
               margin-top: 2px;
             }
             
@@ -1301,82 +1317,61 @@ _Gérante - Espace Maxo_
               text-align: center;
               margin-top: 8px;
               padding-top: 8px;
-              border-top: 4px double #000;
+              border-top: 3px solid #000;
             }
             .footer-badge {
-              display: inline-block;
-              background: #000;
-              color: #fff;
-              padding: 6px 16px;
-              border-radius: 20px;
               font-size: 12px;
               font-weight: 800;
-              letter-spacing: 2px;
-              text-transform: uppercase;
+              letter-spacing: 1px;
             }
             .footer-time {
               font-size: 9px;
-              color: #999;
-              margin-top: 6px;
+              margin-top: 4px;
             }
             
             /* ===== CUT LINE ===== */
             .cut-line {
               margin-top: 10px;
-              padding-top: 10px;
-              border-top: 2px dashed #ccc;
+              padding-top: 6px;
+              border-top: 1px dashed #000;
               text-align: center;
               font-size: 10px;
-              color: #aaa;
             }
-            .scissors { font-size: 14px; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="logo-row">
-              <span class="chef-icon">👨‍🍳</span>
-              <span class="kitchen-title">CUISINE</span>
-            </div>
+            <div class="kitchen-title">CUISINE</div>
             <div class="subtitle">Bon de Commande</div>
           </div>
           
           <div class="table-box">
-            <div class="table-label">Table N°</div>
+            <div class="table-label">TABLE N°</div>
             <div class="table-number">${tableNum}</div>
-            <div class="table-time">⏰ ${orderTime}</div>
+            <div class="table-time">${orderTime}</div>
           </div>
           
           <div class="meta-section">
-            <div class="meta-item">
-              <div class="meta-label">Serveur</div>
-              <div class="meta-value">${invoice.created_by || 'N/A'}</div>
-            </div>
-            <div class="meta-item">
-              <div class="meta-label">Date</div>
-              <div class="meta-value">${orderDate}</div>
-            </div>
-            <div class="meta-item">
-              <div class="meta-label">N° Commande</div>
-              <div class="order-num">${invoice.invoice_number.split('-').pop()}</div>
-            </div>
+            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Date:</strong> ${orderDate}</span>
+            <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
           </div>
           
           ${itemsHtml}
           
           <div class="summary-box">
-            <div class="summary-label">Total Articles</div>
+            <div class="summary-label">TOTAL ARTICLES</div>
             <div class="summary-value">${totalItems}</div>
             <div class="summary-text">article${totalItems > 1 ? 's' : ''} à préparer</div>
           </div>
           
           <div class="footer">
-            <div class="footer-badge">★ Nouvelle Commande ★</div>
-            <div class="footer-time">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit', second: '2-digit'})}</div>
+            <div class="footer-badge">*** BON DE COMMANDE ***</div>
+            <div class="footer-time">Imprimé ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
           </div>
           
           <div class="cut-line">
-            <span class="scissors">✂</span> ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ <span class="scissors">✂</span>
+            - - - - - - - - - - - - - - - - - -
           </div>
           
           <script>
@@ -1704,6 +1699,11 @@ _Gérante - Espace Maxo_
               <div>
                 <h1 className="text-xl font-bold text-amber-500">CAISSE PRO</h1>
                 <p className="text-slate-400 text-xs">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
+              </div>
+              {/* Real-time sync indicator */}
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-green-400 text-xs font-medium">Sync auto</span>
               </div>
             </div>
             
