@@ -200,6 +200,24 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Message de workflow clair pour la gérante : "1. Imprimer bons → 2. Cliquer Facture"
   - Notification sonore + toast pour le serveur quand sa commande devient facture
   - Serveur voit les factures définitives en lecture seule (bouton "Voir" uniquement)
+- [x] **Gestion des Achats/Dépenses** (Mars 2026)
+  - Nouvel onglet "Achats" pour la gérante et l'admin
+  - Catégories : Cuisine, Bar, Jeux, Autres
+  - Workflow complet : pending → approved → completed (ou revision_requested)
+  - L'admin peut approuver, refuser ou demander une révision avec notes
+  - Upload de photo de reçu/facture
+  - Historique des achats complétés
+- [x] **Point Hebdomadaire** (Mars 2026)
+  - Nouvel onglet "Hebdo" pour manager et admin
+  - Affiche Recettes, Dépenses et Résultat de la semaine
+  - Navigation entre les semaines avec sélecteur de date
+  - Badge Bénéfice/Perte automatique
+- [x] **Suivi d'Activité (Admin)** (Mars 2026)
+  - Nouvel onglet "Activité" réservé à l'admin
+  - Période sélectionnable : Jour, Semaine, Mois
+  - Détail des recettes : Caisse, Réservations Jeux, Tables, Combos
+  - Détail par département, mode de paiement, serveur
+  - Résultat net et marge automatiques
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
