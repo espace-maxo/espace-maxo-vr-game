@@ -473,10 +473,17 @@ const CaissePage = () => {
       if (myValidatedInvoices.length > lastValidatedCount && lastValidatedCount > 0) {
         // New invoice validated! Play sound and show notification
         playNotificationSound();
-        toast.success("🔔 Nouvelle facture validée ! Prête à imprimer", {
-          duration: 5000,
-          style: { background: '#166534', color: 'white' }
-        });
+        if (currentUser?.role === 'server') {
+          toast.success("🧾 Votre commande est devenue une facture définitive !", {
+            duration: 5000,
+            style: { background: '#166534', color: 'white' }
+          });
+        } else {
+          toast.success("🔔 Facture créée avec succès !", {
+            duration: 5000,
+            style: { background: '#166534', color: 'white' }
+          });
+        }
       }
       setLastValidatedCount(myValidatedInvoices.length);
       
@@ -968,16 +975,17 @@ _Gérante - Espace Maxo_
 
   const validateInvoice = async (invoiceId) => {
     try {
+      const invoice = invoices.find(i => i.id === invoiceId);
       await axios.put(`${API}/invoices/${invoiceId}`, {
         validation_status: "validated",
         validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
         validated_at: new Date().toISOString()
       });
-      toast.success("Facture validée !");
+      toast.success(`Facture ${invoice?.invoice_number || ''} transformée ! Le serveur ${invoice?.created_by || ''} va recevoir une notification.`);
       fetchAllData();
     } catch (error) {
       console.error("Error validating invoice:", error);
-      toast.error("Erreur lors de la validation");
+      toast.error("Erreur lors de la transformation en facture");
     }
   };
 
@@ -2965,6 +2973,14 @@ _Gérante - Espace Maxo_
               )}
 
               {/* All pending invoices */}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                <div className="mb-4 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
+                  <p className="text-orange-300 text-sm flex items-center gap-2">
+                    <Printer className="w-4 h-4" />
+                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Facture" pour transformer le bon en facture définitive</span>
+                  </p>
+                </div>
+              )}
               {invoices.filter(i => i.validation_status === 'pending' && 
                 (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
               ).length === 0 ? (
@@ -3076,16 +3092,16 @@ _Gérante - Espace Maxo_
                                 </Button>
                               )
                             )}
-                            {/* Manager/Admin: Validate */}
+                            {/* Manager/Admin: Transform to Invoice */}
                             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
                               <>
                                 <Button 
                                   size="sm"
                                   onClick={() => validateInvoice(invoice.id)}
-                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
                                 >
-                                  <CheckCircle className="w-4 h-4 mr-1" />
-                                  Valider
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  Facture
                                 </Button>
                                 <Button 
                                   size="sm"
