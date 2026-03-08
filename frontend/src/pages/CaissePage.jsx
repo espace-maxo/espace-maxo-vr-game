@@ -758,6 +758,232 @@ const CaissePage = () => {
     return shoppingList.reduce((sum, item) => sum + item.amount, 0);
   };
 
+  // ============== PRINT EXPENSE PDF ==============
+  
+  const printExpensePDF = (expense) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    const categoryLabels = {
+      cuisine: '🍳 Cuisine',
+      bar: '🍹 Bar',
+      paiement: '💳 Paiement',
+      autres: '📦 Autres'
+    };
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bon d'Achat - ${expense.description}</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: A5; margin: 10mm; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background: #fff; color: #333; }
+            .header { text-align: center; border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 800; color: #4f46e5; letter-spacing: 2px; }
+            .subtitle { font-size: 14px; color: #666; margin-top: 5px; }
+            .badge { display: inline-block; background: #4f46e5; color: #fff; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; margin: 10px 0; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+            .info-box { background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #4f46e5; }
+            .info-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+            .info-value { font-size: 14px; font-weight: 600; color: #333; margin-top: 3px; }
+            .amount-box { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; }
+            .amount-label { font-size: 12px; opacity: 0.9; }
+            .amount-value { font-size: 36px; font-weight: 800; }
+            .details { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; }
+            .details-title { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
+            .details-content { font-size: 14px; color: #333; }
+            .footer { margin-top: 30px; padding-top: 15px; border-top: 1px dashed #ccc; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+            .signature-box { text-align: center; width: 45%; }
+            .signature-line { border-bottom: 1px solid #333; margin-bottom: 5px; height: 40px; }
+            .signature-label { font-size: 11px; color: #666; }
+            .status-approved { background: #22c55e; }
+            .print-date { text-align: center; font-size: 10px; color: #999; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">ESPACE MAXO</div>
+            <div class="subtitle">Bon d'Achat Approuvé</div>
+            <div class="badge status-approved">✓ APPROUVÉ</div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-box">
+              <div class="info-label">Catégorie</div>
+              <div class="info-value">${categoryLabels[expense.category] || expense.category}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-label">Date prévue</div>
+              <div class="info-value">${expense.planned_date || 'Non spécifiée'}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-label">Demandé par</div>
+              <div class="info-value">${expense.requested_by || 'N/A'}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-label">Approuvé par</div>
+              <div class="info-value">${expense.approved_by || 'Administrateur'}</div>
+            </div>
+          </div>
+
+          <div class="details">
+            <div class="details-title">Description de l'achat</div>
+            <div class="details-content">${expense.description}</div>
+          </div>
+
+          ${expense.supplier ? `
+          <div class="details">
+            <div class="details-title">Fournisseur</div>
+            <div class="details-content">${expense.supplier}</div>
+          </div>
+          ` : ''}
+
+          <div class="amount-box">
+            <div class="amount-label">MONTANT APPROUVÉ</div>
+            <div class="amount-value">${formatPrice(expense.amount)} F</div>
+          </div>
+
+          <div class="footer">
+            <div class="signatures">
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature Gérante</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature Admin</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="print-date">
+            Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 300);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Print all approved expenses as a summary PDF
+  const printAllApprovedExpenses = () => {
+    const approved = expenses.filter(e => e.status === 'approved');
+    if (approved.length === 0) {
+      toast.error("Aucune demande approuvée à imprimer");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    const total = approved.reduce((sum, e) => sum + e.amount, 0);
+    
+    const categoryLabels = {
+      cuisine: 'Cuisine',
+      bar: 'Bar',
+      paiement: 'Paiement',
+      autres: 'Autres'
+    };
+    
+    const itemsHtml = approved.map((expense, index) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${index + 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">
+          <span style="background: ${expense.category === 'cuisine' ? '#22c55e' : expense.category === 'bar' ? '#f97316' : expense.category === 'paiement' ? '#3b82f6' : '#64748b'}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+            ${categoryLabels[expense.category] || expense.category}
+          </span>
+        </td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${expense.description}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${expense.supplier || '-'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600;">${formatPrice(expense.amount)} F</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Liste des Achats Approuvés</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: A4; margin: 15mm; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background: #fff; color: #333; }
+            .header { text-align: center; border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 800; color: #4f46e5; }
+            .subtitle { font-size: 16px; color: #666; margin-top: 5px; }
+            .date-badge { background: #4f46e5; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px; display: inline-block; margin-top: 10px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th { background: #4f46e5; color: white; padding: 10px; text-align: left; font-size: 12px; }
+            .total-row { background: #f8f9fa; font-weight: 800; }
+            .total-row td { padding: 12px 8px; font-size: 16px; }
+            .footer { margin-top: 30px; display: flex; justify-content: space-between; }
+            .signature-box { text-align: center; width: 30%; }
+            .signature-line { border-bottom: 1px solid #333; margin-bottom: 5px; height: 50px; }
+            .signature-label { font-size: 11px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">ESPACE MAXO</div>
+            <div class="subtitle">Liste des Achats Approuvés</div>
+            <div class="date-badge">${new Date().toLocaleDateString('fr-FR')}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 15%;">Catégorie</th>
+                <th style="width: 35%;">Description</th>
+                <th style="width: 20%;">Fournisseur</th>
+                <th style="width: 25%; text-align: right;">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+              <tr class="total-row">
+                <td colspan="4" style="text-align: right; padding-right: 20px;">TOTAL:</td>
+                <td style="text-align: right; color: #4f46e5;">${formatPrice(total)} F</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Gérante</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Administrateur</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Comptable</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 300);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // ============== WEEKLY REPORT FUNCTIONS ==============
   
   const fetchWeeklyReport = async () => {
@@ -4357,12 +4583,49 @@ _Gérante - Espace Maxo_
               </div>
 
               {/* Categories legend */}
-              <div className="flex flex-wrap gap-2">
-                <Badge className="bg-green-500/20 text-green-400">Cuisine</Badge>
-                <Badge className="bg-orange-500/20 text-orange-400">Bar</Badge>
-                <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
-                <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
+              <div className="flex flex-wrap gap-2 items-center justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="bg-green-500/20 text-green-400">Cuisine</Badge>
+                  <Badge className="bg-orange-500/20 text-orange-400">Bar</Badge>
+                  <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
+                  <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span>Total demandes: {expenses.length}</span>
+                  <span>•</span>
+                  <span className="text-amber-400">{expenses.filter(e => e.status === 'pending').length} en attente</span>
+                  <span>•</span>
+                  <span className="text-green-400">{expenses.filter(e => e.status === 'approved').length} approuvées</span>
+                  <span>•</span>
+                  <span className="text-slate-500">{expenses.filter(e => e.status === 'completed').length} terminées</span>
+                </div>
               </div>
+
+              {/* Summary card with totals */}
+              {expenses.length > 0 && (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <p className="text-slate-500 text-xs">En attente</p>
+                        <p className="text-amber-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'pending').reduce((sum, e) => sum + e.amount, 0))} F</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs">À réviser</p>
+                        <p className="text-orange-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'revision_requested').reduce((sum, e) => sum + e.amount, 0))} F</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs">Approuvées</p>
+                        <p className="text-green-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs">Terminées</p>
+                        <p className="text-slate-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'completed').reduce((sum, e) => sum + e.amount, 0))} F</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Pending expenses that need manager revision (revision_requested) */}
               {currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
@@ -4535,40 +4798,66 @@ _Gérante - Espace Maxo_
               {expenses.filter(e => e.status === 'approved').length > 0 && (
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-green-400 flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5" />
-                      APPROUVÉS - Prêts à acheter
-                      <Badge className="bg-green-500/30 text-green-300 ml-2">
-                        {expenses.filter(e => e.status === 'approved').length}
-                      </Badge>
+                    <CardTitle className="text-green-400 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5" />
+                        APPROUVÉS - Prêts à acheter
+                        <Badge className="bg-green-500/30 text-green-300 ml-2">
+                          {expenses.filter(e => e.status === 'approved').length}
+                        </Badge>
+                        <Badge className="bg-emerald-500/30 text-emerald-300">
+                          Total: {formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F
+                        </Badge>
+                      </div>
+                      <Button 
+                        size="sm"
+                        onClick={printAllApprovedExpenses}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Printer className="w-4 h-4 mr-1" />
+                        Imprimer la liste
+                      </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {expenses.filter(e => e.status === 'approved').map(expense => (
                       <div key={expense.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/20 rounded-lg p-3 border border-green-500/30">
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={`text-xs ${
                               expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
                               expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                              expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                              expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
                               'bg-slate-500/20 text-slate-400'
                             }`}>{expense.category}</Badge>
                             <span className="text-white font-medium">{expense.description}</span>
                           </div>
                           <p className="text-green-400 font-bold">{formatPrice(expense.amount)} F</p>
                           {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
+                          {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
+                          <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
                         </div>
-                        {currentUser?.role === 'manager' && (
+                        <div className="flex gap-2 flex-wrap shrink-0">
                           <Button 
                             size="sm"
-                            onClick={() => updateExpense(expense.id, { status: "completed" })}
-                            className="bg-emerald-600 hover:bg-emerald-700"
+                            variant="outline"
+                            onClick={() => printExpensePDF(expense)}
+                            className="border-green-500/50 text-green-400 hover:bg-green-500/20"
                           >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Marquer acheté
+                            <Printer className="w-4 h-4 mr-1" />
+                            PDF
                           </Button>
-                        )}
+                          {currentUser?.role === 'manager' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => updateExpense(expense.id, { status: "completed" })}
+                              className="bg-emerald-600 hover:bg-emerald-700"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Acheté
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </CardContent>
