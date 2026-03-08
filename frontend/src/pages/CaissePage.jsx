@@ -171,7 +171,7 @@ const CaissePage = () => {
   const [loginMode, setLoginMode] = useState("pin"); // pin or admin
   
   // Main state
-  const [activeTab, setActiveTab] = useState("caisse");
+  const [activeTab, setActiveTab] = useState("commande");
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
   
@@ -1216,8 +1216,10 @@ _Gérante - Espace Maxo_
   const printKitchenOrder = (invoice) => {
     const printWindow = window.open('', '_blank', 'width=350,height=700');
     
-    // CUISINE = uniquement articles salle_jardin (restaurant)
-    const kitchenItems = (invoice.items || []).filter(item => item.department === 'salle_jardin');
+    // CUISINE = articles salle_jardin (restaurant) + accompagnements
+    const kitchenItems = (invoice.items || []).filter(item => 
+      item.department === 'salle_jardin' || item.department === 'accompagnements'
+    );
     const totalItems = kitchenItems.reduce((sum, item) => sum + item.quantity, 0);
     
     // If no kitchen items, show message
@@ -1227,7 +1229,7 @@ _Gérante - Espace Maxo_
         <html><head><title>Aucun article cuisine</title></head>
         <body style="font-family: Arial; padding: 20px; text-align: center;">
           <h2>Aucun article pour la cuisine</h2>
-          <p>Cette commande ne contient pas d'articles Salle/Restaurant.</p>
+          <p>Cette commande ne contient pas de plats ni d'accompagnements.</p>
           <script>setTimeout(function() { window.close(); }, 2000);</script>
         </body></html>
       `);
@@ -1235,12 +1237,26 @@ _Gérante - Espace Maxo_
       return;
     }
     
-    const itemsHtml = kitchenItems.map(item => `
+    // Séparer plats et accompagnements
+    const plats = kitchenItems.filter(item => item.department === 'salle_jardin');
+    const accompagnements = kitchenItems.filter(item => item.department === 'accompagnements');
+    
+    const platsHtml = plats.length > 0 ? plats.map(item => `
       <div class="item-row">
         <div class="qty-badge">${item.quantity}</div>
         <div class="item-name">${item.name}</div>
       </div>
-    `).join('');
+    `).join('') : '';
+    
+    const accompagnementsHtml = accompagnements.length > 0 ? `
+      <div class="section-divider">ACCOMPAGNEMENTS</div>
+      ${accompagnements.map(item => `
+        <div class="item-row accomp">
+          <div class="qty-badge accomp-badge">${item.quantity}</div>
+          <div class="item-name">${item.name}</div>
+        </div>
+      `).join('')}
+    ` : '';
 
     // Get table number and time
     const tableNum = invoice.table_number || '—';
@@ -1274,6 +1290,9 @@ _Gérante - Espace Maxo_
             .item-row:last-child { border-bottom: none; }
             .qty-badge { background: #000; color: #fff; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; margin-right: 10px; }
             .item-name { font-size: 14px; font-weight: 600; }
+            .section-divider { background: #333; color: #fff; padding: 4px 8px; font-size: 11px; font-weight: 700; text-align: center; letter-spacing: 1px; margin-top: 2px; }
+            .item-row.accomp { background: #f5f5f5; }
+            .accomp-badge { background: #666 !important; }
             .summary-box { border: 3px solid #000; padding: 8px; margin: 10px 0; text-align: center; }
             .summary-label { font-size: 11px; font-weight: 600; }
             .summary-value { font-size: 32px; font-weight: 900; line-height: 1; }
@@ -1300,13 +1319,14 @@ _Gérante - Espace Maxo_
           </div>
           <div class="items-section">
             <div class="items-header">
-              <span class="items-title">PLATS</span>
+              <span class="items-title">PLATS & ACCOMP.</span>
               <span class="items-count">${totalItems}</span>
             </div>
-            ${itemsHtml}
+            ${platsHtml}
+            ${accompagnementsHtml}
           </div>
           <div class="summary-box">
-            <div class="summary-label">TOTAL PLATS</div>
+            <div class="summary-label">TOTAL ARTICLES</div>
             <div class="summary-value">${totalItems}</div>
           </div>
           <div class="footer">
@@ -2017,8 +2037,14 @@ _Gérante - Espace Maxo_
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
-            <TabsTrigger value="caisse" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-              <Calculator className="w-4 h-4 mr-2" />Caisse
+            <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <Calculator className="w-4 h-4 mr-2" />Commande
+            </TabsTrigger>
+            <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+              <Printer className="w-4 h-4 mr-2" />Bons
+              {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
+                <Badge className="ml-1 bg-orange-600 text-white text-xs">{invoices.filter(i => i.validation_status === 'pending').length}</Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="invoices" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-2" />Factures
@@ -2039,13 +2065,13 @@ _Gérante - Espace Maxo_
             )}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="rapport" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white">
-                <FileText className="w-4 h-4 mr-2" />Rapport Journalier
+                <FileText className="w-4 h-4 mr-2" />Rapport
               </TabsTrigger>
             )}
           </TabsList>
 
-          {/* ==================== CAISSE TAB ==================== */}
-          <TabsContent value="caisse">
+          {/* ==================== COMMANDE TAB (Creation only) ==================== */}
+          <TabsContent value="commande">
             {/* ============== MANAGER/ADMIN VIEW: Priority on validations ============== */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') ? (
               <div className="space-y-4">
@@ -2158,99 +2184,6 @@ _Gérante - Espace Maxo_
                     </CardContent>
                   </Card>
                 )}
-
-                {/* Priority Section: Kitchen Orders (Pending validation) */}
-                <Card className="bg-gradient-to-br from-orange-900/30 to-amber-900/20 border-orange-500/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-orange-400 flex items-center gap-2">
-                      <FileText className="w-6 h-6" />
-                      BONS DE COMMANDE - CUISINE
-                      <Badge className="bg-orange-500/30 text-orange-300 ml-2 text-lg px-3">
-                        {invoices.filter(i => i.validation_status === 'pending').length}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {invoices.filter(i => i.validation_status === 'pending').length === 0 ? (
-                      <p className="text-slate-400 text-center py-4">Aucun bon de commande en attente</p>
-                    ) : (
-                      <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                        {invoices.filter(i => i.validation_status === 'pending').map(invoice => (
-                          <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-orange-900/30 rounded-lg p-3 border border-orange-500/30">
-                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewInvoice(invoice)}>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-white font-bold">{invoice.invoice_number}</span>
-                                <Badge className="bg-orange-500/20 text-orange-400 text-xs">🍽️ Commande</Badge>
-                              </div>
-                              <p className="text-slate-400 text-sm">
-                                {invoice.customer_name} • <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
-                              </p>
-                              <p className="text-slate-500 text-xs">
-                                Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
-                              </p>
-                            </div>
-                            <div className="flex gap-1 shrink-0 flex-wrap">
-                              <Button 
-                                size="sm"
-                                variant="outline"
-                                onClick={() => printKitchenOrder(invoice)}
-                                className="border-green-500/50 text-green-400 hover:bg-green-500/20 px-2"
-                                title="Imprimer pour la cuisine"
-                              >
-                                <Printer className="w-3 h-3 mr-1" />
-                                <span className="hidden sm:inline">Cuisine</span>
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="outline"
-                                onClick={() => printBarOrder(invoice)}
-                                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 px-2"
-                                title="Imprimer pour le bar"
-                              >
-                                <Wine className="w-3 h-3 mr-1" />
-                                <span className="hidden sm:inline">Bar</span>
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="outline"
-                                onClick={() => printGamesOrder(invoice)}
-                                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20 px-2"
-                                title="Imprimer pour les jeux"
-                              >
-                                <Gamepad2 className="w-3 h-3 mr-1" />
-                                <span className="hidden sm:inline">Jeux</span>
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setViewInvoice(invoice)}
-                                className="text-slate-400 hover:text-white px-2"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="sm"
-                                onClick={() => validateInvoice(invoice.id)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                Valider
-                              </Button>
-                              <Button 
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => deleteInvoice(invoice.id)}
-                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20 px-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
 
                 {/* Priority Section: Invoices to Print */}
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
@@ -2871,80 +2804,181 @@ _Gérante - Espace Maxo_
                   </Card>
                 )}
 
-                {/* ============== FACTURES EN ATTENTE (Pending validation) ============== */}
-                {invoices.filter(i => i.validation_status === 'pending' && 
-                  (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                ).length > 0 && (
-                  <Card className="bg-gradient-to-br from-orange-900/20 to-amber-800/10 border-orange-500/30 mt-4">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-orange-400 flex items-center gap-2 text-sm">
-                        <FileText className="w-4 h-4" />
-                        Mes Bons de Commande
-                        <Badge className="bg-orange-500/20 text-orange-300 ml-2">
-                          {invoices.filter(i => i.validation_status === 'pending' && 
-                            (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                          ).length}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {invoices.filter(i => i.validation_status === 'pending' && 
-                        (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                      ).slice(0, 10).map(invoice => (
-                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-orange-900/20 rounded-lg p-3 border border-orange-500/20 hover:bg-orange-900/30 transition-colors">
-                          <div 
-                            className="flex-1 cursor-pointer min-w-0"
-                            onClick={() => setViewInvoice(invoice)}
-                          >
+                </div>
+              </div>
+            </div>
+              </>
+            )}
+          </TabsContent>
+
+          {/* ==================== BONS DE COMMANDE TAB ==================== */}
+          <TabsContent value="bons">
+            <div className="space-y-4">
+              {/* Header with date filter */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-xl font-bold text-orange-400 flex items-center gap-2">
+                  <Printer className="w-6 h-6" />
+                  Bons de Commande
+                  <Badge className="bg-orange-500/20 text-orange-300 text-lg px-3">
+                    {invoices.filter(i => i.validation_status === 'pending').length}
+                  </Badge>
+                </h2>
+                <Input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                />
+              </div>
+
+              {/* ADMIN: Cancellation Requests */}
+              {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
+                <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-red-400 flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      DEMANDES D'ANNULATION
+                      <Badge className="bg-red-500/30 text-red-300 ml-2">{cancellationRequests.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {cancellationRequests.map(req => (
+                      <div key={req.id} className="flex items-center justify-between gap-2 bg-red-900/20 rounded-lg p-3 border border-red-500/30">
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{req.invoice_number}</p>
+                          <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => approveCancellation(req.id)} className="bg-red-600 hover:bg-red-700">
+                            <CheckCircle className="w-4 h-4 mr-1" />Annuler Facture
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => rejectCancellation(req.id)} className="border-slate-600 text-slate-400">
+                            Refuser
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* MANAGER/ADMIN: Modification Requests */}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && modificationRequests.length > 0 && (
+                <Card className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 border-blue-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-blue-400 flex items-center gap-2">
+                      <Edit2 className="w-5 h-5" />
+                      DEMANDES DE MODIFICATION
+                      <Badge className="bg-blue-500/30 text-blue-300 ml-2">{modificationRequests.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {modificationRequests.map(req => (
+                      <div key={req.id} className="flex items-center justify-between gap-2 bg-blue-900/20 rounded-lg p-3 border border-blue-500/30">
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{req.invoice_number}</p>
+                          <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => approveModification(req.id)} className="bg-blue-600 hover:bg-blue-700">
+                            <CheckCircle className="w-4 h-4 mr-1" />Autoriser
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => rejectModification(req.id)} className="border-slate-600 text-slate-400">
+                            Refuser
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* All pending invoices */}
+              {invoices.filter(i => i.validation_status === 'pending' && 
+                (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+              ).length === 0 ? (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <Printer className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Aucun bon de commande en attente</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-3">
+                  {invoices.filter(i => i.validation_status === 'pending' && 
+                    (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
+                  ).map(invoice => (
+                    <Card key={invoice.id} className="bg-gradient-to-br from-orange-900/20 to-amber-800/10 border-orange-500/30">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex-1 cursor-pointer min-w-0" onClick={() => setViewInvoice(invoice)}>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-medium text-sm">{invoice.invoice_number}</span>
-                              <Badge className="bg-orange-500/20 text-orange-400 text-xs">🍽️ Commande</Badge>
+                              <span className="text-white font-bold text-lg">{invoice.invoice_number}</span>
+                              {invoice.table_number && (
+                                <Badge className="bg-amber-500/30 text-amber-300">Table {invoice.table_number}</Badge>
+                              )}
                               {invoice.modification_allowed && (
                                 <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Modif. autorisée</Badge>
                               )}
                             </div>
-                            <p className="text-slate-400 text-xs truncate">
-                              {invoice.customer_name} • {formatPrice(invoice.total)} F
+                            <p className="text-slate-400 text-sm">
+                              {invoice.customer_name} • <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
                             </p>
+                            <p className="text-slate-500 text-xs">
+                              Par: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                            </p>
+                            {/* Show items preview */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {invoice.items?.slice(0, 4).map((item, idx) => (
+                                <span key={idx} className="text-xs bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded">
+                                  {item.quantity}x {item.name}
+                                </span>
+                              ))}
+                              {invoice.items?.length > 4 && (
+                                <span className="text-xs text-slate-500">+{invoice.items.length - 4} autres</span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex gap-1 shrink-0 flex-wrap">
-                            {/* Print order buttons for servers */}
                             <Button 
                               size="sm"
                               variant="outline"
                               onClick={() => printKitchenOrder(invoice)}
-                              className="border-green-500/50 text-green-400 hover:bg-green-500/20 px-2"
-                              title="Imprimer pour la cuisine"
+                              className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                              title="Cuisine"
                             >
-                              <Printer className="w-3 h-3" />
+                              <Printer className="w-4 h-4 mr-1" />
+                              <span className="hidden sm:inline">Cuisine</span>
                             </Button>
                             <Button 
                               size="sm"
                               variant="outline"
                               onClick={() => printBarOrder(invoice)}
-                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 px-2"
-                              title="Imprimer pour le bar"
+                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                              title="Bar"
                             >
-                              <Wine className="w-3 h-3" />
+                              <Wine className="w-4 h-4 mr-1" />
+                              <span className="hidden sm:inline">Bar</span>
                             </Button>
                             <Button 
                               size="sm"
                               variant="outline"
                               onClick={() => printGamesOrder(invoice)}
-                              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20 px-2"
-                              title="Imprimer pour les jeux"
+                              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                              title="Jeux"
                             >
-                              <Gamepad2 className="w-3 h-3" />
+                              <Gamepad2 className="w-4 h-4 mr-1" />
+                              <span className="hidden sm:inline">Jeux</span>
                             </Button>
                             <Button 
                               size="sm"
                               variant="ghost"
                               onClick={() => setViewInvoice(invoice)}
-                              className="text-slate-400 hover:text-white px-2"
+                              className="text-slate-400 hover:text-white"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {/* Server: can request modification or edit if allowed */}
+                            {/* Server: request or edit */}
                             {currentUser?.role === 'server' && invoice.created_by === (currentUser?.full_name || currentUser?.username) && (
                               invoice.modification_allowed ? (
                                 <Button 
@@ -2964,37 +2998,42 @@ _Gérante - Espace Maxo_
                                   disabled={modificationRequests.some(r => r.invoice_id === invoice.id)}
                                 >
                                   {modificationRequests.some(r => r.invoice_id === invoice.id) ? (
-                                    <span className="text-xs">Demande envoyée</span>
+                                    <span className="text-xs">Envoyé</span>
                                   ) : (
-                                    <>
-                                      <Edit2 className="w-4 h-4 mr-1" />
-                                      <span className="text-xs">Demander modif.</span>
-                                    </>
+                                    <span className="text-xs">Demander modif.</span>
                                   )}
                                 </Button>
                               )
                             )}
+                            {/* Manager/Admin: Validate */}
                             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-                              <Button 
-                                size="sm"
-                                onClick={() => validateInvoice(invoice.id)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                Valider
-                              </Button>
+                              <>
+                                <Button 
+                                  size="sm"
+                                  onClick={() => validateInvoice(invoice.id)}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                  Valider
+                                </Button>
+                                <Button 
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => deleteInvoice(invoice.id)}
+                                  className="text-red-400 hover:text-red-300"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
-              </>
-            )}
           </TabsContent>
 
           {/* ==================== INVOICES TAB ==================== */}
