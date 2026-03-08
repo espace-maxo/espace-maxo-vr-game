@@ -1030,8 +1030,8 @@ const CaissePage = () => {
     const statusLabels = { pending: 'Attente', approved: 'OK', completed: 'Fait', revision_requested: 'Réviser', rejected: 'Refusé' };
     const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
     
-    // Filter only pending and approved expenses (things to buy)
-    const toPrint = expenses.filter(e => e.status === 'pending' || e.status === 'approved');
+    // Print all expenses (not filtered)
+    const toPrint = expenses;
     const total = toPrint.reduce((sum, e) => sum + e.amount, 0);
     
     const itemsHtml = toPrint.map((e, i) => {
