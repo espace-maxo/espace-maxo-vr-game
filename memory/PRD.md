@@ -176,6 +176,15 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Badge indiquant le nombre d'articles par table
   - Sauvegarde automatique en base de données (persistance)
   - Fermeture automatique de la table après création de facture
+- [x] **Réorganisation UI - Séparation Commande/Bons** (Mars 2026)
+  - Onglet "Commande" dédié à la création de factures (demandes modification, factures à imprimer)
+  - Onglet "Bons" dédié à la liste des bons de commande en attente de validation
+  - Boutons d'impression séparés (Cuisine, Bar, Jeux) sur chaque bon
+- [x] **Impression améliorée des bons de cuisine** (Mars 2026)
+  - Le bon Cuisine inclut maintenant les accompagnements avec les plats
+  - Séparation visuelle entre plats et accompagnements
+  - Bon Bar = uniquement articles bar
+  - Bon Jeux = uniquement articles jeux
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
