@@ -1415,6 +1415,232 @@ _Gérante - Espace Maxo_
     printWindow.document.close();
   };
 
+  // ============== BON DE COMMANDE BAR (80mm) ==============
+  const printBarOrder = (invoice) => {
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    
+    // Filter only bar items
+    const barItems = (invoice.items || []).filter(item => item.department === 'bar');
+    const totalItems = barItems.reduce((sum, item) => sum + item.quantity, 0);
+    
+    // If no bar items, show message
+    if (totalItems === 0) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html><head><title>Aucun article bar</title></head>
+        <body style="font-family: Arial; padding: 20px; text-align: center;">
+          <h2>Aucun article pour le bar</h2>
+          <p>Cette commande ne contient pas d'articles Bar.</p>
+          <script>setTimeout(function() { window.close(); }, 2000);</script>
+        </body></html>
+      `);
+      printWindow.document.close();
+      return;
+    }
+    
+    const itemsHtml = barItems.map(item => `
+      <div class="item-row">
+        <div class="qty-badge">${item.quantity}</div>
+        <div class="item-name">${item.name}</div>
+      </div>
+    `).join('');
+
+    const tableNum = invoice.table_number || '—';
+    const orderTime = new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+    const orderDate = new Date(invoice.created_at).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'});
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>BAR - ${invoice.invoice_number}</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Courier New', monospace; width: 80mm; padding: 3mm; font-size: 12px; line-height: 1.3; background: #fff; color: #000; }
+            .header { text-align: center; padding: 8px 0; border-bottom: 3px solid #000; margin-bottom: 8px; }
+            .bar-title { font-size: 28px; font-weight: 900; letter-spacing: 3px; }
+            .subtitle { font-size: 11px; margin-top: 2px; }
+            .table-box { border: 3px solid #000; text-align: center; padding: 8px; margin: 8px 0; }
+            .table-label { font-size: 12px; font-weight: 600; }
+            .table-number { font-size: 56px; font-weight: 900; line-height: 1; }
+            .table-time { font-size: 14px; font-weight: 600; margin-top: 4px; }
+            .meta-section { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #000; margin-bottom: 8px; font-size: 11px; }
+            .items-section { border: 2px solid #000; margin: 8px 0; }
+            .items-header { background: #000; color: #fff; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; }
+            .items-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; }
+            .items-count { background: #fff; color: #000; padding: 2px 8px; font-size: 12px; font-weight: 900; }
+            .item-row { display: flex; align-items: center; padding: 6px 8px; border-bottom: 1px dashed #ccc; }
+            .item-row:last-child { border-bottom: none; }
+            .qty-badge { background: #000; color: #fff; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; margin-right: 10px; }
+            .item-name { font-size: 14px; font-weight: 600; }
+            .summary-box { border: 3px solid #000; padding: 8px; margin: 10px 0; text-align: center; }
+            .summary-label { font-size: 11px; font-weight: 600; }
+            .summary-value { font-size: 32px; font-weight: 900; line-height: 1; }
+            .footer { text-align: center; margin-top: 8px; padding-top: 8px; border-top: 3px solid #000; }
+            .footer-badge { font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+            .footer-time { font-size: 9px; margin-top: 4px; }
+            .cut-line { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #000; text-align: center; font-size: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="bar-title">BAR</div>
+            <div class="subtitle">Bon de Commande</div>
+          </div>
+          <div class="table-box">
+            <div class="table-label">TABLE N°</div>
+            <div class="table-number">${tableNum}</div>
+            <div class="table-time">${orderTime}</div>
+          </div>
+          <div class="meta-section">
+            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Date:</strong> ${orderDate}</span>
+            <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
+          </div>
+          <div class="items-section">
+            <div class="items-header">
+              <span class="items-title">BOISSONS</span>
+              <span class="items-count">${totalItems}</span>
+            </div>
+            ${itemsHtml}
+          </div>
+          <div class="summary-box">
+            <div class="summary-label">TOTAL ARTICLES</div>
+            <div class="summary-value">${totalItems}</div>
+          </div>
+          <div class="footer">
+            <div class="footer-badge">*** BON BAR ***</div>
+            <div class="footer-time">Imprimé ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+          </div>
+          <div class="cut-line">- - - - - - - - - - - - - - - - - -</div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 300);
+              setTimeout(function() { window.close(); }, 1000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // ============== BON DE COMMANDE JEUX (80mm) ==============
+  const printGamesOrder = (invoice) => {
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    
+    // Filter only games items
+    const gamesItems = (invoice.items || []).filter(item => item.department === 'jeux');
+    const totalItems = gamesItems.reduce((sum, item) => sum + item.quantity, 0);
+    
+    // If no games items, show message
+    if (totalItems === 0) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html><head><title>Aucun article jeux</title></head>
+        <body style="font-family: Arial; padding: 20px; text-align: center;">
+          <h2>Aucun article pour les jeux</h2>
+          <p>Cette commande ne contient pas d'articles Jeux.</p>
+          <script>setTimeout(function() { window.close(); }, 2000);</script>
+        </body></html>
+      `);
+      printWindow.document.close();
+      return;
+    }
+    
+    const itemsHtml = gamesItems.map(item => `
+      <div class="item-row">
+        <div class="qty-badge">${item.quantity}</div>
+        <div class="item-name">${item.name}</div>
+      </div>
+    `).join('');
+
+    const tableNum = invoice.table_number || '—';
+    const orderTime = new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+    const orderDate = new Date(invoice.created_at).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit'});
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>JEUX - ${invoice.invoice_number}</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Courier New', monospace; width: 80mm; padding: 3mm; font-size: 12px; line-height: 1.3; background: #fff; color: #000; }
+            .header { text-align: center; padding: 8px 0; border-bottom: 3px solid #000; margin-bottom: 8px; }
+            .games-title { font-size: 28px; font-weight: 900; letter-spacing: 3px; }
+            .subtitle { font-size: 11px; margin-top: 2px; }
+            .table-box { border: 3px solid #000; text-align: center; padding: 8px; margin: 8px 0; }
+            .table-label { font-size: 12px; font-weight: 600; }
+            .table-number { font-size: 56px; font-weight: 900; line-height: 1; }
+            .table-time { font-size: 14px; font-weight: 600; margin-top: 4px; }
+            .meta-section { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #000; margin-bottom: 8px; font-size: 11px; }
+            .items-section { border: 2px solid #000; margin: 8px 0; }
+            .items-header { background: #000; color: #fff; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; }
+            .items-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; }
+            .items-count { background: #fff; color: #000; padding: 2px 8px; font-size: 12px; font-weight: 900; }
+            .item-row { display: flex; align-items: center; padding: 6px 8px; border-bottom: 1px dashed #ccc; }
+            .item-row:last-child { border-bottom: none; }
+            .qty-badge { background: #000; color: #fff; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; margin-right: 10px; }
+            .item-name { font-size: 14px; font-weight: 600; }
+            .summary-box { border: 3px solid #000; padding: 8px; margin: 10px 0; text-align: center; }
+            .summary-label { font-size: 11px; font-weight: 600; }
+            .summary-value { font-size: 32px; font-weight: 900; line-height: 1; }
+            .footer { text-align: center; margin-top: 8px; padding-top: 8px; border-top: 3px solid #000; }
+            .footer-badge { font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+            .footer-time { font-size: 9px; margin-top: 4px; }
+            .cut-line { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #000; text-align: center; font-size: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="games-title">JEUX</div>
+            <div class="subtitle">Bon de Commande</div>
+          </div>
+          <div class="table-box">
+            <div class="table-label">TABLE N°</div>
+            <div class="table-number">${tableNum}</div>
+            <div class="table-time">${orderTime}</div>
+          </div>
+          <div class="meta-section">
+            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Date:</strong> ${orderDate}</span>
+            <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
+          </div>
+          <div class="items-section">
+            <div class="items-header">
+              <span class="items-title">SESSIONS</span>
+              <span class="items-count">${totalItems}</span>
+            </div>
+            ${itemsHtml}
+          </div>
+          <div class="summary-box">
+            <div class="summary-label">TOTAL SESSIONS</div>
+            <div class="summary-value">${totalItems}</div>
+          </div>
+          <div class="footer">
+            <div class="footer-badge">*** BON JEUX ***</div>
+            <div class="footer-time">Imprimé ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
+          </div>
+          <div class="cut-line">- - - - - - - - - - - - - - - - - -</div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 300);
+              setTimeout(function() { window.close(); }, 1000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // ============== TICKET THERMIQUE (80mm) ==============
   const printTicket = (invoice) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
@@ -1926,22 +2152,42 @@ _Gérante - Espace Maxo_
                                 Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
                               </p>
                             </div>
-                            <div className="flex gap-2 shrink-0 flex-wrap">
+                            <div className="flex gap-1 shrink-0 flex-wrap">
                               <Button 
                                 size="sm"
                                 variant="outline"
                                 onClick={() => printKitchenOrder(invoice)}
-                                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                className="border-green-500/50 text-green-400 hover:bg-green-500/20 px-2"
                                 title="Imprimer pour la cuisine"
                               >
-                                <Printer className="w-4 h-4 mr-1" />
-                                Cuisine
+                                <Printer className="w-3 h-3 mr-1" />
+                                <span className="hidden sm:inline">Cuisine</span>
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => printBarOrder(invoice)}
+                                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 px-2"
+                                title="Imprimer pour le bar"
+                              >
+                                <Wine className="w-3 h-3 mr-1" />
+                                <span className="hidden sm:inline">Bar</span>
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => printGamesOrder(invoice)}
+                                className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20 px-2"
+                                title="Imprimer pour les jeux"
+                              >
+                                <Gamepad2 className="w-3 h-3 mr-1" />
+                                <span className="hidden sm:inline">Jeux</span>
                               </Button>
                               <Button 
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => setViewInvoice(invoice)}
-                                className="text-slate-400 hover:text-white"
+                                className="text-slate-400 hover:text-white px-2"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -1957,7 +2203,7 @@ _Gérante - Espace Maxo_
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => deleteInvoice(invoice.id)}
-                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20 px-2"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -2554,22 +2800,40 @@ _Gérante - Espace Maxo_
                               {invoice.customer_name} • {formatPrice(invoice.total)} F
                             </p>
                           </div>
-                          <div className="flex gap-2 shrink-0 flex-wrap">
-                            {/* Print kitchen order button for servers */}
+                          <div className="flex gap-1 shrink-0 flex-wrap">
+                            {/* Print order buttons for servers */}
                             <Button 
                               size="sm"
                               variant="outline"
                               onClick={() => printKitchenOrder(invoice)}
-                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                              className="border-green-500/50 text-green-400 hover:bg-green-500/20 px-2"
                               title="Imprimer pour la cuisine"
                             >
-                              <Printer className="w-4 h-4" />
+                              <Printer className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => printBarOrder(invoice)}
+                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 px-2"
+                              title="Imprimer pour le bar"
+                            >
+                              <Wine className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => printGamesOrder(invoice)}
+                              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20 px-2"
+                              title="Imprimer pour les jeux"
+                            >
+                              <Gamepad2 className="w-3 h-3" />
                             </Button>
                             <Button 
                               size="sm"
                               variant="ghost"
                               onClick={() => setViewInvoice(invoice)}
-                              className="text-slate-400 hover:text-white"
+                              className="text-slate-400 hover:text-white px-2"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
