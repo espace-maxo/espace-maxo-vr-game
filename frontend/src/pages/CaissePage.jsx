@@ -1124,20 +1124,8 @@ _Gérante - Espace Maxo_
   const printKitchenOrder = (invoice) => {
     const printWindow = window.open('', '_blank', 'width=350,height=700');
     
-    // EXCLUDE bar and jeux departments - kitchen only needs food/location items
-    const excludedDepts = ['bar', 'jeux'];
-    
-    // Filter and group items by department (excluding bar & jeux)
-    const itemsByDept = {};
-    (invoice.items || []).forEach(item => {
-      const dept = item.department || 'autres';
-      if (excludedDepts.includes(dept)) return; // Skip bar and jeux
-      if (!itemsByDept[dept]) itemsByDept[dept] = [];
-      itemsByDept[dept].push(item);
-    });
-    
-    // Calculate total items (only kitchen items)
-    const kitchenItems = (invoice.items || []).filter(item => !excludedDepts.includes(item.department || 'autres'));
+    // CUISINE = uniquement articles salle_jardin (restaurant)
+    const kitchenItems = (invoice.items || []).filter(item => item.department === 'salle_jardin');
     const totalItems = kitchenItems.reduce((sum, item) => sum + item.quantity, 0);
     
     // If no kitchen items, show message
@@ -1147,7 +1135,7 @@ _Gérante - Espace Maxo_
         <html><head><title>Aucun article cuisine</title></head>
         <body style="font-family: Arial; padding: 20px; text-align: center;">
           <h2>Aucun article pour la cuisine</h2>
-          <p>Cette commande ne contient que des articles Bar/Jeux.</p>
+          <p>Cette commande ne contient pas d'articles Salle/Restaurant.</p>
           <script>setTimeout(function() { window.close(); }, 2000);</script>
         </body></html>
       `);
@@ -1155,37 +1143,12 @@ _Gérante - Espace Maxo_
       return;
     }
     
-    // Order of departments for kitchen
-    const deptOrder = ['salle_jardin', 'location', 'autres'];
-    const sortedDepts = Object.entries(itemsByDept).sort((a, b) => {
-      return deptOrder.indexOf(a[0]) - deptOrder.indexOf(b[0]);
-    });
-    
-    const itemsHtml = sortedDepts.map(([dept, items]) => {
-      const deptConfig = {
-        salle_jardin: { name: 'RESTAURANT' },
-        location: { name: 'LOCATION' },
-        autres: { name: 'AUTRES' }
-      };
-      const config = deptConfig[dept] || deptConfig.autres;
-      
-      return `
-        <div class="dept-section">
-          <div class="dept-header">
-            <span class="dept-name">${config.name}</span>
-            <span class="dept-count">${items.reduce((s, i) => s + i.quantity, 0)}</span>
-          </div>
-          <div class="items-list">
-            ${items.map(item => `
-              <div class="item-row">
-                <div class="qty-badge">${item.quantity}</div>
-                <div class="item-name">${item.name}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }).join('');
+    const itemsHtml = kitchenItems.map(item => `
+      <div class="item-row">
+        <div class="qty-badge">${item.quantity}</div>
+        <div class="item-name">${item.name}</div>
+      </div>
+    `).join('');
 
     // Get table number and time
     const tableNum = invoice.table_number || '—';
@@ -1200,172 +1163,32 @@ _Gérante - Espace Maxo_
           <meta charset="UTF-8">
           <style>
             @page { size: 80mm auto; margin: 0; }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
+            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'Courier New', monospace; 
-              width: 80mm; 
-              padding: 3mm; 
-              font-size: 12px;
-              line-height: 1.3;
-              background: #fff;
-              color: #000;
-            }
-            
-            /* ===== HEADER ===== */
-            .header { 
-              text-align: center; 
-              padding: 8px 0;
-              border-bottom: 3px solid #000;
-              margin-bottom: 8px;
-            }
-            .kitchen-title {
-              font-size: 28px;
-              font-weight: 900;
-              letter-spacing: 3px;
-            }
-            .subtitle {
-              font-size: 11px;
-              margin-top: 2px;
-            }
-            
-            /* ===== TABLE BOX ===== */
-            .table-box {
-              border: 3px solid #000;
-              text-align: center;
-              padding: 8px;
-              margin: 8px 0;
-            }
-            .table-label {
-              font-size: 12px;
-              font-weight: 600;
-            }
-            .table-number {
-              font-size: 56px;
-              font-weight: 900;
-              line-height: 1;
-            }
-            .table-time {
-              font-size: 14px;
-              font-weight: 600;
-              margin-top: 4px;
-            }
-            
-            /* ===== META INFO ===== */
-            .meta-section {
-              display: flex;
-              justify-content: space-between;
-              padding: 6px 0;
-              border-bottom: 1px dashed #000;
-              margin-bottom: 8px;
-              font-size: 11px;
-            }
-            .meta-item strong {
-              font-weight: 700;
-            }
-            
-            /* ===== DEPARTMENTS ===== */
-            .dept-section {
-              margin: 8px 0;
-              border: 2px solid #000;
-            }
-            .dept-header {
-              background: #000;
-              color: #fff;
-              padding: 6px 8px;
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-            }
-            .dept-name {
-              font-size: 13px;
-              font-weight: 800;
-              letter-spacing: 1px;
-            }
-            .dept-count {
-              background: #fff;
-              color: #000;
-              padding: 2px 8px;
-              font-size: 12px;
-              font-weight: 900;
-            }
-            .items-list {
-              background: #fff;
-            }
-            .item-row {
-              display: flex;
-              align-items: center;
-              padding: 6px 8px;
-              border-bottom: 1px dashed #ccc;
-            }
-            .item-row:last-child {
-              border-bottom: none;
-            }
-            .qty-badge {
-              background: #000;
-              color: #fff;
-              min-width: 32px;
-              height: 32px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 18px;
-              font-weight: 900;
-              margin-right: 10px;
-            }
-            .item-name {
-              font-size: 14px;
-              font-weight: 600;
-            }
-            
-            /* ===== SUMMARY ===== */
-            .summary-box {
-              border: 3px solid #000;
-              padding: 8px;
-              margin: 10px 0;
-              text-align: center;
-            }
-            .summary-label {
-              font-size: 11px;
-              font-weight: 600;
-            }
-            .summary-value {
-              font-size: 32px;
-              font-weight: 900;
-              line-height: 1;
-            }
-            .summary-text {
-              font-size: 10px;
-              margin-top: 2px;
-            }
-            
-            /* ===== FOOTER ===== */
-            .footer {
-              text-align: center;
-              margin-top: 8px;
-              padding-top: 8px;
-              border-top: 3px solid #000;
-            }
-            .footer-badge {
-              font-size: 12px;
-              font-weight: 800;
-              letter-spacing: 1px;
-            }
-            .footer-time {
-              font-size: 9px;
-              margin-top: 4px;
-            }
-            
-            /* ===== CUT LINE ===== */
-            .cut-line {
-              margin-top: 10px;
-              padding-top: 6px;
-              border-top: 1px dashed #000;
-              text-align: center;
-              font-size: 10px;
-            }
+            body { font-family: 'Courier New', monospace; width: 80mm; padding: 3mm; font-size: 12px; line-height: 1.3; background: #fff; color: #000; }
+            .header { text-align: center; padding: 8px 0; border-bottom: 3px solid #000; margin-bottom: 8px; }
+            .kitchen-title { font-size: 28px; font-weight: 900; letter-spacing: 3px; }
+            .subtitle { font-size: 11px; margin-top: 2px; }
+            .table-box { border: 3px solid #000; text-align: center; padding: 8px; margin: 8px 0; }
+            .table-label { font-size: 12px; font-weight: 600; }
+            .table-number { font-size: 56px; font-weight: 900; line-height: 1; }
+            .table-time { font-size: 14px; font-weight: 600; margin-top: 4px; }
+            .meta-section { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #000; margin-bottom: 8px; font-size: 11px; }
+            .items-section { border: 2px solid #000; margin: 8px 0; }
+            .items-header { background: #000; color: #fff; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; }
+            .items-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; }
+            .items-count { background: #fff; color: #000; padding: 2px 8px; font-size: 12px; font-weight: 900; }
+            .item-row { display: flex; align-items: center; padding: 6px 8px; border-bottom: 1px dashed #ccc; }
+            .item-row:last-child { border-bottom: none; }
+            .qty-badge { background: #000; color: #fff; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; margin-right: 10px; }
+            .item-name { font-size: 14px; font-weight: 600; }
+            .summary-box { border: 3px solid #000; padding: 8px; margin: 10px 0; text-align: center; }
+            .summary-label { font-size: 11px; font-weight: 600; }
+            .summary-value { font-size: 32px; font-weight: 900; line-height: 1; }
+            .footer { text-align: center; margin-top: 8px; padding-top: 8px; border-top: 3px solid #000; }
+            .footer-badge { font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+            .footer-time { font-size: 9px; margin-top: 4px; }
+            .cut-line { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #000; text-align: center; font-size: 10px; }
           </style>
         </head>
         <body>
@@ -1373,36 +1196,32 @@ _Gérante - Espace Maxo_
             <div class="kitchen-title">CUISINE</div>
             <div class="subtitle">Bon de Commande</div>
           </div>
-          
           <div class="table-box">
             <div class="table-label">TABLE N°</div>
             <div class="table-number">${tableNum}</div>
             <div class="table-time">${orderTime}</div>
           </div>
-          
           <div class="meta-section">
             <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
             <span><strong>Date:</strong> ${orderDate}</span>
             <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
           </div>
-          
-          ${itemsHtml}
-          
-          <div class="summary-box">
-            <div class="summary-label">TOTAL ARTICLES</div>
-            <div class="summary-value">${totalItems}</div>
-            <div class="summary-text">article${totalItems > 1 ? 's' : ''} à préparer</div>
+          <div class="items-section">
+            <div class="items-header">
+              <span class="items-title">PLATS</span>
+              <span class="items-count">${totalItems}</span>
+            </div>
+            ${itemsHtml}
           </div>
-          
+          <div class="summary-box">
+            <div class="summary-label">TOTAL PLATS</div>
+            <div class="summary-value">${totalItems}</div>
+          </div>
           <div class="footer">
-            <div class="footer-badge">*** BON DE COMMANDE ***</div>
+            <div class="footer-badge">*** BON CUISINE ***</div>
             <div class="footer-time">Imprimé ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</div>
           </div>
-          
-          <div class="cut-line">
-            - - - - - - - - - - - - - - - - - -
-          </div>
-          
+          <div class="cut-line">- - - - - - - - - - - - - - - - - -</div>
           <script>
             window.onload = function() {
               setTimeout(function() { window.print(); }, 300);
@@ -1965,8 +1784,18 @@ _Gérante - Espace Maxo_
             <div className="flex items-center gap-4">
               <div className="text-right hidden md:block">
                 <p className="text-white font-medium">{currentUser?.full_name || currentUser?.username}</p>
-                <Badge className={currentUser?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : currentUser?.role === 'manager' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-500/20 text-slate-400'}>
-                  {currentUser?.role === 'admin' ? 'Administrateur' : currentUser?.role === 'manager' ? 'Manager' : 'Serveur'}
+                <Badge className={
+                  currentUser?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 
+                  currentUser?.role === 'manager' ? 'bg-blue-500/20 text-blue-400' : 
+                  currentUser?.role === 'cuisinier' ? 'bg-green-500/20 text-green-400' :
+                  currentUser?.role === 'coach_jeux' ? 'bg-purple-500/20 text-purple-400' :
+                  'bg-slate-500/20 text-slate-400'
+                }>
+                  {currentUser?.role === 'admin' ? 'Administrateur' : 
+                   currentUser?.role === 'manager' ? 'Manager' : 
+                   currentUser?.role === 'cuisinier' ? 'Cuisinier' :
+                   currentUser?.role === 'coach_jeux' ? 'Coach Jeux' :
+                   'Serveur'}
                 </Badge>
               </div>
               <Button variant="ghost" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
@@ -3267,8 +3096,18 @@ _Gérante - Espace Maxo_
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="text-white font-medium">{user.full_name || user.username}</p>
-                              <Badge className={user.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : user.role === 'manager' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-500/20 text-slate-400'}>
-                                {user.role === 'admin' ? 'Admin' : user.role === 'manager' ? 'Manager' : 'Serveur'}
+                              <Badge className={
+                                user.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 
+                                user.role === 'manager' ? 'bg-blue-500/20 text-blue-400' : 
+                                user.role === 'cuisinier' ? 'bg-green-500/20 text-green-400' :
+                                user.role === 'coach_jeux' ? 'bg-purple-500/20 text-purple-400' :
+                                'bg-slate-500/20 text-slate-400'
+                              }>
+                                {user.role === 'admin' ? 'Admin' : 
+                                 user.role === 'manager' ? 'Manager' : 
+                                 user.role === 'cuisinier' ? 'Cuisinier' :
+                                 user.role === 'coach_jeux' ? 'Coach Jeux' :
+                                 'Serveur'}
                               </Badge>
                               {!user.is_active && <Badge className="bg-red-500/20 text-red-400">Inactif</Badge>}
                             </div>
@@ -3925,6 +3764,8 @@ _Gérante - Espace Maxo_
                   <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
                     <SelectItem value="server">Serveur</SelectItem>
+                    <SelectItem value="cuisinier">Cuisinier</SelectItem>
+                    <SelectItem value="coach_jeux">Coach Jeux</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="admin">Administrateur</SelectItem>
                   </SelectContent>
