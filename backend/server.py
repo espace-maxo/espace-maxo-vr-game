@@ -4504,13 +4504,15 @@ async def get_weekly_report(week_start: Optional[str] = None):
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
         
-        start_str = start_date.isoformat()
-        end_str = end_date.isoformat()
+        # Use date strings without timezone for comparison (format: YYYY-MM-DD)
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d") + "T23:59:59"
         
         # Get validated invoices (sales) for the week
-        invoices = await db.caisse_invoices.find({
+        # Use regex to match dates that start with the date portion
+        invoices = await db.invoices.find({
             "validation_status": "validated",
-            "created_at": {"$gte": start_str, "$lte": end_str}
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
         }, {"_id": 0}).to_list(1000)
         
         # Calculate daily sales
@@ -4604,7 +4606,7 @@ async def get_activity_report(
         # ============== INCOME (Recettes) ==============
         
         # 1. Validated invoices (Caisse)
-        invoices = await db.caisse_invoices.find({
+        invoices = await db.invoices.find({
             "validation_status": "validated",
             "created_at": {"$gte": start_str, "$lte": end_str}
         }, {"_id": 0}).to_list(2000)

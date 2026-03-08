@@ -274,10 +274,12 @@ const CaissePage = () => {
   const [shoppingListSupplier, setShoppingListSupplier] = useState("");
   const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", amount: 0 });
+  const [showAllExpenses, setShowAllExpenses] = useState(false);
 
   // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  const [expenseRatioAlert, setExpenseRatioAlert] = useState(null);
 
   // ============== ACTIVITY TRACKING (Admin) ==============
   const [activityReport, setActivityReport] = useState(null);
@@ -984,12 +986,77 @@ const CaissePage = () => {
     printWindow.document.close();
   };
 
+  // Print all expenses (full list)
+  const printAllExpensesList = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    const statusLabels = { pending: 'En attente', approved: 'Approuvée', completed: 'Terminée', revision_requested: 'À réviser', rejected: 'Refusée' };
+    const categoryLabels = { cuisine: 'Cuisine', bar: 'Bar', paiement: 'Paiement', autres: 'Autres' };
+    const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+    
+    const rowsHtml = expenses.map((e, i) => {
+      const catColor = e.category === 'cuisine' ? '#22c55e' : e.category === 'bar' ? '#f97316' : e.category === 'paiement' ? '#3b82f6' : '#64748b';
+      const statusColor = e.status === 'approved' ? '#22c55e' : e.status === 'pending' ? '#f59e0b' : e.status === 'completed' ? '#64748b' : '#ef4444';
+      return '<tr style="border-bottom: 1px solid #eee;">' +
+        '<td style="padding: 8px; text-align: center;">' + (i + 1) + '</td>' +
+        '<td style="padding: 8px;"><span style="background: ' + catColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (categoryLabels[e.category] || e.category) + '</span></td>' +
+        '<td style="padding: 8px;">' + e.description + '</td>' +
+        '<td style="padding: 8px;">' + (e.supplier || '-') + '</td>' +
+        '<td style="padding: 8px; text-align: right; font-weight: 600;">' + formatPrice(e.amount) + ' F</td>' +
+        '<td style="padding: 8px;"><span style="background: ' + statusColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (statusLabels[e.status] || e.status) + '</span></td>' +
+        '<td style="padding: 8px; font-size: 11px; color: #666;">' + (e.requested_by || '-') + '</td>' +
+        '<td style="padding: 8px; font-size: 11px; color: #666;">' + (e.created_at?.slice(0, 10) || '-') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    const html = '<!DOCTYPE html><html><head><title>Liste Complète des Demandes</title>' +
+      '<style>@page { size: A4 landscape; margin: 10mm; } body { font-family: Arial, sans-serif; padding: 15px; } ' +
+      '.header { text-align: center; margin-bottom: 20px; } .logo { font-size: 20px; font-weight: 800; color: #4f46e5; } ' +
+      'table { width: 100%; border-collapse: collapse; font-size: 12px; } th { background: #4f46e5; color: white; padding: 10px; text-align: left; } ' +
+      '.total { background: #f8f9fa; font-weight: 800; }</style></head>' +
+      '<body><div class="header"><div class="logo">ESPACE MAXO</div>' +
+      '<div>Liste Complète des Demandes - ' + new Date().toLocaleDateString('fr-FR') + '</div></div>' +
+      '<table><thead><tr><th>#</th><th>Catégorie</th><th>Description</th><th>Fournisseur</th><th>Montant</th><th>Statut</th><th>Demandé par</th><th>Date</th></tr></thead>' +
+      '<tbody>' + rowsHtml + '<tr class="total"><td colspan="4" style="padding: 10px; text-align: right;">TOTAL:</td>' +
+      '<td style="padding: 10px; color: #4f46e5;">' + formatPrice(total) + ' F</td><td colspan="3"></td></tr></tbody></table>' +
+      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script></body></html>';
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   // ============== WEEKLY REPORT FUNCTIONS ==============
   
   const fetchWeeklyReport = async () => {
     try {
       const res = await axios.get(`${API}/reports/weekly`, { params: { week_start: weekStartDate } });
       setWeeklyReport(res.data);
+      
+      // Check expense ratio for admin alert (> 40%)
+      if (currentUser?.role === 'admin' && res.data) {
+        const weeklyCA = res.data.sales?.total || 0;
+        const weeklyExpenses = res.data.expenses?.total || 0;
+        const totalPendingExpenses = expenses.filter(e => e.status === 'pending' || e.status === 'approved').reduce((sum, e) => sum + e.amount, 0);
+        const totalExpenses = weeklyExpenses + totalPendingExpenses;
+        
+        if (weeklyCA > 0) {
+          const ratio = (totalExpenses / weeklyCA) * 100;
+          if (ratio > 40) {
+            setExpenseRatioAlert({
+              ratio: ratio.toFixed(1),
+              expenses: totalExpenses,
+              ca: weeklyCA,
+              isOverLimit: true
+            });
+          } else {
+            setExpenseRatioAlert({
+              ratio: ratio.toFixed(1),
+              expenses: totalExpenses,
+              ca: weeklyCA,
+              isOverLimit: false
+            });
+          }
+        }
+      }
     } catch (error) {
       console.error("Error fetching weekly report:", error);
     }
@@ -1021,6 +1088,13 @@ const CaissePage = () => {
       fetchWeeklyReport();
     }
   }, [weekStartDate, activeTab, isAuthenticated]);
+
+  // Check expense ratio when on Achats tab (admin only)
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "achats" && currentUser?.role === 'admin') {
+      fetchWeeklyReport(); // This will also calculate the ratio
+    }
+  }, [activeTab, isAuthenticated, currentUser, expenses]);
 
   // Fetch activity report when tab is active (admin only)
   useEffect(() => {
@@ -4590,22 +4664,67 @@ _Gérante - Espace Maxo_
                   <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
                   <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span>Total demandes: {expenses.length}</span>
-                  <span>•</span>
-                  <span className="text-amber-400">{expenses.filter(e => e.status === 'pending').length} en attente</span>
-                  <span>•</span>
-                  <span className="text-green-400">{expenses.filter(e => e.status === 'approved').length} approuvées</span>
-                  <span>•</span>
-                  <span className="text-slate-500">{expenses.filter(e => e.status === 'completed').length} terminées</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowAllExpenses(!showAllExpenses)}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  {showAllExpenses ? 'Masquer détails' : 'Voir tout en détail'}
+                </Button>
+              </div>
+
+              {/* ALERT: Expense ratio > 40% */}
+              {currentUser?.role === 'admin' && expenseRatioAlert?.isOverLimit && (
+                <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/30 border-red-500/70 animate-pulse">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-red-500 rounded-full p-2">
+                        <AlertCircle className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-red-400 font-bold text-lg">⚠️ ALERTE : Ratio Dépenses/CA élevé</p>
+                        <p className="text-red-300">
+                          Les demandes d'achats représentent <span className="font-bold text-xl">{expenseRatioAlert.ratio}%</span> du CA de la semaine
+                        </p>
+                        <p className="text-slate-400 text-sm mt-1">
+                          Dépenses: {formatPrice(expenseRatioAlert.expenses)} F | CA semaine: {formatPrice(expenseRatioAlert.ca)} F | Seuil: 40%
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Ratio indicator (non-alert) */}
+              {currentUser?.role === 'admin' && expenseRatioAlert && !expenseRatioAlert.isOverLimit && (
+                <div className="flex items-center gap-2 text-sm bg-slate-800/30 rounded-lg p-2">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <span className="text-slate-400">Ratio Dépenses/CA: </span>
+                  <span className="text-green-400 font-bold">{expenseRatioAlert.ratio}%</span>
+                  <span className="text-slate-500">(seuil: 40%)</span>
                 </div>
+              )}
+
+              {/* Summary stats */}
+              <div className="flex items-center gap-2 text-sm text-slate-400 flex-wrap">
+                <span>Total: <span className="text-white font-bold">{expenses.length}</span> demandes</span>
+                <span>•</span>
+                <span className="text-amber-400">{expenses.filter(e => e.status === 'pending').length} en attente</span>
+                <span>•</span>
+                <span className="text-orange-400">{expenses.filter(e => e.status === 'revision_requested').length} à réviser</span>
+                <span>•</span>
+                <span className="text-green-400">{expenses.filter(e => e.status === 'approved').length} approuvées</span>
+                <span>•</span>
+                <span className="text-slate-500">{expenses.filter(e => e.status === 'completed').length} terminées</span>
               </div>
 
               {/* Summary card with totals */}
               {expenses.length > 0 && (
                 <Card className="bg-slate-800/30 border-slate-700">
                   <CardContent className="py-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
                       <div>
                         <p className="text-slate-500 text-xs">En attente</p>
                         <p className="text-amber-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'pending').reduce((sum, e) => sum + e.amount, 0))} F</p>
@@ -4622,7 +4741,91 @@ _Gérante - Espace Maxo_
                         <p className="text-slate-500 text-xs">Terminées</p>
                         <p className="text-slate-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'completed').reduce((sum, e) => sum + e.amount, 0))} F</p>
                       </div>
+                      <div className="border-l border-slate-700 pl-4">
+                        <p className="text-slate-500 text-xs">TOTAL GÉNÉRAL</p>
+                        <p className="text-white font-bold text-lg">{formatPrice(expenses.reduce((sum, e) => sum + e.amount, 0))} F</p>
+                      </div>
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* FULL DETAIL VIEW - All expenses */}
+              {showAllExpenses && expenses.length > 0 && (
+                <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-indigo-400 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5" />
+                        VUE COMPLÈTE - Toutes les demandes ({expenses.length})
+                      </div>
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={printAllExpensesList}
+                        className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20"
+                      >
+                        <Printer className="w-4 h-4 mr-1" />
+                        Imprimer tout
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="max-h-[500px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-slate-800">
+                        <tr className="text-left text-slate-400 border-b border-slate-700">
+                          <th className="p-2">#</th>
+                          <th className="p-2">Catégorie</th>
+                          <th className="p-2">Description</th>
+                          <th className="p-2">Fournisseur</th>
+                          <th className="p-2 text-right">Montant</th>
+                          <th className="p-2">Statut</th>
+                          <th className="p-2">Demandé par</th>
+                          <th className="p-2">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses.map((expense, index) => (
+                          <tr key={expense.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                            <td className="p-2 text-slate-500">{index + 1}</td>
+                            <td className="p-2">
+                              <Badge className={`text-xs ${
+                                expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                'bg-slate-500/20 text-slate-400'
+                              }`}>{expense.category}</Badge>
+                            </td>
+                            <td className="p-2 text-white">{expense.description}</td>
+                            <td className="p-2 text-slate-400">{expense.supplier || '-'}</td>
+                            <td className="p-2 text-right font-bold text-amber-400">{formatPrice(expense.amount)} F</td>
+                            <td className="p-2">
+                              <Badge className={`text-xs ${
+                                expense.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                                expense.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                expense.status === 'completed' ? 'bg-slate-500/20 text-slate-400' :
+                                expense.status === 'revision_requested' ? 'bg-orange-500/20 text-orange-400' :
+                                'bg-red-500/20 text-red-400'
+                              }`}>
+                                {expense.status === 'pending' ? 'En attente' :
+                                 expense.status === 'approved' ? 'Approuvée' :
+                                 expense.status === 'completed' ? 'Terminée' :
+                                 expense.status === 'revision_requested' ? 'À réviser' : 'Refusée'}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-slate-500 text-xs">{expense.requested_by}</td>
+                            <td className="p-2 text-slate-500 text-xs">{expense.created_at?.slice(0, 10)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-800 font-bold">
+                          <td colSpan="4" className="p-2 text-right text-slate-400">TOTAL GÉNÉRAL:</td>
+                          <td className="p-2 text-right text-lg text-indigo-400">{formatPrice(expenses.reduce((sum, e) => sum + e.amount, 0))} F</td>
+                          <td colSpan="3"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </CardContent>
                 </Card>
               )}
