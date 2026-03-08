@@ -214,6 +214,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - **Vue complète détaillée** : Tableau avec toutes les demandes (#, Catégorie, Description, Fournisseur, Montant, Statut, Demandé par, Date) + bouton "Imprimer tout"
   - **Impression PDF** : Chaque demande approuvée peut être imprimée en PDF individuel ou en liste complète
   - **Alerte ratio Dépenses/CA > 40%** : L'admin reçoit une alerte visuelle rouge clignotante quand le total des demandes d'achats dépasse 40% du CA de la semaine
+  - **Clic pour modifier** : Cliquer sur n'importe quelle ligne dans la Vue Complète ouvre le modal de modification avec les données pré-remplies
+  - **Impression Ticket Thermique** : Nouveau bouton "Ticket 80mm" pour imprimer la liste des achats en attente/approuvés au format thermique (noir et blanc, police monospace)
 - [x] **Point Hebdomadaire** (Mars 2026)
   - Nouvel onglet "Hebdo" pour manager et admin
   - Affiche Recettes, Dépenses et Résultat de la semaine

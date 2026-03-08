@@ -1024,6 +1024,90 @@ const CaissePage = () => {
     printWindow.document.close();
   };
 
+  // Print expenses on small thermal printer (80mm) - black & white
+  const printExpensesTicket = () => {
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    const statusLabels = { pending: 'Attente', approved: 'OK', completed: 'Fait', revision_requested: 'Réviser', rejected: 'Refusé' };
+    const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
+    
+    // Filter only pending and approved expenses (things to buy)
+    const toPrint = expenses.filter(e => e.status === 'pending' || e.status === 'approved');
+    const total = toPrint.reduce((sum, e) => sum + e.amount, 0);
+    
+    const itemsHtml = toPrint.map((e, i) => {
+      return '<div class="item">' +
+        '<div class="item-header">' +
+        '<span class="num">' + (i + 1) + '.</span>' +
+        '<span class="cat">[' + (categoryLabels[e.category] || e.category.substring(0, 4).toUpperCase()) + ']</span>' +
+        '<span class="status">' + (statusLabels[e.status] || '') + '</span>' +
+        '</div>' +
+        '<div class="desc">' + e.description + '</div>' +
+        (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
+        '<div class="amount">' + formatPrice(e.amount) + ' F</div>' +
+        '</div>';
+    }).join('');
+
+    const html = '<!DOCTYPE html><html><head><title>Liste Achats</title><meta charset="UTF-8">' +
+      '<style>' +
+      '@page { size: 80mm auto; margin: 0; }' +
+      '@media print { body { -webkit-print-color-adjust: exact; } }' +
+      '* { margin: 0; padding: 0; box-sizing: border-box; }' +
+      'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; }' +
+      '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }' +
+      '.title { font-size: 16px; font-weight: 900; letter-spacing: 2px; }' +
+      '.date { font-size: 10px; margin-top: 4px; }' +
+      '.count { font-size: 12px; font-weight: bold; margin-top: 4px; border: 1px solid #000; display: inline-block; padding: 2px 8px; }' +
+      '.item { border-bottom: 1px dashed #000; padding: 6px 0; }' +
+      '.item-header { display: flex; justify-content: space-between; font-size: 10px; }' +
+      '.num { font-weight: bold; }' +
+      '.cat { font-weight: bold; }' +
+      '.status { font-style: italic; }' +
+      '.desc { font-size: 12px; font-weight: bold; margin: 3px 0; }' +
+      '.supplier { font-size: 9px; color: #333; }' +
+      '.amount { text-align: right; font-size: 14px; font-weight: 900; }' +
+      '.total-section { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
+      '.total-label { font-size: 12px; }' +
+      '.total-value { font-size: 24px; font-weight: 900; }' +
+      '.footer { margin-top: 10px; text-align: center; font-size: 9px; border-top: 1px dashed #000; padding-top: 6px; }' +
+      '.cut-line { margin-top: 8px; text-align: center; font-size: 10px; }' +
+      '</style></head>' +
+      '<body>' +
+      '<div class="header">' +
+      '<div class="title">LISTE ACHATS</div>' +
+      '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
+      '<div class="count">' + toPrint.length + ' article(s)</div>' +
+      '</div>' +
+      itemsHtml +
+      '<div class="total-section">' +
+      '<div class="total-label">TOTAL A DEPENSER</div>' +
+      '<div class="total-value">' + formatPrice(total) + ' F</div>' +
+      '</div>' +
+      '<div class="footer">' +
+      'Espace Maxo - Caisse Pro<br>' +
+      '- - - - - - - - - - - - - -' +
+      '</div>' +
+      '<div class="cut-line">. . . . . . . . . . . . . . .</div>' +
+      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script>' +
+      '</body></html>';
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  // Open expense for editing
+  const openExpenseForEdit = (expense) => {
+    setExpenseForm({
+      category: expense.category,
+      description: expense.description,
+      amount: expense.amount,
+      supplier: expense.supplier || "",
+      planned_date: expense.planned_date || format(new Date(), "yyyy-MM-dd"),
+      receipt_image: expense.receipt_image
+    });
+    setEditingExpense(expense);
+    setShowExpenseModal(true);
+  };
+
   // ============== WEEKLY REPORT FUNCTIONS ==============
   
   const fetchWeeklyReport = async () => {
@@ -4759,18 +4843,34 @@ _Gérante - Espace Maxo_
                         <FileText className="w-5 h-5" />
                         VUE COMPLÈTE - Toutes les demandes ({expenses.length})
                       </div>
-                      <Button 
-                        size="sm"
-                        variant="outline"
-                        onClick={printAllExpensesList}
-                        className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20"
-                      >
-                        <Printer className="w-4 h-4 mr-1" />
-                        Imprimer tout
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={printExpensesTicket}
+                          className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                          title="Format ticket thermique 80mm"
+                        >
+                          <Receipt className="w-4 h-4 mr-1" />
+                          Ticket 80mm
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={printAllExpensesList}
+                          className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20"
+                        >
+                          <Printer className="w-4 h-4 mr-1" />
+                          Imprimer A4
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="max-h-[500px] overflow-y-auto">
+                    <p className="text-xs text-slate-500 mb-2 flex items-center gap-1">
+                      <Edit2 className="w-3 h-3" />
+                      Cliquez sur une ligne pour modifier la demande
+                    </p>
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-slate-800">
                         <tr className="text-left text-slate-400 border-b border-slate-700">
@@ -4786,7 +4886,12 @@ _Gérante - Espace Maxo_
                       </thead>
                       <tbody>
                         {expenses.map((expense, index) => (
-                          <tr key={expense.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                          <tr 
+                            key={expense.id} 
+                            className="border-b border-slate-700/50 hover:bg-indigo-500/10 cursor-pointer transition-colors group"
+                            onClick={() => openExpenseForEdit(expense)}
+                            title="Cliquer pour modifier"
+                          >
                             <td className="p-2 text-slate-500">{index + 1}</td>
                             <td className="p-2">
                               <Badge className={`text-xs ${
@@ -4796,7 +4901,10 @@ _Gérante - Espace Maxo_
                                 'bg-slate-500/20 text-slate-400'
                               }`}>{expense.category}</Badge>
                             </td>
-                            <td className="p-2 text-white">{expense.description}</td>
+                            <td className="p-2 text-white flex items-center gap-2">
+                              {expense.description}
+                              <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </td>
                             <td className="p-2 text-slate-400">{expense.supplier || '-'}</td>
                             <td className="p-2 text-right font-bold text-amber-400">{formatPrice(expense.amount)} F</td>
                             <td className="p-2">
