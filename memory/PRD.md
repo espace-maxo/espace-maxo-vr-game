@@ -195,6 +195,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Affiche uniquement les factures validées de la date sélectionnée
   - Accessible à tous les utilisateurs
   - Totaux journaliers calculés automatiquement
+- [x] **Workflow Bon → Facture optimisé** (Mars 2026)
+  - Bouton "Facture" (anciennement "Valider") avec icône document et gradient vert
+  - Message de workflow clair pour la gérante : "1. Imprimer bons → 2. Cliquer Facture"
+  - Notification sonore + toast pour le serveur quand sa commande devient facture
+  - Serveur voit les factures définitives en lecture seule (bouton "Voir" uniquement)
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
