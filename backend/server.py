@@ -3211,18 +3211,36 @@ async def create_invoice(invoice_data: InvoiceCreate):
 
 @api_router.get("/invoices")
 async def get_invoices(date: str = Query(None), user_id: str = Query(None), role: str = Query(None), created_by: str = Query(None)):
-    """Get invoices, optionally filtered by date and user (servers only see their own invoices)"""
+    """Get invoices, optionally filtered by date and user
+    For servers: shows their own pending invoices + ALL validated invoices
+    For admin/manager: shows ALL invoices
+    """
     try:
-        query = {}
-        if date:
-            query["created_at"] = {"$regex": f"^{date}"}
-        
-        # If user is a server (not admin/manager), only show their invoices
         if role == "server" and created_by:
-            query["created_by"] = created_by
-        
-        invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-        return {"invoices": invoices}
+            # For servers: fetch their own pending + ALL validated invoices
+            base_query = {}
+            if date:
+                base_query["created_at"] = {"$regex": f"^{date}"}
+            
+            # Query 1: Server's own pending invoices
+            pending_query = {**base_query, "created_by": created_by, "validation_status": {"$ne": "validated"}}
+            pending_invoices = await db.invoices.find(pending_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            
+            # Query 2: ALL validated invoices (from all servers)
+            validated_query = {**base_query, "validation_status": "validated"}
+            validated_invoices = await db.invoices.find(validated_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            
+            # Combine and deduplicate (validated ones may include server's own)
+            all_invoices = validated_invoices + pending_invoices
+            return {"invoices": all_invoices}
+        else:
+            # For admin/manager: return ALL invoices
+            query = {}
+            if date:
+                query["created_at"] = {"$regex": f"^{date}"}
+            
+            invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            return {"invoices": invoices}
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}")
         raise HTTPException(status_code=500, detail=str(e))

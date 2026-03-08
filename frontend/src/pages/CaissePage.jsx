@@ -236,6 +236,10 @@ const CaissePage = () => {
   const [selectedServerDetail, setSelectedServerDetail] = useState(null);
   const [serverInvoices, setServerInvoices] = useState([]);
   
+  // Historique des factures
+  const [historyDate, setHistoryDate] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd"));
+  const [historyInvoices, setHistoryInvoices] = useState([]);
+  
   // Cancellation requests
   const [cancellationRequests, setCancellationRequests] = useState([]);
   const [lastCancellationCount, setLastCancellationCount] = useState(0);
@@ -578,6 +582,24 @@ const CaissePage = () => {
       fetchRapportData();
     }
   }, [rapportDate, activeTab, isAuthenticated]);
+
+  // Fetch history invoices when history tab is active
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "historique") {
+      fetchHistoryInvoices();
+    }
+  }, [historyDate, activeTab, isAuthenticated]);
+
+  const fetchHistoryInvoices = async () => {
+    try {
+      const res = await axios.get(`${API}/invoices`, { params: { date: historyDate } });
+      // Only show validated invoices in history
+      const validated = (res.data.invoices || []).filter(i => i.validation_status === 'validated');
+      setHistoryInvoices(validated);
+    } catch (error) {
+      console.error("Error fetching history invoices:", error);
+    }
+  };
 
   const fetchRapportData = async () => {
     try {
@@ -2068,6 +2090,9 @@ _Gérante - Espace Maxo_
                 <FileText className="w-4 h-4 mr-2" />Rapport
               </TabsTrigger>
             )}
+            <TabsTrigger value="historique" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white">
+              <Calendar className="w-4 h-4 mr-2" />Historique
+            </TabsTrigger>
           </TabsList>
 
           {/* ==================== COMMANDE TAB (Creation only) ==================== */}
@@ -2797,6 +2822,52 @@ _Gérante - Espace Maxo_
                           >
                             <Printer className="w-4 h-4 mr-2" />
                             IMPRIMER
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ============== FACTURES DÉFINITIVES DU JOUR (Server view - read only) ============== */}
+                {currentUser?.role === 'server' && 
+                  invoices.filter(i => i.validation_status === 'validated').length > 0 && (
+                  <Card className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/50 mt-4">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
+                        <FileText className="w-5 h-5" />
+                        FACTURES DÉFINITIVES DU JOUR
+                        <Badge className="bg-slate-600/50 text-slate-300 ml-2">
+                          {invoices.filter(i => i.validation_status === 'validated').length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {invoices.filter(i => i.validation_status === 'validated').map(invoice => (
+                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-700/30 rounded-lg p-3 border border-slate-600/30">
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewInvoice(invoice)}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-bold text-sm">{invoice.invoice_number}</span>
+                              <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Définitive</Badge>
+                              {invoice.table_number && (
+                                <Badge className="bg-amber-500/20 text-amber-400 text-xs">Table {invoice.table_number}</Badge>
+                              )}
+                            </div>
+                            <p className="text-slate-400 text-xs mt-1">
+                              {invoice.customer_name} • <span className="text-amber-400 font-semibold">{formatPrice(invoice.total)} F</span>
+                            </p>
+                            <p className="text-slate-500 text-xs">
+                              Serveur: {invoice.created_by} • Validé par: {invoice.validated_by}
+                            </p>
+                          </div>
+                          <Button 
+                            variant="outline"
+                            onClick={() => setViewInvoice(invoice)} 
+                            className="border-slate-600 text-slate-300 hover:bg-slate-700 w-full sm:w-auto shrink-0"
+                            size="sm"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Voir
                           </Button>
                         </div>
                       ))}
@@ -3913,6 +3984,108 @@ _Gérante - Espace Maxo_
               </div>
             </TabsContent>
           )}
+
+          {/* ==================== HISTORIQUE TAB ==================== */}
+          <TabsContent value="historique">
+            <div className="space-y-4">
+              {/* Header avec sélecteur de date */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-slate-300 flex items-center gap-2">
+                  <Calendar className="w-6 h-6" />
+                  Historique des Factures
+                </h2>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="date"
+                    value={historyDate}
+                    onChange={(e) => setHistoryDate(e.target.value)}
+                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                  />
+                  <Badge className="bg-slate-600/50 text-slate-300">
+                    {historyInvoices.length} facture(s)
+                  </Badge>
+                  {historyInvoices.length > 0 && (
+                    <Badge className="bg-green-500/20 text-green-400">
+                      Total: {formatPrice(historyInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Liste des factures archivées */}
+              {historyInvoices.length === 0 ? (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Aucune facture validée pour cette date</p>
+                    <p className="text-slate-600 text-sm mt-2">Sélectionnez une autre date dans le calendrier</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-3">
+                  {historyInvoices.map((invoice) => (
+                    <Card key={invoice.id} className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/50">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-white font-bold">{invoice.invoice_number}</span>
+                              <Badge className="bg-green-500/20 text-green-400">Validée</Badge>
+                              <Badge className="bg-amber-500/20 text-amber-400">{formatPrice(invoice.total)} F</Badge>
+                              {invoice.table_number && (
+                                <Badge className="bg-slate-500/30 text-slate-300">Table {invoice.table_number}</Badge>
+                              )}
+                            </div>
+                            <p className="text-slate-400 text-sm mt-1">
+                              Client: {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
+                            </p>
+                            <p className="text-slate-500 text-xs">
+                              Serveur: {invoice.created_by} • Validé par: {invoice.validated_by}
+                            </p>
+                            {/* Résumé des articles */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {invoice.items?.slice(0, 3).map((item, idx) => (
+                                <span key={idx} className="text-xs bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded">
+                                  {item.quantity}x {item.name}
+                                </span>
+                              ))}
+                              {invoice.items?.length > 3 && (
+                                <span className="text-xs text-slate-500">+{invoice.items.length - 3} autres</span>
+                              )}
+                            </div>
+                            {/* Totaux par département */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {invoice.totals_by_department?.salle_jardin > 0 && (
+                                <span className="text-xs text-green-400">Cuisine: {formatPrice(invoice.totals_by_department.salle_jardin)}F</span>
+                              )}
+                              {invoice.totals_by_department?.bar > 0 && (
+                                <span className="text-xs text-orange-400">Bar: {formatPrice(invoice.totals_by_department.bar)}F</span>
+                              )}
+                              {invoice.totals_by_department?.jeux > 0 && (
+                                <span className="text-xs text-blue-400">Jeux: {formatPrice(invoice.totals_by_department.jeux)}F</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setViewInvoice(invoice)}
+                              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Voir
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
         </Tabs>
         )}
       </div>
