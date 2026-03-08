@@ -4366,24 +4366,40 @@ async def generate_rapport_pdf(date: str = Query(...), signature: str = Query(""
 
 # ============== EXPENSE/PURCHASE MODELS ==============
 
+class ExpenseItem(BaseModel):
+    category: str
+    description: str
+    quantity: int = 1
+    unit_price: float
+    amount: float
+
 class ExpenseCreate(BaseModel):
     category: str  # cuisine, bar, jeux, autres
     description: str
+    quantity: Optional[int] = 1
+    unit_price: Optional[float] = None
     amount: float
     supplier: Optional[str] = None
     planned_date: Optional[str] = None
     receipt_image: Optional[str] = None  # Base64 or URL
     requested_by: str
+    is_group: Optional[bool] = False
+    group_id: Optional[str] = None
+    items: Optional[List[ExpenseItem]] = None
 
 class ExpenseUpdate(BaseModel):
     category: Optional[str] = None
     description: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
     amount: Optional[float] = None
     supplier: Optional[str] = None
     planned_date: Optional[str] = None
     receipt_image: Optional[str] = None
     admin_notes: Optional[str] = None
     status: Optional[str] = None  # pending, approved, rejected, revision_requested, completed
+    is_group: Optional[bool] = None
+    items: Optional[List[ExpenseItem]] = None
 
 # ============== EXPENSE ENDPOINTS ==============
 
@@ -4423,11 +4439,16 @@ async def create_expense(expense: ExpenseCreate):
             "id": str(uuid.uuid4()),
             "category": expense.category,
             "description": expense.description,
+            "quantity": expense.quantity or 1,
+            "unit_price": expense.unit_price or expense.amount,
             "amount": expense.amount,
             "supplier": expense.supplier,
             "planned_date": expense.planned_date,
             "receipt_image": expense.receipt_image,
             "requested_by": expense.requested_by,
+            "is_group": expense.is_group or False,
+            "group_id": expense.group_id,
+            "items": [item.dict() for item in expense.items] if expense.items else None,
             "status": "pending",  # pending, approved, rejected, revision_requested, completed
             "admin_notes": None,
             "approved_by": None,
@@ -4452,7 +4473,13 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         
-        update_data = {k: v for k, v in update.dict().items() if v is not None}
+        update_data = {}
+        for k, v in update.dict().items():
+            if v is not None:
+                if k == "items" and v:
+                    update_data[k] = [item if isinstance(item, dict) else item.dict() for item in v]
+                else:
+                    update_data[k] = v
         
         if update.status == "approved":
             update_data["approved_at"] = datetime.now(timezone.utc).isoformat()

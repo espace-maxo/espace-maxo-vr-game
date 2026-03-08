@@ -5083,43 +5083,70 @@ _Gérante - Espace Maxo_
                   <CardContent className="space-y-2">
                     {expenses.filter(e => e.status === 'revision_requested').map(expense => (
                       <div key={expense.id} className="bg-amber-900/20 rounded-lg p-3 border border-amber-500/30">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <Badge className={`text-xs ${
-                                expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                                expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                                'bg-slate-500/20 text-slate-400'
-                              }`}>{expense.category}</Badge>
-                              <span className="text-white font-medium">{expense.description}</span>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste</Badge>
+                                ) : (
+                                  <Badge className={`text-xs ${
+                                    expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{expense.category}</Badge>
+                                )}
+                                <span className="text-white font-medium">{expense.description}</span>
+                              </div>
+                              {!expense.is_group && (
+                                <div className="text-slate-400 text-sm mt-1">
+                                  Qté: <span className="text-white">{expense.quantity || 1}</span> × 
+                                  PU: <span className="text-white">{formatPrice(expense.unit_price || expense.amount)} F</span>
+                                </div>
+                              )}
+                              <p className="text-amber-400 font-bold text-lg">{formatPrice(expense.amount)} F</p>
+                              {expense.admin_notes && (
+                                <p className="text-amber-300 text-sm mt-1">
+                                  <strong>Note admin:</strong> {expense.admin_notes}
+                                </p>
+                              )}
                             </div>
-                            <p className="text-amber-400 font-bold">{formatPrice(expense.amount)} F</p>
-                            {expense.admin_notes && (
-                              <p className="text-amber-300 text-sm mt-1">
-                                <strong>Note admin:</strong> {expense.admin_notes}
-                              </p>
-                            )}
+                            <Button 
+                              size="sm"
+                              onClick={() => openExpenseForEdit(expense)}
+                              className="bg-amber-600 hover:bg-amber-700"
+                            >
+                              <Edit2 className="w-4 h-4 mr-1" />
+                              Modifier
+                            </Button>
                           </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => {
-                              setExpenseForm({
-                                category: expense.category,
-                                description: expense.description,
-                                amount: expense.amount,
-                                supplier: expense.supplier || "",
-                                planned_date: expense.planned_date || format(new Date(), "yyyy-MM-dd"),
-                                receipt_image: expense.receipt_image
-                              });
-                              setEditingExpense(expense);
-                              setShowExpenseModal(true);
-                            }}
-                            className="bg-amber-600 hover:bg-amber-700"
-                          >
-                            <Edit2 className="w-4 h-4 mr-1" />
-                            Modifier
-                          </Button>
+                          {/* Show sub-items for grouped lists */}
+                          {expense.is_group && expense.items && expense.items.length > 0 && (
+                            <div className="bg-slate-800/50 rounded p-2 mt-1">
+                              <p className="text-xs text-slate-400 mb-2">Détails de la liste ({expense.items.length} articles):</p>
+                              <div className="space-y-1">
+                                {expense.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500">{idx + 1}.</span>
+                                      <Badge className={`text-xs ${
+                                        item.category === 'cuisine' ? 'bg-green-500/10 text-green-500' :
+                                        item.category === 'bar' ? 'bg-orange-500/10 text-orange-500' :
+                                        item.category === 'paiement' ? 'bg-blue-500/10 text-blue-500' :
+                                        'bg-slate-500/10 text-slate-500'
+                                      }`}>{item.category}</Badge>
+                                      <span className="text-white">{item.description}</span>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-slate-400 text-xs">{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                      <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -5146,14 +5173,31 @@ _Gérante - Espace Maxo_
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className={`text-xs ${
-                                  expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                                  expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                  expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                                  'bg-slate-500/20 text-slate-400'
-                                }`}>{expense.category}</Badge>
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
+                                ) : (
+                                  <Badge className={`text-xs ${
+                                    expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{expense.category}</Badge>
+                                )}
                                 <span className="text-white font-bold">{expense.description}</span>
                               </div>
+                              {/* Show quantity and unit price for single items */}
+                              {!expense.is_group && (
+                                <div className="text-slate-300 text-sm mt-1 bg-slate-800/50 rounded px-2 py-1 inline-block">
+                                  <span className="text-slate-400">Qté:</span> <span className="font-bold">{expense.quantity || 1}</span>
+                                  <span className="mx-2">×</span>
+                                  <span className="text-slate-400">PU:</span> <span className="font-bold">{formatPrice(expense.unit_price || expense.amount)} F</span>
+                                  <span className="mx-2">=</span>
+                                  <span className="text-amber-400 font-bold">{formatPrice(expense.amount)} F</span>
+                                </div>
+                              )}
+                              {expense.is_group && (
+                                <p className="text-amber-400 font-bold text-lg mt-1">Total: {formatPrice(expense.amount)} F</p>
+                              )}
                               <p className="text-slate-400 text-sm mt-1">
                                 Demandé par: {expense.requested_by} • {new Date(expense.created_at).toLocaleDateString('fr-FR')}
                               </p>
@@ -5171,10 +5215,42 @@ _Gérante - Espace Maxo_
                               )}
                             </div>
                           </div>
+                          {/* Show sub-items for grouped lists */}
+                          {expense.is_group && expense.items && expense.items.length > 0 && (
+                            <div className="bg-slate-800/50 rounded p-3 border border-slate-700">
+                              <p className="text-xs text-slate-400 mb-2 font-semibold">📋 Détails de la liste:</p>
+                              <div className="space-y-2">
+                                {expense.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-900/30 rounded p-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500 font-mono">{idx + 1}.</span>
+                                      <Badge className={`text-xs ${
+                                        item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                        item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                        item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                        'bg-slate-500/20 text-slate-400'
+                                      }`}>{item.category}</Badge>
+                                      <span className="text-white font-medium">{item.description}</span>
+                                    </div>
+                                    <div className="text-right flex items-center gap-2">
+                                      <span className="text-slate-400 text-xs">
+                                        {item.quantity} × {formatPrice(item.unit_price)} F
+                                      </span>
+                                      <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="border-t border-slate-700 mt-2 pt-2 flex justify-end">
+                                <span className="text-slate-400">Total liste:</span>
+                                <span className="text-amber-400 font-bold ml-2">{formatPrice(expense.amount)} F</span>
+                              </div>
+                            </div>
+                          )}
                           {/* Admin: Montant modifiable directement */}
                           <div className="flex items-center gap-3 flex-wrap bg-slate-800/50 rounded-lg p-3">
                             <div className="flex items-center gap-2">
-                              <Label className="text-slate-400 text-sm">Montant:</Label>
+                              <Label className="text-slate-400 text-sm">Montant total:</Label>
                               <Input
                                 type="number"
                                 defaultValue={expense.amount}
@@ -5250,53 +5326,106 @@ _Gérante - Espace Maxo_
                           Total: {formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F
                         </Badge>
                       </div>
-                      <Button 
-                        size="sm"
-                        onClick={printAllApprovedExpenses}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <Printer className="w-4 h-4 mr-1" />
-                        Imprimer la liste
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={printExpensesTicket}
+                          className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                        >
+                          <Receipt className="w-4 h-4 mr-1" />
+                          Ticket 80mm
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={printAllApprovedExpenses}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <Printer className="w-4 h-4 mr-1" />
+                          Imprimer A4
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {expenses.filter(e => e.status === 'approved').map(expense => (
-                      <div key={expense.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/20 rounded-lg p-3 border border-green-500/30">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className={`text-xs ${
-                              expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                              expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                              expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                              'bg-slate-500/20 text-slate-400'
-                            }`}>{expense.category}</Badge>
-                            <span className="text-white font-medium">{expense.description}</span>
+                      <div key={expense.id} className="bg-green-900/20 rounded-lg p-3 border border-green-500/30">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
+                                ) : (
+                                  <Badge className={`text-xs ${
+                                    expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{expense.category}</Badge>
+                                )}
+                                <span className="text-white font-medium">{expense.description}</span>
+                              </div>
+                              {/* Show quantity and unit price for single items */}
+                              {!expense.is_group && (
+                                <div className="text-slate-300 text-sm mt-1">
+                                  <span className="text-slate-400">Qté:</span> <span className="font-bold">{expense.quantity || 1}</span>
+                                  <span className="mx-2">×</span>
+                                  <span className="text-slate-400">PU:</span> <span className="font-bold">{formatPrice(expense.unit_price || expense.amount)} F</span>
+                                </div>
+                              )}
+                              <p className="text-green-400 font-bold text-lg">{formatPrice(expense.amount)} F</p>
+                              {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
+                              {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
+                              <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
+                            </div>
+                            <div className="flex gap-2 flex-wrap shrink-0">
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => printExpensePDF(expense)}
+                                className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                              >
+                                <Printer className="w-4 h-4 mr-1" />
+                                PDF
+                              </Button>
+                              {currentUser?.role === 'manager' && (
+                                <Button 
+                                  size="sm"
+                                  onClick={() => updateExpense(expense.id, { status: "completed" })}
+                                  className="bg-emerald-600 hover:bg-emerald-700"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                  Acheté
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-green-400 font-bold">{formatPrice(expense.amount)} F</p>
-                          {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
-                          {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
-                          <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
-                        </div>
-                        <div className="flex gap-2 flex-wrap shrink-0">
-                          <Button 
-                            size="sm"
-                            variant="outline"
-                            onClick={() => printExpensePDF(expense)}
-                            className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                          >
-                            <Printer className="w-4 h-4 mr-1" />
-                            PDF
-                          </Button>
-                          {currentUser?.role === 'manager' && (
-                            <Button 
-                              size="sm"
-                              onClick={() => updateExpense(expense.id, { status: "completed" })}
-                              className="bg-emerald-600 hover:bg-emerald-700"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Acheté
-                            </Button>
+                          {/* Show sub-items for grouped lists */}
+                          {expense.is_group && expense.items && expense.items.length > 0 && (
+                            <div className="bg-slate-800/50 rounded p-2 mt-1">
+                              <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
+                              <div className="space-y-1">
+                                {expense.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500">{idx + 1}.</span>
+                                      <Badge className={`text-xs ${
+                                        item.category === 'cuisine' ? 'bg-green-500/10 text-green-500' :
+                                        item.category === 'bar' ? 'bg-orange-500/10 text-orange-500' :
+                                        item.category === 'paiement' ? 'bg-blue-500/10 text-blue-500' :
+                                        'bg-slate-500/10 text-slate-500'
+                                      }`}>{item.category}</Badge>
+                                      <span className="text-white">{item.description}</span>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-slate-400 text-xs">{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                      <span className="text-green-400 font-bold">{formatPrice(item.amount)} F</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
