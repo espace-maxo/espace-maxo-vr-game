@@ -1052,6 +1052,35 @@ _Gérante - Espace Maxo_
   const startEditingInvoice = (invoice) => {
     setEditingInvoice(invoice);
     setEditingItems([...invoice.items]);
+    setEditingDepartment("salle_jardin"); // Reset to default department
+  };
+
+  // State for editing modal - which department is selected for adding
+  const [editingDepartment, setEditingDepartment] = useState("salle_jardin");
+
+  // Add product to editing items
+  const addProductToEditing = (product, department) => {
+    const existingIndex = editingItems.findIndex(item => 
+      item.name === product.name && item.department === department
+    );
+    
+    if (existingIndex >= 0) {
+      // Increment quantity if already exists
+      const newItems = [...editingItems];
+      newItems[existingIndex].quantity += 1;
+      setEditingItems(newItems);
+    } else {
+      // Add new item
+      setEditingItems([...editingItems, {
+        id: product.id || `custom-${Date.now()}`,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+        department: department,
+        unit: product.unit || "unité"
+      }]);
+    }
+    toast.success(`${product.name} ajouté`);
   };
 
   // Update item quantity in editing mode
@@ -3722,65 +3751,160 @@ _Gérante - Espace Maxo_
 
       {/* Invoice Edit Modal */}
       <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-4xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-blue-400 flex items-center gap-2">
               <Edit2 className="w-5 h-5" />
               Modifier la Facture {editingInvoice?.invoice_number}
             </DialogTitle>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {editingItems.map((item, index) => (
-                <div key={index} className="flex items-center justify-between gap-2 bg-slate-700/50 rounded-lg p-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{item.name}</p>
-                    <p className="text-amber-400 text-sm">{formatPrice(item.price)} F/unité</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => updateEditingItemQuantity(index, -1)}
-                      className="border-slate-600 text-white h-8 w-8 p-0"
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            {/* LEFT SIDE: Product Catalog to Add */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Ajouter des produits</h3>
+              
+              {/* Department Tabs */}
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(DEPARTMENT_CONFIG).map(([key, config]) => {
+                  const Icon = config.icon;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setEditingDepartment(key)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
+                        editingDepartment === key 
+                          ? `${config.bgColor} ${config.color} border ${config.borderColor}` 
+                          : 'bg-slate-700/50 text-slate-400 hover:text-white'
+                      }`}
                     >
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="text-white font-bold w-8 text-center">{item.quantity}</span>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => updateEditingItemQuantity(index, 1)}
-                      className="border-slate-600 text-white h-8 w-8 p-0"
+                      <Icon className="w-3 h-3" />
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Products Grid */}
+              <div className="grid grid-cols-2 gap-2 max-h-[250px] overflow-y-auto pr-1">
+                {(catalog[editingDepartment] || []).map((product, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => addProductToEditing(product, editingDepartment)}
+                    className="bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600 rounded-lg p-2 text-left transition-all"
+                  >
+                    <p className="text-white text-sm font-medium truncate">{product.name}</p>
+                    <p className="text-amber-400 text-xs">{formatPrice(product.price)} F</p>
+                  </button>
+                ))}
+                {(catalog[editingDepartment] || []).length === 0 && (
+                  <p className="col-span-2 text-slate-500 text-sm text-center py-4">Aucun produit dans ce département</p>
+                )}
+              </div>
+              
+              {/* Custom Item for "Autres" */}
+              {editingDepartment === "autres" && (
+                <div className="bg-slate-700/30 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-slate-400 font-medium">Article personnalisé</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Nom"
+                      value={customItem.name}
+                      onChange={(e) => setCustomItem({...customItem, name: e.target.value})}
+                      className="bg-slate-700/50 border-slate-600 text-white text-sm h-8 flex-1"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Prix"
+                      value={customItem.price || ""}
+                      onChange={(e) => setCustomItem({...customItem, price: parseInt(e.target.value) || 0})}
+                      className="bg-slate-700/50 border-slate-600 text-white text-sm h-8 w-20"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (customItem.name && customItem.price > 0) {
+                          addProductToEditing(customItem, "autres");
+                          setCustomItem({ name: "", price: 0 });
+                        }
+                      }}
+                      disabled={!customItem.name || customItem.price <= 0}
+                      className="bg-amber-500 hover:bg-amber-600 h-8"
                     >
                       <Plus className="w-4 h-4" />
                     </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => removeEditingItem(index)}
-                      className="text-red-400 hover:text-red-300 h-8 w-8 p-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
             
-            <div className="border-t border-slate-700 pt-4">
-              <div className="flex justify-between items-center text-lg">
-                <span className="text-slate-400">Nouveau Total:</span>
-                <span className="text-amber-500 font-bold">
-                  {formatPrice(editingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0))} FCFA
-                </span>
+            {/* RIGHT SIDE: Current Items */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+                Articles actuels ({editingItems.length})
+              </h3>
+              
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {editingItems.map((item, index) => {
+                  const deptConfig = DEPARTMENT_CONFIG[item.department] || DEPARTMENT_CONFIG.autres;
+                  return (
+                    <div key={index} className={`flex items-center justify-between gap-2 rounded-lg p-2 border ${deptConfig.borderColor} ${deptConfig.bgColor}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">{item.name}</p>
+                        <p className={`text-xs ${deptConfig.color}`}>{deptConfig.label} • {formatPrice(item.price)} F</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => updateEditingItemQuantity(index, -1)}
+                          className="text-white h-7 w-7 p-0"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span className="text-white font-bold w-6 text-center text-sm">{item.quantity}</span>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => updateEditingItemQuantity(index, 1)}
+                          className="text-white h-7 w-7 p-0"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => removeEditingItem(index)}
+                          className="text-red-400 hover:text-red-300 h-7 w-7 p-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {editingItems.length === 0 && (
+                  <p className="text-slate-500 text-sm text-center py-8">Aucun article</p>
+                )}
+              </div>
+              
+              {/* Total */}
+              <div className="border-t border-slate-700 pt-3">
+                <div className="flex justify-between items-center text-lg">
+                  <span className="text-slate-400">Nouveau Total:</span>
+                  <span className="text-amber-500 font-bold">
+                    {formatPrice(editingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0))} FCFA
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          
+          <div className="flex gap-2 pt-2 border-t border-slate-700">
             <Button 
               onClick={saveModifiedInvoice}
               className="flex-1 bg-green-600 hover:bg-green-700"
+              disabled={editingItems.length === 0}
             >
               <CheckCircle className="w-4 h-4 mr-2" />
               Enregistrer les modifications

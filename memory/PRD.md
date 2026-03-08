@@ -167,6 +167,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [ ] Déploiement production - Cliquer **"Deploy"**
 - [ ] Tester SMS de confirmation client après paiement
 - [ ] **Vérifier le paiement Kkiapay en production** - Tester manuellement un paiement Mobile Money
+- [x] **Interface de modification de facture améliorée** - Serveurs peuvent ajouter tout type de produit
 
 ### P2 (Future)
 - [ ] Section "À propos de nous"
