@@ -4982,6 +4982,7 @@ _Gérante - Espace Maxo_
                           <th className="p-2 text-right">Total</th>
                           <th className="p-2">Statut</th>
                           <th className="p-2">Fournisseur</th>
+                          {currentUser?.role === 'admin' && <th className="p-2 text-center">Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -5032,6 +5033,18 @@ _Gérante - Espace Maxo_
                                 </Badge>
                               </td>
                               <td className="p-2 text-slate-400 text-xs">{expense.supplier || '-'}</td>
+                              {currentUser?.role === 'admin' && (
+                                <td className="p-2 text-center">
+                                  <Button 
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
+                                    className="h-7 w-7 p-0 text-red-500 hover:bg-red-700/20"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </td>
+                              )}
                             </tr>
                             {/* Show sub-items for grouped lists */}
                             {expense.is_group && expense.items && expense.items.map((item, subIndex) => (
@@ -5051,6 +5064,7 @@ _Gérante - Espace Maxo_
                                 <td className="p-1 text-right text-slate-400">{formatPrice(item.amount)} F</td>
                                 <td className="p-1"></td>
                                 <td className="p-1"></td>
+                                {currentUser?.role === 'admin' && <td className="p-1"></td>}
                               </tr>
                             ))}
                           </>
@@ -5060,7 +5074,7 @@ _Gérante - Espace Maxo_
                         <tr className="bg-slate-800 font-bold">
                           <td colSpan="5" className="p-2 text-right text-slate-400">TOTAL GÉNÉRAL:</td>
                           <td className="p-2 text-right text-lg text-indigo-400">{formatPrice(expenses.reduce((sum, e) => sum + e.amount, 0))} F</td>
-                          <td colSpan="2"></td>
+                          <td colSpan={currentUser?.role === 'admin' ? 3 : 2}></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -5303,6 +5317,15 @@ _Gérante - Espace Maxo_
                               <X className="w-4 h-4 mr-1" />
                               Refuser
                             </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => deleteExpense(expense.id)}
+                              className="border-red-700/50 text-red-500 hover:bg-red-700/20"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Supprimer
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -5399,6 +5422,17 @@ _Gérante - Espace Maxo_
                                   Acheté
                                 </Button>
                               )}
+                              {currentUser?.role === 'admin' && (
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => deleteExpense(expense.id)}
+                                  className="border-red-700/50 text-red-500 hover:bg-red-700/20"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Supprimer
+                                </Button>
+                              )}
                             </div>
                           </div>
                           {/* Show sub-items for grouped lists */}
@@ -5461,6 +5495,16 @@ _Gérante - Espace Maxo_
                         <div className="flex items-center gap-2">
                           <span className="text-slate-400 text-sm">{formatPrice(expense.amount)} F</span>
                           <span className="text-slate-500 text-xs">{expense.completed_at?.slice(0, 10)}</span>
+                          {currentUser?.role === 'admin' && (
+                            <Button 
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteExpense(expense.id)}
+                              className="h-6 w-6 p-0 text-red-500 hover:bg-red-700/20"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
