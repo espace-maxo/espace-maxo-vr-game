@@ -2679,41 +2679,42 @@ _Gérante - Espace Maxo_
                 )}
               </div>
 
-              {/* Right: Current Bill */}
-              <div className="lg:col-span-1 space-y-4">
-                <Card className="bg-slate-800/50 border-amber-500/30 lg:sticky lg:top-20">
-                  <CardHeader className="border-b border-slate-700 py-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
-                        <Receipt className="w-5 h-5" />
-                        {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
-                      </CardTitle>
-                      {currentBill.length > 0 && (
-                        <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                    
-                    {/* Client selector */}
-                    <Select 
-                      value={selectedClient?.id || "anonymous"} 
-                      onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}
-                      disabled={!activeTableId}
-                    >
-                      <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white mt-2">
-                        <SelectValue placeholder="Sélectionner un client (optionnel)" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
-                        <SelectItem value="anonymous" className="text-white">Client anonyme</SelectItem>
-                        {clients.map(client => (
-                          <SelectItem key={client.id} value={client.id} className="text-white">
-                            {client.name} {client.phone && `(${client.phone})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </CardHeader>
+              {/* Right: Current Bill - Fixed on desktop */}
+              <div className="lg:col-span-1">
+                <div className="lg:sticky lg:top-20 space-y-4">
+                  <Card className="bg-slate-800/50 border-amber-500/30">
+                    <CardHeader className="border-b border-slate-700 py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
+                          <Receipt className="w-5 h-5" />
+                          {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
+                        </CardTitle>
+                        {currentBill.length > 0 && (
+                          <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* Client selector */}
+                      <Select 
+                        value={selectedClient?.id || "anonymous"} 
+                        onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}
+                        disabled={!activeTableId}
+                      >
+                        <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white mt-2">
+                          <SelectValue placeholder="Sélectionner un client (optionnel)" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="anonymous" className="text-white">Client anonyme</SelectItem>
+                          {clients.map(client => (
+                            <SelectItem key={client.id} value={client.id} className="text-white">
+                              {client.name} {client.phone && `(${client.phone})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </CardHeader>
                   
                   <CardContent className="p-3">
                     {!activeTableId ? (
@@ -2989,6 +2990,7 @@ _Gérante - Espace Maxo_
                     </CardContent>
                   </Card>
                 )}
+                </div>
               </div>
             </div>
               </>
