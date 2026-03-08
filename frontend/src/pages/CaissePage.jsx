@@ -262,6 +262,8 @@ const CaissePage = () => {
   const [expenseForm, setExpenseForm] = useState({
     category: "cuisine",
     description: "",
+    quantity: 1,
+    unit_price: 0,
     amount: 0,
     supplier: "",
     planned_date: format(new Date(), "yyyy-MM-dd"),
@@ -273,7 +275,7 @@ const CaissePage = () => {
   const [showShoppingListModal, setShowShoppingListModal] = useState(false);
   const [shoppingListSupplier, setShoppingListSupplier] = useState("");
   const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", amount: 0 });
+  const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
   const [showAllExpenses, setShowAllExpenses] = useState(false);
 
   // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
@@ -659,13 +661,16 @@ const CaissePage = () => {
 
   const createExpense = async () => {
     try {
-      if (!expenseForm.description || expenseForm.amount <= 0) {
-        toast.error("Veuillez remplir la description et le montant");
+      if (!expenseForm.description || expenseForm.unit_price <= 0 || expenseForm.quantity <= 0) {
+        toast.error("Veuillez remplir la description, la quantité et le prix unitaire");
         return;
       }
       
+      const totalAmount = expenseForm.quantity * expenseForm.unit_price;
+      
       await axios.post(`${API}/expenses`, {
         ...expenseForm,
+        amount: totalAmount,
         requested_by: currentUser?.full_name || currentUser?.username || "Gérante"
       });
       
@@ -674,6 +679,8 @@ const CaissePage = () => {
       setExpenseForm({
         category: "cuisine",
         description: "",
+        quantity: 1,
+        unit_price: 0,
         amount: 0,
         supplier: "",
         planned_date: format(new Date(), "yyyy-MM-dd"),
@@ -713,12 +720,13 @@ const CaissePage = () => {
   // ============== SHOPPING LIST FUNCTIONS ==============
   
   const addToShoppingList = () => {
-    if (!newListItem.description || newListItem.amount <= 0) {
-      toast.error("Veuillez remplir la description et le montant");
+    if (!newListItem.description || newListItem.unit_price <= 0 || newListItem.quantity <= 0) {
+      toast.error("Veuillez remplir la description, la quantité et le prix unitaire");
       return;
     }
-    setShoppingList([...shoppingList, { ...newListItem, id: Date.now() }]);
-    setNewListItem({ category: "cuisine", description: "", amount: 0 });
+    const totalAmount = newListItem.quantity * newListItem.unit_price;
+    setShoppingList([...shoppingList, { ...newListItem, amount: totalAmount, id: Date.now() }]);
+    setNewListItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
     toast.success("Article ajouté à la liste");
   };
 
@@ -738,6 +746,8 @@ const CaissePage = () => {
         await axios.post(`${API}/expenses`, {
           category: item.category,
           description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
           amount: item.amount,
           supplier: shoppingListSupplier,
           planned_date: shoppingListDate,
@@ -1024,63 +1034,80 @@ const CaissePage = () => {
     printWindow.document.close();
   };
 
-  // Print expenses on small thermal printer (80mm) - black & white
+  // Print expenses on small thermal printer (80mm) - black & white - APPROVED ONLY for market shopping
   const printExpensesTicket = () => {
     const printWindow = window.open('', '_blank', 'width=350,height=700');
-    const statusLabels = { pending: 'Attente', approved: 'OK', completed: 'Fait', revision_requested: 'Réviser', rejected: 'Refusé' };
     const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
     
-    // Print all expenses (not filtered)
-    const toPrint = expenses;
+    // Filter ONLY approved expenses (ready to buy at market)
+    const toPrint = expenses.filter(e => e.status === 'approved');
     const total = toPrint.reduce((sum, e) => sum + e.amount, 0);
     
+    if (toPrint.length === 0) {
+      printWindow.close();
+      toast.error("Aucune demande approuvée à imprimer");
+      return;
+    }
+    
     const itemsHtml = toPrint.map((e, i) => {
+      const qty = e.quantity || 1;
+      const unitPrice = e.unit_price || e.amount;
+      const lineTotal = e.amount || (qty * unitPrice);
       return '<div class="item">' +
-        '<div class="item-header">' +
+        '<div class="item-row">' +
         '<span class="num">' + (i + 1) + '.</span>' +
         '<span class="cat">[' + (categoryLabels[e.category] || e.category.substring(0, 4).toUpperCase()) + ']</span>' +
-        '<span class="status">' + (statusLabels[e.status] || '') + '</span>' +
         '</div>' +
         '<div class="desc">' + e.description + '</div>' +
+        '<div class="detail-row">' +
+        '<span>Qté: ' + qty + '</span>' +
+        '<span>PU: ' + formatPrice(unitPrice) + ' F</span>' +
+        '</div>' +
+        '<div class="total-row">' +
+        '<span>TOTAL:</span>' +
+        '<span class="line-total">' + formatPrice(lineTotal) + ' F</span>' +
+        '</div>' +
         (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
-        '<div class="amount">' + formatPrice(e.amount) + ' F</div>' +
         '</div>';
     }).join('');
 
-    const html = '<!DOCTYPE html><html><head><title>Liste Achats</title><meta charset="UTF-8">' +
+    const html = '<!DOCTYPE html><html><head><title>Liste Achats Approuvés</title><meta charset="UTF-8">' +
       '<style>' +
       '@page { size: 80mm auto; margin: 0; }' +
       '@media print { body { -webkit-print-color-adjust: exact; } }' +
       '* { margin: 0; padding: 0; box-sizing: border-box; }' +
       'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; }' +
       '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }' +
-      '.title { font-size: 16px; font-weight: 900; letter-spacing: 2px; }' +
+      '.title { font-size: 14px; font-weight: 900; letter-spacing: 1px; }' +
+      '.subtitle { font-size: 10px; margin-top: 2px; font-style: italic; }' +
       '.date { font-size: 10px; margin-top: 4px; }' +
       '.count { font-size: 12px; font-weight: bold; margin-top: 4px; border: 1px solid #000; display: inline-block; padding: 2px 8px; }' +
       '.item { border-bottom: 1px dashed #000; padding: 6px 0; }' +
-      '.item-header { display: flex; justify-content: space-between; font-size: 10px; }' +
+      '.item-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }' +
       '.num { font-weight: bold; }' +
       '.cat { font-weight: bold; }' +
-      '.status { font-style: italic; }' +
-      '.desc { font-size: 12px; font-weight: bold; margin: 3px 0; }' +
-      '.supplier { font-size: 9px; color: #333; }' +
-      '.amount { text-align: right; font-size: 14px; font-weight: 900; }' +
-      '.total-section { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
-      '.total-label { font-size: 12px; }' +
-      '.total-value { font-size: 24px; font-weight: 900; }' +
+      '.desc { font-size: 13px; font-weight: bold; margin: 3px 0; text-transform: uppercase; }' +
+      '.detail-row { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }' +
+      '.total-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 3px; border-top: 1px dotted #000; padding-top: 2px; }' +
+      '.line-total { font-size: 13px; }' +
+      '.supplier { font-size: 9px; color: #333; margin-top: 2px; }' +
+      '.grand-total { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
+      '.grand-total-label { font-size: 12px; }' +
+      '.grand-total-value { font-size: 22px; font-weight: 900; }' +
       '.footer { margin-top: 10px; text-align: center; font-size: 9px; border-top: 1px dashed #000; padding-top: 6px; }' +
       '.cut-line { margin-top: 8px; text-align: center; font-size: 10px; }' +
       '</style></head>' +
       '<body>' +
       '<div class="header">' +
       '<div class="title">LISTE ACHATS</div>' +
+      '<div class="subtitle">Demandes Approuvées</div>' +
       '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
       '<div class="count">' + toPrint.length + ' article(s)</div>' +
       '</div>' +
       itemsHtml +
-      '<div class="total-section">' +
-      '<div class="total-label">TOTAL A DEPENSER</div>' +
-      '<div class="total-value">' + formatPrice(total) + ' F</div>' +
+      '<div class="grand-total">' +
+      '<div class="grand-total-label">TOTAL A DEPENSER</div>' +
+      '<div class="grand-total-value">' + formatPrice(total) + ' F</div>' +
       '</div>' +
       '<div class="footer">' +
       'Espace Maxo - Caisse Pro<br>' +
@@ -1099,6 +1126,8 @@ const CaissePage = () => {
     setExpenseForm({
       category: expense.category,
       description: expense.description,
+      quantity: expense.quantity || 1,
+      unit_price: expense.unit_price || expense.amount || 0,
       amount: expense.amount,
       supplier: expense.supplier || "",
       planned_date: expense.planned_date || format(new Date(), "yyyy-MM-dd"),
@@ -4876,12 +4905,12 @@ _Gérante - Espace Maxo_
                         <tr className="text-left text-slate-400 border-b border-slate-700">
                           <th className="p-2">#</th>
                           <th className="p-2">Catégorie</th>
-                          <th className="p-2">Description</th>
-                          <th className="p-2">Fournisseur</th>
-                          <th className="p-2 text-right">Montant</th>
+                          <th className="p-2">Libellé</th>
+                          <th className="p-2 text-center">Qté</th>
+                          <th className="p-2 text-right">P.U.</th>
+                          <th className="p-2 text-right">Total</th>
                           <th className="p-2">Statut</th>
-                          <th className="p-2">Demandé par</th>
-                          <th className="p-2">Date</th>
+                          <th className="p-2">Fournisseur</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4905,7 +4934,8 @@ _Gérante - Espace Maxo_
                               {expense.description}
                               <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </td>
-                            <td className="p-2 text-slate-400">{expense.supplier || '-'}</td>
+                            <td className="p-2 text-center text-slate-300">{expense.quantity || 1}</td>
+                            <td className="p-2 text-right text-slate-400">{formatPrice(expense.unit_price || expense.amount)} F</td>
                             <td className="p-2 text-right font-bold text-amber-400">{formatPrice(expense.amount)} F</td>
                             <td className="p-2">
                               <Badge className={`text-xs ${
@@ -4921,16 +4951,15 @@ _Gérante - Espace Maxo_
                                  expense.status === 'revision_requested' ? 'À réviser' : 'Refusée'}
                               </Badge>
                             </td>
-                            <td className="p-2 text-slate-500 text-xs">{expense.requested_by}</td>
-                            <td className="p-2 text-slate-500 text-xs">{expense.created_at?.slice(0, 10)}</td>
+                            <td className="p-2 text-slate-400 text-xs">{expense.supplier || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="bg-slate-800 font-bold">
-                          <td colSpan="4" className="p-2 text-right text-slate-400">TOTAL GÉNÉRAL:</td>
+                          <td colSpan="5" className="p-2 text-right text-slate-400">TOTAL GÉNÉRAL:</td>
                           <td className="p-2 text-right text-lg text-indigo-400">{formatPrice(expenses.reduce((sum, e) => sum + e.amount, 0))} F</td>
-                          <td colSpan="3"></td>
+                          <td colSpan="2"></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -6074,7 +6103,7 @@ _Gérante - Espace Maxo_
             </div>
 
             <div>
-              <Label className="text-slate-300">Description *</Label>
+              <Label className="text-slate-300">Description / Libellé *</Label>
               <Textarea
                 value={expenseForm.description}
                 onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
@@ -6084,15 +6113,37 @@ _Gérante - Espace Maxo_
               />
             </div>
 
-            <div>
-              <Label className="text-slate-300">Montant (FCFA) *</Label>
-              <Input
-                type="number"
-                value={expenseForm.amount}
-                onChange={(e) => setExpenseForm({...expenseForm, amount: parseFloat(e.target.value) || 0})}
-                placeholder="0"
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-slate-300">Quantité *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={expenseForm.quantity}
+                  onChange={(e) => setExpenseForm({...expenseForm, quantity: parseInt(e.target.value) || 1})}
+                  placeholder="1"
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-300">Prix unitaire (FCFA) *</Label>
+                <Input
+                  type="number"
+                  value={expenseForm.unit_price}
+                  onChange={(e) => setExpenseForm({...expenseForm, unit_price: parseFloat(e.target.value) || 0})}
+                  placeholder="0"
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="bg-indigo-900/30 rounded-lg p-3 border border-indigo-500/30">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-300">Total calculé:</span>
+                <span className="text-xl font-bold text-indigo-400">
+                  {formatPrice(expenseForm.quantity * expenseForm.unit_price)} F
+                </span>
+              </div>
             </div>
 
             <div>
@@ -6234,12 +6285,12 @@ _Gérante - Espace Maxo_
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                   <Select 
                     value={newListItem.category} 
                     onValueChange={(v) => setNewListItem({...newListItem, category: v})}
                   >
-                    <SelectTrigger className="w-full sm:w-[130px] bg-slate-700/50 border-slate-600 text-white">
+                    <SelectTrigger className="w-full sm:w-[120px] bg-slate-700/50 border-slate-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
@@ -6252,16 +6303,27 @@ _Gérante - Espace Maxo_
                   <Input
                     value={newListItem.description}
                     onChange={(e) => setNewListItem({...newListItem, description: e.target.value})}
-                    placeholder="Description de l'article"
-                    className="flex-1 bg-slate-700/50 border-slate-600 text-white"
+                    placeholder="Libellé article"
+                    className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
                   />
                   <Input
                     type="number"
-                    value={newListItem.amount || ""}
-                    onChange={(e) => setNewListItem({...newListItem, amount: parseFloat(e.target.value) || 0})}
-                    placeholder="Montant"
-                    className="w-full sm:w-[120px] bg-slate-700/50 border-slate-600 text-white"
+                    min="1"
+                    value={newListItem.quantity || ""}
+                    onChange={(e) => setNewListItem({...newListItem, quantity: parseInt(e.target.value) || 1})}
+                    placeholder="Qté"
+                    className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
                   />
+                  <Input
+                    type="number"
+                    value={newListItem.unit_price || ""}
+                    onChange={(e) => setNewListItem({...newListItem, unit_price: parseFloat(e.target.value) || 0})}
+                    placeholder="Prix unit."
+                    className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
+                  />
+                  <div className="flex items-center bg-indigo-900/30 rounded px-2 text-indigo-300 text-sm">
+                    = {formatPrice((newListItem.quantity || 1) * (newListItem.unit_price || 0))} F
+                  </div>
                   <Button 
                     onClick={addToShoppingList}
                     className="bg-indigo-600 hover:bg-indigo-700"
@@ -6292,6 +6354,7 @@ _Gérante - Espace Maxo_
                         <span className="text-white truncate">{item.description}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-slate-400 text-xs">{item.quantity || 1} x {formatPrice(item.unit_price || item.amount)} =</span>
                         <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
                         <Button 
                           size="sm" 
