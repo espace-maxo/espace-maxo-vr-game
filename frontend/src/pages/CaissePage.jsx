@@ -1036,7 +1036,6 @@ const CaissePage = () => {
 
   // Print expenses on small thermal printer (80mm) - black & white - APPROVED ONLY for market shopping
   const printExpensesTicket = () => {
-    const printWindow = window.open('', '_blank', 'width=350,height=700');
     const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
     
     // Filter ONLY approved expenses (ready to buy at market)
@@ -1044,8 +1043,7 @@ const CaissePage = () => {
     const total = toPrint.reduce((sum, e) => sum + e.amount, 0);
     
     if (toPrint.length === 0) {
-      printWindow.close();
-      toast.error("Aucune demande approuvée à imprimer");
+      toast.error("Aucune demande approuvée à imprimer. Approuvez d'abord des demandes.");
       return;
     }
     
@@ -1060,7 +1058,7 @@ const CaissePage = () => {
         '</div>' +
         '<div class="desc">' + e.description + '</div>' +
         '<div class="detail-row">' +
-        '<span>Qté: ' + qty + '</span>' +
+        '<span>Qte: ' + qty + '</span>' +
         '<span>PU: ' + formatPrice(unitPrice) + ' F</span>' +
         '</div>' +
         '<div class="total-row">' +
@@ -1071,12 +1069,12 @@ const CaissePage = () => {
         '</div>';
     }).join('');
 
-    const html = '<!DOCTYPE html><html><head><title>Liste Achats Approuvés</title><meta charset="UTF-8">' +
+    const html = '<!DOCTYPE html><html><head><title>Liste Achats Approuves</title><meta charset="UTF-8">' +
       '<style>' +
       '@page { size: 80mm auto; margin: 0; }' +
       '@media print { body { -webkit-print-color-adjust: exact; } }' +
       '* { margin: 0; padding: 0; box-sizing: border-box; }' +
-      'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; }' +
+      'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; background: white; color: black; }' +
       '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }' +
       '.title { font-size: 14px; font-weight: 900; letter-spacing: 1px; }' +
       '.subtitle { font-size: 10px; margin-top: 2px; font-style: italic; }' +
@@ -1100,7 +1098,7 @@ const CaissePage = () => {
       '<body>' +
       '<div class="header">' +
       '<div class="title">LISTE ACHATS</div>' +
-      '<div class="subtitle">Demandes Approuvées</div>' +
+      '<div class="subtitle">Demandes Approuvees</div>' +
       '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
       '<div class="count">' + toPrint.length + ' article(s)</div>' +
       '</div>' +
@@ -1114,11 +1112,18 @@ const CaissePage = () => {
       '- - - - - - - - - - - - - -' +
       '</div>' +
       '<div class="cut-line">. . . . . . . . . . . . . . .</div>' +
-      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script>' +
+      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>' +
       '</body></html>';
+    
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    if (!printWindow || printWindow.closed || typeof printWindow.closed === 'undefined') {
+      toast.error("Popup bloqué! Autorisez les popups pour ce site.");
+      return;
+    }
     
     printWindow.document.write(html);
     printWindow.document.close();
+    toast.success("Ouverture du ticket d'impression...");
   };
 
   // Open expense for editing
