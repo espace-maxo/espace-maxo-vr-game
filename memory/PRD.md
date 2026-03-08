@@ -78,6 +78,20 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 
 ### Caisse Pro
 - URL: /caisse
+- **Admin**: Mot de passe `Caisse2026`
+- **Manager (Gérante)**: PIN `0000`
+- **Serveur (Christian)**: PIN `1111`
+- **Cuisinier (Chef Test)**: PIN `2222` - Ne voit que les bons cuisine
+- **Coach Jeux (Coach Test)**: PIN `3333` - Ne voit que les bons jeux
+
+### Rôles Caisse Pro
+| Rôle | Permissions |
+|------|-------------|
+| **admin** | Accès total, validation factures, annulation directe, gestion utilisateurs |
+| **manager** | Validation factures, demande annulation à admin, rapport journalier |
+| **server** | Création factures, modification (après autorisation), impression |
+| **cuisinier** | Vue simplifiée - Uniquement bons cuisine (salle_jardin) |
+| **coach_jeux** | Vue simplifiée - Uniquement bons jeux |
 - **Mot de passe**: `Caisse2026` ou `Esp@ceM@xo2026`
 
 ### Twilio SMS

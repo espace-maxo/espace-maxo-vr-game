@@ -1807,6 +1807,122 @@ _Gérante - Espace Maxo_
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* ==================== CUISINIER VIEW ==================== */}
+        {currentUser?.role === 'cuisinier' ? (
+          <div className="space-y-4">
+            <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-green-400 flex items-center gap-2">
+                  <Printer className="w-6 h-6" />
+                  BONS DE COMMANDE - CUISINE
+                  <Badge className="bg-green-500/30 text-green-300 ml-2 text-lg px-3">
+                    {invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'salle_jardin')).length}
+                  </Badge>
+                </CardTitle>
+                <p className="text-slate-400 text-sm">Commandes contenant des plats à préparer</p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'salle_jardin')).length === 0 ? (
+                  <p className="text-slate-500 text-center py-8">Aucune commande cuisine en attente</p>
+                ) : (
+                  invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'salle_jardin')).map(invoice => {
+                    const kitchenItems = invoice.items?.filter(item => item.department === 'salle_jardin') || [];
+                    const totalKitchenItems = kitchenItems.reduce((sum, item) => sum + item.quantity, 0);
+                    return (
+                      <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-green-900/20 rounded-lg p-4 border border-green-500/30">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-bold text-lg">{invoice.invoice_number}</span>
+                            {invoice.table_number && (
+                              <Badge className="bg-amber-500/30 text-amber-300 text-lg px-3">Table {invoice.table_number}</Badge>
+                            )}
+                            <Badge className="bg-green-500/20 text-green-400">{totalKitchenItems} plat{totalKitchenItems > 1 ? 's' : ''}</Badge>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {kitchenItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-white">
+                                <span className="bg-green-600 text-white px-2 py-0.5 rounded font-bold text-sm">{item.quantity}x</span>
+                                <span>{item.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-slate-400 text-sm mt-2">
+                            Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => printKitchenOrder(invoice)}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <Printer className="w-4 h-4 mr-2" />
+                          Imprimer
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : currentUser?.role === 'coach_jeux' ? (
+          /* ==================== COACH JEUX VIEW ==================== */
+          <div className="space-y-4">
+            <Card className="bg-gradient-to-br from-purple-900/30 to-blue-900/20 border-purple-500/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-purple-400 flex items-center gap-2">
+                  <Gamepad2 className="w-6 h-6" />
+                  BONS DE COMMANDE - JEUX
+                  <Badge className="bg-purple-500/30 text-purple-300 ml-2 text-lg px-3">
+                    {invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'jeux')).length}
+                  </Badge>
+                </CardTitle>
+                <p className="text-slate-400 text-sm">Sessions de jeux à préparer</p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'jeux')).length === 0 ? (
+                  <p className="text-slate-500 text-center py-8">Aucune session de jeu en attente</p>
+                ) : (
+                  invoices.filter(i => i.validation_status === 'pending' && i.items?.some(item => item.department === 'jeux')).map(invoice => {
+                    const gamesItems = invoice.items?.filter(item => item.department === 'jeux') || [];
+                    const totalGamesItems = gamesItems.reduce((sum, item) => sum + item.quantity, 0);
+                    return (
+                      <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-bold text-lg">{invoice.invoice_number}</span>
+                            {invoice.table_number && (
+                              <Badge className="bg-amber-500/30 text-amber-300 text-lg px-3">Table {invoice.table_number}</Badge>
+                            )}
+                            <Badge className="bg-purple-500/20 text-purple-400">{totalGamesItems} session{totalGamesItems > 1 ? 's' : ''}</Badge>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {gamesItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-white">
+                                <span className="bg-purple-600 text-white px-2 py-0.5 rounded font-bold text-sm">{item.quantity}x</span>
+                                <span>{item.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-slate-400 text-sm mt-2">
+                            Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => printGamesOrder(invoice)}
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Printer className="w-4 h-4 mr-2" />
+                          Imprimer
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+        /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
             <TabsTrigger value="caisse" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
@@ -3596,6 +3712,7 @@ _Gérante - Espace Maxo_
             </TabsContent>
           )}
         </Tabs>
+        )}
       </div>
 
       {/* ==================== MODALS ==================== */}
