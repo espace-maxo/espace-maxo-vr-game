@@ -68,21 +68,6 @@ const DEFAULT_CATALOG = {
     { id: "sauce_goussi", name: "Sauce Goussi (Sésame)", price: 5000, unit: "plat", category: "Sauces" },
     { id: "moyo_poisson", name: "Moyo Poisson", price: 6000, unit: "plat", category: "Sauces" },
     { id: "dakouin", name: "DAKOUIN", price: 6000, unit: "plat", category: "Sauces" },
-    // === ACCOMPAGNEMENTS ===
-    { id: "riz_blanc", name: "Riz blanc", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "riz_cantonais", name: "Riz Cantonais", price: 1500, unit: "portion", category: "Accompagnements" },
-    { id: "riz_legumes", name: "Riz aux légumes", price: 1500, unit: "portion", category: "Accompagnements" },
-    { id: "spaghetti_accomp", name: "Spaghetti (Sauté)", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "pomme_saute", name: "Pomme sautée", price: 1500, unit: "portion", category: "Accompagnements" },
-    { id: "frite_surgelee", name: "Frite surgelée", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "frite_nature", name: "Frite Nature", price: 1500, unit: "portion", category: "Accompagnements" },
-    { id: "atieke", name: "Atiéké", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "akassa", name: "Akassa", price: 500, unit: "portion", category: "Accompagnements" },
-    { id: "pate_rouge_blanc", name: "Pâtes (Rouge/Blanc)", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "couscous", name: "Couscous (au gras/Blanc)", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "pate_blanche", name: "Pâte Blanche (Maïs)", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "pate_noire", name: "Pâte Noire (Télibo)", price: 1000, unit: "portion", category: "Accompagnements" },
-    { id: "pate_rouge", name: "Pâte Rouge (Amiwo)", price: 1000, unit: "portion", category: "Accompagnements" },
     // === BURGERS ===
     { id: "meetburger", name: "MeetBurger", price: 2500, unit: "pièce", category: "Burgers" },
     { id: "cheeseburger", name: "CheeseBurger", price: 3000, unit: "pièce", category: "Burgers" },
@@ -111,6 +96,22 @@ const DEFAULT_CATALOG = {
     { id: "assiette_fruit", name: "Assiette de Fruit", price: 1500, unit: "portion", category: "Desserts" },
     { id: "glace_boule", name: "Glace (Chocolat/Fraise/Vanille)", price: 1000, unit: "boule", category: "Desserts" },
     { id: "coupe_glace", name: "Coupé de glace (3 boules)", price: 2500, unit: "coupe", category: "Desserts" },
+  ],
+  accompagnements: [
+    { id: "riz_blanc", name: "Riz blanc", price: 1000, unit: "portion", category: "Riz" },
+    { id: "riz_cantonais", name: "Riz Cantonais", price: 1500, unit: "portion", category: "Riz" },
+    { id: "riz_legumes", name: "Riz aux légumes", price: 1500, unit: "portion", category: "Riz" },
+    { id: "spaghetti_accomp", name: "Spaghetti (Sauté)", price: 1000, unit: "portion", category: "Pâtes" },
+    { id: "pate_rouge_blanc", name: "Pâtes (Rouge/Blanc)", price: 1000, unit: "portion", category: "Pâtes" },
+    { id: "couscous", name: "Couscous (au gras/Blanc)", price: 1000, unit: "portion", category: "Féculents" },
+    { id: "pomme_saute", name: "Pomme sautée", price: 1500, unit: "portion", category: "Frites" },
+    { id: "frite_surgelee", name: "Frite surgelée", price: 1000, unit: "portion", category: "Frites" },
+    { id: "frite_nature", name: "Frite Nature", price: 1500, unit: "portion", category: "Frites" },
+    { id: "atieke", name: "Atiéké", price: 1000, unit: "portion", category: "Traditionnel" },
+    { id: "akassa", name: "Akassa", price: 500, unit: "portion", category: "Traditionnel" },
+    { id: "pate_blanche", name: "Pâte Blanche (Maïs)", price: 1000, unit: "portion", category: "Traditionnel" },
+    { id: "pate_noire", name: "Pâte Noire (Télibo)", price: 1000, unit: "portion", category: "Traditionnel" },
+    { id: "pate_rouge", name: "Pâte Rouge (Amiwo)", price: 1000, unit: "portion", category: "Traditionnel" },
   ],
   jeux: [
     { id: "vr360", name: "VR 360°", price: 2000, unit: "partie", category: "Jeux VR" },
@@ -146,7 +147,8 @@ const DEFAULT_CATALOG = {
 };
 
 const DEPARTMENT_CONFIG = {
-  salle_jardin: { label: "Salle & Jardin", icon: UtensilsCrossed, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  salle_jardin: { label: "Plats", icon: UtensilsCrossed, color: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30" },
+  accompagnements: { label: "Accomp.", icon: Package, color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30" },
   jeux: { label: "Jeux", icon: Gamepad2, color: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30" },
   bar: { label: "Bar", icon: Wine, color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30" },
   location: { label: "Location", icon: Calendar, color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/30" },
@@ -171,6 +173,7 @@ const CaissePage = () => {
   // Main state
   const [activeTab, setActiveTab] = useState("caisse");
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
+  const [productSearch, setProductSearch] = useState("");
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -2515,6 +2518,75 @@ _Gérante - Espace Maxo_
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Left: Products */}
               <div className="lg:col-span-2 space-y-4">
+                {/* Search bar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Rechercher un produit... (ex: poulet, pizza, bière)"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="pl-10 bg-slate-800/50 border-slate-700 text-white h-12 text-lg"
+                    disabled={!activeTableId}
+                  />
+                  {productSearch && (
+                    <button 
+                      onClick={() => setProductSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Results */}
+                {productSearch.length >= 2 && activeTableId && (
+                  <Card className="bg-amber-500/10 border-amber-500/30">
+                    <CardHeader className="py-2 px-4">
+                      <CardTitle className="text-amber-400 text-sm flex items-center gap-2">
+                        <Search className="w-4 h-4" />
+                        Résultats pour "{productSearch}"
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto">
+                        {(() => {
+                          const searchLower = productSearch.toLowerCase();
+                          const results = [];
+                          Object.entries(catalog).forEach(([dept, items]) => {
+                            (items || []).forEach(item => {
+                              if (item.name.toLowerCase().includes(searchLower) || 
+                                  (item.category && item.category.toLowerCase().includes(searchLower))) {
+                                results.push({ ...item, department: dept });
+                              }
+                            });
+                          });
+                          if (results.length === 0) {
+                            return <p className="col-span-full text-slate-400 text-center py-4">Aucun résultat</p>;
+                          }
+                          return results.slice(0, 12).map((item, idx) => {
+                            const config = DEPARTMENT_CONFIG[item.department] || DEPARTMENT_CONFIG.autres;
+                            return (
+                              <button
+                                key={`search-${idx}`}
+                                onClick={() => {
+                                  addToBill(item, item.department);
+                                  setProductSearch("");
+                                }}
+                                className={`p-2 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
+                              >
+                                <p className={`font-semibold text-xs ${config.color}`}>{item.name}</p>
+                                <p className="text-white font-bold text-sm">{formatPrice(item.price)} F</p>
+                                <p className="text-slate-500 text-xs">{config.label}</p>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Department tabs */}
                 <div className="flex gap-2 flex-wrap bg-slate-800/50 p-2 rounded-lg border border-slate-700">
                   {Object.entries(DEPARTMENT_CONFIG).map(([key, config]) => {
@@ -2523,9 +2595,9 @@ _Gérante - Espace Maxo_
                       <Button
                         key={key}
                         variant={activeDepartment === key ? "default" : "ghost"}
-                        onClick={() => setActiveDepartment(key)}
+                        onClick={() => { setActiveDepartment(key); setProductSearch(""); }}
                         className={activeDepartment === key 
-                          ? `bg-gradient-to-r ${key === 'jeux' ? 'from-blue-500 to-blue-600' : key === 'bar' ? 'from-orange-500 to-orange-600' : 'from-green-500 to-green-600'} text-white` 
+                          ? `bg-gradient-to-r ${key === 'jeux' ? 'from-blue-500 to-blue-600' : key === 'bar' ? 'from-orange-500 to-orange-600' : key === 'accompagnements' ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'} text-white` 
                           : "text-slate-300 hover:text-white"
                         }
                         disabled={!activeTableId}
