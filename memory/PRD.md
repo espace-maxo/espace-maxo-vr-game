@@ -185,6 +185,16 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Séparation visuelle entre plats et accompagnements
   - Bon Bar = uniquement articles bar
   - Bon Jeux = uniquement articles jeux
+- [x] **Factures définitives pour serveurs** (Mars 2026)
+  - Une fois validée, la facture remplace le bon de commande pour le serveur
+  - Section "FACTURES DÉFINITIVES DU JOUR" en lecture seule
+  - Les serveurs voient TOUTES les factures validées du jour (pas seulement les leurs)
+  - Bouton "Voir" uniquement (pas d'impression ni modification)
+- [x] **Onglet Historique** (Mars 2026)
+  - Nouvel onglet "Historique" avec sélecteur de date (calendrier)
+  - Affiche uniquement les factures validées de la date sélectionnée
+  - Accessible à tous les utilisateurs
+  - Totaux journaliers calculés automatiquement
 
 ### P1 (User Action Required)
 - [ ] Déploiement production - Cliquer **"Deploy"**
