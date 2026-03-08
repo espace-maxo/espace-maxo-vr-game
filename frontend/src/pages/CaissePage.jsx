@@ -741,21 +741,35 @@ const CaissePage = () => {
     }
     
     try {
-      // Create each expense from the shopping list
-      for (const item of shoppingList) {
-        await axios.post(`${API}/expenses`, {
+      // Generate a unique group ID for this shopping list
+      const groupId = `GRP-${Date.now()}`;
+      const groupName = shoppingListSupplier ? `Liste - ${shoppingListSupplier}` : `Liste du ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
+      
+      // Calculate total for the group
+      const groupTotal = shoppingList.reduce((sum, item) => sum + item.amount, 0);
+      
+      // Create a single expense with all items as a group
+      await axios.post(`${API}/expenses`, {
+        category: shoppingList[0].category, // Use first item's category as main
+        description: groupName,
+        quantity: shoppingList.length,
+        unit_price: groupTotal,
+        amount: groupTotal,
+        supplier: shoppingListSupplier,
+        planned_date: shoppingListDate,
+        requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        is_group: true,
+        group_id: groupId,
+        items: shoppingList.map(item => ({
           category: item.category,
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          amount: item.amount,
-          supplier: shoppingListSupplier,
-          planned_date: shoppingListDate,
-          requested_by: currentUser?.full_name || currentUser?.username || "Gérante"
-        });
-      }
+          amount: item.amount
+        }))
+      });
       
-      toast.success(`${shoppingList.length} demande(s) d'achat créée(s) !`);
+      toast.success(`Liste d'achats créée avec ${shoppingList.length} article(s) !`);
       setShoppingList([]);
       setShoppingListSupplier("");
       setShowShoppingListModal(false);
@@ -1047,26 +1061,63 @@ const CaissePage = () => {
       return;
     }
     
+    // Count total items including sub-items from grouped lists
+    let totalItems = 0;
+    
     const itemsHtml = toPrint.map((e, i) => {
-      const qty = e.quantity || 1;
-      const unitPrice = e.unit_price || e.amount;
-      const lineTotal = e.amount || (qty * unitPrice);
-      return '<div class="item">' +
-        '<div class="item-row">' +
-        '<span class="num">' + (i + 1) + '.</span>' +
-        '<span class="cat">[' + (categoryLabels[e.category] || e.category.substring(0, 4).toUpperCase()) + ']</span>' +
-        '</div>' +
-        '<div class="desc">' + e.description + '</div>' +
-        '<div class="detail-row">' +
-        '<span>Qte: ' + qty + '</span>' +
-        '<span>PU: ' + formatPrice(unitPrice) + ' F</span>' +
-        '</div>' +
-        '<div class="total-row">' +
-        '<span>TOTAL:</span>' +
-        '<span class="line-total">' + formatPrice(lineTotal) + ' F</span>' +
-        '</div>' +
-        (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
-        '</div>';
+      // If it's a grouped list, show all sub-items
+      if (e.is_group && e.items && e.items.length > 0) {
+        totalItems += e.items.length;
+        const subItemsHtml = e.items.map((item, subIdx) => {
+          return '<div class="sub-item">' +
+            '<div class="sub-item-row">' +
+            '<span class="sub-num">' + (subIdx + 1) + '.</span>' +
+            '<span class="sub-cat">[' + (categoryLabels[item.category] || item.category.substring(0, 4).toUpperCase()) + ']</span>' +
+            '</div>' +
+            '<div class="sub-desc">' + item.description + '</div>' +
+            '<div class="sub-detail">' +
+            '<span>Qte: ' + item.quantity + '</span>' +
+            '<span>PU: ' + formatPrice(item.unit_price) + '</span>' +
+            '<span class="sub-total">' + formatPrice(item.amount) + ' F</span>' +
+            '</div>' +
+            '</div>';
+        }).join('');
+        
+        return '<div class="group-item">' +
+          '<div class="group-header">' +
+          '<span class="group-icon">📦</span>' +
+          '<span class="group-title">' + e.description + '</span>' +
+          '</div>' +
+          (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
+          '<div class="sub-items">' + subItemsHtml + '</div>' +
+          '<div class="group-total">' +
+          '<span>TOTAL LISTE:</span>' +
+          '<span>' + formatPrice(e.amount) + ' F</span>' +
+          '</div>' +
+          '</div>';
+      } else {
+        // Single item
+        totalItems += 1;
+        const qty = e.quantity || 1;
+        const unitPrice = e.unit_price || e.amount;
+        const lineTotal = e.amount || (qty * unitPrice);
+        return '<div class="item">' +
+          '<div class="item-row">' +
+          '<span class="num">' + (i + 1) + '.</span>' +
+          '<span class="cat">[' + (categoryLabels[e.category] || e.category.substring(0, 4).toUpperCase()) + ']</span>' +
+          '</div>' +
+          '<div class="desc">' + e.description + '</div>' +
+          '<div class="detail-row">' +
+          '<span>Qte: ' + qty + '</span>' +
+          '<span>PU: ' + formatPrice(unitPrice) + ' F</span>' +
+          '</div>' +
+          '<div class="total-row">' +
+          '<span>TOTAL:</span>' +
+          '<span class="line-total">' + formatPrice(lineTotal) + ' F</span>' +
+          '</div>' +
+          (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
+          '</div>';
+      }
     }).join('');
 
     const html = '<!DOCTYPE html><html><head><title>Liste Achats Approuves</title><meta charset="UTF-8">' +
@@ -1089,6 +1140,21 @@ const CaissePage = () => {
       '.total-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 3px; border-top: 1px dotted #000; padding-top: 2px; }' +
       '.line-total { font-size: 13px; }' +
       '.supplier { font-size: 9px; color: #333; margin-top: 2px; }' +
+      /* Group styles */
+      '.group-item { border: 2px solid #000; padding: 6px; margin-bottom: 8px; }' +
+      '.group-header { display: flex; align-items: center; gap: 5px; font-weight: bold; font-size: 12px; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 4px; }' +
+      '.group-icon { font-size: 14px; }' +
+      '.group-title { text-transform: uppercase; }' +
+      '.sub-items { padding-left: 5px; }' +
+      '.sub-item { border-bottom: 1px dotted #999; padding: 3px 0; }' +
+      '.sub-item-row { display: flex; justify-content: space-between; font-size: 9px; }' +
+      '.sub-num { font-weight: bold; }' +
+      '.sub-cat { font-size: 8px; }' +
+      '.sub-desc { font-size: 11px; font-weight: bold; margin: 2px 0; }' +
+      '.sub-detail { display: flex; justify-content: space-between; font-size: 10px; }' +
+      '.sub-total { font-weight: bold; }' +
+      '.group-total { display: flex; justify-content: space-between; font-weight: 900; font-size: 12px; border-top: 2px solid #000; margin-top: 4px; padding-top: 4px; }' +
+      /* Grand total */
       '.grand-total { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
       '.grand-total-label { font-size: 12px; }' +
       '.grand-total-value { font-size: 22px; font-weight: 900; }' +
@@ -1100,7 +1166,7 @@ const CaissePage = () => {
       '<div class="title">LISTE ACHATS</div>' +
       '<div class="subtitle">Demandes Approuvees</div>' +
       '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
-      '<div class="count">' + toPrint.length + ' article(s)</div>' +
+      '<div class="count">' + totalItems + ' article(s)</div>' +
       '</div>' +
       itemsHtml +
       '<div class="grand-total">' +
@@ -4920,44 +4986,74 @@ _Gérante - Espace Maxo_
                       </thead>
                       <tbody>
                         {expenses.map((expense, index) => (
-                          <tr 
-                            key={expense.id} 
-                            className="border-b border-slate-700/50 hover:bg-indigo-500/10 cursor-pointer transition-colors group"
-                            onClick={() => openExpenseForEdit(expense)}
-                            title="Cliquer pour modifier"
-                          >
-                            <td className="p-2 text-slate-500">{index + 1}</td>
-                            <td className="p-2">
-                              <Badge className={`text-xs ${
-                                expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                                expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                                'bg-slate-500/20 text-slate-400'
-                              }`}>{expense.category}</Badge>
-                            </td>
-                            <td className="p-2 text-white flex items-center gap-2">
-                              {expense.description}
-                              <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </td>
-                            <td className="p-2 text-center text-slate-300">{expense.quantity || 1}</td>
-                            <td className="p-2 text-right text-slate-400">{formatPrice(expense.unit_price || expense.amount)} F</td>
-                            <td className="p-2 text-right font-bold text-amber-400">{formatPrice(expense.amount)} F</td>
-                            <td className="p-2">
-                              <Badge className={`text-xs ${
-                                expense.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                                expense.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                                expense.status === 'completed' ? 'bg-slate-500/20 text-slate-400' :
-                                expense.status === 'revision_requested' ? 'bg-orange-500/20 text-orange-400' :
-                                'bg-red-500/20 text-red-400'
-                              }`}>
-                                {expense.status === 'pending' ? 'En attente' :
-                                 expense.status === 'approved' ? 'Approuvée' :
-                                 expense.status === 'completed' ? 'Terminée' :
-                                 expense.status === 'revision_requested' ? 'À réviser' : 'Refusée'}
-                              </Badge>
-                            </td>
-                            <td className="p-2 text-slate-400 text-xs">{expense.supplier || '-'}</td>
-                          </tr>
+                          <>
+                            <tr 
+                              key={expense.id} 
+                              className={`border-b border-slate-700/50 hover:bg-indigo-500/10 cursor-pointer transition-colors group ${expense.is_group ? 'bg-indigo-900/20' : ''}`}
+                              onClick={() => openExpenseForEdit(expense)}
+                              title="Cliquer pour modifier"
+                            >
+                              <td className="p-2 text-slate-500">{index + 1}</td>
+                              <td className="p-2">
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">
+                                    📦 Liste
+                                  </Badge>
+                                ) : (
+                                  <Badge className={`text-xs ${
+                                    expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{expense.category}</Badge>
+                                )}
+                              </td>
+                              <td className="p-2 text-white flex items-center gap-2">
+                                {expense.is_group ? (
+                                  <span className="font-semibold">{expense.description} ({expense.items?.length || 0} articles)</span>
+                                ) : expense.description}
+                                <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </td>
+                              <td className="p-2 text-center text-slate-300">{expense.is_group ? expense.items?.length : (expense.quantity || 1)}</td>
+                              <td className="p-2 text-right text-slate-400">{expense.is_group ? '-' : formatPrice(expense.unit_price || expense.amount) + ' F'}</td>
+                              <td className="p-2 text-right font-bold text-amber-400">{formatPrice(expense.amount)} F</td>
+                              <td className="p-2">
+                                <Badge className={`text-xs ${
+                                  expense.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                                  expense.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                  expense.status === 'completed' ? 'bg-slate-500/20 text-slate-400' :
+                                  expense.status === 'revision_requested' ? 'bg-orange-500/20 text-orange-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {expense.status === 'pending' ? 'En attente' :
+                                   expense.status === 'approved' ? 'Approuvée' :
+                                   expense.status === 'completed' ? 'Terminée' :
+                                   expense.status === 'revision_requested' ? 'À réviser' : 'Refusée'}
+                                </Badge>
+                              </td>
+                              <td className="p-2 text-slate-400 text-xs">{expense.supplier || '-'}</td>
+                            </tr>
+                            {/* Show sub-items for grouped lists */}
+                            {expense.is_group && expense.items && expense.items.map((item, subIndex) => (
+                              <tr key={`${expense.id}-${subIndex}`} className="bg-slate-800/30 border-b border-slate-700/30 text-xs">
+                                <td className="p-1 pl-6 text-slate-600">↳</td>
+                                <td className="p-1">
+                                  <Badge className={`text-xs ${
+                                    item.category === 'cuisine' ? 'bg-green-500/10 text-green-500' :
+                                    item.category === 'bar' ? 'bg-orange-500/10 text-orange-500' :
+                                    item.category === 'paiement' ? 'bg-blue-500/10 text-blue-500' :
+                                    'bg-slate-500/10 text-slate-500'
+                                  }`}>{item.category}</Badge>
+                                </td>
+                                <td className="p-1 text-slate-400">{item.description}</td>
+                                <td className="p-1 text-center text-slate-500">{item.quantity}</td>
+                                <td className="p-1 text-right text-slate-500">{formatPrice(item.unit_price)} F</td>
+                                <td className="p-1 text-right text-slate-400">{formatPrice(item.amount)} F</td>
+                                <td className="p-1"></td>
+                                <td className="p-1"></td>
+                              </tr>
+                            ))}
+                          </>
                         ))}
                       </tbody>
                       <tfoot>
