@@ -202,11 +202,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Serveur voit les factures définitives en lecture seule (bouton "Voir" uniquement)
 - [x] **Gestion des Achats/Dépenses** (Mars 2026)
   - Nouvel onglet "Achats" pour la gérante et l'admin
-  - Catégories : Cuisine, Bar, Jeux, Autres
+  - Catégories : Cuisine, Bar, **Paiement** (anciennement Jeux), Autres
   - Workflow complet : pending → approved → completed (ou revision_requested)
   - L'admin peut approuver, refuser ou demander une révision avec notes
+  - **Admin peut modifier le montant directement** avant validation
+  - **Affichage détaillé** : description, fournisseur, date prévue, photo du reçu
   - Upload de photo de reçu/facture
   - Historique des achats complétés
+  - **Onglet Commande masqué pour la gérante** (elle n'en a pas besoin)
 - [x] **Point Hebdomadaire** (Mars 2026)
   - Nouvel onglet "Hebdo" pour manager et admin
   - Affiche Recettes, Dépenses et Résultat de la semaine

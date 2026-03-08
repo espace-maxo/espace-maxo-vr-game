@@ -556,6 +556,11 @@ const CaissePage = () => {
     if (isAuthenticated) {
       fetchAllData();
       fetchOpenTables();
+      
+      // Set default tab based on role
+      if (currentUser?.role === 'manager') {
+        setActiveTab("bons"); // Manager starts on Bons tab (no Commande access)
+      }
     }
   }, [filterDate, isAuthenticated]);
 
@@ -2200,9 +2205,12 @@ _Gérante - Espace Maxo_
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
-            <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-              <Calculator className="w-4 h-4 mr-2" />Commande
-            </TabsTrigger>
+            {/* Commande tab - hidden for manager */}
+            {currentUser?.role !== 'manager' && (
+              <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+                <Calculator className="w-4 h-4 mr-2" />Commande
+              </TabsTrigger>
+            )}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Printer className="w-4 h-4 mr-2" />Bons
               {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
@@ -4283,7 +4291,7 @@ _Gérante - Espace Maxo_
               <div className="flex flex-wrap gap-2">
                 <Badge className="bg-green-500/20 text-green-400">Cuisine</Badge>
                 <Badge className="bg-orange-500/20 text-orange-400">Bar</Badge>
-                <Badge className="bg-blue-500/20 text-blue-400">Jeux</Badge>
+                <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
                 <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
               </div>
 
@@ -4308,7 +4316,7 @@ _Gérante - Espace Maxo_
                               <Badge className={`text-xs ${
                                 expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
                                 expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                                expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
                                 'bg-slate-500/20 text-slate-400'
                               }`}>{expense.category}</Badge>
                               <span className="text-white font-medium">{expense.description}</span>
@@ -4363,36 +4371,58 @@ _Gérante - Espace Maxo_
                       <div key={expense.id} className="bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
                         <div className="flex flex-col gap-3">
                           <div className="flex items-start justify-between">
-                            <div>
+                            <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge className={`text-xs ${
                                   expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
                                   expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                  expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                                  expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
                                   'bg-slate-500/20 text-slate-400'
                                 }`}>{expense.category}</Badge>
                                 <span className="text-white font-bold">{expense.description}</span>
                               </div>
-                              <p className="text-purple-400 font-bold text-lg">{formatPrice(expense.amount)} F</p>
-                              <p className="text-slate-400 text-sm">
+                              <p className="text-slate-400 text-sm mt-1">
                                 Demandé par: {expense.requested_by} • {new Date(expense.created_at).toLocaleDateString('fr-FR')}
                               </p>
                               {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
                               {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
+                              {expense.receipt_image && (
+                                <div className="mt-2">
+                                  <img 
+                                    src={expense.receipt_image} 
+                                    alt="Reçu" 
+                                    className="max-w-[200px] max-h-[100px] object-cover rounded border border-slate-600 cursor-pointer"
+                                    onClick={() => window.open(expense.receipt_image, '_blank')}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {/* Admin action: modify before sending back */}
-                          <div className="flex items-center gap-2 flex-wrap">
+                          {/* Admin: Montant modifiable directement */}
+                          <div className="flex items-center gap-3 flex-wrap bg-slate-800/50 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <Label className="text-slate-400 text-sm">Montant:</Label>
+                              <Input
+                                type="number"
+                                defaultValue={expense.amount}
+                                className="w-32 bg-slate-700/50 border-slate-600 text-white text-lg font-bold"
+                                id={`admin-amount-${expense.id}`}
+                              />
+                              <span className="text-slate-400">F</span>
+                            </div>
                             <Input
                               placeholder="Note pour la gérante (optionnel)"
-                              className="flex-1 bg-slate-800/50 border-slate-700 text-white text-sm"
+                              className="flex-1 min-w-[200px] bg-slate-700/50 border-slate-600 text-white text-sm"
                               id={`admin-note-${expense.id}`}
                             />
                           </div>
                           <div className="flex gap-2 flex-wrap">
                             <Button 
                               size="sm"
-                              onClick={() => updateExpense(expense.id, { status: "approved", approved_by: "Administrateur" })}
+                              onClick={() => {
+                                const newAmount = parseFloat(document.getElementById(`admin-amount-${expense.id}`)?.value) || expense.amount;
+                                updateExpense(expense.id, { status: "approved", approved_by: "Administrateur", amount: newAmount });
+                              }}
                               className="bg-green-600 hover:bg-green-700"
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
@@ -4403,9 +4433,11 @@ _Gérante - Espace Maxo_
                               variant="outline"
                               onClick={() => {
                                 const note = document.getElementById(`admin-note-${expense.id}`)?.value;
+                                const newAmount = parseFloat(document.getElementById(`admin-amount-${expense.id}`)?.value) || expense.amount;
                                 updateExpense(expense.id, { 
                                   status: "revision_requested", 
-                                  admin_notes: note || "Veuillez réviser cette demande"
+                                  admin_notes: note || "Veuillez réviser cette demande",
+                                  amount: newAmount
                                 });
                               }}
                               className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
@@ -5366,7 +5398,7 @@ _Gérante - Espace Maxo_
                 <SelectContent className="bg-slate-800 border-slate-700">
                   <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
                   <SelectItem value="bar">🍹 Bar</SelectItem>
-                  <SelectItem value="jeux">🎮 Jeux</SelectItem>
+                  <SelectItem value="paiement">💳 Paiement</SelectItem>
                   <SelectItem value="autres">📦 Autres</SelectItem>
                 </SelectContent>
               </Select>
