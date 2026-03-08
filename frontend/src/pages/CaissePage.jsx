@@ -2754,81 +2754,125 @@ _Gérante - Espace Maxo_
           {/* ==================== STATS TAB ==================== */}
           <TabsContent value="stats">
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
+              {/* Month selector - full width on mobile */}
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
                 <Input
                   type="month"
                   value={filterMonth}
                   onChange={(e) => setFilterMonth(e.target.value)}
-                  className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                  className="bg-slate-800/50 border-slate-700 text-white w-full sm:w-auto"
                 />
               </div>
 
               {monthlyStats && (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
-                      <CardContent className="p-4 text-center">
-                        <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-                        <p className="text-slate-400 text-sm">Chiffre d'affaires</p>
-                        <p className="text-2xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
-                      </CardContent>
-                    </Card>
+                  {/* Main revenue card - prominent on mobile */}
+                  <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-slate-400 text-sm">Chiffre d'affaires du mois</p>
+                          <p className="text-2xl sm:text-3xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
+                        </div>
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500/20 rounded-full flex items-center justify-center">
+                          <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500" />
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-amber-500/20">
+                        <p className="text-slate-400 text-xs">
+                          {monthlyStats.validated_invoices} factures validées sur {monthlyStats.total_invoices} total
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Department breakdown - 2 columns on mobile, 5 on desktop */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
                     <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-                      <CardContent className="p-4 text-center">
-                        <TreePine className="w-6 h-6 text-green-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Salle & Jardin</p>
-                        <p className="text-xl font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <TreePine className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                          <p className="text-slate-400 text-xs">Salle & Jardin</p>
+                        </div>
+                        <p className="text-base sm:text-lg font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-                      <CardContent className="p-4 text-center">
-                        <Gamepad2 className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Jeux</p>
-                        <p className="text-xl font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                          <p className="text-slate-400 text-xs">Jeux</p>
+                        </div>
+                        <p className="text-base sm:text-lg font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
-                      <CardContent className="p-4 text-center">
-                        <Wine className="w-6 h-6 text-orange-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Bar</p>
-                        <p className="text-xl font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Wine className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+                          <p className="text-slate-400 text-xs">Bar</p>
+                        </div>
+                        <p className="text-base sm:text-lg font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
-                      <CardContent className="p-4 text-center">
-                        <Calendar className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Location</p>
-                        <p className="text-xl font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                          <p className="text-slate-400 text-xs">Location</p>
+                        </div>
+                        <p className="text-base sm:text-lg font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30">
-                      <CardContent className="p-4 text-center">
-                        <Package className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                        <p className="text-slate-400 text-xs">Autres</p>
-                        <p className="text-xl font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
+                    <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30 col-span-2 sm:col-span-1">
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+                          <p className="text-slate-400 text-xs">Autres</p>
+                        </div>
+                        <p className="text-base sm:text-lg font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
                       </CardContent>
                     </Card>
                   </div>
 
+                  {/* Daily breakdown - mobile optimized */}
                   <Card className="bg-slate-800/50 border-slate-700">
-                    <CardHeader>
-                      <CardTitle className="text-white">Détail par jour</CardTitle>
+                    <CardHeader className="pb-2 px-3 sm:px-6">
+                      <CardTitle className="text-white text-base sm:text-lg flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+                        Détail par jour
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    <CardContent className="px-2 sm:px-6">
+                      <div className="space-y-1.5 sm:space-y-2 max-h-[350px] sm:max-h-[400px] overflow-y-auto">
                         {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => (
-                          <div key={date} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-3">
-                            <div>
-                              <p className="text-white font-medium">{format(new Date(date), "EEEE d MMMM", { locale: fr })}</p>
-                              <p className="text-slate-400 text-sm">{data.count} facture{data.count > 1 ? 's' : ''}</p>
+                          <div key={date} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-white font-medium text-sm sm:text-base truncate">
+                                {format(new Date(date), "EEE d MMM", { locale: fr })}
+                              </p>
+                              <p className="text-slate-400 text-xs">{data.count} facture{data.count > 1 ? 's' : ''}</p>
                             </div>
-                            <p className="text-amber-500 font-bold text-lg">{formatPrice(data.revenue)} F</p>
+                            <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
+                              {formatPrice(data.revenue)} F
+                            </p>
                           </div>
                         ))}
+                        {Object.keys(monthlyStats.daily_stats || {}).length === 0 && (
+                          <p className="text-slate-500 text-center py-8 text-sm">Aucune donnée pour ce mois</p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
                 </>
+              )}
+
+              {!monthlyStats && (
+                <div className="text-center py-12">
+                  <BarChart3 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-500">Chargement des statistiques...</p>
+                </div>
               )}
             </div>
           </TabsContent>
