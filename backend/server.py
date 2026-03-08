@@ -4003,17 +4003,27 @@ async def update_invoice_items(invoice_id: str, data: dict = Body(...)):
         
         # Calculate new totals
         subtotal = sum(item.get("price", 0) * item.get("quantity", 1) for item in items)
-        discount_amount = invoice.get("discount_amount", 0)
+        discount = invoice.get("discount", 0)
+        discount_amount = subtotal * discount / 100
         new_total = subtotal - discount_amount
+        
+        # Calculate totals by department
+        totals_by_department = {}
+        for item in items:
+            dept = item.get("department", "autres")
+            totals_by_department[dept] = totals_by_department.get(dept, 0) + (item.get("price", 0) * item.get("quantity", 1))
         
         await db.invoices.update_one(
             {"id": invoice_id},
             {"$set": {
                 "items": items,
                 "subtotal": subtotal,
+                "discount_amount": discount_amount,
                 "total": new_total,
-                "modification_allowed": False,  # Reset after modification
-                "modified_at": datetime.now(timezone.utc).isoformat()
+                "totals_by_department": totals_by_department,
+                "modification_allowed": False,
+                "modified_at": datetime.now(timezone.utc).isoformat(),
+                "validation_status": "pending"  # Ensure it stays pending for manager
             }}
         )
         
