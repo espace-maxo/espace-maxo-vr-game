@@ -4363,6 +4363,375 @@ async def generate_rapport_pdf(date: str = Query(...), signature: str = Query(""
 
 
 # Include the router in the main app
+
+# ============== EXPENSE/PURCHASE MODELS ==============
+
+class ExpenseCreate(BaseModel):
+    category: str  # cuisine, bar, jeux, autres
+    description: str
+    amount: float
+    supplier: Optional[str] = None
+    planned_date: Optional[str] = None
+    receipt_image: Optional[str] = None  # Base64 or URL
+    requested_by: str
+
+class ExpenseUpdate(BaseModel):
+    category: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    supplier: Optional[str] = None
+    planned_date: Optional[str] = None
+    receipt_image: Optional[str] = None
+    admin_notes: Optional[str] = None
+    status: Optional[str] = None  # pending, approved, rejected, revision_requested, completed
+
+# ============== EXPENSE ENDPOINTS ==============
+
+@api_router.get("/expenses")
+async def get_expenses(
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get all expenses with optional filters"""
+    try:
+        query = {}
+        if status:
+            query["status"] = status
+        if category:
+            query["category"] = category
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        if end_date:
+            if "created_at" in query:
+                query["created_at"]["$lte"] = end_date + "T23:59:59"
+            else:
+                query["created_at"] = {"$lte": end_date + "T23:59:59"}
+        
+        expenses = await db.expenses.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return {"expenses": expenses}
+    except Exception as e:
+        logger.error(f"Error fetching expenses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/expenses")
+async def create_expense(expense: ExpenseCreate):
+    """Create a new expense request (by manager)"""
+    try:
+        expense_doc = {
+            "id": str(uuid.uuid4()),
+            "category": expense.category,
+            "description": expense.description,
+            "amount": expense.amount,
+            "supplier": expense.supplier,
+            "planned_date": expense.planned_date,
+            "receipt_image": expense.receipt_image,
+            "requested_by": expense.requested_by,
+            "status": "pending",  # pending, approved, rejected, revision_requested, completed
+            "admin_notes": None,
+            "approved_by": None,
+            "approved_at": None,
+            "completed_at": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.expenses.insert_one(expense_doc)
+        if "_id" in expense_doc:
+            del expense_doc["_id"]
+        return {"success": True, "expense": expense_doc}
+    except Exception as e:
+        logger.error(f"Error creating expense: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/expenses/{expense_id}")
+async def update_expense(expense_id: str, update: ExpenseUpdate):
+    """Update an expense (admin can modify and request revision)"""
+    try:
+        expense = await db.expenses.find_one({"id": expense_id})
+        if not expense:
+            raise HTTPException(status_code=404, detail="Expense not found")
+        
+        update_data = {k: v for k, v in update.dict().items() if v is not None}
+        
+        if update.status == "approved":
+            update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+        elif update.status == "completed":
+            update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.expenses.update_one(
+            {"id": expense_id},
+            {"$set": update_data}
+        )
+        
+        updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        return {"success": True, "expense": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating expense: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str):
+    """Delete an expense"""
+    try:
+        result = await db.expenses.delete_one({"id": expense_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Expense not found")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting expense: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== WEEKLY SUMMARY ENDPOINT ==============
+
+@api_router.get("/reports/weekly")
+async def get_weekly_report(week_start: Optional[str] = None):
+    """Get weekly summary: sales, expenses, and result"""
+    try:
+        # Calculate week start (Monday) if not provided
+        if week_start:
+            start_date = datetime.fromisoformat(week_start.replace('Z', '+00:00'))
+        else:
+            today = datetime.now(timezone.utc)
+            start_date = today - timedelta(days=today.weekday())  # Monday
+        
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
+        
+        # Get validated invoices (sales) for the week
+        invoices = await db.caisse_invoices.find({
+            "validation_status": "validated",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(1000)
+        
+        # Calculate daily sales
+        daily_sales = {}
+        total_sales = 0
+        for invoice in invoices:
+            date = invoice.get("created_at", "")[:10]
+            if date not in daily_sales:
+                daily_sales[date] = {"count": 0, "total": 0}
+            daily_sales[date]["count"] += 1
+            daily_sales[date]["total"] += invoice.get("total", 0)
+            total_sales += invoice.get("total", 0)
+        
+        # Get completed expenses for the week
+        expenses = await db.expenses.find({
+            "status": "completed",
+            "completed_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        # Calculate expenses by category
+        expenses_by_category = {}
+        total_expenses = 0
+        for expense in expenses:
+            cat = expense.get("category", "autres")
+            if cat not in expenses_by_category:
+                expenses_by_category[cat] = 0
+            expenses_by_category[cat] += expense.get("amount", 0)
+            total_expenses += expense.get("amount", 0)
+        
+        # Calculate result
+        result = total_sales - total_expenses
+        
+        return {
+            "week_start": start_str[:10],
+            "week_end": end_str[:10],
+            "sales": {
+                "total": total_sales,
+                "count": len(invoices),
+                "daily": daily_sales
+            },
+            "expenses": {
+                "total": total_expenses,
+                "count": len(expenses),
+                "by_category": expenses_by_category,
+                "details": expenses
+            },
+            "result": result,
+            "is_profitable": result >= 0
+        }
+    except Exception as e:
+        logger.error(f"Error generating weekly report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== ACTIVITY TRACKING (ADMIN) ==============
+
+@api_router.get("/reports/activity")
+async def get_activity_report(
+    period: str = "day",  # day, week, month
+    date: Optional[str] = None
+):
+    """Get detailed activity report: income, expenses, and result"""
+    try:
+        # Calculate date range based on period
+        if date:
+            base_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+        else:
+            base_date = datetime.now(timezone.utc)
+        
+        base_date = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        if period == "day":
+            start_date = base_date
+            end_date = base_date + timedelta(hours=23, minutes=59, seconds=59)
+            period_label = base_date.strftime("%d/%m/%Y")
+        elif period == "week":
+            start_date = base_date - timedelta(days=base_date.weekday())  # Monday
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            period_label = f"Semaine du {start_date.strftime('%d/%m')} au {end_date.strftime('%d/%m/%Y')}"
+        else:  # month
+            start_date = base_date.replace(day=1)
+            # Last day of month
+            if base_date.month == 12:
+                end_date = base_date.replace(year=base_date.year + 1, month=1, day=1) - timedelta(seconds=1)
+            else:
+                end_date = base_date.replace(month=base_date.month + 1, day=1) - timedelta(seconds=1)
+            period_label = base_date.strftime("%B %Y")
+        
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
+        
+        # ============== INCOME (Recettes) ==============
+        
+        # 1. Validated invoices (Caisse)
+        invoices = await db.caisse_invoices.find({
+            "validation_status": "validated",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(2000)
+        
+        caisse_total = sum(inv.get("total", 0) for inv in invoices)
+        caisse_by_department = {}
+        caisse_by_payment = {}
+        caisse_by_server = {}
+        
+        for inv in invoices:
+            # By department
+            totals = inv.get("totals_by_department", {})
+            for dept, amount in totals.items():
+                if dept not in caisse_by_department:
+                    caisse_by_department[dept] = 0
+                caisse_by_department[dept] += amount
+            
+            # By payment method
+            payment = inv.get("payment_method", "Espèces")
+            if payment not in caisse_by_payment:
+                caisse_by_payment[payment] = 0
+            caisse_by_payment[payment] += inv.get("total", 0)
+            
+            # By server
+            server = inv.get("created_by", "Inconnu")
+            if server not in caisse_by_server:
+                caisse_by_server[server] = {"count": 0, "total": 0}
+            caisse_by_server[server]["count"] += 1
+            caisse_by_server[server]["total"] += inv.get("total", 0)
+        
+        # 2. Game bookings (paid)
+        bookings = await db.bookings.find({
+            "payment_status": "completed",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        bookings_total = sum(b.get("amount_to_pay", 0) for b in bookings)
+        
+        # 3. Table reservations (paid)
+        table_reservations = await db.table_reservations.find({
+            "payment_status": "completed",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        tables_total = sum(t.get("amount_paid", 0) for t in table_reservations)
+        
+        # 4. Combo orders (paid)
+        combos = await db.combo_orders.find({
+            "payment_status": "completed",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        combos_total = sum(c.get("total_price", 0) for c in combos)
+        
+        total_income = caisse_total + bookings_total + tables_total + combos_total
+        
+        # ============== EXPENSES (Dépenses) ==============
+        
+        expenses = await db.expenses.find({
+            "status": "completed",
+            "completed_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        total_expenses = sum(e.get("amount", 0) for e in expenses)
+        expenses_by_category = {}
+        
+        for exp in expenses:
+            cat = exp.get("category", "autres")
+            if cat not in expenses_by_category:
+                expenses_by_category[cat] = {"count": 0, "total": 0, "items": []}
+            expenses_by_category[cat]["count"] += 1
+            expenses_by_category[cat]["total"] += exp.get("amount", 0)
+            expenses_by_category[cat]["items"].append({
+                "description": exp.get("description"),
+                "amount": exp.get("amount"),
+                "supplier": exp.get("supplier"),
+                "date": exp.get("completed_at", "")[:10]
+            })
+        
+        # ============== RESULT ==============
+        
+        result = total_income - total_expenses
+        margin = (result / total_income * 100) if total_income > 0 else 0
+        
+        return {
+            "period": period,
+            "period_label": period_label,
+            "start_date": start_str[:10],
+            "end_date": end_str[:10],
+            "income": {
+                "total": total_income,
+                "caisse": {
+                    "total": caisse_total,
+                    "count": len(invoices),
+                    "by_department": caisse_by_department,
+                    "by_payment_method": caisse_by_payment,
+                    "by_server": caisse_by_server
+                },
+                "reservations_jeux": {
+                    "total": bookings_total,
+                    "count": len(bookings)
+                },
+                "reservations_tables": {
+                    "total": tables_total,
+                    "count": len(table_reservations)
+                },
+                "combos": {
+                    "total": combos_total,
+                    "count": len(combos)
+                }
+            },
+            "expenses": {
+                "total": total_expenses,
+                "count": len(expenses),
+                "by_category": expenses_by_category
+            },
+            "result": {
+                "net": result,
+                "margin_percent": round(margin, 2),
+                "is_profitable": result >= 0
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error generating activity report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 app.include_router(api_router)
 
 app.add_middleware(

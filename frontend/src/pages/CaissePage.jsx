@@ -7,7 +7,8 @@ import {
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
-  MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed
+  MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
+  ShoppingCart, AlertCircle, Image, ArrowUpDown, Activity
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -252,6 +254,28 @@ const CaissePage = () => {
   
   // Pending orders count for servers
   const [lastPendingCount, setLastPendingCount] = useState(0);
+
+  // ============== EXPENSES (Achats/Dépenses) ==============
+  const [expenses, setExpenses] = useState([]);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [expenseForm, setExpenseForm] = useState({
+    category: "cuisine",
+    description: "",
+    amount: 0,
+    supplier: "",
+    planned_date: format(new Date(), "yyyy-MM-dd"),
+    receipt_image: null
+  });
+
+  // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
+  const [weeklyReport, setWeeklyReport] = useState(null);
+  const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+
+  // ============== ACTIVITY TRACKING (Admin) ==============
+  const [activityReport, setActivityReport] = useState(null);
+  const [activityPeriod, setActivityPeriod] = useState("day");
+  const [activityDate, setActivityDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -607,6 +631,115 @@ const CaissePage = () => {
       console.error("Error fetching history invoices:", error);
     }
   };
+
+  // ============== EXPENSES FUNCTIONS ==============
+  
+  const fetchExpenses = async () => {
+    try {
+      const res = await axios.get(`${API}/expenses`);
+      setExpenses(res.data.expenses || []);
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+    }
+  };
+
+  const createExpense = async () => {
+    try {
+      if (!expenseForm.description || expenseForm.amount <= 0) {
+        toast.error("Veuillez remplir la description et le montant");
+        return;
+      }
+      
+      await axios.post(`${API}/expenses`, {
+        ...expenseForm,
+        requested_by: currentUser?.full_name || currentUser?.username || "Gérante"
+      });
+      
+      toast.success("Demande d'achat créée !");
+      setShowExpenseModal(false);
+      setExpenseForm({
+        category: "cuisine",
+        description: "",
+        amount: 0,
+        supplier: "",
+        planned_date: format(new Date(), "yyyy-MM-dd"),
+        receipt_image: null
+      });
+      fetchExpenses();
+    } catch (error) {
+      console.error("Error creating expense:", error);
+      toast.error("Erreur lors de la création");
+    }
+  };
+
+  const updateExpense = async (expenseId, updateData) => {
+    try {
+      await axios.put(`${API}/expenses/${expenseId}`, updateData);
+      toast.success("Dépense mise à jour !");
+      fetchExpenses();
+      setEditingExpense(null);
+    } catch (error) {
+      console.error("Error updating expense:", error);
+      toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
+  const deleteExpense = async (expenseId) => {
+    if (!confirm("Supprimer cette dépense ?")) return;
+    try {
+      await axios.delete(`${API}/expenses/${expenseId}`);
+      toast.success("Dépense supprimée");
+      fetchExpenses();
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // ============== WEEKLY REPORT FUNCTIONS ==============
+  
+  const fetchWeeklyReport = async () => {
+    try {
+      const res = await axios.get(`${API}/reports/weekly`, { params: { week_start: weekStartDate } });
+      setWeeklyReport(res.data);
+    } catch (error) {
+      console.error("Error fetching weekly report:", error);
+    }
+  };
+
+  // ============== ACTIVITY REPORT FUNCTIONS (Admin) ==============
+  
+  const fetchActivityReport = async () => {
+    try {
+      const res = await axios.get(`${API}/reports/activity`, { 
+        params: { period: activityPeriod, date: activityDate } 
+      });
+      setActivityReport(res.data);
+    } catch (error) {
+      console.error("Error fetching activity report:", error);
+    }
+  };
+
+  // Fetch expenses when authenticated
+  useEffect(() => {
+    if (isAuthenticated && (currentUser?.role === 'manager' || currentUser?.role === 'admin')) {
+      fetchExpenses();
+    }
+  }, [isAuthenticated, currentUser]);
+
+  // Fetch weekly report when tab is active
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "hebdo") {
+      fetchWeeklyReport();
+    }
+  }, [weekStartDate, activeTab, isAuthenticated]);
+
+  // Fetch activity report when tab is active (admin only)
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "activite" && currentUser?.role === 'admin') {
+      fetchActivityReport();
+    }
+  }, [activityPeriod, activityDate, activeTab, isAuthenticated, currentUser]);
 
   const fetchRapportData = async () => {
     try {
@@ -2101,6 +2234,29 @@ _Gérante - Espace Maxo_
             <TabsTrigger value="historique" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white">
               <Calendar className="w-4 h-4 mr-2" />Historique
             </TabsTrigger>
+            {/* Manager: Achats/Dépenses */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                <ShoppingCart className="w-4 h-4 mr-2" />Achats
+                {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length > 0 && (
+                  <Badge className="ml-1 bg-purple-500 text-white text-xs">
+                    {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+            {/* Point Hebdomadaire */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+                <BarChart3 className="w-4 h-4 mr-2" />Hebdo
+              </TabsTrigger>
+            )}
+            {/* Admin only: Suivi Activité */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <Activity className="w-4 h-4 mr-2" />Activité
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ==================== COMMANDE TAB (Creation only) ==================== */}
@@ -4102,6 +4258,601 @@ _Gérante - Espace Maxo_
             </div>
           </TabsContent>
 
+          {/* ==================== ACHATS/DÉPENSES TAB (Manager) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="achats">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-purple-300 flex items-center gap-2">
+                  <ShoppingCart className="w-6 h-6" />
+                  Achats & Dépenses
+                </h2>
+                {currentUser?.role === 'manager' && (
+                  <Button 
+                    onClick={() => setShowExpenseModal(true)}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nouvelle demande
+                  </Button>
+                )}
+              </div>
+
+              {/* Categories legend */}
+              <div className="flex flex-wrap gap-2">
+                <Badge className="bg-green-500/20 text-green-400">Cuisine</Badge>
+                <Badge className="bg-orange-500/20 text-orange-400">Bar</Badge>
+                <Badge className="bg-blue-500/20 text-blue-400">Jeux</Badge>
+                <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
+              </div>
+
+              {/* Pending expenses that need manager revision (revision_requested) */}
+              {currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+                <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-amber-400 flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5" />
+                      À RÉVISER
+                      <Badge className="bg-amber-500/30 text-amber-300 ml-2">
+                        {expenses.filter(e => e.status === 'revision_requested').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {expenses.filter(e => e.status === 'revision_requested').map(expense => (
+                      <div key={expense.id} className="bg-amber-900/20 rounded-lg p-3 border border-amber-500/30">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Badge className={`text-xs ${
+                                expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                                'bg-slate-500/20 text-slate-400'
+                              }`}>{expense.category}</Badge>
+                              <span className="text-white font-medium">{expense.description}</span>
+                            </div>
+                            <p className="text-amber-400 font-bold">{formatPrice(expense.amount)} F</p>
+                            {expense.admin_notes && (
+                              <p className="text-amber-300 text-sm mt-1">
+                                <strong>Note admin:</strong> {expense.admin_notes}
+                              </p>
+                            )}
+                          </div>
+                          <Button 
+                            size="sm"
+                            onClick={() => {
+                              setExpenseForm({
+                                category: expense.category,
+                                description: expense.description,
+                                amount: expense.amount,
+                                supplier: expense.supplier || "",
+                                planned_date: expense.planned_date || format(new Date(), "yyyy-MM-dd"),
+                                receipt_image: expense.receipt_image
+                              });
+                              setEditingExpense(expense);
+                              setShowExpenseModal(true);
+                            }}
+                            className="bg-amber-600 hover:bg-amber-700"
+                          >
+                            <Edit2 className="w-4 h-4 mr-1" />
+                            Modifier
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Admin view: Pending approvals */}
+              {currentUser?.role === 'admin' && expenses.filter(e => e.status === 'pending').length > 0 && (
+                <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-purple-400 flex items-center gap-2">
+                      <ShoppingCart className="w-5 h-5" />
+                      DEMANDES À VALIDER
+                      <Badge className="bg-purple-500/30 text-purple-300 ml-2">
+                        {expenses.filter(e => e.status === 'pending').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {expenses.filter(e => e.status === 'pending').map(expense => (
+                      <div key={expense.id} className="bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className={`text-xs ${
+                                  expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                  expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                  expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                                  'bg-slate-500/20 text-slate-400'
+                                }`}>{expense.category}</Badge>
+                                <span className="text-white font-bold">{expense.description}</span>
+                              </div>
+                              <p className="text-purple-400 font-bold text-lg">{formatPrice(expense.amount)} F</p>
+                              <p className="text-slate-400 text-sm">
+                                Demandé par: {expense.requested_by} • {new Date(expense.created_at).toLocaleDateString('fr-FR')}
+                              </p>
+                              {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
+                              {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
+                            </div>
+                          </div>
+                          {/* Admin action: modify before sending back */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Input
+                              placeholder="Note pour la gérante (optionnel)"
+                              className="flex-1 bg-slate-800/50 border-slate-700 text-white text-sm"
+                              id={`admin-note-${expense.id}`}
+                            />
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <Button 
+                              size="sm"
+                              onClick={() => updateExpense(expense.id, { status: "approved", approved_by: "Administrateur" })}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Approuver
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const note = document.getElementById(`admin-note-${expense.id}`)?.value;
+                                updateExpense(expense.id, { 
+                                  status: "revision_requested", 
+                                  admin_notes: note || "Veuillez réviser cette demande"
+                                });
+                              }}
+                              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                            >
+                              <Edit2 className="w-4 h-4 mr-1" />
+                              Renvoyer pour révision
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateExpense(expense.id, { status: "rejected" })}
+                              className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Refuser
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Approved expenses (ready for purchase) */}
+              {expenses.filter(e => e.status === 'approved').length > 0 && (
+                <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-green-400 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5" />
+                      APPROUVÉS - Prêts à acheter
+                      <Badge className="bg-green-500/30 text-green-300 ml-2">
+                        {expenses.filter(e => e.status === 'approved').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {expenses.filter(e => e.status === 'approved').map(expense => (
+                      <div key={expense.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/20 rounded-lg p-3 border border-green-500/30">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={`text-xs ${
+                              expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                              expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                              expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-slate-500/20 text-slate-400'
+                            }`}>{expense.category}</Badge>
+                            <span className="text-white font-medium">{expense.description}</span>
+                          </div>
+                          <p className="text-green-400 font-bold">{formatPrice(expense.amount)} F</p>
+                          {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
+                        </div>
+                        {currentUser?.role === 'manager' && (
+                          <Button 
+                            size="sm"
+                            onClick={() => updateExpense(expense.id, { status: "completed" })}
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Marquer acheté
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Completed expenses (history) */}
+              {expenses.filter(e => e.status === 'completed').length > 0 && (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-slate-400 flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      Historique des achats
+                      <Badge className="bg-slate-600/50 text-slate-300 ml-2">
+                        {expenses.filter(e => e.status === 'completed').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {expenses.filter(e => e.status === 'completed').slice(0, 20).map(expense => (
+                      <div key={expense.id} className="flex items-center justify-between gap-2 bg-slate-700/30 rounded-lg p-2 border border-slate-600/30">
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-xs ${
+                            expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                            expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                            expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>{expense.category}</Badge>
+                          <span className="text-slate-300 text-sm">{expense.description}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400 text-sm">{formatPrice(expense.amount)} F</span>
+                          <span className="text-slate-500 text-xs">{expense.completed_at?.slice(0, 10)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {expenses.length === 0 && (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <ShoppingCart className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Aucune demande d'achat</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+          )}
+
+          {/* ==================== POINT HEBDOMADAIRE TAB ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="hebdo">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-cyan-300 flex items-center gap-2">
+                  <BarChart3 className="w-6 h-6" />
+                  Point Hebdomadaire
+                </h2>
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(weekStartDate);
+                      newDate.setDate(newDate.getDate() - 7);
+                      setWeekStartDate(format(newDate, "yyyy-MM-dd"));
+                    }}
+                    className="border-slate-600 text-slate-300"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Input
+                    type="date"
+                    value={weekStartDate}
+                    onChange={(e) => setWeekStartDate(e.target.value)}
+                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(weekStartDate);
+                      newDate.setDate(newDate.getDate() + 7);
+                      setWeekStartDate(format(newDate, "yyyy-MM-dd"));
+                    }}
+                    className="border-slate-600 text-slate-300"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {weeklyReport ? (
+                <div className="grid gap-4 md:grid-cols-3">
+                  {/* Ventes */}
+                  <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-green-400 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5" />
+                        RECETTES
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</p>
+                      <p className="text-slate-400 text-sm">{weeklyReport.sales?.count || 0} factures</p>
+                      <div className="mt-3 space-y-1">
+                        {Object.entries(weeklyReport.sales?.daily || {}).map(([date, data]) => (
+                          <div key={date} className="flex justify-between text-sm">
+                            <span className="text-slate-400">{date}</span>
+                            <span className="text-green-300">{formatPrice(data.total)} F</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Dépenses */}
+                  <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-red-400 flex items-center gap-2">
+                        <ShoppingCart className="w-5 h-5" />
+                        DÉPENSES
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</p>
+                      <p className="text-slate-400 text-sm">{weeklyReport.expenses?.count || 0} achats</p>
+                      <div className="mt-3 space-y-1">
+                        {Object.entries(weeklyReport.expenses?.by_category || {}).map(([cat, amount]) => (
+                          <div key={cat} className="flex justify-between text-sm">
+                            <span className="text-slate-400 capitalize">{cat}</span>
+                            <span className="text-red-300">{formatPrice(amount)} F</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Résultat */}
+                  <Card className={`bg-gradient-to-br ${weeklyReport.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className={`flex items-center gap-2 ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <DollarSign className="w-5 h-5" />
+                        RÉSULTAT
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className={`text-4xl font-bold ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
+                      </p>
+                      <p className="text-slate-400 text-sm mt-2">
+                        Semaine du {weeklyReport.week_start} au {weeklyReport.week_end}
+                      </p>
+                      <Badge className={`mt-3 ${weeklyReport.is_profitable ? 'bg-emerald-500/30 text-emerald-300' : 'bg-red-500/30 text-red-300'}`}>
+                        {weeklyReport.is_profitable ? '✓ Bénéfice' : '✗ Perte'}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <BarChart3 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Chargement des données...</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+          )}
+
+          {/* ==================== ACTIVITÉ TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+          <TabsContent value="activite">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-emerald-300 flex items-center gap-2">
+                  <Activity className="w-6 h-6" />
+                  Suivi d'Activité
+                </h2>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Select value={activityPeriod} onValueChange={setActivityPeriod}>
+                    <SelectTrigger className="w-[120px] bg-slate-800/50 border-slate-700 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="day">Jour</SelectItem>
+                      <SelectItem value="week">Semaine</SelectItem>
+                      <SelectItem value="month">Mois</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    value={activityDate}
+                    onChange={(e) => setActivityDate(e.target.value)}
+                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                  />
+                  <Button onClick={fetchActivityReport} variant="outline" className="border-slate-600 text-slate-300">
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {activityReport ? (
+                <div className="space-y-4">
+                  {/* Period label */}
+                  <div className="text-center">
+                    <Badge className="bg-emerald-500/20 text-emerald-300 text-lg px-4 py-1">
+                      {activityReport.period_label}
+                    </Badge>
+                  </div>
+
+                  {/* Summary cards */}
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {/* Total Recettes */}
+                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-green-400 text-sm">TOTAL RECETTES</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold text-green-400">{formatPrice(activityReport.income?.total || 0)} F</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Total Dépenses */}
+                    <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-red-400 text-sm">TOTAL DÉPENSES</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold text-red-400">{formatPrice(activityReport.expenses?.total || 0)} F</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Résultat Net */}
+                    <Card className={`bg-gradient-to-br ${activityReport.result?.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className={`text-sm ${activityReport.result?.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
+                          RÉSULTAT NET
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className={`text-3xl font-bold ${activityReport.result?.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {activityReport.result?.net >= 0 ? '+' : ''}{formatPrice(activityReport.result?.net || 0)} F
+                        </p>
+                        <p className="text-slate-400 text-sm">Marge: {activityReport.result?.margin_percent || 0}%</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Detailed breakdown */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Recettes détaillées */}
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-green-400 flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5" />
+                          Détail Recettes
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {/* Caisse */}
+                        <div className="bg-green-900/20 rounded-lg p-3 border border-green-500/30">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-medium">Caisse (Factures)</span>
+                            <span className="text-green-400 font-bold">{formatPrice(activityReport.income?.caisse?.total || 0)} F</span>
+                          </div>
+                          <p className="text-slate-400 text-sm">{activityReport.income?.caisse?.count || 0} factures</p>
+                          {/* By department */}
+                          <div className="mt-2 space-y-1">
+                            {Object.entries(activityReport.income?.caisse?.by_department || {}).map(([dept, amount]) => (
+                              <div key={dept} className="flex justify-between text-xs">
+                                <span className="text-slate-500 capitalize">{dept.replace('_', ' ')}</span>
+                                <span className="text-green-300">{formatPrice(amount)} F</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Réservations */}
+                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
+                          <span className="text-slate-300">Réservations Jeux</span>
+                          <span className="text-green-300">{formatPrice(activityReport.income?.reservations_jeux?.total || 0)} F</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
+                          <span className="text-slate-300">Réservations Tables</span>
+                          <span className="text-green-300">{formatPrice(activityReport.income?.reservations_tables?.total || 0)} F</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
+                          <span className="text-slate-300">Combos</span>
+                          <span className="text-green-300">{formatPrice(activityReport.income?.combos?.total || 0)} F</span>
+                        </div>
+
+                        {/* By payment method */}
+                        {Object.keys(activityReport.income?.caisse?.by_payment_method || {}).length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-700">
+                            <p className="text-slate-400 text-sm mb-2">Par mode de paiement:</p>
+                            {Object.entries(activityReport.income?.caisse?.by_payment_method || {}).map(([method, amount]) => (
+                              <div key={method} className="flex justify-between text-sm">
+                                <span className="text-slate-500">{method}</span>
+                                <span className="text-slate-300">{formatPrice(amount)} F</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Dépenses détaillées */}
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-red-400 flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5" />
+                          Détail Dépenses
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {Object.entries(activityReport.expenses?.by_category || {}).length > 0 ? (
+                          Object.entries(activityReport.expenses?.by_category || {}).map(([cat, data]) => (
+                            <div key={cat} className="bg-red-900/20 rounded-lg p-3 border border-red-500/30">
+                              <div className="flex justify-between items-center">
+                                <span className="text-white font-medium capitalize">{cat}</span>
+                                <span className="text-red-400 font-bold">{formatPrice(data.total)} F</span>
+                              </div>
+                              <p className="text-slate-400 text-sm">{data.count} achat(s)</p>
+                              {/* Items */}
+                              <div className="mt-2 space-y-1">
+                                {data.items?.slice(0, 5).map((item, idx) => (
+                                  <div key={idx} className="flex justify-between text-xs">
+                                    <span className="text-slate-500">{item.description}</span>
+                                    <span className="text-red-300">{formatPrice(item.amount)} F</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-slate-500">
+                            Aucune dépense enregistrée
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Performance by server */}
+                  {Object.keys(activityReport.income?.caisse?.by_server || {}).length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-slate-300 flex items-center gap-2">
+                          <Users className="w-5 h-5" />
+                          Performance par Serveur
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                          {Object.entries(activityReport.income?.caisse?.by_server || {}).map(([server, data]) => (
+                            <div key={server} className="bg-slate-700/30 rounded-lg p-3">
+                              <p className="text-white font-medium">{server}</p>
+                              <p className="text-green-400 font-bold">{formatPrice(data.total)} F</p>
+                              <p className="text-slate-500 text-sm">{data.count} factures</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              ) : (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <Activity className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Chargement des données...</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+          )}
+
         </Tabs>
         )}
       </div>
@@ -4576,6 +5327,154 @@ _Gérante - Espace Maxo_
             >
               Annuler
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Modal */}
+      <Dialog open={showExpenseModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowExpenseModal(false);
+          setEditingExpense(null);
+          setExpenseForm({
+            category: "cuisine",
+            description: "",
+            amount: 0,
+            supplier: "",
+            planned_date: format(new Date(), "yyyy-MM-dd"),
+            receipt_image: null
+          });
+        }
+      }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-purple-400 flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              {editingExpense ? 'Modifier la demande' : 'Nouvelle demande d\'achat'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-slate-300">Catégorie *</Label>
+              <Select 
+                value={expenseForm.category} 
+                onValueChange={(v) => setExpenseForm({...expenseForm, category: v})}
+              >
+                <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                  <SelectItem value="bar">🍹 Bar</SelectItem>
+                  <SelectItem value="jeux">🎮 Jeux</SelectItem>
+                  <SelectItem value="autres">📦 Autres</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-slate-300">Description *</Label>
+              <Textarea
+                value={expenseForm.description}
+                onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                placeholder="Ex: Viande de boeuf, légumes frais..."
+                className="bg-slate-700/50 border-slate-600 text-white"
+                rows={2}
+              />
+            </div>
+
+            <div>
+              <Label className="text-slate-300">Montant (FCFA) *</Label>
+              <Input
+                type="number"
+                value={expenseForm.amount}
+                onChange={(e) => setExpenseForm({...expenseForm, amount: parseFloat(e.target.value) || 0})}
+                placeholder="0"
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label className="text-slate-300">Fournisseur</Label>
+              <Input
+                value={expenseForm.supplier}
+                onChange={(e) => setExpenseForm({...expenseForm, supplier: e.target.value})}
+                placeholder="Nom du fournisseur"
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label className="text-slate-300">Date prévue d'achat</Label>
+              <Input
+                type="date"
+                value={expenseForm.planned_date}
+                onChange={(e) => setExpenseForm({...expenseForm, planned_date: e.target.value})}
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            <div>
+              <Label className="text-slate-300">Photo du reçu/facture (optionnel)</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setExpenseForm({...expenseForm, receipt_image: reader.result});
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="bg-slate-700/50 border-slate-600 text-white file:bg-purple-600 file:text-white file:border-0 file:rounded file:mr-2"
+              />
+              {expenseForm.receipt_image && (
+                <div className="mt-2 relative">
+                  <img 
+                    src={expenseForm.receipt_image} 
+                    alt="Reçu" 
+                    className="w-full max-h-32 object-cover rounded border border-slate-600"
+                  />
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="absolute top-1 right-1"
+                    onClick={() => setExpenseForm({...expenseForm, receipt_image: null})}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={() => {
+                  if (editingExpense) {
+                    updateExpense(editingExpense.id, {
+                      ...expenseForm,
+                      status: "pending"  // Resubmit for approval
+                    });
+                    setShowExpenseModal(false);
+                  } else {
+                    createExpense();
+                  }
+                }}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                {editingExpense ? 'Soumettre à nouveau' : 'Créer la demande'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowExpenseModal(false)}
+                className="border-slate-600 text-slate-400"
+              >
+                Annuler
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
