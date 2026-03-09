@@ -204,15 +204,28 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-xl font-bold text-purple-300 flex items-center gap-2">
-          <Building2 className="w-6 h-6" />
-          Gestion des Locations
-        </h2>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-bold text-purple-300 flex items-center gap-2">
+            <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
+            Gestion des Locations
+          </h2>
+          {isAdmin && (
+            <Button 
+              onClick={() => { resetForm(); setEditingLocation(null); setShowModal(true); }}
+              className="bg-purple-600 hover:bg-purple-700"
+              size="sm"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Nouvelle Location</span>
+              <span className="sm:hidden">Nouveau</span>
+            </Button>
+          )}
+        </div>
+        {/* Filters - separate row on mobile */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Filters */}
           <Select value={filterSpace} onValueChange={setFilterSpace}>
-            <SelectTrigger className="w-[140px] bg-slate-800/50 border-slate-700 text-white">
+            <SelectTrigger className="w-[120px] sm:w-[140px] bg-slate-800/50 border-slate-700 text-white text-sm">
               <SelectValue placeholder="Espace" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-700">
@@ -224,7 +237,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           </Select>
           
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[130px] bg-slate-800/50 border-slate-700 text-white">
+            <SelectTrigger className="w-[110px] sm:w-[130px] bg-slate-800/50 border-slate-700 text-white text-sm">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-700">
@@ -234,16 +247,6 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
               <SelectItem value="cancelled">Annulées</SelectItem>
             </SelectContent>
           </Select>
-
-          {isAdmin && (
-            <Button 
-              onClick={() => { resetForm(); setEditingLocation(null); setShowModal(true); }}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Nouvelle Location
-            </Button>
-          )}
         </div>
       </div>
 

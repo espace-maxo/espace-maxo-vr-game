@@ -201,18 +201,30 @@ const InstructionsTab = ({ currentUser, formatPrice }) => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-xl font-bold text-cyan-300 flex items-center gap-2">
-          <MessageSquare className="w-6 h-6" />
-          Instructions & Notes
-          {unreadCount > 0 && (
-            <Badge className="bg-red-500 text-white ml-2">{unreadCount} non lue(s)</Badge>
-          )}
-        </h2>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-bold text-cyan-300 flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="hidden sm:inline">Instructions & Notes</span>
+            <span className="sm:hidden">Notes</span>
+            {unreadCount > 0 && (
+              <Badge className="bg-red-500 text-white text-xs">{unreadCount}</Badge>
+            )}
+          </h2>
+          <Button 
+            onClick={() => { resetForm(); setEditingInstruction(null); setShowModal(true); }}
+            className="bg-cyan-600 hover:bg-cyan-700"
+            size="sm"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            <span className="hidden sm:inline">Nouvelle Note</span>
+            <span className="sm:hidden">Nouveau</span>
+          </Button>
+        </div>
+        {/* Filters - separate row on mobile */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Filters */}
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[140px] bg-slate-800/50 border-slate-700 text-white">
+            <SelectTrigger className="w-[110px] sm:w-[140px] bg-slate-800/50 border-slate-700 text-white text-sm">
               <SelectValue placeholder="Filtrer" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-700">
@@ -230,16 +242,8 @@ const InstructionsTab = ({ currentUser, formatPrice }) => {
             onClick={() => setShowArchived(!showArchived)}
             className={showArchived ? "bg-slate-600" : "border-slate-600 text-slate-300"}
           >
-            <Archive className="w-4 h-4 mr-1" />
-            Archives
-          </Button>
-
-          <Button 
-            onClick={() => { resetForm(); setEditingInstruction(null); setShowModal(true); }}
-            className="bg-cyan-600 hover:bg-cyan-700"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Nouvelle Note
+            <Archive className="w-4 h-4 sm:mr-1" />
+            <span className="hidden sm:inline">Archives</span>
           </Button>
         </div>
       </div>
