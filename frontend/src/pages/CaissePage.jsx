@@ -1300,11 +1300,11 @@ const CaissePage = () => {
     }
   };
 
-  // Auto-refresh tables status every 30 seconds when on tables tab
+  // Auto-refresh tables status every 10 seconds when on tables tab
   useEffect(() => {
     if (isAuthenticated && activeTab === "tables") {
-      fetchTablesStatus();
-      const interval = setInterval(fetchTablesStatus, 30000); // Refresh every 30 seconds
+      fetchTablesStatus(); // Fetch immediately when tab opens
+      const interval = setInterval(fetchTablesStatus, 10000); // Refresh every 10 seconds
       return () => clearInterval(interval);
     }
   }, [activeTab, isAuthenticated]);
