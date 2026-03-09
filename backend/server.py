@@ -3658,6 +3658,102 @@ class CaisseTableUpdate(BaseModel):
     discount: Optional[int] = None
     notes: Optional[str] = None
 
+@api_router.get("/caisse/tables/status")
+async def get_tables_status():
+    """Get status of all 20 tables (free/occupied with timing)"""
+    try:
+        # Get all occupied tables
+        occupied_tables = await db.caisse_tables.find({}, {"_id": 0}).to_list(100)
+        
+        # Create a map of occupied tables by table number
+        occupied_map = {}
+        for table in occupied_tables:
+            occupied_map[table["table_number"]] = table
+        
+        # Generate status for all 20 tables
+        tables_status = []
+        now = datetime.now(timezone.utc)
+        
+        for i in range(1, 21):
+            if i in occupied_map:
+                table = occupied_map[i]
+                # Calculate service duration in minutes
+                created_at = datetime.fromisoformat(table["created_at"].replace("Z", "+00:00"))
+                duration_seconds = (now - created_at).total_seconds()
+                duration_minutes = int(duration_seconds / 60)
+                
+                # Determine status color based on duration
+                if duration_minutes < 15:
+                    status_color = "green"
+                elif duration_minutes < 30:
+                    status_color = "orange"
+                else:
+                    status_color = "red"
+                
+                # Calculate total amount
+                total = sum(item.get("price", 0) * item.get("quantity", 1) for item in table.get("items", []))
+                
+                tables_status.append({
+                    "table_number": i,
+                    "status": "occupied",
+                    "status_color": status_color,
+                    "server_name": table.get("server_name", ""),
+                    "server_id": table.get("server_id", ""),
+                    "client_name": table.get("client_name", "Client"),
+                    "items_count": len(table.get("items", [])),
+                    "total": total,
+                    "duration_minutes": duration_minutes,
+                    "duration_formatted": f"{duration_minutes // 60}h{duration_minutes % 60:02d}" if duration_minutes >= 60 else f"{duration_minutes}min",
+                    "created_at": table.get("created_at"),
+                    "table_id": table.get("id")
+                })
+            else:
+                tables_status.append({
+                    "table_number": i,
+                    "status": "free",
+                    "status_color": "gray",
+                    "server_name": None,
+                    "server_id": None,
+                    "client_name": None,
+                    "items_count": 0,
+                    "total": 0,
+                    "duration_minutes": 0,
+                    "duration_formatted": "-",
+                    "created_at": None,
+                    "table_id": None
+                })
+        
+        # Calculate statistics
+        occupied_count = len(occupied_tables)
+        free_count = 20 - occupied_count
+        
+        # Average service time for occupied tables
+        total_duration = sum(t["duration_minutes"] for t in tables_status if t["status"] == "occupied")
+        avg_duration = total_duration / occupied_count if occupied_count > 0 else 0
+        
+        # Count by status color
+        green_count = len([t for t in tables_status if t["status_color"] == "green"])
+        orange_count = len([t for t in tables_status if t["status_color"] == "orange"])
+        red_count = len([t for t in tables_status if t["status_color"] == "red"])
+        
+        return {
+            "tables": tables_status,
+            "stats": {
+                "total_tables": 20,
+                "occupied": occupied_count,
+                "free": free_count,
+                "avg_duration_minutes": round(avg_duration, 1),
+                "service_quality": {
+                    "green": green_count,  # < 15min - Excellent
+                    "orange": orange_count,  # 15-30min - À surveiller
+                    "red": red_count  # > 30min - Critique
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching tables status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/caisse/tables")
 async def get_caisse_tables(server_id: Optional[str] = None):
     """Get all open tables/drafts for a server"""
