@@ -4699,6 +4699,57 @@ class ExpenseUpdate(BaseModel):
     is_group: Optional[bool] = None
     items: Optional[List[ExpenseItem]] = None
 
+# ============== LOCATION MODELS (Salle, Jardin, Jeux) ==============
+
+class LocationReservationCreate(BaseModel):
+    space_type: str  # salle_fete, espace_jardin, salle_jeux
+    customer_name: str
+    customer_phone: str
+    reservation_date: str
+    start_time: str
+    end_time: str
+    number_of_guests: int
+    event_type: str = ""  # anniversaire, reunion, mariage, bapteme, etc.
+    rental_amount: float
+    deposit_amount: float = 0
+    notes: str = ""
+
+class LocationReservationUpdate(BaseModel):
+    space_type: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    reservation_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    number_of_guests: Optional[int] = None
+    event_type: Optional[str] = None
+    rental_amount: Optional[float] = None
+    deposit_amount: Optional[float] = None
+    deposit_paid: Optional[float] = None
+    balance_remaining: Optional[float] = None
+    status: Optional[str] = None  # confirmed, completed, cancelled
+    notes: Optional[str] = None
+
+# ============== INSTRUCTIONS & NOTES MODELS ==============
+
+class InstructionCreate(BaseModel):
+    title: str
+    content: str
+    instruction_type: str = "note"  # note, task_list
+    tasks: Optional[List[Dict]] = None  # For task lists: [{"text": "...", "completed": false}]
+    sender_role: str  # admin, manager
+    sender_name: str
+    priority: str = "normal"  # low, normal, high, urgent
+
+class InstructionUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    instruction_type: Optional[str] = None
+    tasks: Optional[List[Dict]] = None
+    is_read: Optional[bool] = None
+    is_archived: Optional[bool] = None
+    priority: Optional[str] = None
+
 # ============== EXPENSE ENDPOINTS ==============
 
 @api_router.get("/expenses")
@@ -5154,6 +5205,222 @@ async def get_activity_report(
         }
     except Exception as e:
         logger.error(f"Error generating activity report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== LOCATION RESERVATION ENDPOINTS ==============
+
+LOCATION_SPACES = {
+    "salle_fete": {"name": "Salle de Fête", "default_price": 50000},
+    "espace_jardin": {"name": "Espace Jardin", "default_price": 30000},
+    "salle_jeux": {"name": "Salle de Jeux", "default_price": 25000}
+}
+
+@api_router.get("/locations")
+async def get_locations(
+    status: Optional[str] = None,
+    space_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get all location reservations with optional filters"""
+    try:
+        query = {}
+        if status:
+            query["status"] = status
+        if space_type:
+            query["space_type"] = space_type
+        if start_date:
+            query["reservation_date"] = {"$gte": start_date}
+        if end_date:
+            if "reservation_date" in query:
+                query["reservation_date"]["$lte"] = end_date
+            else:
+                query["reservation_date"] = {"$lte": end_date}
+        
+        locations = await db.location_reservations.find(query, {"_id": 0}).sort("reservation_date", -1).to_list(500)
+        return {"locations": locations, "spaces": LOCATION_SPACES}
+    except Exception as e:
+        logger.error(f"Error fetching locations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/locations")
+async def create_location(location: LocationReservationCreate):
+    """Create a new location reservation (Admin only)"""
+    try:
+        location_dict = location.model_dump()
+        location_dict["id"] = str(uuid.uuid4())
+        location_dict["status"] = "confirmed"
+        location_dict["deposit_paid"] = location_dict.get("deposit_amount", 0)
+        location_dict["balance_remaining"] = location_dict["rental_amount"] - location_dict["deposit_paid"]
+        location_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+        location_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.location_reservations.insert_one(location_dict)
+        return {"success": True, "location": {k: v for k, v in location_dict.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating location: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/locations/{location_id}")
+async def update_location(location_id: str, update: LocationReservationUpdate):
+    """Update a location reservation (Admin only)"""
+    try:
+        update_dict = {k: v for k, v in update.model_dump().items() if v is not None}
+        if not update_dict:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Recalculate balance if amounts changed
+        if "rental_amount" in update_dict or "deposit_paid" in update_dict:
+            existing = await db.location_reservations.find_one({"id": location_id})
+            if existing:
+                rental = update_dict.get("rental_amount", existing.get("rental_amount", 0))
+                deposit = update_dict.get("deposit_paid", existing.get("deposit_paid", 0))
+                update_dict["balance_remaining"] = rental - deposit
+        
+        result = await db.location_reservations.update_one(
+            {"id": location_id},
+            {"$set": update_dict}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Location not found")
+        
+        updated = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
+        return {"success": True, "location": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating location: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/locations/{location_id}")
+async def delete_location(location_id: str):
+    """Delete a location reservation (Admin only)"""
+    try:
+        result = await db.location_reservations.delete_one({"id": location_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Location not found")
+        return {"success": True, "message": "Location deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting location: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== INSTRUCTIONS & NOTES ENDPOINTS ==============
+
+@api_router.get("/instructions")
+async def get_instructions(
+    is_archived: Optional[bool] = None,
+    sender_role: Optional[str] = None,
+    priority: Optional[str] = None
+):
+    """Get all instructions/notes"""
+    try:
+        query = {}
+        if is_archived is not None:
+            query["is_archived"] = is_archived
+        if sender_role:
+            query["sender_role"] = sender_role
+        if priority:
+            query["priority"] = priority
+        
+        instructions = await db.instructions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return {"instructions": instructions}
+    except Exception as e:
+        logger.error(f"Error fetching instructions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/instructions")
+async def create_instruction(instruction: InstructionCreate):
+    """Create a new instruction/note"""
+    try:
+        instruction_dict = instruction.model_dump()
+        instruction_dict["id"] = str(uuid.uuid4())
+        instruction_dict["is_read"] = False
+        instruction_dict["is_archived"] = False
+        instruction_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+        instruction_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Initialize tasks if task_list type
+        if instruction_dict.get("instruction_type") == "task_list" and not instruction_dict.get("tasks"):
+            instruction_dict["tasks"] = []
+        
+        await db.instructions.insert_one(instruction_dict)
+        return {"success": True, "instruction": {k: v for k, v in instruction_dict.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating instruction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/instructions/{instruction_id}")
+async def update_instruction(instruction_id: str, update: InstructionUpdate):
+    """Update an instruction/note"""
+    try:
+        update_dict = {k: v for k, v in update.model_dump().items() if v is not None}
+        if not update_dict:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        result = await db.instructions.update_one(
+            {"id": instruction_id},
+            {"$set": update_dict}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Instruction not found")
+        
+        updated = await db.instructions.find_one({"id": instruction_id}, {"_id": 0})
+        return {"success": True, "instruction": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating instruction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/instructions/{instruction_id}")
+async def delete_instruction(instruction_id: str):
+    """Delete an instruction/note"""
+    try:
+        result = await db.instructions.delete_one({"id": instruction_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Instruction not found")
+        return {"success": True, "message": "Instruction deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting instruction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/instructions/{instruction_id}/task/{task_index}")
+async def toggle_task(instruction_id: str, task_index: int, completed: bool = Body(..., embed=True)):
+    """Toggle a task completion status in a task list"""
+    try:
+        instruction = await db.instructions.find_one({"id": instruction_id})
+        if not instruction:
+            raise HTTPException(status_code=404, detail="Instruction not found")
+        
+        tasks = instruction.get("tasks", [])
+        if task_index < 0 or task_index >= len(tasks):
+            raise HTTPException(status_code=400, detail="Invalid task index")
+        
+        tasks[task_index]["completed"] = completed
+        
+        await db.instructions.update_one(
+            {"id": instruction_id},
+            {"$set": {"tasks": tasks, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        updated = await db.instructions.find_one({"id": instruction_id}, {"_id": 0})
+        return {"success": True, "instruction": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

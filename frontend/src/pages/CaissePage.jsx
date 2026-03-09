@@ -8,7 +8,8 @@ import {
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
-  ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer
+  ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
+  Building2, MessageSquare
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,8 @@ import { fr } from "date-fns/locale";
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
 import HebdoReport from "./caisse/components/HebdoReport";
+import LocationsTab from "./caisse/components/LocationsTab";
+import InstructionsTab from "./caisse/components/InstructionsTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -3015,6 +3018,18 @@ _Gérante - Espace Maxo_
                 <BarChart3 className="w-4 h-4 mr-2" />Hebdo
               </TabsTrigger>
             )}
+            {/* Locations (Salle, Jardin, Jeux) - Manager & Admin */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                <Building2 className="w-4 h-4 mr-2" />Locations
+              </TabsTrigger>
+            )}
+            {/* Instructions & Notes - Manager & Admin */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+                <MessageSquare className="w-4 h-4 mr-2" />Notes
+              </TabsTrigger>
+            )}
             {/* Admin only: Suivi Activité */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
@@ -5760,6 +5775,26 @@ _Gérante - Espace Maxo_
               setWeekStartDate={setWeekStartDate}
               generateWeeklyPDF={generateWeeklyPDF}
               sendWeeklyWhatsApp={sendWeeklyWhatsApp}
+              formatPrice={formatPrice}
+            />
+          </TabsContent>
+          )}
+
+          {/* ==================== LOCATIONS TAB (Manager/Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="locations">
+            <LocationsTab 
+              currentUser={currentUser}
+              formatPrice={formatPrice}
+            />
+          </TabsContent>
+          )}
+
+          {/* ==================== INSTRUCTIONS TAB (Manager/Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="instructions">
+            <InstructionsTab 
+              currentUser={currentUser}
               formatPrice={formatPrice}
             />
           </TabsContent>

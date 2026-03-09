@@ -244,6 +244,16 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Extraction de `HebdoReport.jsx` (Point Hebdomadaire)
   - Création de `constants.js` (configuration partagée)
   - Réduction du fichier principal de 7321 à 6816 lignes (-7%)
+- [x] **Gestion des Locations** (Mars 2026) - NOUVEAU
+  - Onglet "Locations" pour Salle de Fête, Espace Jardin, Salle de Jeux
+  - Admin: Créer, Modifier, Supprimer les réservations
+  - Gérante: Consultation seule
+  - Champs: Client, téléphone, date, horaires, invités, type événement, montant, acompte, solde
+- [x] **Instructions & Notes** (Mars 2026) - NOUVEAU
+  - Communication bidirectionnelle Admin ↔ Gérante
+  - Types: Notes simples et Listes de tâches avec cases à cocher
+  - Priorités: Basse, Normale, Haute, Urgente
+  - Archivage et historique daté
 
 ## Architecture
 
