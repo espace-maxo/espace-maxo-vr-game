@@ -1468,6 +1468,22 @@ const CaissePage = () => {
     }
   };
 
+  // Stop table service (Manager action)
+  const stopTableService = async (tableId, tableNumber) => {
+    try {
+      const res = await axios.post(`${API}/caisse/tables/${tableId}/stop-service`);
+      if (res.data.success) {
+        const { duration_minutes, quality_status } = res.data.service_record;
+        const qualityText = quality_status === 'excellent' ? 'Excellent' : quality_status === 'acceptable' ? 'Acceptable' : 'Lent';
+        toast.success(`Table ${tableNumber} libérée ! Durée: ${duration_minutes}min (${qualityText})`);
+        fetchTablesStatus();
+      }
+    } catch (error) {
+      console.error("Error stopping table service:", error);
+      toast.error("Erreur lors de l'arrêt du service");
+    }
+  };
+
   // Auto-refresh tables status every 10 seconds when on tables tab
   useEffect(() => {
     if (isAuthenticated && activeTab === "tables") {
@@ -5152,6 +5168,7 @@ _Gérante - Espace Maxo_
                             <th className="p-2 text-right">Total</th>
                             <th className="p-2 text-center">Durée</th>
                             <th className="p-2 text-center">Statut</th>
+                            <th className="p-2 text-center">Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -5182,6 +5199,17 @@ _Gérante - Espace Maxo_
                                   table.status_color === 'orange' ? 'bg-orange-500 animate-pulse' : 
                                   'bg-red-500 animate-pulse'
                                 }`}></div>
+                              </td>
+                              <td className="p-2 text-center">
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => stopTableService(table.table_id, table.table_number)}
+                                  className="border-red-500/50 text-red-400 hover:bg-red-500/20 h-8"
+                                >
+                                  <X className="w-4 h-4 mr-1" />
+                                  Arrêter
+                                </Button>
                               </td>
                             </tr>
                           ))}
@@ -6160,6 +6188,71 @@ _Gérante - Espace Maxo_
                             <p className="text-orange-300 font-bold text-lg">{formatPrice(weeklyReport.expenses.by_status.revision_requested || 0)} F</p>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Qualité de Service */}
+                  {weeklyReport.service_quality && weeklyReport.service_quality.total_services > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-teal-400 flex items-center gap-2">
+                          <Timer className="w-5 h-5" />
+                          Qualité de Service (Semaine)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-teal-900/20 border border-teal-500/30 rounded-lg p-3 text-center">
+                            <p className="text-teal-400 text-sm">Services terminés</p>
+                            <p className="text-teal-300 font-bold text-2xl">{weeklyReport.service_quality.total_services}</p>
+                          </div>
+                          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded-lg p-3 text-center">
+                            <p className="text-cyan-400 text-sm">Durée moyenne</p>
+                            <p className="text-cyan-300 font-bold text-2xl">{weeklyReport.service_quality.avg_duration} min</p>
+                          </div>
+                          <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-center">
+                            <p className="text-green-400 text-sm">🟢 Excellent {"<15min"}</p>
+                            <p className="text-green-300 font-bold text-2xl">{weeklyReport.service_quality.quality_breakdown?.excellent || 0}</p>
+                          </div>
+                          <div className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-3 text-center">
+                            <p className="text-orange-400 text-sm">🟠 Acceptable / 🔴 Lent</p>
+                            <p className="text-orange-300 font-bold text-2xl">
+                              {weeklyReport.service_quality.quality_breakdown?.acceptable || 0} / {weeklyReport.service_quality.quality_breakdown?.slow || 0}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Daily breakdown table */}
+                        {Object.keys(weeklyReport.service_quality.by_day || {}).length > 0 && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-left text-slate-400 border-b border-slate-700">
+                                  <th className="p-2">Jour</th>
+                                  <th className="p-2 text-center">Services</th>
+                                  <th className="p-2 text-center">Durée moy.</th>
+                                  <th className="p-2 text-center">🟢</th>
+                                  <th className="p-2 text-center">🟠</th>
+                                  <th className="p-2 text-center">🔴</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Object.entries(weeklyReport.daily || {}).map(([date, data]) => (
+                                  <tr key={date} className="border-b border-slate-700/50">
+                                    <td className="p-2 text-white font-medium">{data.day_name}</td>
+                                    <td className="p-2 text-center text-teal-400">{data.service?.count || 0}</td>
+                                    <td className="p-2 text-center text-cyan-400">{data.service?.avg_duration || 0} min</td>
+                                    <td className="p-2 text-center text-green-400">{data.service?.excellent || 0}</td>
+                                    <td className="p-2 text-center text-orange-400">{data.service?.acceptable || 0}</td>
+                                    <td className="p-2 text-center text-red-400">{data.service?.slow || 0}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}

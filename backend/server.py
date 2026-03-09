@@ -3859,6 +3859,208 @@ async def delete_caisse_table(table_id: str):
         logger.error(f"Error deleting table: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/caisse/tables/{table_id}/stop-service")
+async def stop_table_service(table_id: str):
+    """Stop the service timer for a table and record the duration"""
+    try:
+        table = await db.caisse_tables.find_one({"id": table_id})
+        if not table:
+            raise HTTPException(status_code=404, detail="Table non trouvée")
+        
+        # Calculate service duration
+        created_at = datetime.fromisoformat(table["created_at"].replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        duration_seconds = (now - created_at).total_seconds()
+        duration_minutes = int(duration_seconds / 60)
+        
+        # Determine quality status
+        if duration_minutes < 15:
+            quality_status = "excellent"
+        elif duration_minutes < 30:
+            quality_status = "acceptable"
+        else:
+            quality_status = "slow"
+        
+        # Calculate total amount
+        total = sum(item.get("price", 0) * item.get("quantity", 1) for item in table.get("items", []))
+        
+        # Record service stats
+        service_record = {
+            "id": str(uuid.uuid4()),
+            "table_number": table["table_number"],
+            "server_id": table["server_id"],
+            "server_name": table["server_name"],
+            "client_name": table.get("client_name", "Client"),
+            "items_count": len(table.get("items", [])),
+            "total_amount": total,
+            "duration_minutes": duration_minutes,
+            "quality_status": quality_status,
+            "started_at": table["created_at"],
+            "stopped_at": now.isoformat(),
+            "date": now.strftime("%Y-%m-%d")
+        }
+        
+        # Save to service_stats collection
+        await db.service_stats.insert_one(service_record)
+        
+        # Delete the table (service completed)
+        await db.caisse_tables.delete_one({"id": table_id})
+        
+        return {
+            "success": True, 
+            "service_record": {
+                "table_number": service_record["table_number"],
+                "duration_minutes": duration_minutes,
+                "quality_status": quality_status
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error stopping table service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/service-stats/daily")
+async def get_daily_service_stats(date: Optional[str] = None):
+    """Get service quality statistics for a specific day"""
+    try:
+        if date:
+            target_date = date
+        else:
+            target_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
+        # Get all service records for the day
+        records = await db.service_stats.find({"date": target_date}, {"_id": 0}).to_list(500)
+        
+        if not records:
+            return {
+                "date": target_date,
+                "total_services": 0,
+                "avg_duration": 0,
+                "quality_breakdown": {"excellent": 0, "acceptable": 0, "slow": 0},
+                "quality_percentage": {"excellent": 0, "acceptable": 0, "slow": 0},
+                "by_server": {},
+                "records": []
+            }
+        
+        # Calculate statistics
+        total_services = len(records)
+        total_duration = sum(r.get("duration_minutes", 0) for r in records)
+        avg_duration = total_duration / total_services if total_services > 0 else 0
+        
+        # Quality breakdown
+        quality_breakdown = {"excellent": 0, "acceptable": 0, "slow": 0}
+        for r in records:
+            status = r.get("quality_status", "slow")
+            quality_breakdown[status] = quality_breakdown.get(status, 0) + 1
+        
+        # Quality percentages
+        quality_percentage = {
+            k: round((v / total_services) * 100, 1) if total_services > 0 else 0 
+            for k, v in quality_breakdown.items()
+        }
+        
+        # By server
+        by_server = {}
+        for r in records:
+            server = r.get("server_name", "Inconnu")
+            if server not in by_server:
+                by_server[server] = {"count": 0, "total_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
+            by_server[server]["count"] += 1
+            by_server[server]["total_duration"] += r.get("duration_minutes", 0)
+            by_server[server][r.get("quality_status", "slow")] += 1
+        
+        # Calculate avg duration per server
+        for server in by_server:
+            by_server[server]["avg_duration"] = round(by_server[server]["total_duration"] / by_server[server]["count"], 1)
+        
+        return {
+            "date": target_date,
+            "total_services": total_services,
+            "avg_duration": round(avg_duration, 1),
+            "quality_breakdown": quality_breakdown,
+            "quality_percentage": quality_percentage,
+            "by_server": by_server,
+            "records": records
+        }
+    except Exception as e:
+        logger.error(f"Error fetching daily service stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/service-stats/weekly")
+async def get_weekly_service_stats(week_start: Optional[str] = None):
+    """Get service quality statistics for a week"""
+    try:
+        if week_start:
+            start_date = datetime.fromisoformat(week_start.replace('Z', '+00:00'))
+        else:
+            today = datetime.now(timezone.utc)
+            start_date = today - timedelta(days=today.weekday())
+        
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=6)
+        
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+        
+        # Get all service records for the week
+        records = await db.service_stats.find({
+            "date": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(1000)
+        
+        # Initialize daily data
+        day_names_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        daily_stats = {}
+        
+        for i in range(7):
+            day_date = start_date + timedelta(days=i)
+            date_str = day_date.strftime("%Y-%m-%d")
+            daily_stats[date_str] = {
+                "day_name": day_names_fr[i],
+                "date": date_str,
+                "total_services": 0,
+                "avg_duration": 0,
+                "excellent": 0,
+                "acceptable": 0,
+                "slow": 0
+            }
+        
+        # Aggregate by day
+        for r in records:
+            date = r.get("date")
+            if date in daily_stats:
+                daily_stats[date]["total_services"] += 1
+                daily_stats[date]["avg_duration"] += r.get("duration_minutes", 0)
+                daily_stats[date][r.get("quality_status", "slow")] += 1
+        
+        # Calculate averages
+        for date in daily_stats:
+            if daily_stats[date]["total_services"] > 0:
+                daily_stats[date]["avg_duration"] = round(
+                    daily_stats[date]["avg_duration"] / daily_stats[date]["total_services"], 1
+                )
+        
+        # Overall stats
+        total_services = len(records)
+        total_duration = sum(r.get("duration_minutes", 0) for r in records)
+        avg_duration = round(total_duration / total_services, 1) if total_services > 0 else 0
+        
+        quality_breakdown = {"excellent": 0, "acceptable": 0, "slow": 0}
+        for r in records:
+            quality_breakdown[r.get("quality_status", "slow")] += 1
+        
+        return {
+            "week_start": start_str,
+            "week_end": end_str,
+            "total_services": total_services,
+            "avg_duration": avg_duration,
+            "quality_breakdown": quality_breakdown,
+            "daily": daily_stats
+        }
+    except Exception as e:
+        logger.error(f"Error fetching weekly service stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/caisse/tables/available")
 async def get_available_tables(server_id: str):
     """Get list of available table numbers (1-20) for a server"""
@@ -4721,6 +4923,48 @@ async def get_weekly_report(week_start: Optional[str] = None):
         # Calculate result
         result = total_sales - total_expenses
         
+        # Get service quality stats for the week
+        service_records = await db.service_stats.find({
+            "date": {"$gte": start_str, "$lte": end_str[:10]}
+        }, {"_id": 0}).to_list(1000)
+        
+        # Calculate service quality stats
+        service_stats = {
+            "total_services": len(service_records),
+            "avg_duration": 0,
+            "quality_breakdown": {"excellent": 0, "acceptable": 0, "slow": 0},
+            "by_day": {}
+        }
+        
+        if service_records:
+            total_duration = sum(r.get("duration_minutes", 0) for r in service_records)
+            service_stats["avg_duration"] = round(total_duration / len(service_records), 1)
+            
+            for r in service_records:
+                service_stats["quality_breakdown"][r.get("quality_status", "slow")] += 1
+                
+                # By day
+                date = r.get("date")
+                if date not in service_stats["by_day"]:
+                    service_stats["by_day"][date] = {"count": 0, "avg_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
+                service_stats["by_day"][date]["count"] += 1
+                service_stats["by_day"][date]["avg_duration"] += r.get("duration_minutes", 0)
+                service_stats["by_day"][date][r.get("quality_status", "slow")] += 1
+            
+            # Calculate daily averages
+            for date in service_stats["by_day"]:
+                if service_stats["by_day"][date]["count"] > 0:
+                    service_stats["by_day"][date]["avg_duration"] = round(
+                        service_stats["by_day"][date]["avg_duration"] / service_stats["by_day"][date]["count"], 1
+                    )
+        
+        # Add service stats to daily data
+        for date in daily_data:
+            if date in service_stats["by_day"]:
+                daily_data[date]["service"] = service_stats["by_day"][date]
+            else:
+                daily_data[date]["service"] = {"count": 0, "avg_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
+        
         return {
             "week_start": start_str,
             "week_end": end_str[:10],
@@ -4737,6 +4981,7 @@ async def get_weekly_report(week_start: Optional[str] = None):
                 "all_count": len(all_expenses)
             },
             "daily": daily_data,
+            "service_quality": service_stats,
             "result": result,
             "is_profitable": result >= 0
         }
