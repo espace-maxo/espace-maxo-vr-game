@@ -77,6 +77,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   });
 
   const isAdmin = currentUser?.role === 'admin';
+  const isManager = currentUser?.role === 'manager';
+  const canManageLocations = isAdmin || isManager; // Both can create/edit/delete
 
   useEffect(() => {
     fetchLocations();
@@ -210,7 +212,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
             Gestion des Locations
           </h2>
-          {isAdmin && (
+          {canManageLocations && (
             <Button 
               onClick={() => { resetForm(); setEditingLocation(null); setShowModal(true); }}
               className="bg-purple-600 hover:bg-purple-700"
@@ -282,8 +284,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           <CardContent className="p-8 text-center">
             <Building2 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
             <p className="text-slate-400">Aucune réservation de location</p>
-            {isAdmin && (
-              <p className="text-slate-500 text-sm">Cliquez sur "Nouvelle Location" pour en créer une</p>
+            {canManageLocations && (
+              <p className="text-slate-500 text-sm">Cliquez sur "Nouveau" pour en créer une</p>
             )}
           </CardContent>
         </Card>
@@ -351,7 +353,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        {isAdmin && (
+                        {canManageLocations && (
                           <>
                             <Button 
                               size="sm" 
@@ -637,8 +639,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                 </div>
               )}
 
-              {/* Admin Actions */}
-              {isAdmin && viewingLocation.status === "confirmed" && (
+              {/* Manager/Admin Actions */}
+              {canManageLocations && viewingLocation.status === "confirmed" && (
                 <div className="flex gap-2 pt-2">
                   <Button
                     onClick={() => { handleStatusChange(viewingLocation.id, "completed"); setViewingLocation(null); }}
