@@ -4615,7 +4615,7 @@ async def delete_expense(expense_id: str):
 
 @api_router.get("/reports/weekly")
 async def get_weekly_report(week_start: Optional[str] = None):
-    """Get weekly summary: sales, expenses, and result"""
+    """Get weekly summary: sales, expenses, and result - DAY BY DAY"""
     try:
         # Calculate week start (Monday) if not provided
         if week_start:
@@ -4632,56 +4632,111 @@ async def get_weekly_report(week_start: Optional[str] = None):
         end_str = end_date.strftime("%Y-%m-%d") + "T23:59:59"
         
         # Get validated invoices (sales) for the week
-        # Use regex to match dates that start with the date portion
         invoices = await db.invoices.find({
             "validation_status": "validated",
             "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
         }, {"_id": 0}).to_list(1000)
         
-        # Calculate daily sales
-        daily_sales = {}
+        # Get ALL expenses for the week (completed for actual, approved for pending)
+        all_expenses = await db.expenses.find({
+            "$or": [
+                {"status": "completed", "completed_at": {"$gte": start_str, "$lte": end_str}},
+                {"status": "approved", "approved_at": {"$gte": start_str, "$lte": end_str}},
+                {"status": "pending", "created_at": {"$gte": start_str, "$lte": end_str}},
+                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}}
+            ]
+        }, {"_id": 0}).to_list(500)
+        
+        # Initialize daily data for each day of the week
+        daily_data = {}
+        day_names_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        
+        for i in range(7):
+            day_date = start_date + timedelta(days=i)
+            date_str = day_date.strftime("%Y-%m-%d")
+            daily_data[date_str] = {
+                "day_name": day_names_fr[i],
+                "date": date_str,
+                "date_formatted": day_date.strftime("%d/%m/%Y"),
+                "sales": {"count": 0, "total": 0, "items": []},
+                "expenses": {"count": 0, "total": 0, "items": []},
+                "result": 0
+            }
+        
+        # Aggregate sales by day
         total_sales = 0
         for invoice in invoices:
             date = invoice.get("created_at", "")[:10]
-            if date not in daily_sales:
-                daily_sales[date] = {"count": 0, "total": 0}
-            daily_sales[date]["count"] += 1
-            daily_sales[date]["total"] += invoice.get("total", 0)
+            if date in daily_data:
+                daily_data[date]["sales"]["count"] += 1
+                daily_data[date]["sales"]["total"] += invoice.get("total", 0)
+                daily_data[date]["sales"]["items"].append({
+                    "invoice_id": invoice.get("invoice_id"),
+                    "total": invoice.get("total", 0),
+                    "items_count": len(invoice.get("items", []))
+                })
             total_sales += invoice.get("total", 0)
         
-        # Get completed expenses for the week
-        expenses = await db.expenses.find({
-            "status": "completed",
-            "completed_at": {"$gte": start_str, "$lte": end_str}
-        }, {"_id": 0}).to_list(500)
-        
-        # Calculate expenses by category
-        expenses_by_category = {}
+        # Aggregate expenses by day
         total_expenses = 0
-        for expense in expenses:
-            cat = expense.get("category", "autres")
-            if cat not in expenses_by_category:
-                expenses_by_category[cat] = 0
-            expenses_by_category[cat] += expense.get("amount", 0)
-            total_expenses += expense.get("amount", 0)
+        expenses_by_category = {}
+        expenses_by_status = {"completed": 0, "approved": 0, "pending": 0, "revision_requested": 0}
+        
+        for expense in all_expenses:
+            # Use completed_at, approved_at, or created_at depending on status
+            if expense.get("status") == "completed":
+                date = (expense.get("completed_at") or expense.get("created_at", ""))[:10]
+            elif expense.get("status") == "approved":
+                date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
+            else:
+                date = expense.get("created_at", "")[:10]
+            
+            # Only count completed expenses in totals
+            if expense.get("status") == "completed":
+                total_expenses += expense.get("amount", 0)
+                cat = expense.get("category", "autres")
+                expenses_by_category[cat] = expenses_by_category.get(cat, 0) + expense.get("amount", 0)
+            
+            # Track by status
+            status = expense.get("status", "pending")
+            expenses_by_status[status] = expenses_by_status.get(status, 0) + expense.get("amount", 0)
+            
+            if date in daily_data:
+                daily_data[date]["expenses"]["count"] += 1
+                daily_data[date]["expenses"]["total"] += expense.get("amount", 0) if expense.get("status") == "completed" else 0
+                daily_data[date]["expenses"]["items"].append({
+                    "id": expense.get("id"),
+                    "description": expense.get("description"),
+                    "amount": expense.get("amount", 0),
+                    "category": expense.get("category"),
+                    "status": expense.get("status"),
+                    "is_group": expense.get("is_group", False),
+                    "items": expense.get("items")
+                })
+        
+        # Calculate daily results
+        for date in daily_data:
+            daily_data[date]["result"] = daily_data[date]["sales"]["total"] - daily_data[date]["expenses"]["total"]
         
         # Calculate result
         result = total_sales - total_expenses
         
         return {
-            "week_start": start_str[:10],
+            "week_start": start_str,
             "week_end": end_str[:10],
+            "week_label": f"Semaine du {start_date.strftime('%d/%m')} au {end_date.strftime('%d/%m/%Y')}",
             "sales": {
                 "total": total_sales,
                 "count": len(invoices),
-                "daily": daily_sales
             },
             "expenses": {
                 "total": total_expenses,
-                "count": len(expenses),
+                "count": len([e for e in all_expenses if e.get("status") == "completed"]),
                 "by_category": expenses_by_category,
-                "details": expenses
+                "by_status": expenses_by_status,
+                "all_count": len(all_expenses)
             },
+            "daily": daily_data,
             "result": result,
             "is_profitable": result >= 0
         }

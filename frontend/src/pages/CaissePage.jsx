@@ -1249,6 +1249,174 @@ const CaissePage = () => {
     }
   };
 
+  // Generate Weekly Report PDF
+  const generateWeeklyPDF = () => {
+    if (!weeklyReport) return;
+    
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    // Build daily rows
+    const dailyRows = Object.entries(weeklyReport.daily || {}).map(([date, data]) => {
+      const expenseDetails = data.expenses?.items?.map(exp => 
+        `<div class="expense-item">${exp.is_group ? '📦 ' : ''}${exp.description}: ${formatPrice(exp.amount)} F (${exp.status === 'completed' ? '✓' : exp.status === 'approved' ? '→' : '?'})</div>`
+      ).join('') || '-';
+      
+      return `<tr>
+        <td><strong>${data.day_name}</strong></td>
+        <td>${data.date_formatted}</td>
+        <td class="text-green">${formatPrice(data.sales?.total || 0)} F</td>
+        <td class="text-red">${formatPrice(data.expenses?.total || 0)} F</td>
+        <td class="${data.result >= 0 ? 'text-green' : 'text-red'}">${data.result >= 0 ? '+' : ''}${formatPrice(data.result)} F</td>
+        <td class="expense-details">${expenseDetails}</td>
+      </tr>`;
+    }).join('');
+    
+    // Build category summary
+    const categoryRows = Object.entries(weeklyReport.expenses?.by_category || {}).map(([cat, amount]) => 
+      `<tr><td class="capitalize">${cat}</td><td class="text-red">${formatPrice(amount)} F</td></tr>`
+    ).join('') || '<tr><td colspan="2">Aucune dépense</td></tr>';
+    
+    const html = `<!DOCTYPE html>
+    <html><head>
+      <title>Point Hebdomadaire - ${weeklyReport.week_label}</title>
+      <meta charset="UTF-8">
+      <style>
+        @page { size: A4; margin: 15mm; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #333; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0891b2; padding-bottom: 15px; }
+        .logo { font-size: 24px; font-weight: 900; color: #0891b2; }
+        .subtitle { color: #666; margin-top: 5px; }
+        .period { font-size: 16px; font-weight: bold; color: #0891b2; margin-top: 10px; }
+        .summary { display: flex; justify-content: space-around; margin: 20px 0; }
+        .summary-box { text-align: center; padding: 15px; border-radius: 8px; min-width: 120px; }
+        .summary-box.green { background: #ecfdf5; border: 1px solid #10b981; }
+        .summary-box.red { background: #fef2f2; border: 1px solid #ef4444; }
+        .summary-box.blue { background: #eff6ff; border: 1px solid #3b82f6; }
+        .summary-box h3 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; }
+        .summary-box .value { font-size: 20px; font-weight: bold; }
+        .summary-box.green .value { color: #10b981; }
+        .summary-box.red .value { color: #ef4444; }
+        .summary-box.blue .value { color: #3b82f6; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th { background: #0891b2; color: white; padding: 10px; text-align: left; font-size: 11px; }
+        td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
+        .text-green { color: #10b981; }
+        .text-red { color: #ef4444; }
+        .capitalize { text-transform: capitalize; }
+        .expense-details { font-size: 10px; max-width: 200px; }
+        .expense-item { background: #f3f4f6; padding: 2px 5px; margin: 2px 0; border-radius: 3px; }
+        .total-row { background: #f8fafc; font-weight: bold; }
+        .section-title { font-size: 14px; font-weight: bold; color: #0891b2; margin: 20px 0 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e5e7eb; padding-top: 15px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="logo">ESPACE MAXO</div>
+        <div class="subtitle">Point Hebdomadaire</div>
+        <div class="period">${weeklyReport.week_label}</div>
+      </div>
+      
+      <div class="summary">
+        <div class="summary-box green">
+          <h3>Recettes</h3>
+          <div class="value">${formatPrice(weeklyReport.sales?.total || 0)} F</div>
+          <div>${weeklyReport.sales?.count || 0} ventes</div>
+        </div>
+        <div class="summary-box red">
+          <h3>Dépenses</h3>
+          <div class="value">${formatPrice(weeklyReport.expenses?.total || 0)} F</div>
+          <div>${weeklyReport.expenses?.count || 0} achats</div>
+        </div>
+        <div class="summary-box ${weeklyReport.is_profitable ? 'green' : 'red'}">
+          <h3>Résultat</h3>
+          <div class="value">${weeklyReport.result >= 0 ? '+' : ''}${formatPrice(weeklyReport.result || 0)} F</div>
+          <div>${weeklyReport.is_profitable ? 'Bénéfice' : 'Perte'}</div>
+        </div>
+      </div>
+      
+      <div class="section-title">📅 Détail Jour par Jour</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Jour</th>
+            <th>Date</th>
+            <th>Recettes</th>
+            <th>Dépenses</th>
+            <th>Résultat</th>
+            <th>Détails Achats</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dailyRows}
+          <tr class="total-row">
+            <td colspan="2"><strong>TOTAL SEMAINE</strong></td>
+            <td class="text-green"><strong>${formatPrice(weeklyReport.sales?.total || 0)} F</strong></td>
+            <td class="text-red"><strong>${formatPrice(weeklyReport.expenses?.total || 0)} F</strong></td>
+            <td class="${weeklyReport.is_profitable ? 'text-green' : 'text-red'}"><strong>${weeklyReport.result >= 0 ? '+' : ''}${formatPrice(weeklyReport.result || 0)} F</strong></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="section-title">📊 Dépenses par Catégorie</div>
+      <table style="width: 50%;">
+        <thead>
+          <tr>
+            <th>Catégorie</th>
+            <th>Montant</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${categoryRows}
+        </tbody>
+      </table>
+      
+      <div class="footer">
+        <p>Généré le ${new Date().toLocaleString('fr-FR')}</p>
+        <p>ESPACE MAXO - Caisse Pro</p>
+      </div>
+      
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>
+    </body></html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    toast.success("Génération du PDF en cours...");
+  };
+
+  // Send Weekly Report via WhatsApp
+  const sendWeeklyWhatsApp = () => {
+    if (!weeklyReport) return;
+    
+    // Build message text
+    let message = `📊 *POINT HEBDOMADAIRE*\n`;
+    message += `📅 ${weeklyReport.week_label}\n\n`;
+    
+    message += `💰 *RÉSUMÉ*\n`;
+    message += `✅ Recettes: ${formatPrice(weeklyReport.sales?.total || 0)} F (${weeklyReport.sales?.count || 0} ventes)\n`;
+    message += `❌ Dépenses: ${formatPrice(weeklyReport.expenses?.total || 0)} F (${weeklyReport.expenses?.count || 0} achats)\n`;
+    message += `${weeklyReport.is_profitable ? '📈' : '📉'} Résultat: ${weeklyReport.result >= 0 ? '+' : ''}${formatPrice(weeklyReport.result || 0)} F\n\n`;
+    
+    message += `📅 *DÉTAIL PAR JOUR*\n`;
+    Object.entries(weeklyReport.daily || {}).forEach(([date, data]) => {
+      message += `${data.day_name} (${data.date_formatted}):\n`;
+      message += `  💵 ${formatPrice(data.sales?.total || 0)} F | 🛒 ${formatPrice(data.expenses?.total || 0)} F\n`;
+    });
+    
+    message += `\n_Espace Maxo - Caisse Pro_`;
+    
+    // Encode for WhatsApp URL
+    const encodedMessage = encodeURIComponent(message);
+    
+    // Admin phone number (you can customize this)
+    const adminPhone = "22991005084"; // Replace with actual admin number
+    
+    // Open WhatsApp with pre-filled message
+    window.open(`https://wa.me/${adminPhone}?text=${encodedMessage}`, '_blank');
+    toast.success("Ouverture de WhatsApp...");
+  };
+
   // ============== ACTIVITY REPORT FUNCTIONS (Admin) ==============
   
   const fetchActivityReport = async () => {
@@ -5759,13 +5927,13 @@ _Gérante - Espace Maxo_
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="hebdo">
             <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-center justify-between flex-wrap gap-4">
+              {/* Header avec boutons d'action */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h2 className="text-xl font-bold text-cyan-300 flex items-center gap-2">
                   <BarChart3 className="w-6 h-6" />
                   Point Hebdomadaire
                 </h2>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -5796,75 +5964,205 @@ _Gérante - Espace Maxo_
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
+                  {weeklyReport && (
+                    <>
+                      <Button 
+                        size="sm"
+                        onClick={() => generateWeeklyPDF()}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        PDF
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => sendWeeklyWhatsApp()}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <MessageCircle className="w-4 h-4 mr-1" />
+                        WhatsApp
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
               {weeklyReport ? (
-                <div className="grid gap-4 md:grid-cols-3">
-                  {/* Ventes */}
-                  <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                <div className="space-y-4">
+                  {/* Titre de la semaine */}
+                  <div className="text-center">
+                    <p className="text-lg text-cyan-400 font-semibold">{weeklyReport.week_label}</p>
+                  </div>
+
+                  {/* Résumé en cartes */}
+                  <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                      <CardContent className="p-4 text-center">
+                        <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-1" />
+                        <p className="text-2xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</p>
+                        <p className="text-xs text-slate-400">{weeklyReport.sales?.count || 0} ventes</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                      <CardContent className="p-4 text-center">
+                        <ShoppingCart className="w-6 h-6 text-red-400 mx-auto mb-1" />
+                        <p className="text-2xl font-bold text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</p>
+                        <p className="text-xs text-slate-400">{weeklyReport.expenses?.count || 0} achats</p>
+                      </CardContent>
+                    </Card>
+                    <Card className={`bg-gradient-to-br ${weeklyReport.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-rose-900/30 to-red-900/20 border-rose-500/50'}`}>
+                      <CardContent className="p-4 text-center">
+                        <DollarSign className={`w-6 h-6 mx-auto mb-1 ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`} />
+                        <p className={`text-2xl font-bold ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
+                        </p>
+                        <p className="text-xs text-slate-400">{weeklyReport.is_profitable ? 'Bénéfice' : 'Perte'}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
+                      <CardContent className="p-4 text-center">
+                        <Clock className="w-6 h-6 text-amber-400 mx-auto mb-1" />
+                        <p className="text-2xl font-bold text-amber-400">{weeklyReport.expenses?.all_count || 0}</p>
+                        <p className="text-xs text-slate-400">Demandes totales</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Tableau jour par jour */}
+                  <Card className="bg-slate-800/50 border-slate-700">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-green-400 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5" />
-                        RECETTES
+                      <CardTitle className="text-cyan-400 flex items-center gap-2">
+                        <Calendar className="w-5 h-5" />
+                        Détail Jour par Jour
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-3xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</p>
-                      <p className="text-slate-400 text-sm">{weeklyReport.sales?.count || 0} factures</p>
-                      <div className="mt-3 space-y-1">
-                        {Object.entries(weeklyReport.sales?.daily || {}).map(([date, data]) => (
-                          <div key={date} className="flex justify-between text-sm">
-                            <span className="text-slate-400">{date}</span>
-                            <span className="text-green-300">{formatPrice(data.total)} F</span>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-slate-400 border-b border-slate-700">
+                              <th className="p-3">Jour</th>
+                              <th className="p-3">Date</th>
+                              <th className="p-3 text-right text-green-400">Recettes</th>
+                              <th className="p-3 text-right text-red-400">Dépenses</th>
+                              <th className="p-3 text-right">Résultat</th>
+                              <th className="p-3 text-center">Détails Achats</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(weeklyReport.daily || {}).map(([date, data]) => (
+                              <tr key={date} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                                <td className="p-3 font-semibold text-white">{data.day_name}</td>
+                                <td className="p-3 text-slate-400">{data.date_formatted}</td>
+                                <td className="p-3 text-right">
+                                  <span className="text-green-400 font-bold">{formatPrice(data.sales?.total || 0)} F</span>
+                                  <span className="text-slate-500 text-xs ml-1">({data.sales?.count || 0})</span>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <span className="text-red-400 font-bold">{formatPrice(data.expenses?.total || 0)} F</span>
+                                  <span className="text-slate-500 text-xs ml-1">({data.expenses?.count || 0})</span>
+                                </td>
+                                <td className={`p-3 text-right font-bold ${data.result >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {data.result >= 0 ? '+' : ''}{formatPrice(data.result)} F
+                                </td>
+                                <td className="p-3">
+                                  {data.expenses?.items?.length > 0 ? (
+                                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                                      {data.expenses.items.map((exp, idx) => (
+                                        <div key={idx} className="text-xs flex justify-between items-center bg-slate-700/30 rounded px-2 py-1">
+                                          <span className="text-slate-300 truncate max-w-[150px]" title={exp.description}>
+                                            {exp.is_group ? '📦 ' : ''}{exp.description}
+                                          </span>
+                                          <div className="flex items-center gap-2">
+                                            <Badge className={`text-xs ${
+                                              exp.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                              exp.status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
+                                              exp.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                                              'bg-orange-500/20 text-orange-400'
+                                            }`}>
+                                              {exp.status === 'completed' ? '✓' : exp.status === 'approved' ? '→' : exp.status === 'pending' ? '?' : '↻'}
+                                            </Badge>
+                                            <span className="text-slate-400">{formatPrice(exp.amount)} F</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-600 text-xs">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-slate-900/50 font-bold">
+                              <td colSpan="2" className="p-3 text-white">TOTAL SEMAINE</td>
+                              <td className="p-3 text-right text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</td>
+                              <td className="p-3 text-right text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</td>
+                              <td className={`p-3 text-right ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
+                              </td>
+                              <td className="p-3"></td>
+                            </tr>
+                          </tfoot>
+                        </table>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Dépenses */}
-                  <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-red-400 flex items-center gap-2">
-                        <ShoppingCart className="w-5 h-5" />
-                        DÉPENSES
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</p>
-                      <p className="text-slate-400 text-sm">{weeklyReport.expenses?.count || 0} achats</p>
-                      <div className="mt-3 space-y-1">
-                        {Object.entries(weeklyReport.expenses?.by_category || {}).map(([cat, amount]) => (
-                          <div key={cat} className="flex justify-between text-sm">
-                            <span className="text-slate-400 capitalize">{cat}</span>
-                            <span className="text-red-300">{formatPrice(amount)} F</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Dépenses par catégorie */}
+                  {weeklyReport.expenses?.by_category && Object.keys(weeklyReport.expenses.by_category).length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-red-400 flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5" />
+                          Dépenses par Catégorie
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {Object.entries(weeklyReport.expenses.by_category).map(([cat, amount]) => (
+                            <div key={cat} className="bg-slate-700/30 rounded-lg p-3 text-center">
+                              <p className="text-slate-400 capitalize text-sm">{cat}</p>
+                              <p className="text-red-400 font-bold text-lg">{formatPrice(amount)} F</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                  {/* Résultat */}
-                  <Card className={`bg-gradient-to-br ${weeklyReport.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
-                    <CardHeader className="pb-2">
-                      <CardTitle className={`flex items-center gap-2 ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
-                        <DollarSign className="w-5 h-5" />
-                        RÉSULTAT
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className={`text-4xl font-bold ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
-                      </p>
-                      <p className="text-slate-400 text-sm mt-2">
-                        Semaine du {weeklyReport.week_start} au {weeklyReport.week_end}
-                      </p>
-                      <Badge className={`mt-3 ${weeklyReport.is_profitable ? 'bg-emerald-500/30 text-emerald-300' : 'bg-red-500/30 text-red-300'}`}>
-                        {weeklyReport.is_profitable ? '✓ Bénéfice' : '✗ Perte'}
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                  {/* Statut des demandes */}
+                  {weeklyReport.expenses?.by_status && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-amber-400 flex items-center gap-2">
+                          <AlertCircle className="w-5 h-5" />
+                          Statut des Demandes
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center">
+                            <p className="text-amber-400 text-sm">En attente</p>
+                            <p className="text-amber-300 font-bold text-lg">{formatPrice(weeklyReport.expenses.by_status.pending || 0)} F</p>
+                          </div>
+                          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
+                            <p className="text-blue-400 text-sm">Approuvées</p>
+                            <p className="text-blue-300 font-bold text-lg">{formatPrice(weeklyReport.expenses.by_status.approved || 0)} F</p>
+                          </div>
+                          <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-center">
+                            <p className="text-green-400 text-sm">Terminées</p>
+                            <p className="text-green-300 font-bold text-lg">{formatPrice(weeklyReport.expenses.by_status.completed || 0)} F</p>
+                          </div>
+                          <div className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-3 text-center">
+                            <p className="text-orange-400 text-sm">À réviser</p>
+                            <p className="text-orange-300 font-bold text-lg">{formatPrice(weeklyReport.expenses.by_status.revision_requested || 0)} F</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               ) : (
                 <Card className="bg-slate-800/30 border-slate-700">
