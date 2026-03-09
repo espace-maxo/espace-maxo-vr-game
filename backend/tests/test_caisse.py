@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://caisse-pro-3.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://table-tracker-beta.preview.emergentagent.com').rstrip('/')
 
 class TestCaisseLogin:
     """Test Caisse login functionality"""

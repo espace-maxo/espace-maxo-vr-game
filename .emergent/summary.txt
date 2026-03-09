@@ -1,187 +1,172 @@
 <analysis>**original_problem_statement:**
-The user initially requested a full-stack application for their restaurant, Espace Maxo. The application needed to showcase menus, handle game bookings (VR, simulators), manage reservations via a secure admin panel, process mobile money payments, and manage food delivery orders.
+The user initially requested a full-stack POS application, Caisse Pro. The project has evolved to include:
 
-Recently, the scope has expanded significantly with a request for a comprehensive, standalone Point of Sale (POS) / invoicing software, separate from the main customer-facing website.
+*   **Role-Based Access:** Tailored UIs for Administrators, Managers, Servers, Cooks, and Coaches.
+*   **Advanced Order Management:** A workflow from order creation to final invoice, including printing separate slips for different departments.
+*   **Full Expense Management System:** A module for the Manager to request purchases (single or list-based), which an Administrator must approve, modify, or reject. Includes status tracking, PDF generation, and detailed views with fields for quantity, unit price, and auto-calculated totals. Grouped lists are treated as a single request with sub-items.
+*   **Table Management & Service Quality:** A dedicated Tables tab to monitor the status (free/occupied) of 20 tables in real-time. An automatic chronometer tracks service duration from order creation, with color codes (Green/Orange/Red) indicating service speed. The manager can manually stop the timer.
+*   **Financial & Performance Reporting:**
+    *   A weekly summary (Point Hebdomadaire) showing sales, expenses, and profit/loss on a day-by-day basis. This report can be downloaded as a PDF or shared via WhatsApp.
+    *   The weekly report now includes a Quality of Service section, analyzing the daily/weekly service duration stats captured from the table management system.
+    *   An automatic alert for the Administrator if the weekly expense-to-revenue ratio exceeds 40%.
+*   **Invoice History:** A tab to browse all past finalized invoices.
 
-**PRODUCT REQUIREMENTS (for the new Invoicing Software):**
-*   **Application Name:** Caisse Pro
-*   **Core Management:**
-    *   Full CRUD (Create, Read, Update, Delete) for invoices.
-    *   Full CRUD for products/menu items.
-    *   Full CRUD for customer data.
-*   **Authentication:**
-    *   Simple email/password login (JWT).
-    *   Multi-user roles (e.g., servers, managers).
-*   **Features:**
-    *   Dashboard with key statistics (e.g., daily/monthly revenue).
-    *   Ability to export invoices to PDF.
-*   **Payment Tracking:**
-    *   Manual tracking for payments made by cash, credit card, etc.
+The user has also requested that the Admin be able to delete any expense operation and has asked for a general correction of all spelling and labeling errors.
 
 **User's preferred language**: French. The next agent MUST respond in French only.
 
 **what currently exists?**
-A comprehensive full-stack application for Espace Maxo (React, FastAPI, MongoDB) that includes a customer-facing website and an admin panel. Key integrations with Kkiapay (payments) and Twilio (SMS) are in place.
+A complex, feature-rich full-stack application built with React, FastAPI, and MongoDB. The entire application logic is contained within two massive monolithic files:  (now over 7,300 lines) and  (over 4,500 lines). This structure is causing significant stability and maintainability issues.
 
-A new, standalone POS application has been started at the  route. The agent was in the process of creating a more advanced version (Caisse Pro) based on new user requirements, creating new files  and , along with corresponding backend models and placeholder endpoints in . The basic structure for the new Caisse Pro is in place, but the login is currently broken.
+The application includes PIN-based login, comprehensive order/invoice management, an advanced expense management workflow, real-time table monitoring with service quality timers, and detailed financial reporting with PDF/WhatsApp export.
 
 **Last working item**:
--   **Last item agent was working:** The agent was implementing the new, feature-rich Caisse Pro invoicing software. After creating the basic frontend pages and backend endpoints, the agent attempted to test the login for this new  route. The login failed with an Identifiants incorrects error. The agent hypothesized that the frontend was incorrectly sending a username, while the backend likely only expected a password for this simple login mechanism.
+-   **Last item agent was working:** The agent was in the process of fulfilling the user's request to correct all spelling mistakes and incorrect labels (libellés) throughout the application. The agent has systematically read the entire  file to identify all the errors and is now ready to apply the fixes.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Both. The backend requires thorough testing for the new CRUD APIs for invoices, products, clients, and user management. The frontend requires testing of the entire Caisse Pro interface once the login is fixed.
+-   **Which testing method agent to use?** Frontend screenshot tool to verify UI text changes after applying the corrections.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** The login for the new Caisse Pro application is broken. (Priority: P0)
--   **Issue 2:** Add a discreet link to the cash register application on the homepage. (Priority: P1)
--   **Issue 3:** The user's production environment () is outdated, leading to confusion. (Priority: P2)
+-   **Issue 1:** Correct all spelling errors and review labels throughout the application. (Priority: P0)
+-   **Issue 2:** Critical application instability and bug-proneness due to monolithic code structure. (Priority: P1)
+-   **Issue 3:** User confusion between preview and production environments. (Priority: P2)
 
 **Issues Detail:**
--   **Issue 1: Caisse Pro login is broken.**
-    -   **Attempted fixes:** None. The agent identified the likely cause but did not attempt a fix.
+-   **Issue 1: Correct spelling errors and review labels.**
+    -   **Attempted fixes:** The agent has completed the analysis phase by reading the entire  file to locate errors. No code changes have been made yet.
     -   **Next debug checklist:**
-        1.  Examine  and the  function.
-        2.  Correct the payload sent to the  endpoint to match the backend's expectation (likely just ).
-        3.  Modify the  and container classes in  and  to ensure the layout is fully standalone and not expecting the main site's navbar.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a complete blocker for the development and testing of the new invoicing software, which is the user's current top priority.
+        1.  Based on the analysis, use  in parallel to correct all identified typos and incorrect labels in .
+        2.  Take screenshots of the corrected UI sections for user verification.
+    -   **Why fix this issue and what will be achieved with the fix?** To address the user's direct feedback, improve the professionalism of the application, and regain user satisfaction.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Frontend (to confirm login works).
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Frontend.
     -   **Blocked on other issue:** None.
--   **Issue 2: Add a discreet link to the cash register application on the homepage.**
-    -   **Description:** The user requested a subtle link to the  (or ) route from the main homepage so staff can access it easily.
-    -   **Next debug checklist:** Edit  and add a  component to  in a discreet location, such as the footer, next to the copyright notice.
+
+-   **Issue 2: Critical application instability due to monolithic code structure.**
+    -   **Description:** The files  and  are unmanageably large, leading to slow performance, high bug proneness, and extreme difficulty in maintenance.
+    -   **Next debug checklist:** This is a critical refactoring task. After fixing the typos (Issue 1), the agent **must** propose this to the user as the highest priority.
+        1.  Plan to break down  into smaller, reusable components for each tab/feature (e.g., , , ) and place them in .
+        2.  Plan to move API logic from  into the respective router files in  (e.g., , , ).
+        3.  Explain the benefits to the user (stability, faster future development) to get their approval.
+    -   **Why fix this issue and what will be achieved with the fix?** To make the application stable, maintainable, and scalable. This will prevent the constant introduction of new bugs and reduce user frustration.
     -   **Status:** NOT STARTED
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Frontend (screenshot).
--   **Issue 3: Production environment is outdated.**
-    -   **Description:** The user consistently reports that new features are missing on their live domain. This is a recurring communication problem because they are not using the Deploy button after work is completed.
-    -   **Next debug checklist:** The next agent MUST begin the interaction by politely reminding the user in French that to see any new features on , they must click the **Deploy** button.
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Both, extensively, using the testing agent.
+    -   **Blocked on other issue:** Blocked by Issue 1 (Spelling corrections).
+
+-   **Issue 3: User confusion between preview and production environments.**
+    -   **Description:** The user repeatedly checks their live domain instead of the preview URL, leading to reports that nothing has changed.
+    -   **Next debug checklist:** Continue to politely remind the user in French to check the preview URL and explain that deployment to the live site is a separate action.
     -   **Status:** BLOCKED (on user action).
     -   **Is recurring issue?** Y
 
 **In progress Task List**:
--   **Task 1: Complete Caisse Pro Invoicing Software.** (Priority: P0)
-    -   **Where to resume:** Start by fixing the login bug (Issue #1). Once access is restored, systematically implement the remaining features from the PRODUCT REQUIREMENTS section: Product Management, Client Management, advanced Statistics Dashboard, PDF export, and multi-user roles. This will involve creating new UI components and implementing the logic for the backend endpoints in .
-    -   **What will be achieved with this?** A complete, standalone POS system that meets all of the user's detailed requirements.
+-   **Task 1: Correct spelling and labels.**
+    -   **Where to resume:** Apply the fixes identified during the file analysis of .
+    -   **What will be achieved with this?** A UI with corrected French text, addressing the user's main point of dissatisfaction.
     -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both.
-    -   **Blocked on something:** Blocked by Caisse Pro login is broken (Issue #1).
+    -   **Should Test frontend/backend/both after fix?** Frontend.
+    -   **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P1: Refactor  into modules:** This is a critical technical debt item. The monolithic file is now extremely large and difficult to maintain. The directory structure (, ) exists and should be used.
-    -   **P2: Test client-facing SMS confirmation:** The logic for sending an SMS to the client after a paid booking was implemented but never formally tested.
--   **Future Tasks:**
-    -   **Refactor :** This component is over 1500 lines and should be broken into smaller sub-components for each tab.
-    -   **Add About Us Section:** Create a new page detailing the history of Espace Maxo.
+    -   **P0: CRITICAL REFACTORING of  & :** This is the most urgent technical task. The project's health depends on it. The agent must insist on this after fixing the immediate typo issue. The plan is to break down the monoliths into the existing (but unused)  and  directories.
 
 **Completed work in this session**
--   **Online Combo Payment System:** Implemented a full checkout flow on a dedicated Combos page, allowing users to purchase a food combo and book an included game session in one transaction. This included a complex, user-guided logic to handle the number of included vs. paid extra players.
--   **Table Reservation System:** Fully implemented the table reservation page, allowing users to pay a deposit via Kkiapay or their wallet. Fixed a critical bug where the Kkiapay payment script was not loading.
--   **Floating Cart UI:** Added a highly visible, persistent floating cart button to both the Delivery and Combos pages, with styling adjusted multiple times based on user feedback.
--   **POS Software (V1):** Created the initial standalone POS application at , including a separate login, a tabbed interface (Caisse, History, Stats), and separation of revenue by department (Games, Bar, Garden).
--   **Homepage & Navigation UX:**
-    -   Fixed the Google Maps itinerary link to point to the correct address and moved the button directly onto the map overlay.
-    -   Moved the Avis (Reviews) section to the bottom of the homepage.
-    -   Added a Laisser un Avis button to the reviews section.
-    -   Removed the Avis link from the main navbar.
+-   **Expense Management System Overhaul:** Implemented click-to-edit, thermal printing format, detailed expense structure (Label, Quantity, Unit Price), grouped shopping lists, and Admin deletion rights.
+-   **Table Management & Service Quality (New Major Feature):** Created a Tables tab for real-time status, an automatic service chronometer with color codes, and a manual stop button for managers.
+-   **Enhanced Weekly Report (Point Hebdomadaire):** The report now includes a day-by-day view, integrated service quality metrics, and PDF/WhatsApp export options.
+-   **Data Wipe:** All expense and invoice data were deleted via API calls as requested.
 
 **Earlier issues found/mentioned but not fixed**
--   None. All raised issues in the session were addressed or are listed in the pending section.
+-   The critical refactoring of  and  has been identified many times but always postponed for new features. The high number of bugs is a direct consequence of this technical debt.
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork:** Production Deployment Confusion.
--   **Recurrence count:** High. The user continues to check their live domain instead of the preview URL and forgets to use the Deploy button.
--   **Status:** BLOCKED (on user action/understanding).
+-   **Issue recurrence in previous fork:** Production Deployment Confusion. The user checks the live site instead of the preview URL.
+-   **Recurrence count:** High.
+-   **Status:** BLOCKED (on user understanding).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend:** React, Tailwind CSS, shadcn/ui
--   **Backend:** FastAPI (Python), PyJWT
--   **Database:** MongoDB
--   **Integrations:** Kkiapay (Payments), Twilio (SMS)
+-   **Frontend:** React, Tailwind CSS, shadcn/ui, , , . State is managed entirely with  and  within the monolithic .
+-   **Backend:** FastAPI (Python).
+-   **Database:** MongoDB. The active database is .
 
 **key DB schema**
--   **combo_orders:**  (New model for combo purchases)
--   **table_reservations:**  (New model for table bookings)
--   **invoices:**  (New model for V1 POS system)
--   **caisse_users:**  (New model for Caisse Pro users)
--   **products:**  (New model for Caisse Pro products)
+-   **invoices**: { , , , ,  }
+-   **caisse_tables**: { ,  ('occupied', 'free'), , , ,  }
+-   **expenses**: { , , , , ,  (auto-calculated), , , , : [{...}] }
+-   **service_stats**: { Mon Mar  9 17:31:47 UTC 2026, ,  ('excellent', 'acceptable', 'slow'), ,  }
+
+**changes in tech stack**
+-   None.
 
 **All files of reference**
--   : Heavily modified with all new backend logic.
--   : New file for the combo checkout feature.
--   : Implemented and fixed.
--   : Modified for the new floating cart UI.
--   : Modified for map link and review section placement.
--   : Modified to remove the Avis link.
--   : New routes added for , , .
--   : New file for the advanced POS, currently has a broken login.
--   : New file for the advanced POS login.
+-   : The primary focus for the current spelling correction task. **CRITICAL REFACTOR TARGET.**
+-   : The backend monolith. **CRITICAL REFACTOR TARGET.**
+-   : Contains the Pydantic data models.
 
 **Areas that need refactoring**:
--   **:** Refactoring is now urgent. The file has become unmanageably large, increasing the risk of bugs and slowing down development. This is the highest priority technical debt.
--   **:** Still a monolithic component that is difficult to work with.
+-   ** (CRITICAL):** The file is now over 7,300 lines. It must be broken down into components for each tab and major feature to restore stability and maintainability.
+-   ** (CRITICAL):** The file is over 4,500 lines. All API logic must be moved into the respective router files under .
 
 **key api endpoints**
--    (POST)
--    (POST)
--    (CRUD endpoints for V1 POS)
--    (POST)
--    (New placeholder endpoints for product/client/user management)
+-    (GET, POST, DELETE): Manage expense requests.
+-    (PUT): Update an expense.
+-   : Get enhanced weekly report.
+-    (GET): Get the real-time status of all tables.
+-    (POST): Manually stops the service timer for a table.
+-    (GET): Retrieves service quality statistics.
 
 **Critical Info for New Agent**
 -   **You MUST communicate in French.**
--   **The absolute top priority is to build the Caisse Pro software.** Start by fixing the login bug in , then implement the full feature set from the user's detailed request.
--   Do not forget the small pending task: adding a discreet link to the POS on the homepage.
--   **Start your interaction by reminding the user about the Deploy button.** This is a critical communication step to manage user expectations.
--   The refactoring of  should be proposed to the user as the next major task after the Caisse Pro software is complete, explaining that it's necessary for the stability and future development of the application.
+-   Your first action is to implement the spelling and label corrections in . The analysis is complete; you just need to apply the changes.
+-   After the typos are fixed and verified, you **MUST** propose and begin the **critical refactoring** of  and . The current structure is unsustainable. Frame this as a necessary step to ensure application stability.
+-   Continue to gently remind the user to test on the **preview URL**, not their production domain.
 
 **documents and test reports created in this job**
 -   
--    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **Request:** Detailed specifications for a Caisse Pro invoicing software (product/client management, stats, PDF export, multi-user). (Status: IN PROGRESS)
-2.  **Request:** the combos have disappeared. (Status: Addressed - user likely looking at outdated production site).
-3.  **Request:** Provide URL for the POS app. (Status: Completed).
-4.  **Request:** I want a separate software from the website. (Status: Completed).
-5.  **Request:** make me an invoicing software.... (Status: In Progress - this led to Caisse V1).
-6.  **Clarification:** A series of back-and-forth messages to define the exact business rules for how many free game sessions are included with each specific combo. (Status: Completed).
-7.  **Request:** put the itinerary on the map. (Status: Completed).
-8.  **Request:** the floating cart is not very visible -> followed by requests to change its color to red, then yellow. (Status: Completed).
-9.  **Request:** LEAVE A REVIEW has disappeared. (Status: Completed).
-10. **Request:** remove REVIEWS from the menu and put it at the very bottom. (Status: Completed).
-11. **PENDING Request:** put the cash register menu discreetly on the home page. (Status: NOT STARTED)
+1.  **oui vas y pour tout ca** (Yes, go ahead with all that) - User approved the agent's plan to fix spelling errors and then propose refactoring. (Status: **ADDRESSED**)
+2.  Review all labels (libellés). (Status: **IN PROGRESS**)
+3.  Fix all spelling errors. (Status: **IN PROGRESS**)
+4.  Add a manual stop button for table timers and integrate service quality analysis into the weekly report. (Status: Completed)
+5.  Enhance the weekly report to include purchases, provide a day-by-day breakdown, and add PDF/WhatsApp export. (Status: Completed)
+6.  Complaint: The table tracking system is not working. (Status: Resolved)
+7.  Request: I want to monitor tables (free/occupied) and track service quality with a chronometer. (Status: Completed)
+8.  Request: Delete everything (all invoices and expenses). (Status: Completed)
+9.  Request: Give the administrator the ability to delete all operations. (Status: Completed)
+10. Complaint: I am not at all satisfied, there are too many bugs. (Status: Partially Addressed - lead to current bug fixing effort)
 
 **Project Health Check:**
 -   **Broken:**
-    -   The login for the new  application.
-    -   The user's production deployment is out of sync.
+    -   **Maintainability & Stability:** The project is in a critical state. The monolithic architecture of  and  makes every change risky and prone to introducing new bugs. Refactoring is essential.
 -   **Mocked:**
     -   None.
 
 **3rd Party Integrations**
--   **Kkiapay:** For mobile money payments. User-provided keys are configured.
--   **Twilio:** For SMS notifications and wallet OTP. User-provided keys are configured.
+-   Kkiapay: Mobile money payments.
+-   Recharts: Graphing library.
+-   Twilio: SMS notifications.
 
 **Testing status**
--   **Testing agent used after significant changes:** YES, the agent was used to validate the new combo and table reservation flows. It found and fixed a critical backend bug.
+-   **Testing agent used after significant changes:** NO. The previous session relied on manual testing, which was insufficient. The next agent should use the testing agent after the refactoring.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:**
-    -   
--   **Known regressions:** None.
+-   **Test files created:** None
+-   **Known regressions:** The code is extremely fragile. The risk of regressions with any new change is very high until the refactoring is done.
 
 **Credentials to test flow:**
--   **Admin Dashboard:** 
-    -   Full Access Password: 
-    -   Read-Only Password: 
--   **POS Software (V1):** 
-    -   Password: 
+-   **Caisse Pro Application:** 
+    -   **Admin Login:** Use the **Admin** button with password: 
+    -   **Manager (Gérante) Login:** Use PIN  for user Mères AHOUANDJINOU.
+    -   **Server Login:** Use PIN  for Christian.
+    -   **Cuisinier Login:** Use PIN  for Chef Test.
+    -   **Coach Jeux Login:** Use PIN  for Coach Test.
 
 **What agent forgot to execute**
--   The agent did not implement the user's request to add a discreet link to the cash register application on the homepage.</analysis>
+-   The critical refactoring of  and  has been consistently postponed. This is the single most important pending action for the health and stability of the project.</analysis>

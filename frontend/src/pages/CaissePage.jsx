@@ -8,7 +8,7 @@ import {
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
-  ShoppingCart, AlertCircle, Image, ArrowUpDown, Activity, LayoutGrid, Timer
+  ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,7 @@ const DEFAULT_CATALOG = {
     { id: "ananas_pirogue", name: "Ananas Pirogue", price: 1000, unit: "portion", category: "Desserts" },
     { id: "assiette_fruit", name: "Assiette de Fruit", price: 1500, unit: "portion", category: "Desserts" },
     { id: "glace_boule", name: "Glace (Chocolat/Fraise/Vanille)", price: 1000, unit: "boule", category: "Desserts" },
-    { id: "coupe_glace", name: "Coupé de glace (3 boules)", price: 2500, unit: "coupe", category: "Desserts" },
+    { id: "coupe_glace", name: "Coupe de glace (3 boules)", price: 2500, unit: "coupe", category: "Desserts" },
   ],
   accompagnements: [
     { id: "riz_blanc", name: "Riz blanc", price: 1000, unit: "portion", category: "Riz" },
@@ -3844,10 +3844,10 @@ _Gérante - Espace Maxo_
                           <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => approveCancellation(req.id)} className="bg-red-600 hover:bg-red-700">
+                          <Button size="sm" onClick={() => approveCancellationRequest(req.id)} className="bg-red-600 hover:bg-red-700">
                             <CheckCircle className="w-4 h-4 mr-1" />Annuler Facture
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => rejectCancellation(req.id)} className="border-slate-600 text-slate-400">
+                          <Button size="sm" variant="outline" onClick={() => rejectCancellationRequest(req.id)} className="border-slate-600 text-slate-400">
                             Refuser
                           </Button>
                         </div>
@@ -3875,10 +3875,10 @@ _Gérante - Espace Maxo_
                           <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => approveModification(req.id)} className="bg-blue-600 hover:bg-blue-700">
+                          <Button size="sm" onClick={() => approveModificationRequest(req.id)} className="bg-blue-600 hover:bg-blue-700">
                             <CheckCircle className="w-4 h-4 mr-1" />Autoriser
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => rejectModification(req.id)} className="border-slate-600 text-slate-400">
+                          <Button size="sm" variant="outline" onClick={() => rejectModificationRequest(req.id)} className="border-slate-600 text-slate-400">
                             Refuser
                           </Button>
                         </div>
