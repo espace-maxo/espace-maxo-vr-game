@@ -11,10 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { 
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
-  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye
+  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// Caution amount
+const CAUTION_AMOUNT = 50000;
 
 const SPACE_CONFIG = {
   salle_fete: { 
@@ -182,6 +185,144 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       deposit_amount: 0,
       notes: ""
     });
+  };
+
+  // Generate and print contract
+  const generateContract = (location) => {
+    const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
+    const isGarden = location.space_type === 'espace_jardin';
+    
+    const contractHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Contrat de Location - Espace Maxo</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+          h1 { text-align: center; color: #1a1a2e; border-bottom: 2px solid #16213e; padding-bottom: 10px; }
+          h2 { color: #16213e; margin-top: 25px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .header img { max-width: 150px; }
+          .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
+          .info-row { display: flex; justify-content: space-between; margin: 8px 0; }
+          .label { font-weight: bold; color: #333; }
+          .value { color: #666; }
+          .amount { font-size: 1.2em; color: #e63946; font-weight: bold; }
+          .rules { background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0; }
+          .rules-garden { background: #d4edda; border-left-color: #28a745; }
+          .rules h3 { margin-top: 0; color: #856404; }
+          .rules-garden h3 { color: #155724; }
+          .rules ul { margin: 10px 0; padding-left: 20px; }
+          .rules li { margin: 8px 0; }
+          .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
+          .signature-box { width: 45%; text-align: center; }
+          .signature-line { border-top: 1px solid #333; margin-top: 60px; padding-top: 10px; }
+          .caution-box { background: #f8d7da; padding: 15px; border-radius: 8px; border: 2px solid #f5c6cb; margin: 20px 0; }
+          .caution-box h3 { color: #721c24; margin-top: 0; }
+          .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>CONTRAT DE LOCATION</h1>
+          <p><strong>ESPACE MAXO</strong><br>Fidjrossè Plage, Cotonou<br>Tél: +229 91 00 50 84</p>
+        </div>
+
+        <div class="info-box">
+          <h2 style="margin-top: 0;">Informations de la Réservation</h2>
+          <div class="info-row"><span class="label">Espace loué :</span><span class="value">${spaceConfig.label}</span></div>
+          <div class="info-row"><span class="label">Client :</span><span class="value">${location.customer_name}</span></div>
+          <div class="info-row"><span class="label">Téléphone :</span><span class="value">${location.customer_phone}</span></div>
+          <div class="info-row"><span class="label">Date de l'événement :</span><span class="value">${location.reservation_date}</span></div>
+          <div class="info-row"><span class="label">Horaires :</span><span class="value">${location.start_time} - ${location.end_time}</span></div>
+          <div class="info-row"><span class="label">Nombre de personnes :</span><span class="value">${location.number_of_guests} personnes</span></div>
+          <div class="info-row"><span class="label">Type d'événement :</span><span class="value">${location.event_type || 'Non précisé'}</span></div>
+        </div>
+
+        <div class="info-box">
+          <h2 style="margin-top: 0;">Conditions Financières</h2>
+          <div class="info-row"><span class="label">Montant de la location :</span><span class="amount">${formatPrice(location.rental_amount)} F CFA</span></div>
+          <div class="info-row"><span class="label">Acompte versé :</span><span class="value">${formatPrice(location.deposit_paid || 0)} F CFA</span></div>
+          <div class="info-row"><span class="label">Solde restant :</span><span class="value">${formatPrice(location.balance_remaining || 0)} F CFA</span></div>
+        </div>
+
+        <div class="caution-box">
+          <h3>⚠️ CAUTION OBLIGATOIRE</h3>
+          <p>Une caution de <strong>${formatPrice(CAUTION_AMOUNT)} F CFA</strong> est exigée avant la mise à disposition de l'espace.</p>
+          <p>Cette caution sera restituée intégralement après l'événement, sous réserve que :</p>
+          <ul>
+            <li>L'espace soit rendu dans son état initial</li>
+            <li>Aucune dégradation ne soit constatée</li>
+            <li>Toutes les conditions du présent contrat soient respectées</li>
+          </ul>
+          <p><em>En cas de dégradation, la caution sera retenue en tout ou partie pour couvrir les réparations.</em></p>
+        </div>
+
+        <div class="rules">
+          <h3>📋 CONDITIONS GÉNÉRALES</h3>
+          <ul>
+            <li>Le locataire s'engage à respecter les horaires convenus.</li>
+            <li>Tout dépassement horaire sera facturé selon le tarif en vigueur.</li>
+            <li>Le locataire est responsable des dommages causés pendant la durée de la location.</li>
+            <li>L'espace doit être laissé propre et en ordre après utilisation.</li>
+            <li>La sous-location est strictement interdite.</li>
+            <li>Le nombre maximum de personnes indiqué doit être respecté.</li>
+            <li>Espace Maxo se réserve le droit d'annuler la réservation en cas de non-respect des conditions.</li>
+          </ul>
+        </div>
+
+        ${isGarden ? `
+        <div class="rules rules-garden">
+          <h3>🌿 CONDITIONS SPÉCIFIQUES - ESPACE JARDIN</h3>
+          <p><strong>L'Espace Jardin est un espace vert qui nécessite un soin particulier. Le locataire s'engage à :</strong></p>
+          <ul>
+            <li><strong>PRÉSERVER L'ÉTAT DE L'ESPACE VERT</strong> : Ne pas arracher, piétiner ou endommager les plantes, fleurs et pelouse.</li>
+            <li><strong>INTERDICTION DE DANSER SUR LA PELOUSE</strong> : Les danses et activités physiques intenses doivent se faire uniquement sur les zones pavées ou prévues à cet effet.</li>
+            <li><strong>NE PAS PLANTER DE PIQUETS OU STRUCTURES</strong> dans le sol sans autorisation préalable.</li>
+            <li><strong>INTERDICTION DE FEUX</strong> : Aucun feu, barbecue ou source de chaleur directement sur l'herbe.</li>
+            <li><strong>GESTION DES DÉCHETS</strong> : Tous les déchets doivent être ramassés et déposés dans les poubelles prévues.</li>
+            <li><strong>PROTECTION DES ARBRES</strong> : Ne rien accrocher aux arbres sans autorisation (décorations, hamacs, etc.).</li>
+            <li><strong>VÉHICULES INTERDITS</strong> : Aucun véhicule motorisé n'est autorisé sur l'espace vert.</li>
+          </ul>
+          <p style="color: #155724; font-weight: bold;">⚠️ Tout dommage constaté sur l'espace vert entraînera la retenue totale ou partielle de la caution, et pourra faire l'objet d'une facturation supplémentaire.</p>
+        </div>
+        ` : ''}
+
+        <div class="signature-section">
+          <div class="signature-box">
+            <p><strong>Le Locataire</strong></p>
+            <p>Lu et approuvé,<br>"Bon pour accord"</p>
+            <div class="signature-line">
+              ${location.customer_name}
+            </div>
+          </div>
+          <div class="signature-box">
+            <p><strong>Espace Maxo</strong></p>
+            <p>Le Responsable</p>
+            <div class="signature-line">
+              Signature et cachet
+            </div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Contrat établi le ${new Date().toLocaleDateString('fr-FR')} à Cotonou</p>
+          <p><strong>ESPACE MAXO</strong> - Fidjrossè Plage, Cotonou - Tél: +229 91 00 50 84</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(contractHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
   };
 
   const filteredLocations = locations.filter(loc => {
@@ -352,6 +493,15 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                           className="text-slate-400 hover:text-white"
                         >
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => generateContract(location)}
+                          className="text-purple-400 hover:text-purple-300"
+                          title="Imprimer le contrat"
+                        >
+                          <FileText className="w-4 h-4" />
                         </Button>
                         {canManageLocations && (
                           <>
@@ -638,6 +788,15 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                   <p className="text-white">{viewingLocation.notes}</p>
                 </div>
               )}
+
+              {/* Print Contract Button */}
+              <Button
+                onClick={() => generateContract(viewingLocation)}
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Imprimer le Contrat
+              </Button>
 
               {/* Manager/Admin Actions */}
               {canManageLocations && viewingLocation.status === "confirmed" && (
