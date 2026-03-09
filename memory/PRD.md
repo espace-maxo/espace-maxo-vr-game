@@ -239,7 +239,11 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [ ] Graphiques de revenus
 - [ ] Refactorisation de `server.py` (4350+ lignes) - Structure modulaire préparée
 - [ ] Refactorisation de `AdminPage.jsx` (1500+ lignes)
-- [ ] Intégration complète des composants modulaires frontend
+- [x] **Phase 1 - Refactorisation CaissePage.jsx** (Mars 2026)
+  - Extraction de `TablesTab.jsx` (onglet Suivi des Tables)
+  - Extraction de `HebdoReport.jsx` (Point Hebdomadaire)
+  - Création de `constants.js` (configuration partagée)
+  - Réduction du fichier principal de 7321 à 6816 lignes (-7%)
 
 ## Architecture
 
@@ -251,8 +255,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 │   ├── server.py (~4350 lignes - refactorisation en cours)
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── caisse.py (Modèles Pydantic - NOUVEAU)
-│   ├── routers/ (Structure modulaire préparée - NOUVEAU)
+│   │   └── caisse.py (Modèles Pydantic)
+│   ├── routers/ (Structure modulaire préparée)
 │   │   ├── __init__.py
 │   │   ├── invoices.py
 │   │   ├── users.py
@@ -275,10 +279,12 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
         └── pages/
             ├── AdminPage.jsx
             ├── BookingPage.jsx
-            ├── CaissePage.jsx (~3800 lignes - Bug CSS corrigé)
-            ├── caisse/ (Composants modulaires - NOUVEAU)
-            │   ├── constants.js
+            ├── CaissePage.jsx (~6816 lignes - REFACTORISÉ)
+            ├── caisse/ (Composants modulaires)
+            │   ├── constants.js (Configuration, catalogue)
             │   └── components/
+            │       ├── TablesTab.jsx (Suivi des Tables - NOUVEAU)
+            │       ├── HebdoReport.jsx (Point Hebdomadaire - NOUVEAU)
             │       ├── LoginView.jsx
             │       ├── TableBar.jsx
             │       ├── BillPanel.jsx
@@ -290,6 +296,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
             ├── TableReservationPage.jsx
             └── WalletPage.jsx
 ```
+
+## Corrections appliquées (Mars 2026)
+- [x] "Coupé de glace" → "Coupe de glace" (correction orthographe)
+- [x] Import manquant `AlertTriangle` ajouté
+- [x] Correction des fonctions `approveCancellation` → `approveCancellationRequest`
+- [x] Correction des fonctions `rejectCancellation` → `rejectCancellationRequest`
+- [x] Correction de `approveModification` → `approveModificationRequest`
+- [x] Correction de `rejectModification` → `rejectModificationRequest`
 
 ## Contact
 - SMS Admin: +229 97 72 08 08, +229 91 00 50 84
