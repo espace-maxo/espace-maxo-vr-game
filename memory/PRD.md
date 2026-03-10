@@ -155,6 +155,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - `PUT /api/menu-notifications/mark-all-read` - Marquer toutes les notifications comme lues
 - `DELETE /api/menu-notifications/{id}` - Supprimer une notification
 - `GET /api/server-daily-report/{server_name}?date=YYYY-MM-DD` - Point journalier d'un serveur
+- `POST /api/server-end-of-service` - Créer un rapport de fin de service (envoi point à la gérante)
+- `GET /api/server-end-of-service-reports` - Liste des rapports de fin de service (Gérante)
+- `PUT /api/server-end-of-service-reports/{id}/read` - Marquer un rapport comme lu
+- `PUT /api/server-end-of-service-reports/mark-all-read` - Marquer tous les rapports comme lus
 
 ## Prioritized Backlog
 
@@ -286,6 +290,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Répartition par mode de paiement
   - Sélecteur de date pour consulter l'historique
   - Liste des factures du jour avec statut et montants
+- [x] **Envoi Point Fin de Service à la Gérante** (Mars 2026) - NOUVEAU
+  - Bouton "Terminer Service" (violet/indigo) visible pour les serveurs dans le header
+  - Modal avec résumé de la journée (Commandes, Validées, Total)
+  - Champ "Observation" optionnel pour notes (retard fournisseur, incident, etc.)
+  - Envoi automatique du point à la Gérante avec notification in-app
+  - Gérante reçoit notification avec badge sur icône 📋 (Points des Serveurs)
+  - Panneau listant tous les points reçus avec: nom serveur, statistiques, observation, date/heure
+  - Option "Marquer comme lu" individuel ou global
 
 ## Architecture
 
