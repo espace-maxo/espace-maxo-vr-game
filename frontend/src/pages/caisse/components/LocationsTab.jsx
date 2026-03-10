@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { 
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
-  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer
+  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -187,11 +187,82 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     });
   };
 
-  // Generate and print contract
-  const generateContract = (location) => {
+  // Get specific rules for each space type
+  const getSpaceSpecificRules = (spaceType) => {
+    switch (spaceType) {
+      case 'salle_fete':
+        return `
+          <div class="rules rules-salle">
+            <h3>🎉 CONDITIONS SPÉCIFIQUES - SALLE DE FÊTE</h3>
+            <p><strong>La Salle de Fête est un espace clos et équipé. Le locataire s'engage à :</strong></p>
+            <ul>
+              <li><strong>RESPECT DU MATÉRIEL</strong> : Tables, chaises, nappes et équipements fournis doivent être restitués en bon état.</li>
+              <li><strong>DÉCORATION</strong> : Aucune fixation au mur (clous, vis, adhésifs forts) sans autorisation préalable.</li>
+              <li><strong>SONORISATION</strong> : Le volume sonore doit respecter les normes de voisinage. Réduction obligatoire après 23h.</li>
+              <li><strong>CAPACITÉ MAXIMALE</strong> : Ne pas dépasser le nombre de personnes autorisé pour des raisons de sécurité.</li>
+              <li><strong>CUISINE</strong> : L'utilisation de la cuisine doit être faite dans le respect des règles d'hygiène.</li>
+              <li><strong>NETTOYAGE</strong> : La salle doit être rendue balayée et débarrassée des déchets.</li>
+              <li><strong>INTERDICTION DE FUMER</strong> : Il est strictement interdit de fumer à l'intérieur de la salle.</li>
+            </ul>
+            <p style="color: #856404; font-weight: bold;">⚠️ Tout dommage constaté sur le mobilier ou les installations entraînera la retenue de la caution.</p>
+          </div>
+        `;
+      case 'espace_jardin':
+        return `
+          <div class="rules rules-garden">
+            <h3>🌿 CONDITIONS SPÉCIFIQUES - ESPACE JARDIN</h3>
+            <p><strong>L'Espace Jardin est un espace vert qui nécessite un soin particulier. Le locataire s'engage à :</strong></p>
+            <ul>
+              <li><strong>PRÉSERVER L'ÉTAT DE L'ESPACE VERT</strong> : Ne pas arracher, piétiner ou endommager les plantes, fleurs et pelouse.</li>
+              <li><strong>INTERDICTION DE DANSER SUR LA PELOUSE</strong> : Les danses et activités physiques intenses doivent se faire uniquement sur les zones pavées ou prévues à cet effet.</li>
+              <li><strong>NE PAS PLANTER DE PIQUETS OU STRUCTURES</strong> dans le sol sans autorisation préalable.</li>
+              <li><strong>INTERDICTION DE FEUX</strong> : Aucun feu, barbecue ou source de chaleur directement sur l'herbe.</li>
+              <li><strong>GESTION DES DÉCHETS</strong> : Tous les déchets doivent être ramassés et déposés dans les poubelles prévues.</li>
+              <li><strong>PROTECTION DES ARBRES</strong> : Ne rien accrocher aux arbres sans autorisation (décorations, hamacs, etc.).</li>
+              <li><strong>VÉHICULES INTERDITS</strong> : Aucun véhicule motorisé n'est autorisé sur l'espace vert.</li>
+              <li><strong>ARROSAGE</strong> : Ne pas gêner le système d'arrosage automatique s'il est en place.</li>
+            </ul>
+            <p style="color: #155724; font-weight: bold;">⚠️ Tout dommage constaté sur l'espace vert entraînera la retenue totale ou partielle de la caution, et pourra faire l'objet d'une facturation supplémentaire.</p>
+          </div>
+        `;
+      case 'salle_jeux':
+        return `
+          <div class="rules rules-jeux">
+            <h3>🎮 CONDITIONS SPÉCIFIQUES - SALLE DE JEUX</h3>
+            <p><strong>La Salle de Jeux contient du matériel électronique et ludique de valeur. Le locataire s'engage à :</strong></p>
+            <ul>
+              <li><strong>MANIPULATION DU MATÉRIEL</strong> : Les consoles, manettes, casques VR et autres équipements doivent être manipulés avec soin.</li>
+              <li><strong>SUPERVISION DES ENFANTS</strong> : Les enfants de moins de 12 ans doivent être supervisés en permanence par un adulte.</li>
+              <li><strong>NOURRITURE ET BOISSONS</strong> : Interdiction de consommer nourriture et boissons à proximité des équipements électroniques.</li>
+              <li><strong>SIGNALEMENT DE PANNE</strong> : Tout dysfonctionnement doit être signalé immédiatement au personnel.</li>
+              <li><strong>CASQUES VR</strong> : Les casques de réalité virtuelle doivent être utilisés conformément aux instructions données.</li>
+              <li><strong>BILLARD</strong> : Ne pas s'asseoir sur les tables de billard. Utiliser la craie uniquement sur les queues.</li>
+              <li><strong>BABY-FOOT</strong> : Ne pas faire tourner les barres à 360°.</li>
+              <li><strong>TEMPS D'UTILISATION</strong> : Respecter les créneaux horaires attribués pour chaque équipement.</li>
+            </ul>
+            <p style="color: #0c5460; font-weight: bold;">⚠️ Tout équipement endommagé ou cassé sera facturé au prix de remplacement. La caution sera retenue en conséquence.</p>
+          </div>
+        `;
+      default:
+        return '';
+    }
+  };
+
+  // Generate and print contract for single or multiple spaces
+  const generateContract = (location, additionalSpaces = []) => {
     const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
-    const isGarden = location.space_type === 'espace_jardin';
+    const allSpaces = [location.space_type, ...additionalSpaces];
+    const isMultiSpace = additionalSpaces.length > 0;
     
+    // Calculate total for multi-space
+    let totalAmount = location.rental_amount;
+    let spacesLabel = spaceConfig.label;
+    
+    if (isMultiSpace) {
+      spacesLabel = allSpaces.map(s => SPACE_CONFIG[s]?.label || s).join(' + ');
+      // For demo, we just use the location amount
+    }
+
     const contractHTML = `
       <!DOCTYPE html>
       <html>
@@ -199,40 +270,46 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <meta charset="UTF-8">
         <title>Contrat de Location - Espace Maxo</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
-          h1 { text-align: center; color: #1a1a2e; border-bottom: 2px solid #16213e; padding-bottom: 10px; }
-          h2 { color: #16213e; margin-top: 25px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header img { max-width: 150px; }
-          .info-box { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
-          .info-row { display: flex; justify-content: space-between; margin: 8px 0; }
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; font-size: 14px; }
+          h1 { text-align: center; color: #1a1a2e; border-bottom: 3px solid #16213e; padding-bottom: 10px; font-size: 24px; }
+          h2 { color: #16213e; margin-top: 20px; font-size: 16px; }
+          .header { text-align: center; margin-bottom: 20px; }
+          .contract-type { background: ${isMultiSpace ? '#6f42c1' : spaceConfig.color === 'text-purple-400' ? '#6f42c1' : spaceConfig.color === 'text-green-400' ? '#28a745' : '#17a2b8'}; color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin: 10px 0; font-weight: bold; }
+          .info-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #dee2e6; }
+          .info-row { display: flex; justify-content: space-between; margin: 6px 0; padding: 4px 0; border-bottom: 1px dotted #dee2e6; }
+          .info-row:last-child { border-bottom: none; }
           .label { font-weight: bold; color: #333; }
-          .value { color: #666; }
-          .amount { font-size: 1.2em; color: #e63946; font-weight: bold; }
-          .rules { background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0; }
+          .value { color: #495057; }
+          .amount { font-size: 1.1em; color: #dc3545; font-weight: bold; }
+          .rules { background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 15px 0; }
           .rules-garden { background: #d4edda; border-left-color: #28a745; }
-          .rules h3 { margin-top: 0; color: #856404; }
-          .rules-garden h3 { color: #155724; }
+          .rules-salle { background: #e7e3ff; border-left-color: #6f42c1; }
+          .rules-jeux { background: #d1ecf1; border-left-color: #17a2b8; }
+          .rules h3 { margin-top: 0; font-size: 14px; }
           .rules ul { margin: 10px 0; padding-left: 20px; }
-          .rules li { margin: 8px 0; }
-          .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
+          .rules li { margin: 6px 0; font-size: 13px; }
+          .signature-section { margin-top: 30px; display: flex; justify-content: space-between; page-break-inside: avoid; }
           .signature-box { width: 45%; text-align: center; }
-          .signature-line { border-top: 1px solid #333; margin-top: 60px; padding-top: 10px; }
-          .caution-box { background: #f8d7da; padding: 15px; border-radius: 8px; border: 2px solid #f5c6cb; margin: 20px 0; }
-          .caution-box h3 { color: #721c24; margin-top: 0; }
-          .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }
-          @media print { body { padding: 0; } }
+          .signature-line { border-top: 1px solid #333; margin-top: 50px; padding-top: 8px; font-size: 12px; }
+          .caution-box { background: #f8d7da; padding: 15px; border-radius: 8px; border: 2px solid #f5c6cb; margin: 15px 0; }
+          .caution-box h3 { color: #721c24; margin-top: 0; font-size: 14px; }
+          .footer { margin-top: 20px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 10px; }
+          @media print { 
+            body { padding: 10px; font-size: 12px; }
+            .rules { page-break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
         <div class="header">
           <h1>CONTRAT DE LOCATION</h1>
+          <div class="contract-type">${isMultiSpace ? '📦 PACK COMBINÉ' : location.space_type === 'salle_fete' ? '🎉 SALLE DE FÊTE' : location.space_type === 'espace_jardin' ? '🌿 ESPACE JARDIN' : '🎮 SALLE DE JEUX'}</div>
           <p><strong>ESPACE MAXO</strong><br>Fidjrossè Plage, Cotonou<br>Tél: +229 91 00 50 84</p>
         </div>
 
         <div class="info-box">
-          <h2 style="margin-top: 0;">Informations de la Réservation</h2>
-          <div class="info-row"><span class="label">Espace loué :</span><span class="value">${spaceConfig.label}</span></div>
+          <h2 style="margin-top: 0;">📋 Informations de la Réservation</h2>
+          <div class="info-row"><span class="label">Espace(s) loué(s) :</span><span class="value" style="color: #6f42c1; font-weight: bold;">${spacesLabel}</span></div>
           <div class="info-row"><span class="label">Client :</span><span class="value">${location.customer_name}</span></div>
           <div class="info-row"><span class="label">Téléphone :</span><span class="value">${location.customer_phone}</span></div>
           <div class="info-row"><span class="label">Date de l'événement :</span><span class="value">${location.reservation_date}</span></div>
@@ -242,22 +319,21 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         </div>
 
         <div class="info-box">
-          <h2 style="margin-top: 0;">Conditions Financières</h2>
+          <h2 style="margin-top: 0;">💰 Conditions Financières</h2>
           <div class="info-row"><span class="label">Montant de la location :</span><span class="amount">${formatPrice(location.rental_amount)} F CFA</span></div>
           <div class="info-row"><span class="label">Acompte versé :</span><span class="value">${formatPrice(location.deposit_paid || 0)} F CFA</span></div>
-          <div class="info-row"><span class="label">Solde restant :</span><span class="value">${formatPrice(location.balance_remaining || 0)} F CFA</span></div>
+          <div class="info-row"><span class="label">Solde restant :</span><span class="value" style="color: #dc3545;">${formatPrice(location.balance_remaining || 0)} F CFA</span></div>
         </div>
 
         <div class="caution-box">
           <h3>⚠️ CAUTION OBLIGATOIRE</h3>
           <p>Une caution de <strong>${formatPrice(CAUTION_AMOUNT)} F CFA</strong> est exigée avant la mise à disposition de l'espace.</p>
           <p>Cette caution sera restituée intégralement après l'événement, sous réserve que :</p>
-          <ul>
+          <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">
             <li>L'espace soit rendu dans son état initial</li>
             <li>Aucune dégradation ne soit constatée</li>
             <li>Toutes les conditions du présent contrat soient respectées</li>
           </ul>
-          <p><em>En cas de dégradation, la caution sera retenue en tout ou partie pour couvrir les réparations.</em></p>
         </div>
 
         <div class="rules">
@@ -269,60 +345,192 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             <li>L'espace doit être laissé propre et en ordre après utilisation.</li>
             <li>La sous-location est strictement interdite.</li>
             <li>Le nombre maximum de personnes indiqué doit être respecté.</li>
-            <li>Espace Maxo se réserve le droit d'annuler la réservation en cas de non-respect des conditions.</li>
           </ul>
         </div>
 
-        ${isGarden ? `
-        <div class="rules rules-garden">
-          <h3>🌿 CONDITIONS SPÉCIFIQUES - ESPACE JARDIN</h3>
-          <p><strong>L'Espace Jardin est un espace vert qui nécessite un soin particulier. Le locataire s'engage à :</strong></p>
-          <ul>
-            <li><strong>PRÉSERVER L'ÉTAT DE L'ESPACE VERT</strong> : Ne pas arracher, piétiner ou endommager les plantes, fleurs et pelouse.</li>
-            <li><strong>INTERDICTION DE DANSER SUR LA PELOUSE</strong> : Les danses et activités physiques intenses doivent se faire uniquement sur les zones pavées ou prévues à cet effet.</li>
-            <li><strong>NE PAS PLANTER DE PIQUETS OU STRUCTURES</strong> dans le sol sans autorisation préalable.</li>
-            <li><strong>INTERDICTION DE FEUX</strong> : Aucun feu, barbecue ou source de chaleur directement sur l'herbe.</li>
-            <li><strong>GESTION DES DÉCHETS</strong> : Tous les déchets doivent être ramassés et déposés dans les poubelles prévues.</li>
-            <li><strong>PROTECTION DES ARBRES</strong> : Ne rien accrocher aux arbres sans autorisation (décorations, hamacs, etc.).</li>
-            <li><strong>VÉHICULES INTERDITS</strong> : Aucun véhicule motorisé n'est autorisé sur l'espace vert.</li>
-          </ul>
-          <p style="color: #155724; font-weight: bold;">⚠️ Tout dommage constaté sur l'espace vert entraînera la retenue totale ou partielle de la caution, et pourra faire l'objet d'une facturation supplémentaire.</p>
-        </div>
-        ` : ''}
+        ${allSpaces.map(space => getSpaceSpecificRules(space)).join('')}
 
         <div class="signature-section">
           <div class="signature-box">
             <p><strong>Le Locataire</strong></p>
-            <p>Lu et approuvé,<br>"Bon pour accord"</p>
-            <div class="signature-line">
-              ${location.customer_name}
-            </div>
+            <p style="font-size: 12px;">Lu et approuvé,<br>"Bon pour accord"</p>
+            <div class="signature-line">${location.customer_name}</div>
           </div>
           <div class="signature-box">
             <p><strong>Espace Maxo</strong></p>
-            <p>Le Responsable</p>
-            <div class="signature-line">
-              Signature et cachet
-            </div>
+            <p style="font-size: 12px;">Le Responsable</p>
+            <div class="signature-line">Signature et cachet</div>
           </div>
         </div>
 
         <div class="footer">
-          <p>Contrat établi le ${new Date().toLocaleDateString('fr-FR')} à Cotonou</p>
+          <p>Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'} - Établi le ${new Date().toLocaleDateString('fr-FR')} à Cotonou</p>
           <p><strong>ESPACE MAXO</strong> - Fidjrossè Plage, Cotonou - Tél: +229 91 00 50 84</p>
         </div>
       </body>
       </html>
     `;
 
-    // Open print window
     const printWindow = window.open('', '_blank');
     printWindow.document.write(contractHTML);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+    setTimeout(() => printWindow.print(), 500);
+  };
+
+  // Convert location to invoice
+  const convertToInvoice = async (location) => {
+    const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
+    
+    // Generate invoice HTML
+    const invoiceNumber = `FAC-LOC-${Date.now().toString().slice(-6)}`;
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Facture ${invoiceNumber} - Espace Maxo</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.5; }
+          .invoice-header { display: flex; justify-content: space-between; align-items: start; border-bottom: 3px solid #1a1a2e; padding-bottom: 20px; margin-bottom: 20px; }
+          .company-info { text-align: left; }
+          .company-info h1 { margin: 0; color: #1a1a2e; font-size: 28px; }
+          .invoice-info { text-align: right; }
+          .invoice-number { font-size: 24px; color: #dc3545; font-weight: bold; }
+          .client-section { display: flex; justify-content: space-between; margin: 20px 0; }
+          .client-box, .event-box { width: 48%; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+          .client-box h3, .event-box h3 { margin-top: 0; color: #1a1a2e; border-bottom: 2px solid #dee2e6; padding-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          th { background: #1a1a2e; color: white; padding: 12px; text-align: left; }
+          td { padding: 12px; border-bottom: 1px solid #dee2e6; }
+          .text-right { text-align: right; }
+          .total-section { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; }
+          .total-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #dee2e6; }
+          .total-row:last-child { border-bottom: none; }
+          .grand-total { font-size: 20px; color: #dc3545; font-weight: bold; background: #1a1a2e; color: white; padding: 15px; border-radius: 8px; margin-top: 10px; }
+          .payment-info { margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 15px; }
+          .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
+          .status-paid { background: #d4edda; color: #155724; }
+          .status-partial { background: #fff3cd; color: #856404; }
+          .status-pending { background: #f8d7da; color: #721c24; }
+          @media print { body { padding: 10px; } }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-header">
+          <div class="company-info">
+            <h1>ESPACE MAXO</h1>
+            <p>Fidjrossè Plage, Cotonou<br>
+            Tél: +229 91 00 50 84<br>
+            Email: contact@espacemaxo.com</p>
+          </div>
+          <div class="invoice-info">
+            <div class="invoice-number">${invoiceNumber}</div>
+            <p><strong>Date :</strong> ${new Date().toLocaleDateString('fr-FR')}<br>
+            <strong>Échéance :</strong> ${location.reservation_date}</p>
+            <span class="status-badge ${location.balance_remaining <= 0 ? 'status-paid' : location.deposit_paid > 0 ? 'status-partial' : 'status-pending'}">
+              ${location.balance_remaining <= 0 ? '✓ PAYÉE' : location.deposit_paid > 0 ? '◐ ACOMPTE VERSÉ' : '○ EN ATTENTE'}
+            </span>
+          </div>
+        </div>
+
+        <div class="client-section">
+          <div class="client-box">
+            <h3>👤 Client</h3>
+            <p><strong>${location.customer_name}</strong><br>
+            Tél: ${location.customer_phone}</p>
+          </div>
+          <div class="event-box">
+            <h3>📅 Événement</h3>
+            <p><strong>Type :</strong> ${location.event_type || 'Non précisé'}<br>
+            <strong>Date :</strong> ${location.reservation_date}<br>
+            <strong>Horaires :</strong> ${location.start_time} - ${location.end_time}<br>
+            <strong>Personnes :</strong> ${location.number_of_guests}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Désignation</th>
+              <th>Qté</th>
+              <th class="text-right">Prix Unit.</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Location ${spaceConfig.label}</strong><br>
+                <small style="color: #6c757d;">Du ${location.start_time} au ${location.end_time}</small>
+              </td>
+              <td>1</td>
+              <td class="text-right">${formatPrice(location.rental_amount)} F</td>
+              <td class="text-right"><strong>${formatPrice(location.rental_amount)} F</strong></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Caution (remboursable)</strong><br>
+                <small style="color: #6c757d;">Restituée après vérification de l'état des lieux</small>
+              </td>
+              <td>1</td>
+              <td class="text-right">${formatPrice(CAUTION_AMOUNT)} F</td>
+              <td class="text-right"><strong>${formatPrice(CAUTION_AMOUNT)} F</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="total-section">
+          <div class="total-row">
+            <span>Sous-total Location</span>
+            <span>${formatPrice(location.rental_amount)} F CFA</span>
+          </div>
+          <div class="total-row">
+            <span>Caution</span>
+            <span>${formatPrice(CAUTION_AMOUNT)} F CFA</span>
+          </div>
+          <div class="total-row">
+            <span><strong>Total à payer</strong></span>
+            <span><strong>${formatPrice(location.rental_amount + CAUTION_AMOUNT)} F CFA</strong></span>
+          </div>
+          <div class="total-row">
+            <span>Acompte versé</span>
+            <span style="color: #28a745;">- ${formatPrice(location.deposit_paid || 0)} F CFA</span>
+          </div>
+        </div>
+
+        <div class="grand-total" style="display: flex; justify-content: space-between;">
+          <span>RESTE À PAYER</span>
+          <span>${formatPrice((location.rental_amount + CAUTION_AMOUNT) - (location.deposit_paid || 0))} F CFA</span>
+        </div>
+
+        <div class="payment-info">
+          <h4 style="margin-top: 0;">💳 Modalités de paiement</h4>
+          <p>
+            <strong>Espèces :</strong> À régler sur place<br>
+            <strong>Mobile Money :</strong> +229 91 00 50 84<br>
+            <strong>Virement :</strong> Contactez-nous pour les coordonnées bancaires
+          </p>
+          <p><em>La caution de ${formatPrice(CAUTION_AMOUNT)} F CFA sera restituée après l'événement, sous réserve de l'état des lieux.</em></p>
+        </div>
+
+        <div class="footer">
+          <p>Facture N° ${invoiceNumber} | Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'}</p>
+          <p><strong>ESPACE MAXO</strong> - Fidjrossè Plage, Cotonou - Tél: +229 91 00 50 84</p>
+          <p style="font-size: 10px;">Merci de votre confiance !</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(invoiceHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+    
+    toast.success("Facture générée avec succès !");
   };
 
   const filteredLocations = locations.filter(loc => {
@@ -491,6 +699,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                           variant="ghost" 
                           onClick={() => setViewingLocation(location)}
                           className="text-slate-400 hover:text-white"
+                          title="Voir les détails"
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -503,6 +712,15 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                         >
                           <FileText className="w-4 h-4" />
                         </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => convertToInvoice(location)}
+                          className="text-amber-400 hover:text-amber-300"
+                          title="Générer une facture"
+                        >
+                          <Receipt className="w-4 h-4" />
+                        </Button>
                         {canManageLocations && (
                           <>
                             <Button 
@@ -510,6 +728,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                               variant="ghost" 
                               onClick={() => openEditModal(location)}
                               className="text-blue-400 hover:text-blue-300"
+                              title="Modifier"
                             >
                               <Edit2 className="w-4 h-4" />
                             </Button>
@@ -518,6 +737,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                               variant="ghost" 
                               onClick={() => handleDelete(location.id)}
                               className="text-red-400 hover:text-red-300"
+                              title="Supprimer"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -789,14 +1009,26 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                 </div>
               )}
 
-              {/* Print Contract Button */}
-              <Button
-                onClick={() => generateContract(viewingLocation)}
-                className="w-full bg-purple-600 hover:bg-purple-700"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimer le Contrat
-              </Button>
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Print Contract Button */}
+                <Button
+                  onClick={() => generateContract(viewingLocation)}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Contrat
+                </Button>
+
+                {/* Generate Invoice Button */}
+                <Button
+                  onClick={() => convertToInvoice(viewingLocation)}
+                  className="bg-amber-600 hover:bg-amber-700"
+                >
+                  <Receipt className="w-4 h-4 mr-2" />
+                  Facture
+                </Button>
+              </div>
 
               {/* Manager/Admin Actions */}
               {canManageLocations && viewingLocation.status === "confirmed" && (
