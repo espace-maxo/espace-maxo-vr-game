@@ -3534,12 +3534,30 @@ async def delete_caisse_user(user_id: str):
 # ============== CAISSE PRODUCTS ENDPOINTS ==============
 
 @api_router.post("/caisse/products")
-async def create_caisse_product(product_data: CaisseProductCreate):
+async def create_caisse_product(product_data: CaisseProductCreate, modified_by: str = "", modified_by_role: str = ""):
     """Create a new caisse product"""
     try:
         product = CaisseProduct(**product_data.model_dump())
         product_dict = product.model_dump()
         await db.caisse_products.insert_one(product_dict)
+        
+        # Create notification for admin
+        if modified_by and modified_by_role:
+            notification = {
+                "id": str(uuid.uuid4()),
+                "action": "created",
+                "product_name": product_dict.get("name", ""),
+                "product_id": product_dict.get("id", ""),
+                "department": product_dict.get("department", ""),
+                "old_price": None,
+                "new_price": product_dict.get("price", 0),
+                "modified_by": modified_by,
+                "modified_by_role": modified_by_role,
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.menu_notifications.insert_one(notification)
+        
         return {"success": True, "product": {k: v for k, v in product_dict.items() if k != "_id"}}
     except Exception as e:
         logger.error(f"Error creating caisse product: {e}")
@@ -3559,9 +3577,32 @@ async def get_caisse_products():
 async def update_caisse_product(product_id: str, product_data: dict = Body(...)):
     """Update a caisse product"""
     try:
+        # Get old product data for notification
+        old_product = await db.caisse_products.find_one({"id": product_id}, {"_id": 0})
+        
         result = await db.caisse_products.update_one({"id": product_id}, {"$set": product_data})
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Produit non trouvé")
+        
+        # Create notification for admin if modified_by is provided
+        modified_by = product_data.pop("modified_by", None)
+        modified_by_role = product_data.pop("modified_by_role", None)
+        if modified_by and modified_by_role and old_product:
+            notification = {
+                "id": str(uuid.uuid4()),
+                "action": "updated",
+                "product_name": product_data.get("name", old_product.get("name", "")),
+                "product_id": product_id,
+                "department": product_data.get("department", old_product.get("department", "")),
+                "old_price": old_product.get("price"),
+                "new_price": product_data.get("price", old_product.get("price")),
+                "modified_by": modified_by,
+                "modified_by_role": modified_by_role,
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.menu_notifications.insert_one(notification)
+        
         return {"success": True}
     except HTTPException:
         raise
@@ -3570,17 +3611,145 @@ async def update_caisse_product(product_id: str, product_data: dict = Body(...))
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.delete("/caisse/products/{product_id}")
-async def delete_caisse_product(product_id: str):
+async def delete_caisse_product(product_id: str, modified_by: str = "", modified_by_role: str = ""):
     """Delete a caisse product"""
     try:
+        # Get product data for notification before deleting
+        product = await db.caisse_products.find_one({"id": product_id}, {"_id": 0})
+        
         result = await db.caisse_products.delete_one({"id": product_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Produit non trouvé")
+        
+        # Create notification for admin
+        if modified_by and modified_by_role and product:
+            notification = {
+                "id": str(uuid.uuid4()),
+                "action": "deleted",
+                "product_name": product.get("name", ""),
+                "product_id": product_id,
+                "department": product.get("department", ""),
+                "old_price": product.get("price"),
+                "new_price": None,
+                "modified_by": modified_by,
+                "modified_by_role": modified_by_role,
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.menu_notifications.insert_one(notification)
+        
         return {"success": True}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting caisse product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== MENU NOTIFICATIONS ENDPOINTS ==============
+
+@api_router.get("/menu-notifications")
+async def get_menu_notifications(unread_only: bool = False):
+    """Get all menu modification notifications (for Admin)"""
+    try:
+        query = {"is_read": False} if unread_only else {}
+        notifications = await db.menu_notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        unread_count = await db.menu_notifications.count_documents({"is_read": False})
+        return {"notifications": notifications, "unread_count": unread_count}
+    except Exception as e:
+        logger.error(f"Error fetching menu notifications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/menu-notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    """Mark a notification as read"""
+    try:
+        result = await db.menu_notifications.update_one(
+            {"id": notification_id},
+            {"$set": {"is_read": True}}
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error marking notification as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/menu-notifications/mark-all-read")
+async def mark_all_notifications_read():
+    """Mark all notifications as read"""
+    try:
+        result = await db.menu_notifications.update_many(
+            {"is_read": False},
+            {"$set": {"is_read": True}}
+        )
+        return {"success": True, "count": result.modified_count}
+    except Exception as e:
+        logger.error(f"Error marking all notifications as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/menu-notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    """Delete a notification"""
+    try:
+        result = await db.menu_notifications.delete_one({"id": notification_id})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== SERVER DAILY REPORT ENDPOINTS ==============
+
+@api_router.get("/server-daily-report/{server_name}")
+async def get_server_daily_report(server_name: str, date: Optional[str] = None):
+    """Get daily report for a specific server"""
+    try:
+        target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
+        # Get all invoices for this server on this date
+        invoices = await db.invoices.find({
+            "server_name": server_name,
+            "date": target_date
+        }, {"_id": 0}).to_list(500)
+        
+        # Calculate stats
+        total_invoices = len(invoices)
+        validated_invoices = [inv for inv in invoices if inv.get("status") == "validated"]
+        pending_invoices = [inv for inv in invoices if inv.get("status") == "pending"]
+        
+        total_sales = sum(inv.get("total", 0) for inv in validated_invoices)
+        
+        # Group by department
+        dept_sales = {}
+        for inv in validated_invoices:
+            for item in inv.get("items", []):
+                dept = item.get("department", "autres")
+                if dept not in dept_sales:
+                    dept_sales[dept] = {"count": 0, "total": 0}
+                dept_sales[dept]["count"] += item.get("quantity", 1)
+                dept_sales[dept]["total"] += item.get("subtotal", 0)
+        
+        # Group by payment method
+        payment_methods = {}
+        for inv in validated_invoices:
+            method = inv.get("payment_method", "especes")
+            if method not in payment_methods:
+                payment_methods[method] = {"count": 0, "total": 0}
+            payment_methods[method]["count"] += 1
+            payment_methods[method]["total"] += inv.get("total", 0)
+        
+        return {
+            "server_name": server_name,
+            "date": target_date,
+            "total_invoices": total_invoices,
+            "validated_count": len(validated_invoices),
+            "pending_count": len(pending_invoices),
+            "total_sales": total_sales,
+            "department_breakdown": dept_sales,
+            "payment_methods": payment_methods,
+            "invoices": invoices
+        }
+    except Exception as e:
+        logger.error(f"Error fetching server daily report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4749,6 +4918,21 @@ class InstructionUpdate(BaseModel):
     is_read: Optional[bool] = None
     is_archived: Optional[bool] = None
     priority: Optional[str] = None
+
+# ============== MENU NOTIFICATIONS MODELS ==============
+
+class MenuNotification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    action: str  # created, updated, deleted
+    product_name: str
+    product_id: str
+    department: str
+    old_price: Optional[float] = None
+    new_price: Optional[float] = None
+    modified_by: str  # User name
+    modified_by_role: str  # manager or admin
+    is_read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # ============== EXPENSE ENDPOINTS ==============
 

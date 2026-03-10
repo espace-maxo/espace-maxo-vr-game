@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare
+  Building2, MessageSquare, Bell, ClipboardList
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -261,6 +261,15 @@ const CaissePage = () => {
   
   // Pending orders count for servers
   const [lastPendingCount, setLastPendingCount] = useState(0);
+
+  // ============== MENU NOTIFICATIONS (for Admin) ==============
+  const [menuNotifications, setMenuNotifications] = useState([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
+
+  // ============== SERVER DAILY POINT ==============
+  const [serverDailyReport, setServerDailyReport] = useState(null);
+  const [serverReportDate, setServerReportDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   // ============== EXPENSES (Achats/Dépenses) ==============
   const [expenses, setExpenses] = useState([]);
@@ -647,6 +656,26 @@ const CaissePage = () => {
     }
   }, [historyDate, activeTab, isAuthenticated]);
 
+  // Fetch menu notifications for admin
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'admin') {
+      fetchMenuNotifications();
+      // Refresh notifications every 30 seconds
+      const interval = setInterval(fetchMenuNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, currentUser]);
+
+  // Fetch server daily report when "mon_point" tab is active
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "mon_point" && currentUser?.role === 'server') {
+      const serverName = currentUser?.full_name || currentUser?.username;
+      if (serverName) {
+        fetchServerDailyReport(serverName, serverReportDate);
+      }
+    }
+  }, [serverReportDate, activeTab, isAuthenticated, currentUser]);
+
   const fetchHistoryInvoices = async () => {
     try {
       const res = await axios.get(`${API}/invoices`, { params: { date: historyDate } });
@@ -666,6 +695,49 @@ const CaissePage = () => {
       setExpenses(res.data.expenses || []);
     } catch (error) {
       console.error("Error fetching expenses:", error);
+    }
+  };
+
+  // ============== MENU NOTIFICATIONS FUNCTIONS (Admin) ==============
+  
+  const fetchMenuNotifications = async () => {
+    try {
+      const res = await axios.get(`${API}/menu-notifications`);
+      setMenuNotifications(res.data.notifications || []);
+      setUnreadNotificationCount(res.data.unread_count || 0);
+    } catch (error) {
+      console.error("Error fetching menu notifications:", error);
+    }
+  };
+
+  const markNotificationRead = async (notificationId) => {
+    try {
+      await axios.put(`${API}/menu-notifications/${notificationId}/read`);
+      fetchMenuNotifications();
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await axios.put(`${API}/menu-notifications/mark-all-read`);
+      fetchMenuNotifications();
+      toast.success("Toutes les notifications marquées comme lues");
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+    }
+  };
+
+  // ============== SERVER DAILY REPORT FUNCTIONS ==============
+  
+  const fetchServerDailyReport = async (serverName, date) => {
+    try {
+      const targetDate = date || serverReportDate;
+      const res = await axios.get(`${API}/server-daily-report/${encodeURIComponent(serverName)}?date=${targetDate}`);
+      setServerDailyReport(res.data);
+    } catch (error) {
+      console.error("Error fetching server daily report:", error);
     }
   };
 
@@ -2620,17 +2692,30 @@ _Gérante - Espace Maxo_
   // ============== CRUD OPERATIONS ==============
   const saveProduct = async () => {
     try {
+      const modifierInfo = {
+        modified_by: currentUser?.full_name || currentUser?.username || "Utilisateur",
+        modified_by_role: currentUser?.role || "unknown"
+      };
+      
       if (editProduct) {
-        await axios.put(`${API}/caisse/products/${editProduct.id}`, productForm);
+        await axios.put(`${API}/caisse/products/${editProduct.id}`, {
+          ...productForm,
+          ...modifierInfo
+        });
         toast.success("Produit modifié");
       } else {
-        await axios.post(`${API}/caisse/products`, productForm);
+        await axios.post(`${API}/caisse/products?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`, productForm);
         toast.success("Produit ajouté");
       }
       setShowProductModal(false);
       setEditProduct(null);
       setProductForm({ name: "", price: 0, department: "bar", unit: "unité", category: "" });
       fetchAllData();
+      
+      // Refresh notifications if admin
+      if (currentUser?.role === 'admin') {
+        fetchMenuNotifications();
+      }
     } catch (error) {
       toast.error("Erreur");
     }
@@ -2639,9 +2724,19 @@ _Gérante - Espace Maxo_
   const deleteProduct = async (productId) => {
     if (!confirm("Supprimer ce produit ?")) return;
     try {
-      await axios.delete(`${API}/caisse/products/${productId}`);
+      const modifierInfo = {
+        modified_by: currentUser?.full_name || currentUser?.username || "Utilisateur",
+        modified_by_role: currentUser?.role || "unknown"
+      };
+      
+      await axios.delete(`${API}/caisse/products/${productId}?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`);
       toast.success("Produit supprimé");
       fetchAllData();
+      
+      // Refresh notifications if admin
+      if (currentUser?.role === 'admin') {
+        fetchMenuNotifications();
+      }
     } catch (error) {
       toast.error("Erreur");
     }
@@ -2816,6 +2911,93 @@ _Gérante - Espace Maxo_
             </div>
             
             <div className="flex items-center gap-4">
+              {/* Notification Bell for Admin */}
+              {currentUser?.role === 'admin' && (
+                <div className="relative">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setShowNotificationsPanel(!showNotificationsPanel)}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700/50 relative"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadNotificationCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">
+                        {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                      </span>
+                    )}
+                  </Button>
+                  
+                  {/* Notifications Panel */}
+                  {showNotificationsPanel && (
+                    <div className="absolute right-0 top-12 w-80 sm:w-96 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+                      <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+                        <h3 className="text-white font-semibold flex items-center gap-2">
+                          <Bell className="w-4 h-4" />
+                          Modifications du Menu
+                        </h3>
+                        {unreadNotificationCount > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={markAllNotificationsRead}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Tout marquer lu
+                          </Button>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        {menuNotifications.length === 0 ? (
+                          <p className="text-slate-500 text-center py-4 text-sm">Aucune notification</p>
+                        ) : (
+                          menuNotifications.slice(0, 20).map(notif => (
+                            <div 
+                              key={notif.id}
+                              onClick={() => markNotificationRead(notif.id)}
+                              className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${
+                                notif.is_read ? 'bg-slate-700/30' : 'bg-blue-900/30 border border-blue-500/30'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                                  notif.action === 'created' ? 'bg-green-400' :
+                                  notif.action === 'updated' ? 'bg-blue-400' :
+                                  'bg-red-400'
+                                }`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white text-sm font-medium">
+                                    {notif.action === 'created' && '➕ Nouveau produit'}
+                                    {notif.action === 'updated' && '✏️ Produit modifié'}
+                                    {notif.action === 'deleted' && '🗑️ Produit supprimé'}
+                                  </p>
+                                  <p className="text-slate-300 text-sm truncate">{notif.product_name}</p>
+                                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                                    <span>Par: {notif.modified_by}</span>
+                                    {notif.action === 'updated' && notif.old_price !== notif.new_price && (
+                                      <span className="text-amber-400">
+                                        {formatPrice(notif.old_price)} → {formatPrice(notif.new_price)} F
+                                      </span>
+                                    )}
+                                    {notif.action === 'created' && notif.new_price && (
+                                      <span className="text-green-400">{formatPrice(notif.new_price)} F</span>
+                                    )}
+                                  </div>
+                                  <p className="text-slate-500 text-xs mt-1">
+                                    {new Date(notif.created_at).toLocaleString('fr-FR', {
+                                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div className="text-right hidden md:block">
                 <p className="text-white font-medium">{currentUser?.full_name || currentUser?.username}</p>
                 <Badge className={
@@ -3001,6 +3183,12 @@ _Gérante - Espace Maxo_
             <TabsTrigger value="historique" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white">
               <Calendar className="w-4 h-4 mr-2" />Historique
             </TabsTrigger>
+            {/* Server Daily Report - Only for servers */}
+            {currentUser?.role === 'server' && (
+              <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+                <ClipboardList className="w-4 h-4 mr-2" />Mon Point
+              </TabsTrigger>
+            )}
             {/* Manager: Achats/Dépenses */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
@@ -5036,6 +5224,175 @@ _Gérante - Espace Maxo_
               )}
             </div>
           </TabsContent>
+
+          {/* ==================== SERVER DAILY REPORT TAB ==================== */}
+          {currentUser?.role === 'server' && (
+          <TabsContent value="mon_point">
+            <div className="space-y-4">
+              {/* Header with date selector */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-indigo-300 flex items-center gap-2">
+                  <ClipboardList className="w-6 h-6" />
+                  Mon Point Journalier
+                </h2>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="date"
+                    value={serverReportDate}
+                    onChange={(e) => setServerReportDate(e.target.value)}
+                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                  />
+                  <Button 
+                    onClick={() => fetchServerDailyReport(currentUser?.full_name || currentUser?.username, serverReportDate)}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Actualiser
+                  </Button>
+                </div>
+              </div>
+
+              {serverDailyReport ? (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Card className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border-indigo-500/50">
+                      <CardContent className="p-4 text-center">
+                        <Receipt className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-indigo-400">{serverDailyReport.total_invoices}</p>
+                        <p className="text-slate-400 text-sm">Commandes créées</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                      <CardContent className="p-4 text-center">
+                        <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-green-400">{serverDailyReport.validated_count}</p>
+                        <p className="text-slate-400 text-sm">Factures validées</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
+                      <CardContent className="p-4 text-center">
+                        <Clock className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-amber-400">{serverDailyReport.pending_count}</p>
+                        <p className="text-slate-400 text-sm">En attente</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-emerald-900/30 to-teal-900/20 border-emerald-500/50">
+                      <CardContent className="p-4 text-center">
+                        <DollarSign className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-emerald-400">{formatPrice(serverDailyReport.total_sales)} F</p>
+                        <p className="text-slate-400 text-sm">Total validé</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Breakdown by Department */}
+                  {serverDailyReport.department_breakdown && Object.keys(serverDailyReport.department_breakdown).length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-slate-300 flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5" />
+                          Répartition par Département
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {Object.entries(serverDailyReport.department_breakdown).map(([dept, data]) => {
+                            const deptConfig = DEPARTMENT_CONFIG[dept];
+                            return (
+                              <div key={dept} className={`p-3 rounded-lg ${deptConfig?.bgColor || 'bg-slate-700/30'} border ${deptConfig?.borderColor || 'border-slate-600'}`}>
+                                <p className={`font-medium ${deptConfig?.color || 'text-slate-300'}`}>{deptConfig?.label || dept}</p>
+                                <p className="text-white text-lg font-bold">{formatPrice(data.total)} F</p>
+                                <p className="text-slate-400 text-xs">{data.count} article(s)</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Breakdown by Payment Method */}
+                  {serverDailyReport.payment_methods && Object.keys(serverDailyReport.payment_methods).length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-slate-300 flex items-center gap-2">
+                          <Wallet className="w-5 h-5" />
+                          Modes de Paiement
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {Object.entries(serverDailyReport.payment_methods).map(([method, data]) => (
+                            <div key={method} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600">
+                              <p className="text-slate-300 font-medium capitalize">
+                                {method === 'cash' ? '💵 Espèces' : 
+                                 method === 'card' ? '💳 Carte' : 
+                                 method === 'mobile_money' ? '📱 Mobile Money' : 
+                                 method === 'cheque' ? '📝 Chèque' : method}
+                              </p>
+                              <p className="text-white text-lg font-bold">{formatPrice(data.total)} F</p>
+                              <p className="text-slate-400 text-xs">{data.count} transaction(s)</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Invoice List */}
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-slate-300 flex items-center gap-2">
+                        <FileText className="w-5 h-5" />
+                        Mes Factures du Jour
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {serverDailyReport.invoices?.length === 0 ? (
+                        <p className="text-slate-500 text-center py-8">Aucune facture pour cette date</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {serverDailyReport.invoices?.map((invoice) => (
+                            <div key={invoice.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <span className="text-white font-medium">{invoice.invoice_number}</span>
+                                <Badge className={
+                                  invoice.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' :
+                                  invoice.validation_status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                                  'bg-slate-500/20 text-slate-400'
+                                }>
+                                  {invoice.validation_status === 'validated' ? '✓ Validée' : 
+                                   invoice.validation_status === 'pending' ? '⏳ En attente' : invoice.validation_status}
+                                </Badge>
+                                {invoice.table_number && (
+                                  <Badge className="bg-slate-600/50 text-slate-300">Table {invoice.table_number}</Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
+                                <span className="text-slate-500 text-sm">
+                                  {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <Card className="bg-slate-800/30 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <ClipboardList className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Chargement de votre point journalier...</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+          )}
 
           {/* ==================== TABLES TAB (Manager/Admin) ==================== */}
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
