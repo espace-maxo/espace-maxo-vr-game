@@ -149,6 +149,13 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - `/api/applications` - Candidatures
 - `/api/admin/export/*` - Export CSV
 
+### APIs Menu Notifications & Server Point (Mars 2026)
+- `GET /api/menu-notifications` - Liste des notifications de modifications du menu (Admin)
+- `PUT /api/menu-notifications/{id}/read` - Marquer une notification comme lue
+- `PUT /api/menu-notifications/mark-all-read` - Marquer toutes les notifications comme lues
+- `DELETE /api/menu-notifications/{id}` - Supprimer une notification
+- `GET /api/server-daily-report/{server_name}?date=YYYY-MM-DD` - Point journalier d'un serveur
+
 ## Prioritized Backlog
 
 ### P0 (Completed)
@@ -261,6 +268,24 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Types: Notes simples et Listes de tâches avec cases à cocher
   - Priorités: Basse, Normale, Haute, Urgente
   - Archivage et historique daté
+- [x] **Gestion du Menu par la Gérante** (Mars 2026) - NOUVEAU
+  - La Gérante peut accéder à l'onglet Produits (catalogue du POS)
+  - Ajout, modification et suppression de produits
+  - Modifications immédiates sans validation préalable
+  - Notifications automatiques à l'Admin via icône cloche
+- [x] **Notifications Menu pour Admin** (Mars 2026) - NOUVEAU
+  - Icône cloche avec badge indiquant le nombre de notifications non lues
+  - Panneau des notifications : "Modifications du Menu"
+  - Détails : action (créé/modifié/supprimé), nom du produit, par qui, prix ancien/nouveau
+  - Marquer comme lu (individuel ou tout)
+  - Rafraîchissement automatique toutes les 30 secondes
+- [x] **Point Journalier Serveur** (Mars 2026) - NOUVEAU
+  - Nouvel onglet "Mon Point" visible uniquement pour les serveurs
+  - 4 cartes statistiques : Commandes créées, Factures validées, En attente, Total validé
+  - Répartition par département (Cuisine, Bar, Jeux, etc.)
+  - Répartition par mode de paiement
+  - Sélecteur de date pour consulter l'historique
+  - Liste des factures du jour avec statut et montants
 
 ## Architecture
 
