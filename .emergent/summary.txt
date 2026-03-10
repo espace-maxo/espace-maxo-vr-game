@@ -1,90 +1,116 @@
 <analysis>**original_problem_statement:**
-The user initially requested a full-stack POS application, Caisse Pro. The project has evolved to include:
+The user requested a comprehensive full-stack POS application named Caisse Pro for managing a restaurant/venue.
 
-*   **Role-Based Access:** Tailored UIs for Administrators, Managers, Servers, Cooks, and Coaches.
-*   **Advanced Order Management:** A workflow from order creation to final invoice, including printing separate slips for different departments.
-*   **Full Expense Management System:** A module for the Manager to request purchases (single or list-based), which an Administrator must approve, modify, or reject. Includes status tracking, PDF generation, and detailed views with fields for quantity, unit price, and auto-calculated totals. Grouped lists are treated as a single request with sub-items.
-*   **Table Management & Service Quality:** A dedicated Tables tab to monitor the status (free/occupied) of 20 tables in real-time. An automatic chronometer tracks service duration from order creation, with color codes (Green/Orange/Red) indicating service speed. The manager can manually stop the timer.
+**PRODUCT REQUIREMENTS:**
+*   **Role-Based Access Control:** Differentiated UIs for Administrators, Managers, Servers, Cooks, and Coaches.
+*   **Order & Invoice Management:** Complete workflow from order creation to final invoice, including printing slips for different departments and a history of all invoices.
+*   **Expense Management:** A module for Managers to request purchases (single or list-based), requiring Administrator approval. Includes status tracking and PDF generation.
+*   **Table Management & Service Quality:** A real-time dashboard to monitor the status of 20 tables, with an automatic chronometer tracking service duration and color-coded alerts (Green/Orange/Red).
 *   **Financial & Performance Reporting:**
-    *   A weekly summary (Point Hebdomadaire) showing sales, expenses, and profit/loss on a day-by-day basis. This report can be downloaded as a PDF or shared via WhatsApp.
-    *   The weekly report now includes a Quality of Service section, analyzing the daily/weekly service duration stats captured from the table management system.
-    *   An automatic alert for the Administrator if the weekly expense-to-revenue ratio exceeds 40%.
-*   **Invoice History:** A tab to browse all past finalized invoices.
-
-The user has also requested that the Admin be able to delete any expense operation and has asked for a general correction of all spelling and labeling errors.
+    *   A Weekly Summary showing daily sales, expenses, and profit, exportable as a PDF or shareable via WhatsApp.
+    *   The report includes a Quality of Service analysis based on table timer data.
+    *   An automatic alert if the weekly expense-to-revenue ratio exceeds 40%.
+*   **Rental Management (New):** A dedicated menu for the Manager/Admin to manage rentals for Salle de Fête (Party Room), Espace Jardin (Garden Area), and Salle de Jeux (Game Room).
+    *   Ability to book multiple spaces in a single combined rental.
+    *   Generate distinct PDF contracts for each rental type (and combined types), including specific clauses (e.g., caution deposit, rules for the garden).
+    *   Transform a rental contract into a final invoice, with options for both A4 and small thermal ticket formats.
+*   **Instructions & Notes (New):** A menu for the Manager to create and manage internal notes and to-do lists.
+*   **General:** Correction of all spelling and labeling errors throughout the application. Admin ability to delete any expense operation.
 
 **User's preferred language**: French. The next agent MUST respond in French only.
 
 **what currently exists?**
-A complex, feature-rich full-stack application built with React, FastAPI, and MongoDB. The entire application logic is contained within two massive monolithic files:  (now over 7,300 lines) and  (over 4,500 lines). This structure is causing significant stability and maintainability issues.
+A feature-rich full-stack application built with React, FastAPI, and MongoDB. The codebase is dangerously monolithic, with most logic in  (over 6,800 lines) and  (over 4,700 lines).
 
-The application includes PIN-based login, comprehensive order/invoice management, an advanced expense management workflow, real-time table monitoring with service quality timers, and detailed financial reporting with PDF/WhatsApp export.
+A critical refactoring process has begun, with two components (, ) extracted from . However, two major new features (Rental Management and a Notes system) were subsequently added, with their frontend logic being implemented as new standalone components but their backend logic being added directly into the  monolith, increasing its size and complexity. The application is functional but remains highly unstable and difficult to maintain.
 
 **Last working item**:
--   **Last item agent was working:** The agent was in the process of fulfilling the user's request to correct all spelling mistakes and incorrect labels (libellés) throughout the application. The agent has systematically read the entire  file to identify all the errors and is now ready to apply the fixes.
+-   **Last item agent was working:** Implementing the combined rental feature. The user wants to select multiple spaces (e.g., Party Room + Garden) in a single booking, with the price and contract reflecting the combination. The agent modified the creation form to allow multiple selections and was about to test the submission and subsequent logic (contract/invoice generation for combined rentals).
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend screenshot tool to verify UI text changes after applying the corrections.
+-   **Which testing method agent to use?** Frontend screenshot tool.
+    1.  Test creating a new rental with two or more spaces selected.
+    2.  Verify the total price is calculated correctly in the form.
+    3.  After creation, verify the new rental appears correctly in the list.
+    4.  Test generating a contract for the combined rental and check its content.
+    5.  Test generating both A4 and thermal invoices for the combined rental.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** Correct all spelling errors and review labels throughout the application. (Priority: P0)
--   **Issue 2:** Critical application instability and bug-proneness due to monolithic code structure. (Priority: P1)
--   **Issue 3:** User confusion between preview and production environments. (Priority: P2)
+-   **Issue 1:** Complete and verify the Combined Rentals feature. (Priority: P0)
+-   **Issue 2:** Critical application instability due to monolithic code structure. (Priority: P1)
+-   **Issue 3:** Potential mobile UX issue with horizontal tab scrolling. (Priority: P2)
 
 **Issues Detail:**
--   **Issue 1: Correct spelling errors and review labels.**
-    -   **Attempted fixes:** The agent has completed the analysis phase by reading the entire  file to locate errors. No code changes have been made yet.
+-   **Issue 1: Complete and verify the Combined Rentals feature.**
+    -   **Attempted fixes:** The agent has modified the frontend form UI to allow multi-selection of spaces. The backend data model implicitly supports this (by storing a string like ), but the logic for handling these combined types in contracts and price calculations needs to be fully tested and debugged.
     -   **Next debug checklist:**
-        1.  Based on the analysis, use  in parallel to correct all identified typos and incorrect labels in .
-        2.  Take screenshots of the corrected UI sections for user verification.
-    -   **Why fix this issue and what will be achieved with the fix?** To address the user's direct feedback, improve the professionalism of the application, and regain user satisfaction.
+        1.  In , test the  function to ensure it correctly formats the combined  and .
+        2.  Test the  function to ensure it correctly parses the combined space string and includes all relevant clauses.
+        3.  Test  and  to ensure they handle combined rentals correctly.
+        4.  Create a test rental combining all three spaces.
+    -   **Why fix this issue and what will be achieved with the fix?** This is the final part of the user's explicit request for the rental management feature.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** Y
+    -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Frontend.
     -   **Blocked on other issue:** None.
 
 -   **Issue 2: Critical application instability due to monolithic code structure.**
-    -   **Description:** The files  and  are unmanageably large, leading to slow performance, high bug proneness, and extreme difficulty in maintenance.
-    -   **Next debug checklist:** This is a critical refactoring task. After fixing the typos (Issue 1), the agent **must** propose this to the user as the highest priority.
-        1.  Plan to break down  into smaller, reusable components for each tab/feature (e.g., , , ) and place them in .
-        2.  Plan to move API logic from  into the respective router files in  (e.g., , , ).
-        3.  Explain the benefits to the user (stability, faster future development) to get their approval.
-    -   **Why fix this issue and what will be achieved with the fix?** To make the application stable, maintainable, and scalable. This will prevent the constant introduction of new bugs and reduce user frustration.
-    -   **Status:** NOT STARTED
+    -   **Description:** The files  and  are unmanageably large. While a small part of the frontend was refactored, new features were added to the backend monolith, worsening the problem. This technical debt is the root cause of most bugs and slowdowns.
+    -   **Next debug checklist:** After completing the current rental feature, this MUST be the next priority.
+        1.  Propose a clear plan to the user: Now that rentals are complete, to ensure stability, I will continue refactoring. I will start by moving the new rental and notes backend logic out of into their own files.
+        2.  Create  and .
+        3.  Move all related endpoints and logic from  to these new router files.
+        4.  Update  to include these new routers.
+        5.  Continue refactoring  by extracting  and .
+    -   **Why fix this issue and what will be achieved with the fix?** To make the application stable, maintainable, and scalable. This will prevent regressions and allow for faster, safer development in the future.
+    -   **Status:** NOT STARTED (for the backend part), IN PROGRESS (for the frontend part).
     -   **Is recurring issue?** Y
     -   **Should Test frontend/backend/both after fix?** Both, extensively, using the testing agent.
-    -   **Blocked on other issue:** Blocked by Issue 1 (Spelling corrections).
+    -   **Blocked on other issue:** Blocked by Issue 1.
 
--   **Issue 3: User confusion between preview and production environments.**
-    -   **Description:** The user repeatedly checks their live domain instead of the preview URL, leading to reports that nothing has changed.
-    -   **Next debug checklist:** Continue to politely remind the user in French to check the preview URL and explain that deployment to the live site is a separate action.
-    -   **Status:** BLOCKED (on user action).
+-   **Issue 3: Potential mobile UX issue with horizontal tab scrolling.**
+    -   **Description:** The user reported Location à disparu! (The rental tab disappeared). The agent found the tab was present but likely off-screen on mobile, requiring horizontal scrolling. The user may not be aware they can scroll the tabs.
+    -   **Next debug checklist:** In , within the  component, consider adding visual cues like gradient masks or arrows to indicate that the tab list is scrollable on smaller screens.
+    -   **Why fix this issue and what will be achieved with the fix?** To improve user experience on mobile and prevent user confusion.
+    -   **Status:** NOT STARTED
     -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Frontend.
+    -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   **Task 1: Correct spelling and labels.**
-    -   **Where to resume:** Apply the fixes identified during the file analysis of .
-    -   **What will be achieved with this?** A UI with corrected French text, addressing the user's main point of dissatisfaction.
+-   **Task 1: Finalize Combined Rental & Invoice Formats**
+    -   **Where to resume:** The UI for multi-select is done. The next step is to test the full end-to-end flow: submitting the form, and then generating contracts and invoices for a combined rental.
+    -   **What will be achieved with this?** Fulfills the user's request for package deals and flexible invoicing.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** Frontend.
     -   **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P0: CRITICAL REFACTORING of  & :** This is the most urgent technical task. The project's health depends on it. The agent must insist on this after fixing the immediate typo issue. The plan is to break down the monoliths into the existing (but unused)  and  directories.
+    -   **P0: CRITICAL REFACTORING of :** This is the highest priority after the current task. All rental and instruction endpoints must be moved out of the monolith into .
+    -   **P1: Continue CRITICAL REFACTORING of :** Extract more components like , , , etc.
+    -   **P2: Improve Mobile Tab Navigation:** Add visual indicators for horizontal scrolling on the main navigation tabs.
 
 **Completed work in this session**
--   **Expense Management System Overhaul:** Implemented click-to-edit, thermal printing format, detailed expense structure (Label, Quantity, Unit Price), grouped shopping lists, and Admin deletion rights.
--   **Table Management & Service Quality (New Major Feature):** Created a Tables tab for real-time status, an automatic service chronometer with color codes, and a manual stop button for managers.
--   **Enhanced Weekly Report (Point Hebdomadaire):** The report now includes a day-by-day view, integrated service quality metrics, and PDF/WhatsApp export options.
--   **Data Wipe:** All expense and invoice data were deleted via API calls as requested.
+-   **Bug Fixes & Polish:** Corrected all identified spelling mistakes and incorrect labels throughout . Fixed a missing  import and several misnamed function calls.
+-   **Initial Frontend Refactoring:** Began the critical refactoring of  by creating and integrating , , and , reducing the main file's size by ~500 lines.
+-   **New Feature: Rental Management:**
+    -   Implemented backend models and endpoints in .
+    -   Created  component with role-based access (Admin/Manager).
+    -   Implemented PDF contract generation via  with custom clauses per rental type.
+    -   Implemented invoice generation (A4 and thermal formats).
+    -   Fixed responsive design issues to make buttons visible on mobile.
+-   **New Feature: Instructions & Notes:**
+    -   Implemented backend models and endpoints in .
+    -   Created  component.
 
 **Earlier issues found/mentioned but not fixed**
--   The critical refactoring of  and  has been identified many times but always postponed for new features. The high number of bugs is a direct consequence of this technical debt.
+-   The backend monolith  has not been refactored at all. It has only grown larger, accumulating more technical debt.
+-   The frontend monolith  is only ~7% refactored. The bulk of the work remains.
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork:** Production Deployment Confusion. The user checks the live site instead of the preview URL.
+-   **Issue recurrence in previous fork:** Production vs. Preview URL confusion.
 -   **Recurrence count:** High.
 -   **Status:** BLOCKED (on user understanding).
 
@@ -92,73 +118,77 @@ The application includes PIN-based login, comprehensive order/invoice management
 
 
 **Key Technical Concepts**
--   **Frontend:** React, Tailwind CSS, shadcn/ui, , , . State is managed entirely with  and  within the monolithic .
+-   **Frontend:** React, Tailwind CSS, shadcn/ui, , ,  (for contracts/invoices).
 -   **Backend:** FastAPI (Python).
--   **Database:** MongoDB. The active database is .
+-   **Database:** MongoDB.
+-   **State Management:** Purely  and  within monolithic or large components.
 
 **key DB schema**
--   **invoices**: { , , , ,  }
--   **caisse_tables**: { ,  ('occupied', 'free'), , , ,  }
--   **expenses**: { , , , , ,  (auto-calculated), , , , : [{...}] }
--   **service_stats**: { Mon Mar  9 17:31:47 UTC 2026, ,  ('excellent', 'acceptable', 'slow'), ,  }
+-   **invoices**: { , , , ... }
+-   **caisse_tables**: { , , , ... }
+-   **expenses**: { , , , , ... }
+-   **service_stats**: { Tue Mar 10 03:13:51 UTC 2026, , , ... }
+-   **locations** (new): { ,  (e.g., 'salle_fete' or 'salle_fete+espace_jardin'), , Tue Mar 10 03:13:51 UTC 2026, , ... }
+-   **instructions** (new): { , , , ,  ('note', 'todo'), , ... }
 
 **changes in tech stack**
--   None.
+-   None.  was added as a frontend dependency for PDF generation.
 
 **All files of reference**
--   : The primary focus for the current spelling correction task. **CRITICAL REFACTOR TARGET.**
--   : The backend monolith. **CRITICAL REFACTOR TARGET.**
--   : Contains the Pydantic data models.
+-   : The main frontend monolith. Target for further refactoring.
+-   : The main backend monolith. Target for critical refactoring.
+-   : Contains all logic for the new rental management feature.
+-   : Contains all logic for the new notes feature.
+-   : Contains all Pydantic data models for the application.
 
 **Areas that need refactoring**:
--   ** (CRITICAL):** The file is now over 7,300 lines. It must be broken down into components for each tab and major feature to restore stability and maintainability.
--   ** (CRITICAL):** The file is over 4,500 lines. All API logic must be moved into the respective router files under .
+-   ** (CRITICAL):** Has grown even larger. All endpoints for locations, instructions, expenses, tables, etc., must be moved into their own router files in the  directory.
+-   ** (CRITICAL):** The refactoring has only just begun. The remaining tabs (Bons, Factures, Achats, etc.) must be extracted into their own components to reduce the file's size and complexity.
 
 **key api endpoints**
--    (GET, POST, DELETE): Manage expense requests.
--    (PUT): Update an expense.
--   : Get enhanced weekly report.
--    (GET): Get the real-time status of all tables.
--    (POST): Manually stops the service timer for a table.
--    (GET): Retrieves service quality statistics.
+-    (GET, POST, PUT, DELETE)
+-    (GET)
+-    (GET)
+-    (GET, POST, PUT, DELETE) (New)
+-    (GET, POST, PUT, DELETE) (New)
 
 **Critical Info for New Agent**
 -   **You MUST communicate in French.**
--   Your first action is to implement the spelling and label corrections in . The analysis is complete; you just need to apply the changes.
--   After the typos are fixed and verified, you **MUST** propose and begin the **critical refactoring** of  and . The current structure is unsustainable. Frame this as a necessary step to ensure application stability.
--   Continue to gently remind the user to test on the **preview URL**, not their production domain.
+-   Your immediate task is to finish and thoroughly test the combined rentals feature, ensuring contracts and invoices work correctly.
+-   Once the rental feature is complete and verified, you **MUST** prioritize and propose the **critical backend refactoring** of  to the user. This is the project's biggest point of failure.
+-   Continue the frontend refactoring of  after the backend is more stable.
+-   Be mindful of the horizontal scrolling issue on the mobile tab bar; it may cause user confusion.
 
 **documents and test reports created in this job**
--   
+-    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **oui vas y pour tout ca** (Yes, go ahead with all that) - User approved the agent's plan to fix spelling errors and then propose refactoring. (Status: **ADDRESSED**)
-2.  Review all labels (libellés). (Status: **IN PROGRESS**)
-3.  Fix all spelling errors. (Status: **IN PROGRESS**)
-4.  Add a manual stop button for table timers and integrate service quality analysis into the weekly report. (Status: Completed)
-5.  Enhance the weekly report to include purchases, provide a day-by-day breakdown, and add PDF/WhatsApp export. (Status: Completed)
-6.  Complaint: The table tracking system is not working. (Status: Resolved)
-7.  Request: I want to monitor tables (free/occupied) and track service quality with a chronometer. (Status: Completed)
-8.  Request: Delete everything (all invoices and expenses). (Status: Completed)
-9.  Request: Give the administrator the ability to delete all operations. (Status: Completed)
-10. Complaint: I am not at all satisfied, there are too many bugs. (Status: Partially Addressed - lead to current bug fixing effort)
+1.  **Les factures doivent être possibles pour les 2 format petit et grand) Il reste la location combinée de 2 ou plusieurs espaces** (Invoices must be possible in 2 formats (small and large). The combined rental of 2 or more spaces remains.) - *Status: IN PROGRESS.*
+2.  **Faire des contrats distincts pour chaque type de location... Pouvoir transformer les contrats en facture** (Make distinct contracts for each rental type... Be able to transform contracts into an invoice.) - *Status: Completed.*
+3.  **Je veux un contrat de location instituant une caution de 50.000...** (I want a rental contract with a 50,000 deposit...) - *Status: Completed.*
+4.  **Location à disparu!** (The rental [tab] has disappeared!) - *Status: Addressed (Agent concluded it was a scrolling issue).*
+5.  **Ça ne fonctionne toujours pas** (It still doesn't work) - Referring to creating a location as a Manager. - *Status: Resolved (Agent changed permissions).*
+6.  **Créer nouvelle location n'est pas visible sur téléphone** (Create new location is not visible on the phone) - *Status: Resolved (Agent fixed responsive CSS).*
+7.  **a** (User chose option 'a', referring to the creation of a new location not working). - *Status: Resolved.*
+8.  **La gestion des location ne fonctionne pas** (Rental management doesn't work) - *Status: Addressed (Agent found it was working, asked for clarification).*
+9.  **...un menu pour la gérante pour la gestion des locations... Un autre menu pour recevoir des instructions...** (...a menu for the manager for rental management... Another menu to receive instructions...) - *Status: Completed.*
+10. **oui** (yes) - User approved the refactoring plan. - *Status: Addressed.*
 
 **Project Health Check:**
 -   **Broken:**
-    -   **Maintainability & Stability:** The project is in a critical state. The monolithic architecture of  and  makes every change risky and prone to introducing new bugs. Refactoring is essential.
--   **Mocked:**
-    -   None.
+    -   **Maintainability & Stability:** The project is in a critical state. The monolithic architecture, especially in the backend (), makes every change risky and prone to introducing new bugs. Refactoring is essential for long-term survival.
 
 **3rd Party Integrations**
 -   Kkiapay: Mobile money payments.
 -   Recharts: Graphing library.
 -   Twilio: SMS notifications.
+-   jspdf: Frontend PDF generation for contracts and invoices.
 
 **Testing status**
--   **Testing agent used after significant changes:** NO. The previous session relied on manual testing, which was insufficient. The next agent should use the testing agent after the refactoring.
+-   **Testing agent used after significant changes:** NO. The session relied on manual  verification.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** None
--   **Known regressions:** The code is extremely fragile. The risk of regressions with any new change is very high until the refactoring is done.
+-   **Known regressions:** The code is extremely fragile. The risk of regressions is very high until the refactoring is completed.
 
 **Credentials to test flow:**
 -   **Caisse Pro Application:** 
@@ -169,4 +199,4 @@ The application includes PIN-based login, comprehensive order/invoice management
     -   **Coach Jeux Login:** Use PIN  for Coach Test.
 
 **What agent forgot to execute**
--   The critical refactoring of  and  has been consistently postponed. This is the single most important pending action for the health and stability of the project.</analysis>
+-   The agent did not start the planned refactoring of the backend  file. Instead, all new backend logic for two major features (Locations and Instructions) was added directly to this monolith, significantly increasing the project's technical debt and contradicting the approved plan to refactor.</analysis>

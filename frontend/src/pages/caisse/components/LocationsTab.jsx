@@ -64,9 +64,11 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   const [viewingLocation, setViewingLocation] = useState(null);
   const [filterSpace, setFilterSpace] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [showInvoiceChoice, setShowInvoiceChoice] = useState(false);
+  const [invoiceLocation, setInvoiceLocation] = useState(null);
   
   const [formData, setFormData] = useState({
-    space_type: "salle_fete",
+    space_types: ["salle_fete"], // Array for multiple spaces
     customer_name: "",
     customer_phone: "",
     reservation_date: "",
@@ -83,6 +85,32 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   const isManager = currentUser?.role === 'manager';
   const canManageLocations = isAdmin || isManager; // Both can create/edit/delete
 
+  // Calculate total price based on selected spaces
+  const calculateTotalPrice = (selectedSpaces) => {
+    return selectedSpaces.reduce((total, space) => {
+      return total + (SPACE_CONFIG[space]?.defaultPrice || 0);
+    }, 0);
+  };
+
+  // Toggle space selection for combined rentals
+  const toggleSpaceSelection = (spaceKey) => {
+    const currentSpaces = formData.space_types || [];
+    let newSpaces;
+    
+    if (currentSpaces.includes(spaceKey)) {
+      newSpaces = currentSpaces.filter(s => s !== spaceKey);
+      if (newSpaces.length === 0) newSpaces = [spaceKey];
+    } else {
+      newSpaces = [...currentSpaces, spaceKey];
+    }
+    
+    setFormData({
+      ...formData,
+      space_types: newSpaces,
+      rental_amount: calculateTotalPrice(newSpaces)
+    });
+  };
+
   useEffect(() => {
     fetchLocations();
   }, []);
@@ -98,9 +126,10 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   };
 
   const handleSpaceChange = (spaceType) => {
+    // For single space selection (backward compatibility)
     setFormData({
       ...formData,
-      space_type: spaceType,
+      space_types: [spaceType],
       rental_amount: SPACE_CONFIG[spaceType]?.defaultPrice || 50000
     });
   };
@@ -112,11 +141,19 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     }
 
     try {
+      // Convert space_types array to space_type string for backend
+      const submitData = {
+        ...formData,
+        space_type: formData.space_types.join('+'), // Combined spaces like "salle_fete+espace_jardin"
+        is_combined: formData.space_types.length > 1
+      };
+      delete submitData.space_types;
+
       if (editingLocation) {
-        await axios.put(`${API}/locations/${editingLocation.id}`, formData);
+        await axios.put(`${API}/locations/${editingLocation.id}`, submitData);
         toast.success("Location modifiée avec succès");
       } else {
-        await axios.post(`${API}/locations`, formData);
+        await axios.post(`${API}/locations`, submitData);
         toast.success("Location créée avec succès");
       }
       setShowModal(false);
@@ -155,8 +192,12 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
   const openEditModal = (location) => {
     setEditingLocation(location);
+    // Parse combined spaces
+    const spaceTypes = location.space_type?.includes('+') 
+      ? location.space_type.split('+') 
+      : [location.space_type];
     setFormData({
-      space_type: location.space_type,
+      space_types: spaceTypes,
       customer_name: location.customer_name,
       customer_phone: location.customer_phone,
       reservation_date: location.reservation_date,
@@ -173,7 +214,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
   const resetForm = () => {
     setFormData({
-      space_type: "salle_fete",
+      space_types: ["salle_fete"],
       customer_name: "",
       customer_phone: "",
       reservation_date: "",
@@ -249,19 +290,15 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   };
 
   // Generate and print contract for single or multiple spaces
-  const generateContract = (location, additionalSpaces = []) => {
-    const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
-    const allSpaces = [location.space_type, ...additionalSpaces];
-    const isMultiSpace = additionalSpaces.length > 0;
-    
-    // Calculate total for multi-space
-    let totalAmount = location.rental_amount;
-    let spacesLabel = spaceConfig.label;
-    
-    if (isMultiSpace) {
-      spacesLabel = allSpaces.map(s => SPACE_CONFIG[s]?.label || s).join(' + ');
-      // For demo, we just use the location amount
-    }
+  const generateContract = (location) => {
+    // Parse combined spaces from space_type field
+    const allSpaces = location.space_type?.includes('+') 
+      ? location.space_type.split('+') 
+      : [location.space_type];
+    const isMultiSpace = allSpaces.length > 1;
+    const spacesLabel = getSpaceLabel(location.space_type);
+    const primarySpace = allSpaces[0];
+    const spaceConfig = SPACE_CONFIG[primarySpace] || SPACE_CONFIG.salle_fete;
 
     const contractHTML = `
       <!DOCTYPE html>
@@ -378,12 +415,19 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     setTimeout(() => printWindow.print(), 500);
   };
 
-  // Convert location to invoice
-  const convertToInvoice = async (location) => {
-    const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
-    
-    // Generate invoice HTML
+  // Get space label (handle combined spaces)
+  const getSpaceLabel = (spaceType) => {
+    if (spaceType?.includes('+')) {
+      return spaceType.split('+').map(s => SPACE_CONFIG[s]?.label || s).join(' + ');
+    }
+    return SPACE_CONFIG[spaceType]?.label || spaceType;
+  };
+
+  // Convert location to invoice - LARGE FORMAT (A4)
+  const convertToInvoiceLarge = (location) => {
+    const spacesLabel = getSpaceLabel(location.space_type);
     const invoiceNumber = `FAC-LOC-${Date.now().toString().slice(-6)}`;
+    
     const invoiceHTML = `
       <!DOCTYPE html>
       <html>
@@ -407,7 +451,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           .total-section { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; }
           .total-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #dee2e6; }
           .total-row:last-child { border-bottom: none; }
-          .grand-total { font-size: 20px; color: #dc3545; font-weight: bold; background: #1a1a2e; color: white; padding: 15px; border-radius: 8px; margin-top: 10px; }
+          .grand-total { font-size: 20px; font-weight: bold; background: #1a1a2e; color: white; padding: 15px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; }
           .payment-info { margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745; }
           .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 15px; }
           .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
@@ -421,9 +465,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <div class="invoice-header">
           <div class="company-info">
             <h1>ESPACE MAXO</h1>
-            <p>Fidjrossè Plage, Cotonou<br>
-            Tél: +229 91 00 50 84<br>
-            Email: contact@espacemaxo.com</p>
+            <p>Fidjrossè Plage, Cotonou<br>Tél: +229 91 00 50 84<br>Email: contact@espacemaxo.com</p>
           </div>
           <div class="invoice-info">
             <div class="invoice-number">${invoiceNumber}</div>
@@ -438,8 +480,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <div class="client-section">
           <div class="client-box">
             <h3>👤 Client</h3>
-            <p><strong>${location.customer_name}</strong><br>
-            Tél: ${location.customer_phone}</p>
+            <p><strong>${location.customer_name}</strong><br>Tél: ${location.customer_phone}</p>
           </div>
           <div class="event-box">
             <h3>📅 Événement</h3>
@@ -452,28 +493,17 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
         <table>
           <thead>
-            <tr>
-              <th>Désignation</th>
-              <th>Qté</th>
-              <th class="text-right">Prix Unit.</th>
-              <th class="text-right">Total</th>
-            </tr>
+            <tr><th>Désignation</th><th>Qté</th><th class="text-right">Prix Unit.</th><th class="text-right">Total</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td>
-                <strong>Location ${spaceConfig.label}</strong><br>
-                <small style="color: #6c757d;">Du ${location.start_time} au ${location.end_time}</small>
-              </td>
+              <td><strong>Location ${spacesLabel}</strong><br><small style="color: #6c757d;">${location.start_time} - ${location.end_time}</small></td>
               <td>1</td>
               <td class="text-right">${formatPrice(location.rental_amount)} F</td>
               <td class="text-right"><strong>${formatPrice(location.rental_amount)} F</strong></td>
             </tr>
             <tr>
-              <td>
-                <strong>Caution (remboursable)</strong><br>
-                <small style="color: #6c757d;">Restituée après vérification de l'état des lieux</small>
-              </td>
+              <td><strong>Caution (remboursable)</strong><br><small style="color: #6c757d;">Restituée après état des lieux</small></td>
               <td>1</td>
               <td class="text-right">${formatPrice(CAUTION_AMOUNT)} F</td>
               <td class="text-right"><strong>${formatPrice(CAUTION_AMOUNT)} F</strong></td>
@@ -482,43 +512,23 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         </table>
 
         <div class="total-section">
-          <div class="total-row">
-            <span>Sous-total Location</span>
-            <span>${formatPrice(location.rental_amount)} F CFA</span>
-          </div>
-          <div class="total-row">
-            <span>Caution</span>
-            <span>${formatPrice(CAUTION_AMOUNT)} F CFA</span>
-          </div>
-          <div class="total-row">
-            <span><strong>Total à payer</strong></span>
-            <span><strong>${formatPrice(location.rental_amount + CAUTION_AMOUNT)} F CFA</strong></span>
-          </div>
-          <div class="total-row">
-            <span>Acompte versé</span>
-            <span style="color: #28a745;">- ${formatPrice(location.deposit_paid || 0)} F CFA</span>
-          </div>
+          <div class="total-row"><span>Sous-total Location</span><span>${formatPrice(location.rental_amount)} F CFA</span></div>
+          <div class="total-row"><span>Caution</span><span>${formatPrice(CAUTION_AMOUNT)} F CFA</span></div>
+          <div class="total-row"><span><strong>Total à payer</strong></span><span><strong>${formatPrice(location.rental_amount + CAUTION_AMOUNT)} F CFA</strong></span></div>
+          <div class="total-row"><span>Acompte versé</span><span style="color: #28a745;">- ${formatPrice(location.deposit_paid || 0)} F CFA</span></div>
         </div>
 
-        <div class="grand-total" style="display: flex; justify-content: space-between;">
-          <span>RESTE À PAYER</span>
-          <span>${formatPrice((location.rental_amount + CAUTION_AMOUNT) - (location.deposit_paid || 0))} F CFA</span>
-        </div>
+        <div class="grand-total"><span>RESTE À PAYER</span><span>${formatPrice((location.rental_amount + CAUTION_AMOUNT) - (location.deposit_paid || 0))} F CFA</span></div>
 
         <div class="payment-info">
           <h4 style="margin-top: 0;">💳 Modalités de paiement</h4>
-          <p>
-            <strong>Espèces :</strong> À régler sur place<br>
-            <strong>Mobile Money :</strong> +229 91 00 50 84<br>
-            <strong>Virement :</strong> Contactez-nous pour les coordonnées bancaires
-          </p>
-          <p><em>La caution de ${formatPrice(CAUTION_AMOUNT)} F CFA sera restituée après l'événement, sous réserve de l'état des lieux.</em></p>
+          <p><strong>Espèces :</strong> À régler sur place | <strong>Mobile Money :</strong> +229 91 00 50 84</p>
+          <p><em>La caution sera restituée après l'événement, sous réserve de l'état des lieux.</em></p>
         </div>
 
         <div class="footer">
           <p>Facture N° ${invoiceNumber} | Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'}</p>
           <p><strong>ESPACE MAXO</strong> - Fidjrossè Plage, Cotonou - Tél: +229 91 00 50 84</p>
-          <p style="font-size: 10px;">Merci de votre confiance !</p>
         </div>
       </body>
       </html>
@@ -529,12 +539,147 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 500);
+    toast.success("Facture A4 générée !");
+  };
+
+  // Convert location to invoice - SMALL FORMAT (Thermal Printer 58/80mm)
+  const convertToInvoiceSmall = (location) => {
+    const spacesLabel = getSpaceLabel(location.space_type);
+    const invoiceNumber = `FAC-${Date.now().toString().slice(-6)}`;
+    const totalToPay = (location.rental_amount + CAUTION_AMOUNT) - (location.deposit_paid || 0);
     
-    toast.success("Facture générée avec succès !");
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Ticket ${invoiceNumber}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Courier New', monospace; 
+            width: 80mm; 
+            padding: 5mm;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+          .header h1 { font-size: 16px; font-weight: bold; }
+          .header p { font-size: 10px; }
+          .invoice-num { text-align: center; font-size: 11px; margin: 5px 0; padding: 5px; background: #f0f0f0; }
+          .section { margin: 8px 0; padding: 5px 0; border-bottom: 1px dashed #000; }
+          .section-title { font-weight: bold; font-size: 11px; margin-bottom: 5px; }
+          .row { display: flex; justify-content: space-between; margin: 3px 0; }
+          .row-label { flex: 1; }
+          .row-value { text-align: right; font-weight: bold; }
+          .item-row { margin: 5px 0; }
+          .item-name { font-weight: bold; }
+          .item-details { font-size: 10px; color: #666; }
+          .total-section { margin-top: 10px; padding-top: 8px; border-top: 2px solid #000; }
+          .grand-total { font-size: 14px; font-weight: bold; text-align: center; padding: 8px; background: #000; color: #fff; margin: 8px 0; }
+          .status { text-align: center; padding: 5px; margin: 5px 0; font-weight: bold; }
+          .status-paid { background: #d4edda; }
+          .status-partial { background: #fff3cd; }
+          .status-pending { background: #f8d7da; }
+          .footer { text-align: center; font-size: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #000; }
+          .footer p { margin: 3px 0; }
+          .cut-line { text-align: center; margin-top: 15px; font-size: 10px; color: #999; }
+          @media print { 
+            body { width: 80mm; }
+            @page { size: 80mm auto; margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>ESPACE MAXO</h1>
+          <p>Fidjrossè Plage, Cotonou</p>
+          <p>Tél: +229 91 00 50 84</p>
+        </div>
+
+        <div class="invoice-num">
+          <strong>FACTURE N° ${invoiceNumber}</strong><br>
+          ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+        </div>
+
+        <div class="section">
+          <div class="section-title">CLIENT</div>
+          <div>${location.customer_name}</div>
+          <div style="font-size: 10px;">${location.customer_phone}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">ÉVÉNEMENT</div>
+          <div class="row"><span>Date:</span><span class="row-value">${location.reservation_date}</span></div>
+          <div class="row"><span>Horaires:</span><span class="row-value">${location.start_time}-${location.end_time}</span></div>
+          <div class="row"><span>Personnes:</span><span class="row-value">${location.number_of_guests}</span></div>
+          ${location.event_type ? `<div class="row"><span>Type:</span><span class="row-value">${location.event_type}</span></div>` : ''}
+        </div>
+
+        <div class="section">
+          <div class="section-title">DÉTAIL</div>
+          <div class="item-row">
+            <div class="item-name">${spacesLabel}</div>
+            <div class="row"><span>Location</span><span class="row-value">${formatPrice(location.rental_amount)} F</span></div>
+          </div>
+          <div class="item-row">
+            <div class="row"><span>Caution</span><span class="row-value">${formatPrice(CAUTION_AMOUNT)} F</span></div>
+            <div class="item-details">(remboursable)</div>
+          </div>
+        </div>
+
+        <div class="total-section">
+          <div class="row"><span>Sous-total</span><span class="row-value">${formatPrice(location.rental_amount + CAUTION_AMOUNT)} F</span></div>
+          <div class="row"><span>Acompte versé</span><span class="row-value" style="color: green;">-${formatPrice(location.deposit_paid || 0)} F</span></div>
+        </div>
+
+        <div class="grand-total">
+          RESTE À PAYER: ${formatPrice(totalToPay)} F
+        </div>
+
+        <div class="status ${totalToPay <= 0 ? 'status-paid' : location.deposit_paid > 0 ? 'status-partial' : 'status-pending'}">
+          ${totalToPay <= 0 ? '✓ PAYÉE' : location.deposit_paid > 0 ? '◐ ACOMPTE VERSÉ' : '○ EN ATTENTE'}
+        </div>
+
+        <div class="footer">
+          <p>Mobile Money: +229 91 00 50 84</p>
+          <p>Merci de votre confiance !</p>
+          <p style="margin-top: 5px;">Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'}</p>
+        </div>
+
+        <div class="cut-line">- - - - - ✂ - - - - -</div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(invoiceHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+    toast.success("Ticket généré !");
+  };
+
+  // Open invoice choice modal
+  const openInvoiceChoice = (location) => {
+    setInvoiceLocation(location);
+    setShowInvoiceChoice(true);
   };
 
   const filteredLocations = locations.filter(loc => {
-    if (filterSpace !== "all" && loc.space_type !== filterSpace) return false;
+    // Handle combined space filter - show if the filter matches any space in combined type
+    if (filterSpace !== "all") {
+      if (filterSpace === "combined") {
+        // Filter only combined rentals
+        if (!loc.space_type?.includes('+')) return false;
+      } else if (loc.space_type?.includes('+')) {
+        // For combined spaces, check if any of the spaces match the filter
+        const spaces = loc.space_type.split('+');
+        if (!spaces.includes(filterSpace)) return false;
+      } else if (loc.space_type !== filterSpace) {
+        return false;
+      }
+    }
     if (filterStatus !== "all" && loc.status !== filterStatus) return false;
     return true;
   });
@@ -581,6 +726,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-700">
               <SelectItem value="all">Tous les espaces</SelectItem>
+              <SelectItem value="combined">📦 Packs combinés</SelectItem>
               {Object.entries(SPACE_CONFIG).map(([key, config]) => (
                 <SelectItem key={key} value={key}>{config.label}</SelectItem>
               ))}
@@ -602,10 +748,17 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {Object.entries(SPACE_CONFIG).map(([key, config]) => {
           const Icon = config.icon;
-          const count = locations.filter(l => l.space_type === key && l.status === "confirmed").length;
+          // Count includes both single and combined spaces
+          const count = locations.filter(l => {
+            if (l.status !== "confirmed") return false;
+            if (l.space_type?.includes('+')) {
+              return l.space_type.split('+').includes(key);
+            }
+            return l.space_type === key;
+          }).length;
           return (
             <Card key={key} className={`${config.bgColor} ${config.borderColor} border`}>
               <CardContent className="p-4 text-center">
@@ -616,6 +769,16 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             </Card>
           );
         })}
+        {/* Combined Packs Stats */}
+        <Card className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border-purple-500/50 border">
+          <CardContent className="p-4 text-center">
+            <Building2 className="w-6 h-6 text-purple-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-purple-400">
+              {locations.filter(l => l.space_type?.includes('+') && l.status === "confirmed").length}
+            </p>
+            <p className="text-xs text-slate-400">Packs Combinés</p>
+          </CardContent>
+        </Card>
         <Card className="bg-amber-900/30 border-amber-500/50 border">
           <CardContent className="p-4 text-center">
             <DollarSign className="w-6 h-6 text-amber-400 mx-auto mb-1" />
@@ -641,27 +804,37 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       ) : (
         <div className="grid gap-3">
           {filteredLocations.map(location => {
-            const spaceConfig = SPACE_CONFIG[location.space_type] || SPACE_CONFIG.salle_fete;
-            const SpaceIcon = spaceConfig.icon;
+            // Handle combined spaces (e.g., "salle_fete+espace_jardin+salle_jeux")
+            const allSpaces = location.space_type?.includes('+') 
+              ? location.space_type.split('+') 
+              : [location.space_type];
+            const isCombined = allSpaces.length > 1;
+            const primarySpace = allSpaces[0];
+            const spaceConfig = SPACE_CONFIG[primarySpace] || SPACE_CONFIG.salle_fete;
+            const SpaceIcon = isCombined ? Building2 : spaceConfig.icon; // Use building icon for combined
+            const spacesLabel = getSpaceLabel(location.space_type);
             return (
-              <Card key={location.id} className={`${spaceConfig.bgColor} ${spaceConfig.borderColor} border`}>
+              <Card key={location.id} className={`${isCombined ? 'bg-gradient-to-r from-purple-900/30 via-green-900/20 to-blue-900/30 border-purple-500/50' : spaceConfig.bgColor + ' ' + spaceConfig.borderColor} border`}>
                 <CardContent className="p-4">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     {/* Left: Info */}
                     <div className="flex items-start gap-3 flex-1">
-                      <div className={`p-2 rounded-lg ${spaceConfig.bgColor}`}>
-                        <SpaceIcon className={`w-6 h-6 ${spaceConfig.color}`} />
+                      <div className={`p-2 rounded-lg ${isCombined ? 'bg-purple-900/50' : spaceConfig.bgColor}`}>
+                        <SpaceIcon className={`w-6 h-6 ${isCombined ? 'text-purple-400' : spaceConfig.color}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-white font-semibold">{location.customer_name}</h3>
                           {getStatusBadge(location.status)}
+                          {isCombined && (
+                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/50">📦 Pack combiné</Badge>
+                          )}
                           {location.event_type && (
                             <Badge className="bg-slate-700/50 text-slate-300">{location.event_type}</Badge>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm">
-                          <span className={spaceConfig.color}>{spaceConfig.label}</span>
+                          <span className={isCombined ? 'text-purple-300 font-medium' : spaceConfig.color}>{spacesLabel}</span>
                           <span className="text-slate-400 flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {location.reservation_date}
@@ -715,7 +888,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                         <Button 
                           size="sm" 
                           variant="ghost" 
-                          onClick={() => convertToInvoice(location)}
+                          onClick={() => openInvoiceChoice(location)}
                           className="text-amber-400 hover:text-amber-300"
                           title="Générer une facture"
                         >
@@ -764,28 +937,40 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* Space Type Selection */}
+            {/* Space Type Selection - Multiple selection */}
             <div className="space-y-2">
-              <Label className="text-slate-300">Type d'espace *</Label>
+              <Label className="text-slate-300">Espace(s) à louer * <span className="text-xs text-purple-400">(cliquez pour sélectionner plusieurs)</span></Label>
               <div className="grid grid-cols-3 gap-2">
                 {Object.entries(SPACE_CONFIG).map(([key, config]) => {
                   const Icon = config.icon;
+                  const isSelected = formData.space_types?.includes(key);
                   return (
                     <button
                       key={key}
-                      onClick={() => handleSpaceChange(key)}
-                      className={`p-3 rounded-lg border transition-all flex flex-col items-center gap-1 ${
-                        formData.space_type === key 
+                      onClick={() => toggleSpaceSelection(key)}
+                      className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 relative ${
+                        isSelected 
                           ? `${config.bgColor} ${config.borderColor} ${config.color}` 
                           : 'bg-slate-700/30 border-slate-600 text-slate-400 hover:border-slate-500'
                       }`}
                     >
+                      {isSelected && (
+                        <CheckCircle className="w-4 h-4 absolute top-1 right-1 text-green-400" />
+                      )}
                       <Icon className="w-5 h-5" />
-                      <span className="text-xs">{config.label}</span>
+                      <span className="text-xs text-center">{config.label}</span>
+                      <span className="text-xs opacity-60">{formatPrice(config.defaultPrice)} F</span>
                     </button>
                   );
                 })}
               </div>
+              {formData.space_types?.length > 1 && (
+                <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-2 text-center">
+                  <span className="text-purple-400 text-sm font-medium">
+                    📦 Pack combiné : {formData.space_types.map(s => SPACE_CONFIG[s]?.label).join(' + ')}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Customer Info */}
@@ -946,18 +1131,26 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             <div className="space-y-4 py-4">
               <div className="flex items-center gap-3">
                 {(() => {
-                  const config = SPACE_CONFIG[viewingLocation.space_type] || SPACE_CONFIG.salle_fete;
-                  const Icon = config.icon;
+                  const allSpaces = viewingLocation.space_type?.includes('+') 
+                    ? viewingLocation.space_type.split('+') 
+                    : [viewingLocation.space_type];
+                  const isCombined = allSpaces.length > 1;
+                  const primarySpace = allSpaces[0];
+                  const config = SPACE_CONFIG[primarySpace] || SPACE_CONFIG.salle_fete;
+                  const Icon = isCombined ? Building2 : config.icon;
                   return (
-                    <div className={`p-3 rounded-lg ${config.bgColor}`}>
-                      <Icon className={`w-8 h-8 ${config.color}`} />
+                    <div className={`p-3 rounded-lg ${isCombined ? 'bg-purple-900/50' : config.bgColor}`}>
+                      <Icon className={`w-8 h-8 ${isCombined ? 'text-purple-400' : config.color}`} />
                     </div>
                   );
                 })()}
                 <div>
                   <h3 className="text-white font-bold text-lg">{viewingLocation.customer_name}</h3>
-                  <p className="text-slate-400">{SPACE_CONFIG[viewingLocation.space_type]?.label}</p>
+                  <p className={viewingLocation.space_type?.includes('+') ? 'text-purple-300 font-medium' : 'text-slate-400'}>{getSpaceLabel(viewingLocation.space_type)}</p>
                 </div>
+                {viewingLocation.space_type?.includes('+') && (
+                  <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/50">📦 Pack</Badge>
+                )}
                 {getStatusBadge(viewingLocation.status)}
               </div>
 
@@ -1022,7 +1215,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
                 {/* Generate Invoice Button */}
                 <Button
-                  onClick={() => convertToInvoice(viewingLocation)}
+                  onClick={() => openInvoiceChoice(viewingLocation)}
                   className="bg-amber-600 hover:bg-amber-700"
                 >
                   <Receipt className="w-4 h-4 mr-2" />
@@ -1052,6 +1245,48 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Format Choice Modal */}
+      <Dialog open={showInvoiceChoice} onOpenChange={setShowInvoiceChoice}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-amber-400 flex items-center gap-2">
+              <Receipt className="w-5 h-5" />
+              Choisir le format
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            <p className="text-slate-400 text-sm text-center">Sélectionnez le format de la facture :</p>
+            
+            <Button
+              onClick={() => { convertToInvoiceLarge(invoiceLocation); setShowInvoiceChoice(false); }}
+              className="w-full bg-amber-600 hover:bg-amber-700 h-16"
+            >
+              <div className="flex items-center gap-3">
+                <FileText className="w-8 h-8" />
+                <div className="text-left">
+                  <p className="font-bold">Grand Format (A4)</p>
+                  <p className="text-xs opacity-75">Facture complète à imprimer</p>
+                </div>
+              </div>
+            </Button>
+            
+            <Button
+              onClick={() => { convertToInvoiceSmall(invoiceLocation); setShowInvoiceChoice(false); }}
+              className="w-full bg-slate-600 hover:bg-slate-500 h-16"
+            >
+              <div className="flex items-center gap-3">
+                <Receipt className="w-8 h-8" />
+                <div className="text-left">
+                  <p className="font-bold">Petit Format (Ticket)</p>
+                  <p className="text-xs opacity-75">Pour imprimante thermique</p>
+                </div>
+              </div>
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
