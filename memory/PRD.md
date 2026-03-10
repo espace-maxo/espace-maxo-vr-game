@@ -246,9 +246,16 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Réduction du fichier principal de 7321 à 6816 lignes (-7%)
 - [x] **Gestion des Locations** (Mars 2026) - NOUVEAU
   - Onglet "Locations" pour Salle de Fête, Espace Jardin, Salle de Jeux
-  - Admin: Créer, Modifier, Supprimer les réservations
-  - Gérante: Consultation seule
+  - Admin et Gérante: Créer, Modifier, Supprimer les réservations
   - Champs: Client, téléphone, date, horaires, invités, type événement, montant, acompte, solde
+- [x] **Locations Combinées** (Mars 2026) - NOUVEAU
+  - Sélection multiple d'espaces dans une seule réservation (Pack combiné)
+  - Calcul automatique du prix total (50000 + 30000 + 25000 = 105000 F)
+  - Badge "📦 Pack combiné" et affichage du label complet "Salle de Fête + Espace Jardin + Salle de Jeux"
+  - Statistiques dédiées pour les packs combinés
+  - Filtrage par espace individuel ou par "Packs combinés"
+  - Contrats avec clauses spécifiques de chaque espace inclus
+  - Factures A4 et tickets thermiques pour packs combinés
 - [x] **Instructions & Notes** (Mars 2026) - NOUVEAU
   - Communication bidirectionnelle Admin ↔ Gérante
   - Types: Notes simples et Listes de tâches avec cases à cocher
