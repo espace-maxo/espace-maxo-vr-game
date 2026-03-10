@@ -271,6 +271,16 @@ const CaissePage = () => {
   const [serverDailyReport, setServerDailyReport] = useState(null);
   const [serverReportDate, setServerReportDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
+  // ============== END OF SERVICE (for servers) ==============
+  const [showEndOfServiceModal, setShowEndOfServiceModal] = useState(false);
+  const [endOfServiceObservation, setEndOfServiceObservation] = useState("");
+  const [isSubmittingEndOfService, setIsSubmittingEndOfService] = useState(false);
+
+  // ============== SERVICE REPORTS (for Manager) ==============
+  const [serviceReports, setServiceReports] = useState([]);
+  const [unreadServiceReportsCount, setUnreadServiceReportsCount] = useState(0);
+  const [showServiceReportsPanel, setShowServiceReportsPanel] = useState(false);
+
   // ============== EXPENSES (Achats/Dépenses) ==============
   const [expenses, setExpenses] = useState([]);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -676,6 +686,16 @@ const CaissePage = () => {
     }
   }, [serverReportDate, activeTab, isAuthenticated, currentUser]);
 
+  // Fetch service reports for manager
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'manager') {
+      fetchServiceReports();
+      // Refresh service reports every 30 seconds
+      const interval = setInterval(fetchServiceReports, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, currentUser]);
+
   const fetchHistoryInvoices = async () => {
     try {
       const res = await axios.get(`${API}/invoices`, { params: { date: historyDate } });
@@ -796,6 +816,62 @@ const CaissePage = () => {
     } catch (error) {
       console.error("Error deleting expense:", error);
       toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // ============== END OF SERVICE FUNCTIONS (Server) ==============
+
+  const submitEndOfService = async () => {
+    try {
+      setIsSubmittingEndOfService(true);
+      const serverName = currentUser?.full_name || currentUser?.username;
+      
+      await axios.post(`${API}/server-end-of-service`, {
+        server_name: serverName,
+        server_id: currentUser?.id,
+        date: format(new Date(), "yyyy-MM-dd"),
+        observation: endOfServiceObservation
+      });
+      
+      toast.success("Votre point journalier a été envoyé à la gérante !");
+      setShowEndOfServiceModal(false);
+      setEndOfServiceObservation("");
+    } catch (error) {
+      console.error("Error submitting end of service:", error);
+      toast.error("Erreur lors de l'envoi du point");
+    } finally {
+      setIsSubmittingEndOfService(false);
+    }
+  };
+
+  // ============== SERVICE REPORTS FUNCTIONS (Manager) ==============
+
+  const fetchServiceReports = async () => {
+    try {
+      const res = await axios.get(`${API}/server-end-of-service-reports`);
+      setServiceReports(res.data.reports || []);
+      setUnreadServiceReportsCount(res.data.unread_count || 0);
+    } catch (error) {
+      console.error("Error fetching service reports:", error);
+    }
+  };
+
+  const markServiceReportRead = async (reportId) => {
+    try {
+      await axios.put(`${API}/server-end-of-service-reports/${reportId}/read`);
+      fetchServiceReports();
+    } catch (error) {
+      console.error("Error marking service report as read:", error);
+    }
+  };
+
+  const markAllServiceReportsRead = async () => {
+    try {
+      await axios.put(`${API}/server-end-of-service-reports/mark-all-read`);
+      fetchServiceReports();
+      toast.success("Tous les points marqués comme lus");
+    } catch (error) {
+      console.error("Error marking all service reports as read:", error);
     }
   };
 
@@ -2911,7 +2987,7 @@ _Gérante - Espace Maxo_
             </div>
             
             <div className="flex items-center gap-4">
-              {/* Notification Bell for Admin */}
+              {/* Notification Bell for Admin (Menu modifications) */}
               {currentUser?.role === 'admin' && (
                 <div className="relative">
                   <Button 
@@ -2996,6 +3072,109 @@ _Gérante - Espace Maxo_
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Service Reports Bell for Manager (Points des serveurs) */}
+              {currentUser?.role === 'manager' && (
+                <div className="relative">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setShowServiceReportsPanel(!showServiceReportsPanel)}
+                    className="text-slate-400 hover:text-white hover:bg-slate-700/50 relative"
+                  >
+                    <ClipboardList className="w-5 h-5" />
+                    {unreadServiceReportsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">
+                        {unreadServiceReportsCount > 9 ? '9+' : unreadServiceReportsCount}
+                      </span>
+                    )}
+                  </Button>
+                  
+                  {/* Service Reports Panel */}
+                  {showServiceReportsPanel && (
+                    <div className="absolute right-0 top-12 w-80 sm:w-96 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-[500px] overflow-y-auto">
+                      <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+                        <h3 className="text-white font-semibold flex items-center gap-2">
+                          <ClipboardList className="w-4 h-4" />
+                          Points des Serveurs
+                        </h3>
+                        {unreadServiceReportsCount > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={markAllServiceReportsRead}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Tout marquer lu
+                          </Button>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        {serviceReports.length === 0 ? (
+                          <p className="text-slate-500 text-center py-4 text-sm">Aucun point reçu</p>
+                        ) : (
+                          serviceReports.slice(0, 20).map(report => (
+                            <div 
+                              key={report.id}
+                              onClick={() => markServiceReportRead(report.id)}
+                              className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${
+                                report.is_read ? 'bg-slate-700/30' : 'bg-indigo-900/30 border border-indigo-500/30'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                                  report.is_read ? 'bg-slate-400' : 'bg-indigo-400'
+                                }`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white text-sm font-medium flex items-center gap-2">
+                                    <User className="w-4 h-4" />
+                                    {report.server_name}
+                                  </p>
+                                  <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                                      <p className="text-indigo-400 font-bold">{report.total_invoices}</p>
+                                      <p className="text-slate-500">Commandes</p>
+                                    </div>
+                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                                      <p className="text-green-400 font-bold">{report.validated_invoices}</p>
+                                      <p className="text-slate-500">Validées</p>
+                                    </div>
+                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
+                                      <p className="text-amber-400 font-bold">{formatPrice(report.total_sales)} F</p>
+                                      <p className="text-slate-500">Total</p>
+                                    </div>
+                                  </div>
+                                  {report.observation && (
+                                    <div className="mt-2 p-2 bg-slate-700/30 rounded text-xs">
+                                      <p className="text-slate-400 font-medium mb-1">Observation:</p>
+                                      <p className="text-slate-300 italic">"{report.observation}"</p>
+                                    </div>
+                                  )}
+                                  <p className="text-slate-500 text-xs mt-2">
+                                    {new Date(report.created_at).toLocaleString('fr-FR', {
+                                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* End of Service Button for Servers */}
+              {currentUser?.role === 'server' && (
+                <Button 
+                  onClick={() => setShowEndOfServiceModal(true)}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Terminer Service
+                </Button>
               )}
               
               <div className="text-right hidden md:block">
@@ -7197,6 +7376,77 @@ _Gérante - Espace Maxo_
               className="w-full border-slate-600 text-slate-400"
             >
               Fermer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* End of Service Modal (for Servers) */}
+      <Dialog open={showEndOfServiceModal} onOpenChange={setShowEndOfServiceModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <ClipboardList className="w-6 h-6 text-indigo-400" />
+              Terminer Mon Service
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Summary Preview */}
+            {serverDailyReport && (
+              <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                <h4 className="text-sm font-medium text-slate-400 mb-3">Résumé de votre journée</h4>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-indigo-900/30 rounded-lg p-2">
+                    <p className="text-2xl font-bold text-indigo-400">{serverDailyReport.total_invoices}</p>
+                    <p className="text-xs text-slate-500">Commandes</p>
+                  </div>
+                  <div className="bg-green-900/30 rounded-lg p-2">
+                    <p className="text-2xl font-bold text-green-400">{serverDailyReport.validated_count}</p>
+                    <p className="text-xs text-slate-500">Validées</p>
+                  </div>
+                  <div className="bg-amber-900/30 rounded-lg p-2">
+                    <p className="text-2xl font-bold text-amber-400">{formatPrice(serverDailyReport.total_sales)} F</p>
+                    <p className="text-xs text-slate-500">Total</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Observation Field */}
+            <div>
+              <Label className="text-slate-300 text-sm mb-2 block">
+                Observation (optionnel)
+              </Label>
+              <Textarea
+                value={endOfServiceObservation}
+                onChange={(e) => setEndOfServiceObservation(e.target.value)}
+                placeholder="Ex: Retard livraison fournisseur, problème caisse, incident client..."
+                className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 min-h-[100px]"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Cette observation sera envoyée à la gérante avec votre point journalier
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowEndOfServiceModal(false)}
+              className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={submitEndOfService}
+              disabled={isSubmittingEndOfService}
+              className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            >
+              {isSubmittingEndOfService ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Envoyer le Point
             </Button>
           </div>
         </DialogContent>

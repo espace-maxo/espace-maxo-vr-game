@@ -3753,6 +3753,96 @@ async def get_server_daily_report(server_name: str, date: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== SERVER END OF SERVICE REPORTS ENDPOINTS ==============
+
+@api_router.post("/server-end-of-service")
+async def create_end_of_service_report(report_data: dict = Body(...)):
+    """Create an end of service report for a server and notify manager"""
+    try:
+        server_name = report_data.get("server_name")
+        server_id = report_data.get("server_id")
+        observation = report_data.get("observation", "")
+        target_date = report_data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        
+        # Get server's daily stats
+        invoices = await db.invoices.find({
+            "server_name": server_name,
+            "date": target_date
+        }, {"_id": 0}).to_list(500)
+        
+        total_invoices = len(invoices)
+        validated_invoices = len([inv for inv in invoices if inv.get("validation_status") == "validated"])
+        pending_invoices = len([inv for inv in invoices if inv.get("validation_status") == "pending"])
+        total_sales = sum(inv.get("total", 0) for inv in invoices if inv.get("validation_status") == "validated")
+        
+        # Create the report
+        report = {
+            "id": str(uuid.uuid4()),
+            "server_name": server_name,
+            "server_id": server_id,
+            "date": target_date,
+            "total_invoices": total_invoices,
+            "validated_invoices": validated_invoices,
+            "pending_invoices": pending_invoices,
+            "total_sales": total_sales,
+            "observation": observation,
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.server_end_of_service_reports.insert_one(report)
+        
+        return {
+            "success": True,
+            "report": {k: v for k, v in report.items() if k != "_id"}
+        }
+    except Exception as e:
+        logger.error(f"Error creating end of service report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/server-end-of-service-reports")
+async def get_end_of_service_reports(unread_only: bool = False, date: Optional[str] = None):
+    """Get all end of service reports (for Manager/Admin)"""
+    try:
+        query = {}
+        if unread_only:
+            query["is_read"] = False
+        if date:
+            query["date"] = date
+            
+        reports = await db.server_end_of_service_reports.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        unread_count = await db.server_end_of_service_reports.count_documents({"is_read": False})
+        return {"reports": reports, "unread_count": unread_count}
+    except Exception as e:
+        logger.error(f"Error fetching end of service reports: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/server-end-of-service-reports/{report_id}/read")
+async def mark_service_report_read(report_id: str):
+    """Mark a service report as read"""
+    try:
+        await db.server_end_of_service_reports.update_one(
+            {"id": report_id},
+            {"$set": {"is_read": True}}
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error marking report as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/server-end-of-service-reports/mark-all-read")
+async def mark_all_service_reports_read():
+    """Mark all service reports as read"""
+    try:
+        result = await db.server_end_of_service_reports.update_many(
+            {"is_read": False},
+            {"$set": {"is_read": True}}
+        )
+        return {"success": True, "count": result.modified_count}
+    except Exception as e:
+        logger.error(f"Error marking all reports as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== CAISSE CLIENTS ENDPOINTS ==============
 
 @api_router.post("/caisse/clients")
@@ -4931,6 +5021,21 @@ class MenuNotification(BaseModel):
     new_price: Optional[float] = None
     modified_by: str  # User name
     modified_by_role: str  # manager or admin
+    is_read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# ============== SERVER END OF SERVICE REPORT MODEL ==============
+
+class ServerEndOfServiceReport(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    server_name: str
+    server_id: Optional[str] = None
+    date: str  # YYYY-MM-DD
+    total_invoices: int
+    validated_invoices: int
+    pending_invoices: int
+    total_sales: float
+    observation: Optional[str] = None
     is_read: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
