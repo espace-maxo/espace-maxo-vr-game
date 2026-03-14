@@ -298,6 +298,22 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
   - Gérante reçoit notification avec badge sur icône 📋 (Points des Serveurs)
   - Panneau listant tous les points reçus avec: nom serveur, statistiques, observation, date/heure
   - Option "Marquer comme lu" individuel ou global
+- [x] **Accompagnement Gratuit** (Mars 2026) - NOUVEAU
+  - Bouton "+ Accomp. Gratuit" (jaune) visible quand la commande a des articles
+  - Modal avec 14 accompagnements disponibles (Riz, Frites, Pâtes, etc.)
+  - Ajoute l'accompagnement avec "(GRATUIT)" et prix 0 F
+- [x] **Clic sur Table pour Détails (Gérante)** (Mars 2026) - NOUVEAU
+  - Dans l'onglet "Tables", la gérante peut cliquer sur une table occupée
+  - Modal avec détails: Serveur, Client, Durée, Couleur chronomètre
+  - Liste des articles de la commande en cours avec quantités et prix
+  - Total de la commande
+- [x] **Badge Achats en Révision (Gérante)** (Mars 2026) - NOUVEAU
+  - Badge orange dans le header quand des achats ont le statut "revision_requested"
+  - Clic redirige vers l'onglet Achats
+  - Section "À RÉVISER" visible dans l'onglet Achats
+- [x] **Bug Fix: Mon Point Serveur** (Mars 2026)
+  - Corrigé le filtre backend: utilise `created_by` au lieu de `server_name`
+  - Corrigé le filtre date: utilise regex sur `created_at` au lieu de `date` inexistant
 
 ## Architecture
 
