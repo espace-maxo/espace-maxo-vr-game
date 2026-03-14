@@ -3646,6 +3646,55 @@ async def delete_caisse_product(product_id: str, modified_by: str = "", modified
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.post("/caisse/products/init-default")
+async def init_default_products(products: List[dict] = Body(...)):
+    """Initialize default products in database (one-time migration)"""
+    try:
+        # Check if products already exist
+        existing_count = await db.caisse_products.count_documents({})
+        if existing_count > 0:
+            # Return existing products count
+            return {"success": True, "message": "Products already initialized", "count": existing_count}
+        
+        # Insert all products
+        if products:
+            for product in products:
+                product["id"] = product.get("id", str(uuid.uuid4()))
+            await db.caisse_products.insert_many(products)
+        
+        return {"success": True, "message": f"Initialized {len(products)} products", "count": len(products)}
+    except Exception as e:
+        logger.error(f"Error initializing default products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/caisse/products/sync-defaults")
+async def sync_default_products(products: List[dict] = Body(...)):
+    """Sync default products - add missing ones without overwriting existing"""
+    try:
+        added_count = 0
+        for product in products:
+            # Check if product already exists by id
+            existing = await db.caisse_products.find_one({"id": product.get("id")})
+            if not existing:
+                product["id"] = product.get("id", str(uuid.uuid4()))
+                await db.caisse_products.insert_one(product)
+                added_count += 1
+        
+        total = await db.caisse_products.count_documents({})
+        return {"success": True, "added": added_count, "total": total}
+    except Exception as e:
+        logger.error(f"Error syncing default products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting caisse product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============== MENU NOTIFICATIONS ENDPOINTS ==============
 
 @api_router.get("/menu-notifications")

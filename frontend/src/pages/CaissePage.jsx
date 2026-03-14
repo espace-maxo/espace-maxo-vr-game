@@ -573,20 +573,98 @@ const CaissePage = () => {
         setLastPendingCount(pendingInvoices.length);
       }
       
-      // Merge custom products with default catalog
+      // Sync default products to database if needed
       const customProducts = productsRes.data.products || [];
-      if (customProducts.length > 0) {
-        const newCatalog = { ...DEFAULT_CATALOG };
-        customProducts.forEach(p => {
-          if (!newCatalog[p.department]) newCatalog[p.department] = [];
-          newCatalog[p.department].push(p);
-        });
-        setCatalog(newCatalog);
+      
+      // Check if we need to sync default products (check if plats/accomp/jeux are missing)
+      const hasPlats = customProducts.some(p => p.department === 'salle_jardin');
+      const hasAccomp = customProducts.some(p => p.department === 'accompagnements');
+      const hasJeux = customProducts.some(p => p.department === 'jeux');
+      const hasBar = customProducts.some(p => p.department === 'bar');
+      
+      if (!hasPlats || !hasAccomp || !hasJeux || !hasBar) {
+        console.log("Syncing missing default products to database...");
+        const allDefaultProducts = [];
+        
+        // Add salle_jardin (Plats) products if missing
+        if (!hasPlats) {
+          DEFAULT_CATALOG.salle_jardin.forEach(p => {
+            allDefaultProducts.push({ ...p, department: "salle_jardin", isDefault: true });
+          });
+        }
+        
+        // Add accompagnements products if missing
+        if (!hasAccomp) {
+          DEFAULT_CATALOG.accompagnements.forEach(p => {
+            allDefaultProducts.push({ ...p, department: "accompagnements", isDefault: true });
+          });
+        }
+        
+        // Add jeux products if missing
+        if (!hasJeux) {
+          DEFAULT_CATALOG.jeux.forEach(p => {
+            allDefaultProducts.push({ ...p, department: "jeux", isDefault: true });
+          });
+        }
+        
+        // Add bar products if missing
+        if (!hasBar) {
+          DEFAULT_CATALOG.bar.forEach(p => {
+            allDefaultProducts.push({ ...p, department: "bar", isDefault: true });
+          });
+        }
+        
+        if (allDefaultProducts.length > 0) {
+          try {
+            await axios.post(`${API}/caisse/products/sync-defaults`, allDefaultProducts);
+            console.log(`Synced ${allDefaultProducts.length} default products!`);
+            // Fetch again to get the updated products from DB
+            const refreshRes = await axios.get(`${API}/caisse/products`);
+            const dbProducts = refreshRes.data.products || [];
+            buildCatalogFromProducts(dbProducts);
+            setProducts(dbProducts);
+          } catch (err) {
+            console.error("Error syncing products:", err);
+            // Fallback: merge custom products with defaults
+            const merged = [...customProducts];
+            allDefaultProducts.forEach(dp => {
+              if (!merged.find(p => p.id === dp.id)) merged.push(dp);
+            });
+            buildCatalogFromProducts(merged);
+            setProducts(merged);
+          }
+        } else {
+          buildCatalogFromProducts(customProducts);
+          setProducts(customProducts);
+        }
+      } else {
+        // All departments have products, use them
+        buildCatalogFromProducts(customProducts);
+        setProducts(customProducts);
       }
-      setProducts(customProducts);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
+  };
+  
+  // Helper function to build catalog from database products
+  const buildCatalogFromProducts = (dbProducts) => {
+    const newCatalog = {
+      salle_jardin: [],
+      accompagnements: [],
+      jeux: [],
+      bar: [],
+      location: [],
+      autres: []
+    };
+    
+    dbProducts.forEach(p => {
+      const dept = p.department || 'autres';
+      if (!newCatalog[dept]) newCatalog[dept] = [];
+      newCatalog[dept].push(p);
+    });
+    
+    setCatalog(newCatalog);
   };
 
   const fetchMonthlyStats = async () => {
@@ -4775,7 +4853,8 @@ _Gérante - Espace Maxo_
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(DEPARTMENT_CONFIG).map(([dept, config]) => {
                   const Icon = config.icon;
-                  const deptProducts = products.filter(p => p.department === dept);
+                  // Use catalog which contains all products (default + custom)
+                  const deptProducts = catalog[dept] || [];
                   return (
                     <Card key={dept} className={`bg-slate-800/50 ${config.borderColor} border`}>
                       <CardHeader className="py-3">
@@ -4784,25 +4863,30 @@ _Gérante - Espace Maxo_
                           {config.label} ({deptProducts.length})
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
+                      <CardContent className="space-y-2 max-h-96 overflow-y-auto">
                         {deptProducts.map((product, idx) => (
                           <div key={`${dept}-${product.id}-${idx}`} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2">
-                            <div>
-                              <p className="text-white text-sm">{product.name}</p>
-                              <p className="text-slate-400 text-xs">{formatPrice(product.price)} F/{product.unit}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm truncate">{product.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-slate-400 text-xs">{formatPrice(product.price)} F/{product.unit}</p>
+                                {product.category && (
+                                  <Badge className="bg-slate-600/50 text-slate-300 text-xs">{product.category}</Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" onClick={() => { setEditProduct(product); setProductForm(product); setShowProductModal(true); }} className="w-7 h-7 text-slate-400">
+                            <div className="flex gap-1 ml-2">
+                              <Button size="icon" variant="ghost" onClick={() => { setEditProduct(product); setProductForm({...product, department: dept}); setShowProductModal(true); }} className="w-7 h-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20">
                                 <Edit2 className="w-3 h-3" />
                               </Button>
-                              <Button size="icon" variant="ghost" onClick={() => deleteProduct(product.id)} className="w-7 h-7 text-red-400">
+                              <Button size="icon" variant="ghost" onClick={() => deleteProduct(product.id)} className="w-7 h-7 text-red-400 hover:text-red-300 hover:bg-red-500/20">
                                 <Trash2 className="w-3 h-3" />
                               </Button>
                             </div>
                           </div>
                         ))}
                         {deptProducts.length === 0 && (
-                          <p className="text-slate-500 text-center py-4 text-sm">Aucun produit personnalisé</p>
+                          <p className="text-slate-500 text-center py-4 text-sm">Aucun produit</p>
                         )}
                       </CardContent>
                     </Card>
