@@ -280,6 +280,11 @@ const CaissePage = () => {
   const [serviceReports, setServiceReports] = useState([]);
   const [unreadServiceReportsCount, setUnreadServiceReportsCount] = useState(0);
   const [showServiceReportsPanel, setShowServiceReportsPanel] = useState(false);
+  
+  // Detailed view of a server's point (for Manager)
+  const [viewingServerReport, setViewingServerReport] = useState(null);
+  const [viewingServerDetailedReport, setViewingServerDetailedReport] = useState(null);
+  const [loadingServerDetail, setLoadingServerDetail] = useState(false);
 
   // ============== EXPENSES (Achats/Dépenses) ==============
   const [expenses, setExpenses] = useState([]);
@@ -879,6 +884,29 @@ const CaissePage = () => {
       toast.success("Tous les points marqués comme lus");
     } catch (error) {
       console.error("Error marking all service reports as read:", error);
+    }
+  };
+
+  // Open detailed view of a server's daily report
+  const openServerReportDetail = async (report) => {
+    try {
+      setLoadingServerDetail(true);
+      setViewingServerReport(report);
+      setShowServiceReportsPanel(false);
+      
+      // Fetch the detailed daily report for this server
+      const res = await axios.get(`${API}/server-daily-report/${encodeURIComponent(report.server_name)}?date=${report.date}`);
+      setViewingServerDetailedReport(res.data);
+      
+      // Mark as read
+      if (!report.is_read) {
+        markServiceReportRead(report.id);
+      }
+    } catch (error) {
+      console.error("Error fetching server detail report:", error);
+      toast.error("Erreur lors du chargement du rapport détaillé");
+    } finally {
+      setLoadingServerDetail(false);
     }
   };
 
@@ -3141,9 +3169,9 @@ _Gérante - Espace Maxo_
                           serviceReports.slice(0, 20).map(report => (
                             <div 
                               key={report.id}
-                              onClick={() => markServiceReportRead(report.id)}
-                              className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${
-                                report.is_read ? 'bg-slate-700/30' : 'bg-indigo-900/30 border border-indigo-500/30'
+                              onClick={() => openServerReportDetail(report)}
+                              className={`p-3 rounded-lg mb-2 cursor-pointer transition-all hover:scale-[1.02] ${
+                                report.is_read ? 'bg-slate-700/30 hover:bg-slate-700/50' : 'bg-indigo-900/30 border border-indigo-500/30 hover:bg-indigo-900/50'
                               }`}
                             >
                               <div className="flex items-start gap-2">
@@ -3151,10 +3179,13 @@ _Gérante - Espace Maxo_
                                   report.is_read ? 'bg-slate-400' : 'bg-indigo-400'
                                 }`}></div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-white text-sm font-medium flex items-center gap-2">
-                                    <User className="w-4 h-4" />
-                                    {report.server_name}
-                                  </p>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-white text-sm font-medium flex items-center gap-2">
+                                      <User className="w-4 h-4" />
+                                      {report.server_name}
+                                    </p>
+                                    <Eye className="w-4 h-4 text-slate-400" />
+                                  </div>
                                   <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
                                     <div className="bg-slate-700/50 rounded p-1.5 text-center">
                                       <p className="text-indigo-400 font-bold">{report.total_invoices}</p>
@@ -3172,13 +3203,15 @@ _Gérante - Espace Maxo_
                                   {report.observation && (
                                     <div className="mt-2 p-2 bg-slate-700/30 rounded text-xs">
                                       <p className="text-slate-400 font-medium mb-1">Observation:</p>
-                                      <p className="text-slate-300 italic">"{report.observation}"</p>
+                                      <p className="text-slate-300 italic truncate">"{report.observation}"</p>
                                     </div>
                                   )}
-                                  <p className="text-slate-500 text-xs mt-2">
+                                  <p className="text-slate-500 text-xs mt-2 flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
                                     {new Date(report.created_at).toLocaleString('fr-FR', {
                                       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
                                     })}
+                                    <span className="ml-auto text-indigo-400 text-xs">Cliquer pour détails →</span>
                                   </p>
                                 </div>
                               </div>
@@ -7535,6 +7568,189 @@ _Gérante - Espace Maxo_
           >
             Annuler
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Server Report Detail Modal (for Manager viewing server's point) */}
+      <Dialog open={!!viewingServerReport} onOpenChange={(open) => { if (!open) { setViewingServerReport(null); setViewingServerDetailedReport(null); } }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 bg-indigo-900/50 rounded-lg">
+                <User className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div>
+                <span className="text-white">Point de {viewingServerReport?.server_name}</span>
+                <p className="text-sm text-slate-400 font-normal mt-0.5">
+                  {viewingServerReport?.date && new Date(viewingServerReport.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {loadingServerDetail ? (
+            <div className="py-12 text-center">
+              <RefreshCw className="w-8 h-8 text-indigo-400 mx-auto animate-spin mb-3" />
+              <p className="text-slate-400">Chargement du rapport détaillé...</p>
+            </div>
+          ) : viewingServerDetailedReport ? (
+            <div className="space-y-4 py-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border-indigo-500/50">
+                  <CardContent className="p-4 text-center">
+                    <Receipt className="w-6 h-6 text-indigo-400 mx-auto mb-1" />
+                    <p className="text-2xl font-bold text-indigo-400">{viewingServerDetailedReport.total_invoices}</p>
+                    <p className="text-slate-400 text-xs">Commandes créées</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                  <CardContent className="p-4 text-center">
+                    <CheckCircle className="w-6 h-6 text-green-400 mx-auto mb-1" />
+                    <p className="text-2xl font-bold text-green-400">{viewingServerDetailedReport.validated_count}</p>
+                    <p className="text-slate-400 text-xs">Factures validées</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
+                  <CardContent className="p-4 text-center">
+                    <Clock className="w-6 h-6 text-amber-400 mx-auto mb-1" />
+                    <p className="text-2xl font-bold text-amber-400">{viewingServerDetailedReport.pending_count}</p>
+                    <p className="text-slate-400 text-xs">En attente</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-emerald-900/30 to-teal-900/20 border-emerald-500/50">
+                  <CardContent className="p-4 text-center">
+                    <DollarSign className="w-6 h-6 text-emerald-400 mx-auto mb-1" />
+                    <p className="text-2xl font-bold text-emerald-400">{formatPrice(viewingServerDetailedReport.total_sales)} F</p>
+                    <p className="text-slate-400 text-xs">Total validé</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Observation from Server */}
+              {viewingServerReport?.observation && (
+                <Card className="bg-slate-900/50 border-indigo-500/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <MessageSquare className="w-5 h-5 text-indigo-400 mt-0.5" />
+                      <div>
+                        <p className="text-indigo-400 font-medium text-sm mb-1">Observation du serveur</p>
+                        <p className="text-white italic">"{viewingServerReport.observation}"</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Breakdown by Department */}
+              {viewingServerDetailedReport.department_breakdown && Object.keys(viewingServerDetailedReport.department_breakdown).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
+                      <BarChart3 className="w-5 h-5" />
+                      Répartition par Département
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {Object.entries(viewingServerDetailedReport.department_breakdown).map(([dept, data]) => {
+                        const deptConfig = DEPARTMENT_CONFIG[dept];
+                        return (
+                          <div key={dept} className={`p-3 rounded-lg ${deptConfig?.bgColor || 'bg-slate-700/30'} border ${deptConfig?.borderColor || 'border-slate-600'}`}>
+                            <p className={`font-medium text-sm ${deptConfig?.color || 'text-slate-300'}`}>{deptConfig?.label || dept}</p>
+                            <p className="text-white text-lg font-bold">{formatPrice(data.total)} F</p>
+                            <p className="text-slate-400 text-xs">{data.count} article(s)</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Breakdown by Payment Method */}
+              {viewingServerDetailedReport.payment_methods && Object.keys(viewingServerDetailedReport.payment_methods).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
+                      <Wallet className="w-5 h-5" />
+                      Modes de Paiement
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {Object.entries(viewingServerDetailedReport.payment_methods).map(([method, data]) => (
+                        <div key={method} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600">
+                          <p className="text-slate-300 font-medium capitalize text-sm">
+                            {method === 'cash' || method === 'especes' ? '💵 Espèces' : 
+                             method === 'card' || method === 'carte' ? '💳 Carte' : 
+                             method === 'mobile_money' ? '📱 Mobile Money' : 
+                             method === 'cheque' ? '📝 Chèque' : method}
+                          </p>
+                          <p className="text-white text-lg font-bold">{formatPrice(data.total)} F</p>
+                          <p className="text-slate-400 text-xs">{data.count} transaction(s)</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Invoice List */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
+                    <FileText className="w-5 h-5" />
+                    Factures du Jour ({viewingServerDetailedReport.invoices?.length || 0})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {viewingServerDetailedReport.invoices?.length === 0 ? (
+                    <p className="text-slate-500 text-center py-6">Aucune facture pour cette date</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {viewingServerDetailedReport.invoices?.map((invoice) => (
+                        <div key={invoice.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <span className="text-white font-medium">{invoice.invoice_number}</span>
+                            <Badge className={
+                              invoice.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' :
+                              invoice.validation_status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-slate-500/20 text-slate-400'
+                            }>
+                              {invoice.validation_status === 'validated' ? '✓ Validée' : 
+                               invoice.validation_status === 'pending' ? '⏳ En attente' : invoice.validation_status}
+                            </Badge>
+                            {invoice.table_number && (
+                              <Badge className="bg-slate-600/50 text-slate-300">Table {invoice.table_number}</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
+                            <span className="text-slate-500 text-sm">
+                              {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Timestamp */}
+              <p className="text-slate-500 text-xs text-center">
+                Point envoyé le {viewingServerReport?.created_at && new Date(viewingServerReport.created_at).toLocaleString('fr-FR', { 
+                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                })}
+              </p>
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+              <p className="text-slate-400">Impossible de charger le rapport détaillé</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
