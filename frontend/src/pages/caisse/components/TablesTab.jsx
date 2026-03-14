@@ -1,15 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LayoutGrid, RefreshCw, Clock, Timer, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LayoutGrid, RefreshCw, Clock, Timer, X, User, ShoppingCart, Eye } from "lucide-react";
 
 const TablesTab = ({ 
   tablesStatus, 
   fetchTablesStatus, 
   stopTableService, 
-  formatPrice 
+  formatPrice,
+  openTables = []  // Add openTables prop for order details
 }) => {
+  const [selectedTable, setSelectedTable] = useState(null);
+
+  // Find table details from openTables
+  const getTableDetails = (tableNumber) => {
+    return openTables.find(t => t.table_number === tableNumber);
+  };
+
+  const handleTableClick = (table) => {
+    if (table.status === 'occupied') {
+      const tableDetails = getTableDetails(table.table_number);
+      setSelectedTable({ ...table, items: tableDetails?.items || [] });
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header with stats */}
@@ -97,6 +113,7 @@ const TablesTab = ({
         {tablesStatus.tables?.map(table => (
           <div 
             key={table.table_number}
+            onClick={() => handleTableClick(table)}
             className={`
               relative aspect-square rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer
               transition-all hover:scale-105
@@ -111,7 +128,7 @@ const TablesTab = ({
             `}
             title={table.status === 'free' 
               ? `Table ${table.table_number} - Libre` 
-              : `Table ${table.table_number}\nServeur: ${table.server_name}\nDurée: ${table.duration_formatted}\nArticles: ${table.items_count}\nTotal: ${formatPrice(table.total)} F`
+              : `Cliquez pour voir les détails`
             }
           >
             <span className={`text-lg font-bold ${
@@ -131,6 +148,7 @@ const TablesTab = ({
                   table.status_color === 'green' ? 'text-green-400' :
                   table.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
                 }`} />
+                <Eye className="w-3 h-3 absolute bottom-1 right-1 text-white/50" />
               </>
             )}
           </div>
@@ -220,6 +238,73 @@ const TablesTab = ({
           </CardContent>
         </Card>
       )}
+
+      {/* Table Details Modal */}
+      <Dialog open={!!selectedTable} onOpenChange={(open) => !open && setSelectedTable(null)}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <LayoutGrid className={`w-6 h-6 ${
+                selectedTable?.status_color === 'green' ? 'text-green-400' :
+                selectedTable?.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
+              }`} />
+              Table {selectedTable?.table_number}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedTable && (
+            <div className="space-y-4 py-4">
+              {/* Info Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-700/30 rounded-lg p-3 text-center">
+                  <User className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+                  <p className="text-white font-medium">{selectedTable.server_name || 'N/A'}</p>
+                  <p className="text-xs text-slate-400">Serveur</p>
+                </div>
+                <div className="bg-slate-700/30 rounded-lg p-3 text-center">
+                  <Clock className={`w-5 h-5 mx-auto mb-1 ${
+                    selectedTable.status_color === 'green' ? 'text-green-400' :
+                    selectedTable.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
+                  }`} />
+                  <p className={`font-bold ${
+                    selectedTable.status_color === 'green' ? 'text-green-400' :
+                    selectedTable.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
+                  }`}>{selectedTable.duration_formatted}</p>
+                  <p className="text-xs text-slate-400">Durée</p>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShoppingCart className="w-4 h-4 text-teal-400" />
+                  <h4 className="text-teal-400 font-medium">Commande en cours</h4>
+                </div>
+                {selectedTable.items?.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {selectedTable.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-sm py-1 border-b border-slate-700/50 last:border-0">
+                        <div className="flex-1">
+                          <span className="text-white">{item.name}</span>
+                          <span className="text-slate-500 ml-2">x{item.quantity}</span>
+                        </div>
+                        <span className="text-amber-400 font-medium">{formatPrice(item.price * item.quantity)} F</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-sm text-center py-4">Aucun article dans la commande</p>
+                )}
+              </div>
+
+              {/* Total */}
+              <div className="flex justify-between items-center bg-gradient-to-r from-amber-900/30 to-orange-900/20 rounded-lg p-4">
+                <span className="text-slate-300 font-medium">Total</span>
+                <span className="text-2xl font-bold text-amber-400">{formatPrice(selectedTable.total)} F</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

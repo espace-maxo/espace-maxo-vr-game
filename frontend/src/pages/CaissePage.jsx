@@ -296,6 +296,10 @@ const CaissePage = () => {
     receipt_image: null
   });
   
+  // Revision notifications for Manager
+  const [revisionExpensesCount, setRevisionExpensesCount] = useState(0);
+  const [showRevisionPanel, setShowRevisionPanel] = useState(false);
+  
   // Liste d'achats multiple
   const [shoppingList, setShoppingList] = useState([]);
   const [showShoppingListModal, setShowShoppingListModal] = useState(false);
@@ -712,7 +716,10 @@ const CaissePage = () => {
   const fetchExpenses = async () => {
     try {
       const res = await axios.get(`${API}/expenses`);
-      setExpenses(res.data.expenses || []);
+      const expensesList = res.data.expenses || [];
+      setExpenses(expensesList);
+      // Update revision count for manager
+      setRevisionExpensesCount(expensesList.filter(e => e.status === 'revision_requested').length);
     } catch (error) {
       console.error("Error fetching expenses:", error);
     }
@@ -1853,6 +1860,24 @@ _Gérante - Espace Maxo_
     setCurrentBill([...currentBill, newItem]);
     setCustomItem({ name: "", price: 0 });
     toast.success(`${customItem.name} ajouté`);
+  };
+
+  // Add free accompaniment (Accompagnement gratuit)
+  const [showFreeAccompModal, setShowFreeAccompModal] = useState(false);
+  
+  const addFreeAccompaniment = (accompName) => {
+    const newItem = {
+      id: `free_accomp_${Date.now()}`,
+      name: `${accompName} (GRATUIT)`,
+      price: 0,
+      unit: "portion",
+      department: "accompagnements",
+      quantity: 1,
+      isFree: true
+    };
+    setCurrentBill([...currentBill, newItem]);
+    setShowFreeAccompModal(false);
+    toast.success(`${accompName} gratuit ajouté`);
   };
 
   // ============== INVOICE ACTIONS ==============
@@ -3166,6 +3191,21 @@ _Gérante - Espace Maxo_
                 </div>
               )}
 
+              {/* Revision Notifications for Manager (Achats à réviser) */}
+              {currentUser?.role === 'manager' && revisionExpensesCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setActiveTab('achats')}
+                  className="text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 relative"
+                  title="Achats à réviser"
+                >
+                  <AlertTriangle className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">
+                    {revisionExpensesCount}
+                  </span>
+                </Button>
+              )}
+
               {/* End of Service Button for Servers */}
               {currentUser?.role === 'server' && (
                 <Button 
@@ -4022,6 +4062,17 @@ _Gérante - Espace Maxo_
 
                     {currentBill.length > 0 && (
                       <>
+                        {/* Free Accompaniment Button */}
+                        <Button
+                          onClick={() => setShowFreeAccompModal(true)}
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Accomp. Gratuit
+                        </Button>
+                        
                         {/* Totals by department */}
                         <div className="mt-3 pt-3 border-t border-slate-700 space-y-1">
                           {Object.entries(totalByDepartment).map(([dept, amount]) => {
@@ -5581,6 +5632,7 @@ _Gérante - Espace Maxo_
               fetchTablesStatus={fetchTablesStatus}
               stopTableService={stopTableService}
               formatPrice={formatPrice}
+              openTables={openTables}
             />
           </TabsContent>
           )}
@@ -7449,6 +7501,40 @@ _Gérante - Espace Maxo_
               Envoyer le Point
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Free Accompaniment Modal */}
+      <Dialog open={showFreeAccompModal} onOpenChange={setShowFreeAccompModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl text-yellow-400">
+              <Package className="w-6 h-6" />
+              Ajouter un Accompagnement Gratuit
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-4">
+            {DEFAULT_CATALOG.accompagnements.map(accomp => (
+              <Button
+                key={accomp.id}
+                onClick={() => addFreeAccompaniment(accomp.name)}
+                variant="outline"
+                className="h-auto py-3 border-yellow-500/30 hover:bg-yellow-500/20 text-left justify-start"
+              >
+                <div>
+                  <p className="text-white font-medium text-sm">{accomp.name}</p>
+                  <p className="text-yellow-400 text-xs">GRATUIT (au lieu de {formatPrice(accomp.price)} F)</p>
+                </div>
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => setShowFreeAccompModal(false)}
+            className="w-full text-slate-400 hover:text-white"
+          >
+            Annuler
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

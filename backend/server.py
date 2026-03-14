@@ -3706,15 +3706,17 @@ async def get_server_daily_report(server_name: str, date: Optional[str] = None):
         target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
         
         # Get all invoices for this server on this date
+        # Use created_by field which stores the server name
+        # Filter by created_at which contains date as prefix (e.g., "2024-01-15T...")
         invoices = await db.invoices.find({
-            "server_name": server_name,
-            "date": target_date
+            "created_by": server_name,
+            "created_at": {"$regex": f"^{target_date}"}
         }, {"_id": 0}).to_list(500)
         
-        # Calculate stats
+        # Calculate stats - use validation_status field
         total_invoices = len(invoices)
-        validated_invoices = [inv for inv in invoices if inv.get("status") == "validated"]
-        pending_invoices = [inv for inv in invoices if inv.get("status") == "pending"]
+        validated_invoices = [inv for inv in invoices if inv.get("validation_status") == "validated"]
+        pending_invoices = [inv for inv in invoices if inv.get("validation_status") == "pending"]
         
         total_sales = sum(inv.get("total", 0) for inv in validated_invoices)
         
@@ -3764,10 +3766,11 @@ async def create_end_of_service_report(report_data: dict = Body(...)):
         observation = report_data.get("observation", "")
         target_date = report_data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
         
-        # Get server's daily stats
+        # Get server's daily stats - use created_by field
+        # Filter by created_at which contains date as prefix (e.g., "2024-01-15T...")
         invoices = await db.invoices.find({
-            "server_name": server_name,
-            "date": target_date
+            "created_by": server_name,
+            "created_at": {"$regex": f"^{target_date}"}
         }, {"_id": 0}).to_list(500)
         
         total_invoices = len(invoices)
