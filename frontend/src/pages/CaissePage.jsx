@@ -969,16 +969,63 @@ const CaissePage = () => {
     }
   };
 
-  // Open detailed view of a server's daily report
+  // Compare server report with actual data
+  const compareServerReport = async (report) => {
+    try {
+      const res = await axios.get(`${API}/server-end-of-service-reports/${report.id}/compare`);
+      return res.data;
+    } catch (error) {
+      console.error("Error comparing report:", error);
+      toast.error("Erreur lors de la comparaison");
+      return null;
+    }
+  };
+
+  // Validate, request revision, or reject a report
+  const handleReportValidation = async (reportId, action, comment = "") => {
+    try {
+      await axios.put(`${API}/server-end-of-service-reports/${reportId}/validate`, {
+        action,
+        comment,
+        validated_by: currentUser?.full_name || "Gérante"
+      });
+      
+      const messages = {
+        validate: "Point validé avec succès",
+        request_revision: "Demande de révision envoyée",
+        reject: "Point rejeté"
+      };
+      
+      toast.success(messages[action] || "Action effectuée");
+      fetchServiceReports();
+      setViewingServerReport(null);
+      setViewingServerDetailedReport(null);
+      setReportComparison(null);
+    } catch (error) {
+      console.error("Error validating report:", error);
+      toast.error("Erreur lors de la validation");
+    }
+  };
+
+  // State for report comparison
+  const [reportComparison, setReportComparison] = useState(null);
+  const [validationComment, setValidationComment] = useState("");
+
+  // Open detailed view of a server's daily report with comparison
   const openServerReportDetail = async (report) => {
     try {
       setLoadingServerDetail(true);
       setViewingServerReport(report);
       setShowServiceReportsPanel(false);
+      setValidationComment("");
       
       // Fetch the detailed daily report for this server
       const res = await axios.get(`${API}/server-daily-report/${encodeURIComponent(report.server_name)}?date=${report.date}`);
       setViewingServerDetailedReport(res.data);
+      
+      // Fetch comparison with actual data
+      const comparison = await compareServerReport(report);
+      setReportComparison(comparison);
       
       // Mark as read
       if (!report.is_read) {
@@ -7688,19 +7735,31 @@ _Gérante - Espace Maxo_
       </Dialog>
 
       {/* Server Report Detail Modal (for Manager viewing server's point) */}
-      <Dialog open={!!viewingServerReport} onOpenChange={(open) => { if (!open) { setViewingServerReport(null); setViewingServerDetailedReport(null); } }}>
+      <Dialog open={!!viewingServerReport} onOpenChange={(open) => { if (!open) { setViewingServerReport(null); setViewingServerDetailedReport(null); setReportComparison(null); setValidationComment(""); } }}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3 text-xl">
               <div className="p-2 bg-indigo-900/50 rounded-lg">
                 <User className="w-6 h-6 text-indigo-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <span className="text-white">Point de {viewingServerReport?.server_name}</span>
                 <p className="text-sm text-slate-400 font-normal mt-0.5">
                   {viewingServerReport?.date && new Date(viewingServerReport.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               </div>
+              {/* Status Badge - Always show, default to pending if no status */}
+              <Badge className={
+                viewingServerReport?.status === 'validated' ? 'bg-green-500/20 text-green-400' :
+                viewingServerReport?.status === 'revision_requested' ? 'bg-orange-500/20 text-orange-400' :
+                viewingServerReport?.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                'bg-amber-500/20 text-amber-400'
+              }>
+                {viewingServerReport?.status === 'validated' ? 'Validé' :
+                 viewingServerReport?.status === 'revision_requested' ? 'Révision demandée' :
+                 viewingServerReport?.status === 'rejected' ? 'Rejeté' :
+                 'En attente'}
+              </Badge>
             </DialogTitle>
           </DialogHeader>
           
@@ -7711,6 +7770,73 @@ _Gérante - Espace Maxo_
             </div>
           ) : viewingServerDetailedReport ? (
             <div className="space-y-4 py-4">
+              
+              {/* COMPARISON SECTION - Declared vs Actual */}
+              {reportComparison && (
+                <Card className={`border-2 ${reportComparison.discrepancy?.has_discrepancy ? 'border-orange-500/50 bg-orange-900/10' : 'border-green-500/50 bg-green-900/10'}`}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-white flex items-center gap-2 text-base">
+                      <BarChart3 className="w-5 h-5" />
+                      Comparaison Déclaré vs Réel
+                      {reportComparison.discrepancy?.has_discrepancy ? (
+                        <Badge className="bg-orange-500/20 text-orange-400 ml-2">Écarts détectés</Badge>
+                      ) : (
+                        <Badge className="bg-green-500/20 text-green-400 ml-2">Conforme</Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-600">
+                            <th className="text-left py-2 text-slate-400"></th>
+                            <th className="text-center py-2 text-slate-400">Déclaré</th>
+                            <th className="text-center py-2 text-slate-400">Réel (Système)</th>
+                            <th className="text-center py-2 text-slate-400">Écart</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-700">
+                            <td className="py-3 text-slate-300">Commandes créées</td>
+                            <td className="py-3 text-center text-white font-medium">{reportComparison.declared?.total_invoices}</td>
+                            <td className="py-3 text-center text-white font-medium">{reportComparison.actual?.total_invoices}</td>
+                            <td className={`py-3 text-center font-bold ${reportComparison.discrepancy?.invoices === 0 ? 'text-green-400' : reportComparison.discrepancy?.invoices > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                              {reportComparison.discrepancy?.invoices > 0 ? '+' : ''}{reportComparison.discrepancy?.invoices}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-700">
+                            <td className="py-3 text-slate-300">Factures validées</td>
+                            <td className="py-3 text-center text-white font-medium">{reportComparison.declared?.validated_invoices}</td>
+                            <td className="py-3 text-center text-white font-medium">{reportComparison.actual?.validated_invoices}</td>
+                            <td className={`py-3 text-center font-bold ${reportComparison.actual?.validated_invoices === reportComparison.declared?.validated_invoices ? 'text-green-400' : 'text-orange-400'}`}>
+                              {reportComparison.actual?.validated_invoices - reportComparison.declared?.validated_invoices > 0 ? '+' : ''}
+                              {reportComparison.actual?.validated_invoices - reportComparison.declared?.validated_invoices}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-3 text-slate-300 font-medium">Total des ventes</td>
+                            <td className="py-3 text-center text-amber-400 font-bold">{formatPrice(reportComparison.declared?.total_sales)} F</td>
+                            <td className="py-3 text-center text-amber-400 font-bold">{formatPrice(reportComparison.actual?.total_sales)} F</td>
+                            <td className={`py-3 text-center font-bold ${Math.abs(reportComparison.discrepancy?.sales) < 1 ? 'text-green-400' : reportComparison.discrepancy?.sales > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                              {reportComparison.discrepancy?.sales > 0 ? '+' : ''}{formatPrice(reportComparison.discrepancy?.sales)} F
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    {reportComparison.discrepancy?.has_discrepancy && (
+                      <div className="mt-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                        <p className="text-orange-400 text-sm flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          Des écarts ont été détectés entre les chiffres déclarés et les données du système.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Card className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border-indigo-500/50">
@@ -7798,10 +7924,10 @@ _Gérante - Espace Maxo_
                       {Object.entries(viewingServerDetailedReport.payment_methods).map(([method, data]) => (
                         <div key={method} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600">
                           <p className="text-slate-300 font-medium capitalize text-sm">
-                            {method === 'cash' || method === 'especes' ? '💵 Espèces' : 
-                             method === 'card' || method === 'carte' ? '💳 Carte' : 
-                             method === 'mobile_money' ? '📱 Mobile Money' : 
-                             method === 'cheque' ? '📝 Chèque' : method}
+                            {method === 'cash' || method === 'especes' ? 'Espèces' : 
+                             method === 'card' || method === 'carte' ? 'Carte' : 
+                             method === 'mobile_money' ? 'Mobile Money' : 
+                             method === 'cheque' ? 'Chèque' : method}
                           </p>
                           <p className="text-white text-lg font-bold">{formatPrice(data.total)} F</p>
                           <p className="text-slate-400 text-xs">{data.count} transaction(s)</p>
@@ -7824,7 +7950,7 @@ _Gérante - Espace Maxo_
                   {viewingServerDetailedReport.invoices?.length === 0 ? (
                     <p className="text-slate-500 text-center py-6">Aucune facture pour cette date</p>
                   ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
                       {viewingServerDetailedReport.invoices?.map((invoice) => (
                         <div key={invoice.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
                           <div className="flex items-center gap-3">
@@ -7834,8 +7960,8 @@ _Gérante - Espace Maxo_
                               invoice.validation_status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
                               'bg-slate-500/20 text-slate-400'
                             }>
-                              {invoice.validation_status === 'validated' ? '✓ Validée' : 
-                               invoice.validation_status === 'pending' ? '⏳ En attente' : invoice.validation_status}
+                              {invoice.validation_status === 'validated' ? 'Validée' : 
+                               invoice.validation_status === 'pending' ? 'En attente' : invoice.validation_status}
                             </Badge>
                             {invoice.table_number && (
                               <Badge className="bg-slate-600/50 text-slate-300">Table {invoice.table_number}</Badge>
@@ -7853,6 +7979,93 @@ _Gérante - Espace Maxo_
                   )}
                 </CardContent>
               </Card>
+
+              {/* VALIDATION SECTION - Only for manager/admin and pending reports */}
+              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (!viewingServerReport?.status || viewingServerReport?.status === 'pending') && (
+                <Card className="bg-slate-900/50 border-slate-600">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
+                      <CheckCircle className="w-5 h-5" />
+                      Valider ce Point
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-slate-400 text-sm">Commentaire (optionnel)</Label>
+                      <Textarea
+                        value={validationComment}
+                        onChange={(e) => setValidationComment(e.target.value)}
+                        placeholder="Ajouter un commentaire pour le serveur..."
+                        className="bg-slate-800 border-slate-600 text-white mt-1"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <Button 
+                        onClick={() => handleReportValidation(viewingServerReport.id, 'validate', validationComment)}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Valider
+                      </Button>
+                      <Button 
+                        onClick={() => handleReportValidation(viewingServerReport.id, 'request_revision', validationComment)}
+                        variant="outline"
+                        className="flex-1 border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Réviser
+                      </Button>
+                      <Button 
+                        onClick={() => handleReportValidation(viewingServerReport.id, 'reject', validationComment)}
+                        variant="outline"
+                        className="flex-1 border-red-500 text-red-400 hover:bg-red-500/20"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Rejeter
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Already validated info */}
+              {viewingServerReport?.status && viewingServerReport.status !== 'pending' && (
+                <Card className={`border ${
+                  viewingServerReport.status === 'validated' ? 'bg-green-900/20 border-green-500/50' :
+                  viewingServerReport.status === 'revision_requested' ? 'bg-orange-900/20 border-orange-500/50' :
+                  'bg-red-900/20 border-red-500/50'
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      {viewingServerReport.status === 'validated' ? (
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      ) : viewingServerReport.status === 'revision_requested' ? (
+                        <RefreshCw className="w-5 h-5 text-orange-400" />
+                      ) : (
+                        <X className="w-5 h-5 text-red-400" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${
+                          viewingServerReport.status === 'validated' ? 'text-green-400' :
+                          viewingServerReport.status === 'revision_requested' ? 'text-orange-400' :
+                          'text-red-400'
+                        }`}>
+                          {viewingServerReport.status === 'validated' ? 'Point validé' :
+                           viewingServerReport.status === 'revision_requested' ? 'Révision demandée' :
+                           'Point rejeté'}
+                        </p>
+                        <p className="text-slate-400 text-sm">
+                          Par {viewingServerReport.validated_by} le {viewingServerReport.validated_at && new Date(viewingServerReport.validated_at).toLocaleString('fr-FR')}
+                        </p>
+                        {viewingServerReport.validation_comment && (
+                          <p className="text-slate-300 text-sm mt-1 italic">"{viewingServerReport.validation_comment}"</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Timestamp */}
               <p className="text-slate-500 text-xs text-center">

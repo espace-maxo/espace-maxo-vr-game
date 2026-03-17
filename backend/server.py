@@ -3895,6 +3895,166 @@ async def mark_all_service_reports_read():
         logger.error(f"Error marking all reports as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/server-end-of-service-reports/{report_id}/compare")
+async def compare_service_report(report_id: str):
+    """Compare server's declared report with actual data from invoices"""
+    try:
+        report = await db.server_end_of_service_reports.find_one({"id": report_id}, {"_id": 0})
+        if not report:
+            raise HTTPException(status_code=404, detail="Rapport non trouvé")
+        
+        server_name = report.get("server_name")
+        report_date = report.get("date")
+        
+        # Get actual invoices created by this server on this date
+        date_start = f"{report_date}T00:00:00"
+        date_end = f"{report_date}T23:59:59"
+        
+        actual_invoices = await db.invoices.find({
+            "created_by": server_name,
+            "created_at": {"$gte": date_start, "$lte": date_end}
+        }, {"_id": 0}).to_list(500)
+        
+        actual_count = len(actual_invoices)
+        actual_validated = len([inv for inv in actual_invoices if inv.get("validation_status") == "validated"])
+        actual_sales = sum(inv.get("total", 0) for inv in actual_invoices if inv.get("validation_status") == "validated")
+        
+        # Calculate discrepancies
+        declared_invoices = report.get("total_invoices", 0)
+        declared_sales = report.get("total_sales", 0)
+        
+        discrepancy_invoices = actual_count - declared_invoices
+        discrepancy_sales = actual_sales - declared_sales
+        
+        comparison = {
+            "report_id": report_id,
+            "server_name": server_name,
+            "date": report_date,
+            "declared": {
+                "total_invoices": declared_invoices,
+                "validated_invoices": report.get("validated_invoices", 0),
+                "total_sales": declared_sales
+            },
+            "actual": {
+                "total_invoices": actual_count,
+                "validated_invoices": actual_validated,
+                "total_sales": actual_sales
+            },
+            "discrepancy": {
+                "invoices": discrepancy_invoices,
+                "sales": discrepancy_sales,
+                "has_discrepancy": discrepancy_invoices != 0 or abs(discrepancy_sales) > 1
+            },
+            "invoices_detail": actual_invoices
+        }
+        
+        # Update the report with actual data
+        await db.server_end_of_service_reports.update_one(
+            {"id": report_id},
+            {"$set": {
+                "actual_invoices": actual_count,
+                "actual_validated": actual_validated,
+                "actual_sales": actual_sales,
+                "discrepancy_invoices": discrepancy_invoices,
+                "discrepancy_sales": discrepancy_sales
+            }}
+        )
+        
+        return comparison
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error comparing service report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ReportValidationRequest(BaseModel):
+    action: str  # validate, request_revision, reject
+    comment: Optional[str] = None
+    validated_by: str
+
+@api_router.put("/server-end-of-service-reports/{report_id}/validate")
+async def validate_service_report(report_id: str, request: ReportValidationRequest):
+    """Validate, request revision, or reject a service report"""
+    try:
+        report = await db.server_end_of_service_reports.find_one({"id": report_id})
+        if not report:
+            raise HTTPException(status_code=404, detail="Rapport non trouvé")
+        
+        status_map = {
+            "validate": "validated",
+            "request_revision": "revision_requested",
+            "reject": "rejected"
+        }
+        
+        new_status = status_map.get(request.action)
+        if not new_status:
+            raise HTTPException(status_code=400, detail="Action invalide. Utilisez: validate, request_revision, ou reject")
+        
+        update_data = {
+            "status": new_status,
+            "validation_comment": request.comment,
+            "validated_by": request.validated_by,
+            "validated_at": datetime.now(timezone.utc).isoformat(),
+            "is_read": True
+        }
+        
+        await db.server_end_of_service_reports.update_one(
+            {"id": report_id},
+            {"$set": update_data}
+        )
+        
+        # Create notification for the server if revision requested or rejected
+        if new_status in ["revision_requested", "rejected"]:
+            notification = {
+                "id": str(uuid.uuid4()),
+                "type": "report_feedback",
+                "server_name": report.get("server_name"),
+                "status": new_status,
+                "comment": request.comment,
+                "from": request.validated_by,
+                "report_date": report.get("date"),
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.server_notifications.insert_one(notification)
+        
+        return {"success": True, "status": new_status, "message": f"Rapport {new_status}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating service report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/server-notifications/{server_name}")
+async def get_server_notifications(server_name: str):
+    """Get notifications for a specific server"""
+    try:
+        notifications = await db.server_notifications.find(
+            {"server_name": server_name},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+        unread_count = await db.server_notifications.count_documents({
+            "server_name": server_name,
+            "is_read": False
+        })
+        return {"notifications": notifications, "unread_count": unread_count}
+    except Exception as e:
+        logger.error(f"Error fetching server notifications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/server-notifications/{notification_id}/read")
+async def mark_server_notification_read(notification_id: str):
+    """Mark a server notification as read"""
+    try:
+        await db.server_notifications.update_one(
+            {"id": notification_id},
+            {"$set": {"is_read": True}}
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error marking notification as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== CAISSE CLIENTS ENDPOINTS ==============
 
 @api_router.post("/caisse/clients")
@@ -5129,6 +5289,17 @@ class ServerEndOfServiceReport(BaseModel):
     observation: Optional[str] = None
     is_read: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # New fields for validation workflow
+    status: str = "pending"  # pending, validated, revision_requested, rejected
+    validation_comment: Optional[str] = None
+    validated_by: Optional[str] = None
+    validated_at: Optional[str] = None
+    # Comparison with actual data
+    actual_invoices: Optional[int] = None
+    actual_validated: Optional[int] = None
+    actual_sales: Optional[float] = None
+    discrepancy_invoices: Optional[int] = None
+    discrepancy_sales: Optional[float] = None
 
 # ============== EXPENSE ENDPOINTS ==============
 

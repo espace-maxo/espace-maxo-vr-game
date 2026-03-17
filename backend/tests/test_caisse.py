@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://proforma-quote-tool.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://caisse-mon-point.preview.emergentagent.com').rstrip('/')
 
 class TestCaisseLogin:
     """Test Caisse login functionality"""
