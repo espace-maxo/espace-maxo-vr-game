@@ -13,6 +13,7 @@ import {
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
   Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt
 } from "lucide-react";
+import { LOGO_BASE64 } from "../constants_logo";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -307,41 +308,48 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <meta charset="UTF-8">
         <title>Contrat de Location - Espace Maxo</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; font-size: 14px; }
-          h1 { text-align: center; color: #1a1a2e; border-bottom: 3px solid #16213e; padding-bottom: 10px; font-size: 24px; }
-          h2 { color: #16213e; margin-top: 20px; font-size: 16px; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .contract-type { background: ${isMultiSpace ? '#6f42c1' : spaceConfig.color === 'text-purple-400' ? '#6f42c1' : spaceConfig.color === 'text-green-400' ? '#28a745' : '#17a2b8'}; color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; margin: 10px 0; font-weight: bold; }
-          .info-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #dee2e6; }
-          .info-row { display: flex; justify-content: space-between; margin: 6px 0; padding: 4px 0; border-bottom: 1px dotted #dee2e6; }
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.5; font-size: 11pt; }
+          .page-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+          .logo { width: 80px; height: 80px; }
+          .logo img { width: 100%; height: 100%; object-fit: contain; }
+          .header-center { text-align: center; flex: 1; }
+          .header-title { font-size: 16pt; font-weight: bold; text-transform: uppercase; }
+          .contract-type { background: ${isMultiSpace ? '#6f42c1' : spaceConfig.color === 'text-purple-400' ? '#6f42c1' : spaceConfig.color === 'text-green-400' ? '#28a745' : '#17a2b8'}; color: white; padding: 5px 15px; display: inline-block; margin: 8px 0; font-weight: bold; font-size: 10pt; }
+          .header-right { text-align: right; font-size: 9pt; }
+          h2 { color: #333; margin-top: 15px; font-size: 11pt; }
+          .info-box { background: #f8f9fa; padding: 12px; margin: 12px 0; border: 1px solid #ddd; }
+          .info-row { display: flex; justify-content: space-between; margin: 4px 0; padding: 3px 0; border-bottom: 1px dotted #ddd; font-size: 10pt; }
           .info-row:last-child { border-bottom: none; }
           .label { font-weight: bold; color: #333; }
-          .value { color: #495057; }
-          .amount { font-size: 1.1em; color: #dc3545; font-weight: bold; }
-          .rules { background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 15px 0; }
+          .value { color: #555; }
+          .amount { font-size: 11pt; color: #dc3545; font-weight: bold; }
+          .rules { background: #fff3cd; padding: 12px; border-left: 3px solid #ffc107; margin: 12px 0; font-size: 9pt; }
           .rules-garden { background: #d4edda; border-left-color: #28a745; }
           .rules-salle { background: #e7e3ff; border-left-color: #6f42c1; }
           .rules-jeux { background: #d1ecf1; border-left-color: #17a2b8; }
-          .rules h3 { margin-top: 0; font-size: 14px; }
-          .rules ul { margin: 10px 0; padding-left: 20px; }
-          .rules li { margin: 6px 0; font-size: 13px; }
-          .signature-section { margin-top: 30px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+          .rules h3 { margin-top: 0; font-size: 10pt; }
+          .rules ul { margin: 8px 0; padding-left: 18px; }
+          .rules li { margin: 4px 0; }
+          .signature-section { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; }
           .signature-box { width: 45%; text-align: center; }
-          .signature-line { border-top: 1px solid #333; margin-top: 50px; padding-top: 8px; font-size: 12px; }
-          .caution-box { background: #f8d7da; padding: 15px; border-radius: 8px; border: 2px solid #f5c6cb; margin: 15px 0; }
-          .caution-box h3 { color: #721c24; margin-top: 0; font-size: 14px; }
-          .footer { margin-top: 20px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 10px; }
-          @media print { 
-            body { padding: 10px; font-size: 12px; }
-            .rules { page-break-inside: avoid; }
-          }
+          .signature-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 9pt; }
+          .caution-box { background: #f8d7da; padding: 12px; border: 1px solid #f5c6cb; margin: 12px 0; font-size: 9pt; }
+          .caution-box h3 { color: #721c24; margin-top: 0; font-size: 10pt; }
+          .footer { margin-top: 15px; text-align: center; font-size: 9pt; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
+          @media print { body { padding: 10px; font-size: 10pt; } .rules { page-break-inside: avoid; } }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>CONTRAT DE LOCATION</h1>
-          <div class="contract-type">${isMultiSpace ? '📦 PACK COMBINÉ' : location.space_type === 'salle_fete' ? '🎉 SALLE DE FÊTE' : location.space_type === 'espace_jardin' ? '🌿 ESPACE JARDIN' : '🎮 SALLE DE JEUX'}</div>
-          <p><strong>ESPACE MAXO</strong><br>Fidjrossè Plage, Cotonou<br>Tél: +229 91 00 50 84</p>
+        <div class="page-header">
+          <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+          <div class="header-center">
+            <div class="header-title">Contrat de Location</div>
+            <div class="contract-type">${isMultiSpace ? 'PACK COMBINÉ' : location.space_type === 'salle_fete' ? 'SALLE DE FÊTE' : location.space_type === 'espace_jardin' ? 'ESPACE JARDIN' : 'SALLE DE JEUX'}</div>
+          </div>
+          <div class="header-right">
+            <p>Tél: +229 01 4147 0000</p>
+            <p>Fidjrossè, Cotonou</p>
+          </div>
         </div>
 
         <div class="info-box">
@@ -435,55 +443,58 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <meta charset="UTF-8">
         <title>Facture ${invoiceNumber} - Espace Maxo</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.5; }
-          .invoice-header { display: flex; justify-content: space-between; align-items: start; border-bottom: 3px solid #1a1a2e; padding-bottom: 20px; margin-bottom: 20px; }
-          .company-info { text-align: left; }
-          .company-info h1 { margin: 0; color: #1a1a2e; font-size: 28px; }
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.4; font-size: 10pt; }
+          .invoice-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+          .logo { width: 80px; height: 80px; }
+          .logo img { width: 100%; height: 100%; object-fit: contain; }
+          .header-center { flex: 1; padding: 0 20px; }
+          .header-center h1 { margin: 0; font-size: 14pt; text-transform: uppercase; }
           .invoice-info { text-align: right; }
-          .invoice-number { font-size: 24px; color: #dc3545; font-weight: bold; }
-          .client-section { display: flex; justify-content: space-between; margin: 20px 0; }
-          .client-box, .event-box { width: 48%; background: #f8f9fa; padding: 15px; border-radius: 8px; }
-          .client-box h3, .event-box h3 { margin-top: 0; color: #1a1a2e; border-bottom: 2px solid #dee2e6; padding-bottom: 8px; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          th { background: #1a1a2e; color: white; padding: 12px; text-align: left; }
-          td { padding: 12px; border-bottom: 1px solid #dee2e6; }
+          .invoice-number { font-size: 14pt; font-weight: bold; }
+          .status-badge { display: inline-block; padding: 3px 10px; font-weight: bold; font-size: 9pt; margin-top: 5px; border: 1px solid; }
+          .status-paid { border-color: #28a745; color: #28a745; }
+          .status-partial { border-color: #ffc107; color: #856404; }
+          .status-pending { border-color: #dc3545; color: #dc3545; }
+          .client-section { display: flex; justify-content: space-between; margin: 15px 0; gap: 15px; }
+          .client-box, .event-box { width: 48%; background: #f8f9fa; padding: 12px; border: 1px solid #ddd; }
+          .client-box h3, .event-box h3 { margin-top: 0; font-size: 10pt; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+          thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
+          th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
+          td { padding: 8px; border-bottom: 1px solid #ddd; }
           .text-right { text-align: right; }
-          .total-section { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; }
-          .total-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #dee2e6; }
+          .total-section { padding: 10px; border: 1px solid #ddd; margin-top: 15px; font-size: 9pt; }
+          .total-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #ddd; }
           .total-row:last-child { border-bottom: none; }
-          .grand-total { font-size: 20px; font-weight: bold; background: #1a1a2e; color: white; padding: 15px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; }
-          .payment-info { margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745; }
-          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 15px; }
-          .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
-          .status-paid { background: #d4edda; color: #155724; }
-          .status-partial { background: #fff3cd; color: #856404; }
-          .status-pending { background: #f8d7da; color: #721c24; }
+          .grand-total { font-size: 12pt; font-weight: bold; background: #333; color: white; padding: 12px; margin-top: 10px; display: flex; justify-content: space-between; }
+          .payment-info { margin-top: 15px; padding: 10px; background: #f5f5f5; border-left: 3px solid #333; font-size: 9pt; }
+          .footer { margin-top: 20px; text-align: center; font-size: 9pt; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
           @media print { body { padding: 10px; } }
         </style>
       </head>
       <body>
         <div class="invoice-header">
-          <div class="company-info">
-            <h1>ESPACE MAXO</h1>
-            <p>Fidjrossè Plage, Cotonou<br>Tél: +229 91 00 50 84<br>Email: contact@espacemaxo.com</p>
+          <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+          <div class="header-center">
+            <h1>Facture de Location</h1>
+            <p style="margin: 5px 0; font-size: 9pt;">Fidjrossè, Cotonou | Tél: +229 01 4147 0000</p>
           </div>
           <div class="invoice-info">
             <div class="invoice-number">${invoiceNumber}</div>
-            <p><strong>Date :</strong> ${new Date().toLocaleDateString('fr-FR')}<br>
-            <strong>Échéance :</strong> ${location.reservation_date}</p>
+            <p style="font-size: 9pt; margin: 5px 0;"><strong>Date :</strong> ${new Date().toLocaleDateString('fr-FR')}</p>
             <span class="status-badge ${location.balance_remaining <= 0 ? 'status-paid' : location.deposit_paid > 0 ? 'status-partial' : 'status-pending'}">
-              ${location.balance_remaining <= 0 ? '✓ PAYÉE' : location.deposit_paid > 0 ? '◐ ACOMPTE VERSÉ' : '○ EN ATTENTE'}
+              ${location.balance_remaining <= 0 ? 'PAYÉE' : location.deposit_paid > 0 ? 'ACOMPTE VERSÉ' : 'EN ATTENTE'}
             </span>
           </div>
         </div>
 
         <div class="client-section">
           <div class="client-box">
-            <h3>👤 Client</h3>
+            <h3>Client</h3>
             <p><strong>${location.customer_name}</strong><br>Tél: ${location.customer_phone}</p>
           </div>
           <div class="event-box">
-            <h3>📅 Événement</h3>
+            <h3>Événement</h3>
             <p><strong>Type :</strong> ${location.event_type || 'Non précisé'}<br>
             <strong>Date :</strong> ${location.reservation_date}<br>
             <strong>Horaires :</strong> ${location.start_time} - ${location.end_time}<br>
@@ -497,13 +508,13 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           </thead>
           <tbody>
             <tr>
-              <td><strong>Location ${spacesLabel}</strong><br><small style="color: #6c757d;">${location.start_time} - ${location.end_time}</small></td>
+              <td><strong>Location ${spacesLabel}</strong><br><small style="color: #666;">${location.start_time} - ${location.end_time}</small></td>
               <td>1</td>
               <td class="text-right">${formatPrice(location.rental_amount)} F</td>
               <td class="text-right"><strong>${formatPrice(location.rental_amount)} F</strong></td>
             </tr>
             <tr>
-              <td><strong>Caution (remboursable)</strong><br><small style="color: #6c757d;">Restituée après état des lieux</small></td>
+              <td><strong>Caution (remboursable)</strong><br><small style="color: #666;">Restituée après état des lieux</small></td>
               <td>1</td>
               <td class="text-right">${formatPrice(CAUTION_AMOUNT)} F</td>
               <td class="text-right"><strong>${formatPrice(CAUTION_AMOUNT)} F</strong></td>
@@ -521,14 +532,12 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <div class="grand-total"><span>RESTE À PAYER</span><span>${formatPrice((location.rental_amount + CAUTION_AMOUNT) - (location.deposit_paid || 0))} F CFA</span></div>
 
         <div class="payment-info">
-          <h4 style="margin-top: 0;">💳 Modalités de paiement</h4>
-          <p><strong>Espèces :</strong> À régler sur place | <strong>Mobile Money :</strong> +229 91 00 50 84</p>
-          <p><em>La caution sera restituée après l'événement, sous réserve de l'état des lieux.</em></p>
+          <p style="margin: 0;"><strong>Modalités de paiement :</strong> Espèces sur place | Mobile Money: +229 01 4147 0000</p>
+          <p style="margin: 5px 0 0 0;"><em>La caution sera restituée après l'événement, sous réserve de l'état des lieux.</em></p>
         </div>
 
         <div class="footer">
           <p>Facture N° ${invoiceNumber} | Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'}</p>
-          <p><strong>ESPACE MAXO</strong> - Fidjrossè Plage, Cotonou - Tél: +229 91 00 50 84</p>
         </div>
       </body>
       </html>

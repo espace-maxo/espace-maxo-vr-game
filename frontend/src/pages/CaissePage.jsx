@@ -32,6 +32,9 @@ import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
 
+// Import logo for printing
+import { LOGO_BASE64 } from "./caisse/constants_logo";
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 // Default catalog items
@@ -1062,10 +1065,10 @@ const CaissePage = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
     const categoryLabels = {
-      cuisine: '🍳 Cuisine',
-      bar: '🍹 Bar',
-      paiement: '💳 Paiement',
-      autres: '📦 Autres'
+      cuisine: 'Cuisine',
+      bar: 'Bar',
+      paiement: 'Paiement',
+      autres: 'Autres'
     };
     
     printWindow.document.write(`
@@ -1078,35 +1081,40 @@ const CaissePage = () => {
             @page { size: A5; margin: 10mm; }
             @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background: #fff; color: #333; }
-            .header { text-align: center; border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
-            .logo { font-size: 24px; font-weight: 800; color: #4f46e5; letter-spacing: 2px; }
-            .subtitle { font-size: 14px; color: #666; margin-top: 5px; }
-            .badge { display: inline-block; background: #4f46e5; color: #fff; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; margin: 10px 0; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
-            .info-box { background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #4f46e5; }
-            .info-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-            .info-value { font-size: 14px; font-weight: 600; color: #333; margin-top: 3px; }
-            .amount-box { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; }
-            .amount-label { font-size: 12px; opacity: 0.9; }
-            .amount-value { font-size: 36px; font-weight: 800; }
-            .details { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; }
-            .details-title { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
-            .details-content { font-size: 14px; color: #333; }
-            .footer { margin-top: 30px; padding-top: 15px; border-top: 1px dashed #ccc; }
-            .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 10pt; }
+            .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+            .logo { width: 70px; height: 70px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .header-right { text-align: right; font-size: 9pt; }
+            .doc-title { text-align: center; font-size: 14pt; font-weight: bold; margin: 15px 0; text-transform: uppercase; }
+            .badge { display: inline-block; background: #22c55e; color: #fff; padding: 3px 10px; border-radius: 10px; font-size: 9pt; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
+            .info-box { padding: 8px; border: 1px solid #ddd; }
+            .info-label { font-size: 8pt; color: #666; text-transform: uppercase; }
+            .info-value { font-size: 10pt; font-weight: 600; margin-top: 2px; }
+            .amount-box { border: 2px solid #333; padding: 15px; text-align: center; margin: 15px 0; }
+            .amount-label { font-size: 9pt; color: #666; }
+            .amount-value { font-size: 24pt; font-weight: bold; }
+            .details { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+            .details-title { font-size: 8pt; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 25px; }
             .signature-box { text-align: center; width: 45%; }
-            .signature-line { border-bottom: 1px solid #333; margin-bottom: 5px; height: 40px; }
-            .signature-label { font-size: 11px; color: #666; }
-            .status-approved { background: #22c55e; }
-            .print-date { text-align: center; font-size: 10px; color: #999; margin-top: 20px; }
+            .signature-line { border-bottom: 1px solid #333; height: 30px; margin-bottom: 3px; }
+            .signature-label { font-size: 8pt; color: #666; }
+            .print-date { text-align: center; font-size: 8pt; color: #999; margin-top: 15px; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="logo">ESPACE MAXO</div>
-            <div class="subtitle">Bon d'Achat Approuvé</div>
-            <div class="badge status-approved">✓ APPROUVÉ</div>
+            <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+            <div class="header-right">
+              <p>Tél: +229 01 4147 0000</p>
+              <p>Fidjrossè, Cotonou</p>
+            </div>
+          </div>
+
+          <div class="doc-title">
+            Bon d'Achat <span class="badge">✓ APPROUVÉ</span>
           </div>
 
           <div class="info-grid">
@@ -1129,32 +1137,30 @@ const CaissePage = () => {
           </div>
 
           <div class="details">
-            <div class="details-title">Description de l'achat</div>
-            <div class="details-content">${expense.description}</div>
+            <div class="details-title">Description</div>
+            <div>${expense.description}</div>
           </div>
 
           ${expense.supplier ? `
           <div class="details">
             <div class="details-title">Fournisseur</div>
-            <div class="details-content">${expense.supplier}</div>
+            <div>${expense.supplier}</div>
           </div>
           ` : ''}
 
           <div class="amount-box">
             <div class="amount-label">MONTANT APPROUVÉ</div>
-            <div class="amount-value">${formatPrice(expense.amount)} F</div>
+            <div class="amount-value">${formatPrice(expense.amount)} F CFA</div>
           </div>
 
-          <div class="footer">
-            <div class="signatures">
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Signature Gérante</div>
-              </div>
-              <div class="signature-box">
-                <div class="signature-line"></div>
-                <div class="signature-label">Signature Admin</div>
-              </div>
+          <div class="signatures">
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Signature Gérante</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Signature Admin</div>
             </div>
           </div>
 
@@ -1162,11 +1168,7 @@ const CaissePage = () => {
             Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
           </div>
 
-          <script>
-            window.onload = function() {
-              setTimeout(function() { window.print(); }, 300);
-            }
-          </script>
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script>
         </body>
       </html>
     `);
@@ -1213,29 +1215,38 @@ const CaissePage = () => {
           <meta charset="UTF-8">
           <style>
             @page { size: A4; margin: 15mm; }
-            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background: #fff; color: #333; }
-            .header { text-align: center; border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
-            .logo { font-size: 24px; font-weight: 800; color: #4f46e5; }
-            .subtitle { font-size: 16px; color: #666; margin-top: 5px; }
-            .date-badge { background: #4f46e5; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px; display: inline-block; margin-top: 10px; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th { background: #4f46e5; color: white; padding: 10px; text-align: left; font-size: 12px; }
-            .total-row { background: #f8f9fa; font-weight: 800; }
-            .total-row td { padding: 12px 8px; font-size: 16px; }
-            .footer { margin-top: 30px; display: flex; justify-content: space-between; }
+            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 10pt; }
+            .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+            .logo { width: 80px; height: 80px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .header-right { text-align: right; font-size: 9pt; }
+            .doc-title { text-align: center; font-size: 14pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+            .date-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+            thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
+            th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
+            td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+            .total-row { border-top: 2px solid #333; }
+            .total-row td { font-weight: bold; padding: 10px 8px; }
+            .footer { display: flex; justify-content: space-between; margin-top: 30px; }
             .signature-box { text-align: center; width: 30%; }
-            .signature-line { border-bottom: 1px solid #333; margin-bottom: 5px; height: 50px; }
-            .signature-label { font-size: 11px; color: #666; }
+            .signature-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px; }
+            .signature-label { font-size: 8pt; color: #666; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="logo">ESPACE MAXO</div>
-            <div class="subtitle">Liste des Achats Approuvés</div>
-            <div class="date-badge">${new Date().toLocaleDateString('fr-FR')}</div>
+            <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+            <div class="header-right">
+              <p>Tél: +229 01 4147 0000</p>
+              <p>RCCM RB/COT/22 B 32037</p>
+              <p>Fidjrossè, Cotonou</p>
+            </div>
           </div>
+          
+          <div class="doc-title">Liste des Achats Approuvés</div>
+          <div class="date-line">${new Date().toLocaleDateString('fr-FR')}</div>
 
           <table>
             <thead>
@@ -1250,8 +1261,8 @@ const CaissePage = () => {
             <tbody>
               ${itemsHtml}
               <tr class="total-row">
-                <td colspan="4" style="text-align: right; padding-right: 20px;">TOTAL:</td>
-                <td style="text-align: right; color: #4f46e5;">${formatPrice(total)} F</td>
+                <td colspan="4" style="text-align: right;">TOTAL:</td>
+                <td style="text-align: right;">${formatPrice(total)} F CFA</td>
               </tr>
             </tbody>
           </table>
@@ -1271,11 +1282,7 @@ const CaissePage = () => {
             </div>
           </div>
 
-          <script>
-            window.onload = function() {
-              setTimeout(function() { window.print(); }, 300);
-            }
-          </script>
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script>
         </body>
       </html>
     `);
@@ -1551,39 +1558,46 @@ const CaissePage = () => {
       <meta charset="UTF-8">
       <style>
         @page { size: A4; margin: 15mm; }
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #333; }
-        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0891b2; padding-bottom: 15px; }
-        .logo { font-size: 24px; font-weight: 900; color: #0891b2; }
-        .subtitle { color: #666; margin-top: 5px; }
-        .period { font-size: 16px; font-weight: bold; color: #0891b2; margin-top: 10px; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 20px; }
+        .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+        .logo { width: 80px; height: 80px; }
+        .logo img { width: 100%; height: 100%; object-fit: contain; }
+        .header-center { text-align: center; flex: 1; }
+        .header-title { font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+        .header-period { font-size: 11pt; color: #555; margin-top: 5px; }
+        .header-right { text-align: right; font-size: 9pt; }
         .summary { display: flex; justify-content: space-around; margin: 20px 0; }
-        .summary-box { text-align: center; padding: 15px; border-radius: 8px; min-width: 120px; }
-        .summary-box.green { background: #ecfdf5; border: 1px solid #10b981; }
-        .summary-box.red { background: #fef2f2; border: 1px solid #ef4444; }
-        .summary-box.blue { background: #eff6ff; border: 1px solid #3b82f6; }
-        .summary-box h3 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; }
-        .summary-box .value { font-size: 20px; font-weight: bold; }
-        .summary-box.green .value { color: #10b981; }
-        .summary-box.red .value { color: #ef4444; }
-        .summary-box.blue .value { color: #3b82f6; }
-        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-        th { background: #0891b2; color: white; padding: 10px; text-align: left; font-size: 11px; }
-        td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
-        .text-green { color: #10b981; }
-        .text-red { color: #ef4444; }
+        .summary-box { text-align: center; padding: 12px 20px; border: 1px solid #ddd; min-width: 130px; }
+        .summary-box h3 { margin: 0 0 5px 0; font-size: 9pt; text-transform: uppercase; color: #666; }
+        .summary-box .value { font-size: 16pt; font-weight: bold; }
+        .summary-box.green .value { color: #16a34a; }
+        .summary-box.red .value { color: #dc2626; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+        thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
+        th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
+        td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+        .text-green { color: #16a34a; }
+        .text-red { color: #dc2626; }
         .capitalize { text-transform: capitalize; }
-        .expense-details { font-size: 10px; max-width: 200px; }
-        .expense-item { background: #f3f4f6; padding: 2px 5px; margin: 2px 0; border-radius: 3px; }
-        .total-row { background: #f8fafc; font-weight: bold; }
-        .section-title { font-size: 14px; font-weight: bold; color: #0891b2; margin: 20px 0 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e5e7eb; padding-top: 15px; }
+        .expense-details { font-size: 8pt; max-width: 180px; }
+        .expense-item { background: #f5f5f5; padding: 2px 4px; margin: 1px 0; font-size: 8pt; }
+        .total-row { border-top: 2px solid #333; }
+        .total-row td { font-weight: bold; padding: 10px 8px; }
+        .section-title { font-size: 11pt; font-weight: bold; margin: 20px 0 10px; padding-bottom: 5px; border-bottom: 1px solid #ddd; }
+        .footer { margin-top: 20px; text-align: center; font-size: 9pt; color: #666; padding-top: 10px; border-top: 1px solid #ddd; }
       </style>
     </head>
     <body>
       <div class="header">
-        <div class="logo">ESPACE MAXO</div>
-        <div class="subtitle">Point Hebdomadaire</div>
-        <div class="period">${weeklyReport.week_label}</div>
+        <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+        <div class="header-center">
+          <div class="header-title">Point Hebdomadaire</div>
+          <div class="header-period">${weeklyReport.week_label}</div>
+        </div>
+        <div class="header-right">
+          <p>Tél: +229 01 4147 0000</p>
+          <p>Fidjrossè, Cotonou</p>
+        </div>
       </div>
       
       <div class="summary">
@@ -1604,7 +1618,7 @@ const CaissePage = () => {
         </div>
       </div>
       
-      <div class="section-title">📅 Détail Jour par Jour</div>
+      <div class="section-title">Détail Jour par Jour</div>
       <table>
         <thead>
           <tr>
@@ -1619,16 +1633,16 @@ const CaissePage = () => {
         <tbody>
           ${dailyRows}
           <tr class="total-row">
-            <td colspan="2"><strong>TOTAL SEMAINE</strong></td>
-            <td class="text-green"><strong>${formatPrice(weeklyReport.sales?.total || 0)} F</strong></td>
-            <td class="text-red"><strong>${formatPrice(weeklyReport.expenses?.total || 0)} F</strong></td>
-            <td class="${weeklyReport.is_profitable ? 'text-green' : 'text-red'}"><strong>${weeklyReport.result >= 0 ? '+' : ''}${formatPrice(weeklyReport.result || 0)} F</strong></td>
+            <td colspan="2">TOTAL SEMAINE</td>
+            <td class="text-green">${formatPrice(weeklyReport.sales?.total || 0)} F</td>
+            <td class="text-red">${formatPrice(weeklyReport.expenses?.total || 0)} F</td>
+            <td class="${weeklyReport.is_profitable ? 'text-green' : 'text-red'}">${weeklyReport.result >= 0 ? '+' : ''}${formatPrice(weeklyReport.result || 0)} F</td>
             <td></td>
           </tr>
         </tbody>
       </table>
       
-      <div class="section-title">📊 Dépenses par Catégorie</div>
+      <div class="section-title">Dépenses par Catégorie</div>
       <table style="width: 50%;">
         <thead>
           <tr>
@@ -1643,7 +1657,6 @@ const CaissePage = () => {
       
       <div class="footer">
         <p>Généré le ${new Date().toLocaleString('fr-FR')}</p>
-        <p>ESPACE MAXO - Caisse Pro</p>
       </div>
       
       <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>
