@@ -281,6 +281,14 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     const tvaAmount = applyTva ? Math.round(montantHT * 0.18) : 0;
     const totalTTC = montantHT + tvaAmount;
     
+    // Format date in French
+    const dateCreation = new Date(proforma.created_at);
+    const moisFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const dateFormatted = `${dateCreation.getDate()} ${moisFr[dateCreation.getMonth()]} ${dateCreation.getFullYear()}`;
+    
+    // Generate proforma number in format: 00 XX /MM/YY/ES
+    const proformaNum = proforma.proforma_number || 'N/A';
+    
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -288,117 +296,340 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       <head>
         <title>Proforma ${proforma.proforma_number}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-          .header h1 { color: #2563eb; margin: 0; }
-          .header p { color: #666; margin: 5px 0; }
-          .proforma-badge { background: #dbeafe; color: #1d4ed8; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-          .info-box { background: #f8fafc; padding: 15px; border-radius: 8px; }
-          .info-box h3 { margin: 0 0 10px 0; color: #333; font-size: 14px; }
-          .info-box p { margin: 5px 0; color: #555; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th { background: #1e293b; color: white; padding: 12px; text-align: left; }
-          td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-          .totals { text-align: right; margin-top: 20px; }
-          .totals-table { margin-left: auto; width: 300px; }
-          .totals-table td { padding: 8px 12px; }
-          .totals-table .label { text-align: left; color: #555; }
-          .totals-table .value { text-align: right; font-weight: 500; }
-          .totals-table .total-row { border-top: 2px solid #333; font-size: 1.2em; }
-          .totals-table .total-row .value { color: #059669; font-weight: bold; }
-          .validity { background: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
-          .notes { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px; }
-          .footer { margin-top: 40px; text-align: center; color: #888; font-size: 12px; }
-          @media print { body { padding: 0; } }
+          @page { margin: 15mm; size: A4; }
+          * { box-sizing: border-box; }
+          body { 
+            font-family: 'Times New Roman', Times, serif; 
+            padding: 20px 40px; 
+            max-width: 800px; 
+            margin: 0 auto;
+            color: #000;
+            font-size: 12pt;
+            line-height: 1.4;
+          }
+          
+          /* Header with logo */
+          .header {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #d4a017;
+          }
+          .logo-section {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #d4a017 0%, #b8860b 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14pt;
+            text-align: center;
+            flex-shrink: 0;
+          }
+          .company-info {
+            flex: 1;
+          }
+          .company-name {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #d4a017;
+            margin: 0;
+            letter-spacing: 2px;
+          }
+          .company-location {
+            font-size: 14pt;
+            color: #333;
+            margin: 5px 0;
+          }
+          .company-date {
+            font-size: 12pt;
+            color: #555;
+          }
+          
+          /* Contact and document info */
+          .doc-info {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #d4a017;
+          }
+          .doc-info-left {
+            text-align: left;
+          }
+          .doc-info-right {
+            text-align: right;
+          }
+          .doc-title {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #d4a017;
+            margin-bottom: 10px;
+          }
+          .doc-number {
+            font-size: 14pt;
+            font-weight: bold;
+            letter-spacing: 1px;
+          }
+          .rccm {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 5px;
+          }
+          
+          /* Client section */
+          .client-section {
+            margin: 25px 0;
+            padding: 15px;
+            border: 2px solid #d4a017;
+            border-radius: 8px;
+          }
+          .client-label {
+            font-weight: bold;
+            font-size: 14pt;
+            color: #d4a017;
+            margin-bottom: 10px;
+          }
+          .client-name {
+            font-size: 16pt;
+            font-weight: bold;
+          }
+          .client-details {
+            font-size: 11pt;
+            color: #333;
+            margin-top: 5px;
+          }
+          
+          /* Table */
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 20px 0;
+          }
+          thead tr {
+            background: #d4a017;
+            color: white;
+          }
+          th { 
+            padding: 12px 10px; 
+            text-align: left;
+            font-weight: bold;
+            font-size: 11pt;
+          }
+          th:nth-child(2), th:nth-child(3), th:nth-child(4) {
+            text-align: center;
+          }
+          th:last-child {
+            text-align: right;
+          }
+          td { 
+            padding: 10px; 
+            border-bottom: 1px solid #ddd;
+            font-size: 11pt;
+          }
+          td:nth-child(2), td:nth-child(3) {
+            text-align: center;
+          }
+          td:last-child {
+            text-align: right;
+            font-weight: 500;
+          }
+          tbody tr:nth-child(even) {
+            background: #fafafa;
+          }
+          tbody tr:hover {
+            background: #fff8e7;
+          }
+          
+          /* Totals */
+          .totals-section {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+          }
+          .totals-table {
+            width: 350px;
+            border: 2px solid #d4a017;
+            border-radius: 8px;
+            overflow: hidden;
+          }
+          .totals-table tr {
+            border-bottom: 1px solid #eee;
+          }
+          .totals-table td {
+            padding: 10px 15px;
+            border: none;
+          }
+          .totals-table .label {
+            text-align: left;
+            color: #333;
+            font-size: 11pt;
+          }
+          .totals-table .value {
+            text-align: right;
+            font-weight: 600;
+            font-size: 11pt;
+          }
+          .totals-table .total-row {
+            background: #d4a017;
+            color: white;
+          }
+          .totals-table .total-row td {
+            font-size: 14pt;
+            font-weight: bold;
+            padding: 12px 15px;
+          }
+          
+          /* Notes */
+          .notes-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff8e7;
+            border-left: 4px solid #d4a017;
+            font-style: italic;
+          }
+          
+          /* Footer */
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #d4a017;
+          }
+          .thank-you {
+            text-align: center;
+            font-size: 12pt;
+            color: #d4a017;
+            font-weight: bold;
+            margin-bottom: 30px;
+          }
+          .signature-section {
+            text-align: right;
+            margin-top: 20px;
+          }
+          .signature-name {
+            font-weight: bold;
+            font-size: 12pt;
+          }
+          .signature-title {
+            font-style: italic;
+            color: #666;
+          }
+          
+          @media print { 
+            body { padding: 0; }
+            .header { break-inside: avoid; }
+            table { break-inside: auto; }
+            tr { break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
+        <!-- Header with Logo -->
         <div class="header">
-          <h1>ESPACE MAXO</h1>
-          <p>Restaurant & Espace de Jeux</p>
-          <p>Fidjrossè Plage, Cotonou | +229 91 00 50 84</p>
-          <div class="proforma-badge">FACTURE PROFORMA</div>
-        </div>
-        
-        <div class="info-grid">
-          <div class="info-box">
-            <h3>PROFORMA</h3>
-            <p><strong>N°:</strong> ${proforma.proforma_number}</p>
-            <p><strong>Date:</strong> ${new Date(proforma.created_at).toLocaleDateString('fr-FR')}</p>
-            <p><strong>Valide jusqu'au:</strong> ${new Date(proforma.valid_until).toLocaleDateString('fr-FR')}</p>
+          <div class="logo-section">
+            ESPACE<br/>MAXO
           </div>
-          <div class="info-box">
-            <h3>CLIENT</h3>
-            <p><strong>${proforma.client_name}</strong></p>
-            ${proforma.client_phone ? `<p>Tél: ${proforma.client_phone}</p>` : ''}
-            ${proforma.client_email ? `<p>Email: ${proforma.client_email}</p>` : ''}
-            ${proforma.client_address ? `<p>Adresse: ${proforma.client_address}</p>` : ''}
+          <div class="company-info">
+            <h1 class="company-name">ESPACE MAXO</h1>
+            <p class="company-location">Cotonou, Fidjrossè</p>
+            <p class="company-date">${dateFormatted}</p>
           </div>
         </div>
         
+        <!-- Document Info -->
+        <div class="doc-info">
+          <div class="doc-info-left">
+            <p style="margin: 0;"><strong>Tél:</strong> +229 01 4147 0000</p>
+            <p class="rccm">RCCM RB/COT/22 B 32037</p>
+          </div>
+          <div class="doc-info-right">
+            <div class="doc-title">FACTURE PROFORMA</div>
+            <div class="doc-number">N° ${proformaNum}</div>
+          </div>
+        </div>
+        
+        <!-- Client Section -->
+        <div class="client-section">
+          <div class="client-label">CLIENT :</div>
+          <div class="client-name">${proforma.client_name}</div>
+          <div class="client-details">
+            ${proforma.client_phone ? `<p style="margin: 2px 0;">Tél: ${proforma.client_phone}</p>` : ''}
+            ${proforma.client_email ? `<p style="margin: 2px 0;">Email: ${proforma.client_email}</p>` : ''}
+            ${proforma.client_address ? `<p style="margin: 2px 0;">Adresse: ${proforma.client_address}</p>` : ''}
+          </div>
+        </div>
+        
+        <!-- Items Table -->
         <table>
           <thead>
             <tr>
-              <th>Désignation</th>
-              <th style="text-align:center">Qté</th>
-              <th style="text-align:right">Prix Unitaire</th>
-              <th style="text-align:right">Montant</th>
+              <th style="width: 50%;">DESCRIPTION</th>
+              <th style="width: 10%;">QTÉ</th>
+              <th style="width: 20%;">PRIX UNITAIRE</th>
+              <th style="width: 20%;">MONTANT</th>
             </tr>
           </thead>
           <tbody>
             ${proforma.items.map(item => `
               <tr>
                 <td>${item.name}</td>
-                <td style="text-align:center">${item.quantity}</td>
-                <td style="text-align:right">${item.unit_price?.toLocaleString('fr-FR')} F</td>
-                <td style="text-align:right">${item.subtotal?.toLocaleString('fr-FR')} F</td>
+                <td>${item.quantity}</td>
+                <td>${item.unit_price?.toLocaleString('fr-FR')} F</td>
+                <td>${item.subtotal?.toLocaleString('fr-FR')} F</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
         
-        <div class="totals">
+        <!-- Totals -->
+        <div class="totals-section">
           <table class="totals-table">
             <tr>
               <td class="label">Sous-total</td>
-              <td class="value">${subtotalCalc.toLocaleString('fr-FR')} F CFA</td>
+              <td class="value">${subtotalCalc.toLocaleString('fr-FR')} F</td>
             </tr>
             ${proforma.discount > 0 ? `
               <tr>
                 <td class="label">Remise</td>
-                <td class="value">-${proforma.discount?.toLocaleString('fr-FR')} F CFA</td>
+                <td class="value">-${proforma.discount?.toLocaleString('fr-FR')} F</td>
               </tr>
             ` : ''}
             <tr>
               <td class="label"><strong>Montant HT</strong></td>
-              <td class="value"><strong>${montantHT.toLocaleString('fr-FR')} F CFA</strong></td>
+              <td class="value"><strong>${montantHT.toLocaleString('fr-FR')} F</strong></td>
             </tr>
             <tr>
               <td class="label">TVA (18%)</td>
-              <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F CFA' : 'Non applicable'}</td>
+              <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F' : 'Exonéré'}</td>
             </tr>
             <tr class="total-row">
-              <td class="label"><strong>MONTANT TTC</strong></td>
+              <td class="label">MONTANT TTC</td>
               <td class="value">${totalTTC.toLocaleString('fr-FR')} F CFA</td>
             </tr>
           </table>
         </div>
         
-        <div class="validity">
-          <strong>Cette proforma est valide pendant ${proforma.validity_days} jours</strong>
-          <p>Date limite: ${new Date(proforma.valid_until).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-        </div>
-        
         ${proforma.notes ? `
-          <div class="notes">
-            <strong>Notes:</strong>
-            <p>${proforma.notes}</p>
+          <div class="notes-section">
+            <strong>Notes :</strong><br/>
+            ${proforma.notes}
           </div>
         ` : ''}
         
+        <!-- Footer -->
         <div class="footer">
-          <p>Merci de votre confiance | Espace Maxo - L'excellence au service de vos événements</p>
+          <p class="thank-you">NOUS VOUS REMERCIONS DE VOTRE CONFIANCE ET À BIENTÔT !</p>
+          
+          <div class="signature-section">
+            <p class="signature-name">AHOUANDJINOU MÈRES</p>
+            <p class="signature-title">LA GÉRANTE</p>
+          </div>
         </div>
       </body>
       </html>
