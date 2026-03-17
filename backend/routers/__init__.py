@@ -8,6 +8,7 @@ from .clients import router as clients_router
 from .tables import router as tables_router
 from .requests import router as requests_router
 from .service_reports import router as service_reports_router
+from .subscriptions import router as subscriptions_router
 
 __all__ = [
     'invoices_router',
@@ -16,5 +17,6 @@ __all__ = [
     'clients_router',
     'tables_router',
     'requests_router',
-    'service_reports_router'
+    'service_reports_router',
+    'subscriptions_router'
 ]

@@ -31,6 +31,7 @@ import HebdoReport from "./caisse/components/HebdoReport";
 import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
+import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -3616,6 +3617,12 @@ _Gérante - Espace Maxo_
                 <MessageSquare className="w-4 h-4 mr-2" />Notes
               </TabsTrigger>
             )}
+            {/* Abonnements & Factures Récurrentes - Manager & Admin */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="subscriptions" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+                <RefreshCw className="w-4 h-4 mr-2" />Abonnements
+              </TabsTrigger>
+            )}
             {/* Admin only: Suivi Activité */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
@@ -6581,6 +6588,13 @@ _Gérante - Espace Maxo_
               currentUser={currentUser}
               formatPrice={formatPrice}
             />
+          </TabsContent>
+          )}
+
+          {/* ==================== ABONNEMENTS TAB (Manager & Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="subscriptions">
+            <SubscriptionsTab currentUser={currentUser} />
           </TabsContent>
           )}
 
