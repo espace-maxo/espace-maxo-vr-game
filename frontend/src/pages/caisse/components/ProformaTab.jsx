@@ -24,12 +24,14 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [deleteRequests, setDeleteRequests] = useState([]); // Demandes de suppression en attente
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingProforma, setViewingProforma] = useState(null);
   const [editingProforma, setEditingProforma] = useState(null);
+  const [showDeleteRequestsModal, setShowDeleteRequestsModal] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -274,6 +276,81 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       toast.error("Erreur lors de la suppression");
     }
   };
+
+  // Demande de suppression par la gérante
+  const requestDeleteProforma = async (proforma) => {
+    if (!confirm(`Demander l'autorisation de supprimer la proforma ${proforma.proforma_number} ?`)) return;
+    
+    try {
+      await axios.post(`${API}/proforma-delete-requests`, {
+        proforma_id: proforma.id,
+        proforma_number: proforma.proforma_number,
+        client_name: proforma.client_name,
+        total: proforma.total,
+        requested_by: currentUser?.full_name || "Gérante"
+      });
+      toast.success("Demande de suppression envoyée à l'administrateur");
+      fetchDeleteRequests();
+    } catch (error) {
+      console.error("Error requesting delete:", error);
+      toast.error(error.response?.data?.detail || "Erreur lors de la demande");
+    }
+  };
+
+  // Récupérer les demandes de suppression (pour admin)
+  const fetchDeleteRequests = async () => {
+    try {
+      const res = await axios.get(`${API}/proforma-delete-requests`);
+      setDeleteRequests(res.data.requests || []);
+    } catch (error) {
+      console.error("Error fetching delete requests:", error);
+    }
+  };
+
+  // Approuver une demande de suppression (admin seulement)
+  const approveDeleteRequest = async (request) => {
+    if (!confirm(`Approuver la suppression de la proforma ${request.proforma_number} ?`)) return;
+    
+    try {
+      await axios.post(`${API}/proforma-delete-requests/${request.id}/approve`, {
+        approved_by: currentUser?.full_name || "Admin"
+      });
+      toast.success("Proforma supprimée avec succès");
+      fetchDeleteRequests();
+      fetchProformas();
+    } catch (error) {
+      console.error("Error approving delete:", error);
+      toast.error("Erreur lors de l'approbation");
+    }
+  };
+
+  // Rejeter une demande de suppression (admin seulement)
+  const rejectDeleteRequest = async (request) => {
+    if (!confirm(`Rejeter la demande de suppression de ${request.proforma_number} ?`)) return;
+    
+    try {
+      await axios.post(`${API}/proforma-delete-requests/${request.id}/reject`, {
+        rejected_by: currentUser?.full_name || "Admin"
+      });
+      toast.success("Demande rejetée");
+      fetchDeleteRequests();
+    } catch (error) {
+      console.error("Error rejecting delete:", error);
+      toast.error("Erreur lors du rejet");
+    }
+  };
+
+  // Vérifier si une proforma a une demande de suppression en attente
+  const hasPendingDeleteRequest = (proformaId) => {
+    return deleteRequests.some(r => r.proforma_id === proformaId && r.status === 'pending');
+  };
+
+  // Charger les demandes de suppression au démarrage
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      fetchDeleteRequests();
+    }
+  }, [currentUser]);
 
   // Function to convert number to French words
   const numberToFrenchWords = (num) => {
@@ -678,6 +755,17 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           Factures Proforma
         </h2>
         <div className="flex items-center gap-3">
+          {/* Bouton demandes de suppression pour Admin */}
+          {currentUser?.role === 'admin' && deleteRequests.length > 0 && (
+            <Button 
+              onClick={() => setShowDeleteRequestsModal(true)} 
+              variant="outline" 
+              className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
+            >
+              <AlertCircle className="w-4 h-4 mr-2" />
+              Demandes ({deleteRequests.length})
+            </Button>
+          )}
           <Button onClick={fetchProformas} variant="outline" className="border-slate-600 text-slate-300">
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualiser
@@ -833,9 +921,22 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                               <ArrowRight className="w-4 h-4" />
                             </Button>
                           )}
-                          <Button size="icon" variant="ghost" onClick={() => deleteProforma(proforma.id)} className="w-8 h-8 text-red-400 hover:text-red-300">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {/* Admin peut supprimer directement, Gérante doit demander l'autorisation */}
+                          {currentUser?.role === 'admin' ? (
+                            <Button size="icon" variant="ghost" onClick={() => deleteProforma(proforma.id)} className="w-8 h-8 text-red-400 hover:text-red-300" title="Supprimer">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            hasPendingDeleteRequest(proforma.id) ? (
+                              <Button size="icon" variant="ghost" disabled className="w-8 h-8 text-yellow-400" title="Demande en attente">
+                                <Clock className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button size="icon" variant="ghost" onClick={() => requestDeleteProforma(proforma)} className="w-8 h-8 text-orange-400 hover:text-orange-300" title="Demander la suppression">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )
+                          )}
                         </>
                       )}
                     </div>
@@ -845,6 +946,45 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Modal des demandes de suppression (Admin seulement) */}
+      {currentUser?.role === 'admin' && deleteRequests.length > 0 && (
+        <Dialog open={showDeleteRequestsModal} onOpenChange={setShowDeleteRequestsModal}>
+          <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-amber-400 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Demandes de suppression ({deleteRequests.length})
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {deleteRequests.map((request) => (
+                <div key={request.id} className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-medium text-white">{request.proforma_number}</p>
+                      <p className="text-sm text-slate-400">{request.client_name}</p>
+                      <p className="text-sm text-amber-400">{formatPrice(request.total)} F CFA</p>
+                    </div>
+                    <Badge className="bg-yellow-500/20 text-yellow-400">En attente</Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Demandé par: {request.requested_by} • {new Date(request.created_at).toLocaleDateString('fr-FR')}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => approveDeleteRequest(request)} className="flex-1 bg-green-600 hover:bg-green-700">
+                      <CheckCircle className="w-4 h-4 mr-1" /> Approuver
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => rejectDeleteRequest(request)} className="flex-1 border-red-500 text-red-400 hover:bg-red-500/20">
+                      Rejeter
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Create/Edit Modal */}

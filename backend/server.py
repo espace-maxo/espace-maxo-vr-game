@@ -5796,6 +5796,121 @@ async def convert_proforma_to_invoice(proforma_id: str, converted_by: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== PROFORMA DELETE REQUESTS ====================
+
+class ProformaDeleteRequest(BaseModel):
+    proforma_id: str
+    proforma_number: str
+    client_name: str
+    total: float
+    requested_by: str
+
+@api_router.post("/proforma-delete-requests")
+async def create_delete_request(request: ProformaDeleteRequest):
+    """Create a delete request for a proforma (manager requests, admin approves)"""
+    try:
+        # Check if request already exists
+        existing = await db.proforma_delete_requests.find_one({
+            "proforma_id": request.proforma_id,
+            "status": "pending"
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Une demande de suppression est déjà en attente pour cette proforma")
+        
+        delete_request = {
+            "id": str(uuid.uuid4()),
+            "proforma_id": request.proforma_id,
+            "proforma_number": request.proforma_number,
+            "client_name": request.client_name,
+            "total": request.total,
+            "requested_by": request.requested_by,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.proforma_delete_requests.insert_one(delete_request)
+        
+        return {"success": True, "message": "Demande de suppression envoyée"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating delete request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/proforma-delete-requests")
+async def get_delete_requests():
+    """Get all pending delete requests (for admin)"""
+    try:
+        requests = await db.proforma_delete_requests.find(
+            {"status": "pending"},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(100)
+        
+        return {"requests": requests}
+    except Exception as e:
+        logger.error(f"Error fetching delete requests: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/proforma-delete-requests/{request_id}/approve")
+async def approve_delete_request(request_id: str, approved_by: str = ""):
+    """Approve a delete request and delete the proforma (admin only)"""
+    try:
+        # Find the request
+        delete_request = await db.proforma_delete_requests.find_one({"id": request_id})
+        if not delete_request:
+            raise HTTPException(status_code=404, detail="Demande non trouvée")
+        
+        if delete_request["status"] != "pending":
+            raise HTTPException(status_code=400, detail="Cette demande a déjà été traitée")
+        
+        # Delete the proforma
+        result = await db.proforma_invoices.delete_one({"id": delete_request["proforma_id"]})
+        
+        if result.deleted_count == 0:
+            # Proforma already deleted, just update request status
+            pass
+        
+        # Update request status
+        await db.proforma_delete_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "approved_by": approved_by,
+                "approved_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return {"success": True, "message": "Proforma supprimée avec succès"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving delete request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/proforma-delete-requests/{request_id}/reject")
+async def reject_delete_request(request_id: str, rejected_by: str = ""):
+    """Reject a delete request (admin only)"""
+    try:
+        result = await db.proforma_delete_requests.update_one(
+            {"id": request_id, "status": "pending"},
+            {"$set": {
+                "status": "rejected",
+                "rejected_by": rejected_by,
+                "rejected_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Demande non trouvée ou déjà traitée")
+        
+        return {"success": True, "message": "Demande rejetée"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rejecting delete request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/locations")
 async def get_locations(
     status: Optional[str] = None,
