@@ -14,6 +14,7 @@ import {
   DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package
 } from "lucide-react";
 import { toast } from "sonner";
+import { LOGO_BASE64 } from "../constants_logo";
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -315,21 +316,17 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             gap: 20px;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 3px solid #d4a017;
+            border-bottom: 3px solid #1a237e;
           }
           .logo-section {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, #d4a017 0%, #b8860b 100%);
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 14pt;
-            text-align: center;
+            width: 120px;
+            height: 120px;
             flex-shrink: 0;
+          }
+          .logo-section img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
           }
           .company-info {
             flex: 1;
@@ -337,7 +334,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .company-name {
             font-size: 28pt;
             font-weight: bold;
-            color: #d4a017;
+            color: #1a237e;
             margin: 0;
             letter-spacing: 2px;
           }
@@ -358,7 +355,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             margin: 20px 0;
             padding: 15px;
             background: #f9f9f9;
-            border-left: 4px solid #d4a017;
+            border-left: 4px solid #8b0000;
           }
           .doc-info-left {
             text-align: left;
@@ -369,13 +366,14 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .doc-title {
             font-size: 18pt;
             font-weight: bold;
-            color: #d4a017;
+            color: #8b0000;
             margin-bottom: 10px;
           }
           .doc-number {
             font-size: 14pt;
             font-weight: bold;
             letter-spacing: 1px;
+            color: #1a237e;
           }
           .rccm {
             font-size: 10pt;
@@ -387,13 +385,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .client-section {
             margin: 25px 0;
             padding: 15px;
-            border: 2px solid #d4a017;
+            border: 2px solid #1a237e;
             border-radius: 8px;
           }
           .client-label {
             font-weight: bold;
             font-size: 14pt;
-            color: #d4a017;
+            color: #1a237e;
             margin-bottom: 10px;
           }
           .client-name {
@@ -413,7 +411,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             margin: 20px 0;
           }
           thead tr {
-            background: #d4a017;
+            background: #1a237e;
             color: white;
           }
           th { 
@@ -444,7 +442,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             background: #fafafa;
           }
           tbody tr:hover {
-            background: #fff8e7;
+            background: #e8eaf6;
           }
           
           /* Totals */
@@ -455,7 +453,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           .totals-table {
             width: 350px;
-            border: 2px solid #d4a017;
+            border: 2px solid #1a237e;
             border-radius: 8px;
             overflow: hidden;
           }
@@ -477,7 +475,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-size: 11pt;
           }
           .totals-table .total-row {
-            background: #d4a017;
+            background: #8b0000;
             color: white;
           }
           .totals-table .total-row td {
@@ -490,8 +488,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .notes-section {
             margin-top: 20px;
             padding: 15px;
-            background: #fff8e7;
-            border-left: 4px solid #d4a017;
+            background: #e8eaf6;
+            border-left: 4px solid #1a237e;
             font-style: italic;
           }
           
@@ -499,12 +497,12 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .footer {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 2px solid #d4a017;
+            border-top: 2px solid #8b0000;
           }
           .thank-you {
             text-align: center;
             font-size: 12pt;
-            color: #d4a017;
+            color: #8b0000;
             font-weight: bold;
             margin-bottom: 30px;
           }
@@ -533,7 +531,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         <!-- Header with Logo -->
         <div class="header">
           <div class="logo-section">
-            ESPACE<br/>MAXO
+            <img src="${LOGO_BASE64}" alt="ESPACE MAXO" />
           </div>
           <div class="company-info">
             <h1 class="company-name">ESPACE MAXO</h1>
