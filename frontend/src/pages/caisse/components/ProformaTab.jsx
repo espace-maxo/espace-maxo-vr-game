@@ -355,205 +355,166 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { 
             font-family: Arial, Helvetica, sans-serif; 
-            padding: 15px 25px; 
+            padding: 15px 30px; 
             max-width: 800px; 
             margin: 0 auto;
-            color: #000;
+            color: #333;
             font-size: 10pt;
-            line-height: 1.3;
+            line-height: 1.4;
           }
           
           .header {
             display: flex;
             align-items: center;
-            gap: 15px;
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #1a237e;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
           }
           .logo-section {
-            width: 80px;
-            height: 80px;
-            flex-shrink: 0;
+            width: 90px;
+            height: 90px;
           }
           .logo-section img {
             width: 100%;
             height: 100%;
             object-fit: contain;
           }
-          .company-info {
-            flex: 1;
-          }
-          .company-name {
-            font-size: 22pt;
-            font-weight: bold;
-            color: #1a237e;
-            margin: 0;
-            letter-spacing: 1px;
-          }
-          .company-subtitle {
-            font-size: 9pt;
-            color: #666;
-            margin-top: 2px;
-          }
           .header-right {
             text-align: right;
             font-size: 9pt;
             color: #333;
+            line-height: 1.5;
           }
           
-          .doc-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 10px 0;
-            padding: 8px 12px;
-            background: #f5f5f5;
-            border-left: 3px solid #8b0000;
+          .doc-title-section {
+            text-align: center;
+            margin: 15px 0;
           }
           .doc-title {
-            font-size: 14pt;
+            font-size: 16pt;
             font-weight: bold;
-            color: #8b0000;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+          }
+          .doc-info-line {
+            font-size: 10pt;
+            color: #555;
           }
           .doc-number {
-            font-size: 11pt;
             font-weight: bold;
-            color: #1a237e;
-          }
-          .doc-date {
-            font-size: 9pt;
-            color: #555;
-            margin-top: 3px;
           }
           
           .client-section {
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #1a237e;
-            border-radius: 4px;
+            margin: 15px 0;
+            padding: 12px;
+            border: 1px solid #999;
           }
           .client-label {
             font-weight: bold;
-            font-size: 10pt;
-            color: #1a237e;
+            font-size: 9pt;
+            text-transform: uppercase;
             margin-bottom: 5px;
+            color: #555;
           }
           .client-name {
             font-size: 11pt;
             font-weight: bold;
+            color: #000;
           }
           .client-details {
             font-size: 9pt;
             color: #333;
-            margin-top: 3px;
+            margin-top: 5px;
           }
-          .client-details p { margin: 1px 0; }
+          .client-details p { margin: 2px 0; }
           
           table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 10px 0;
+            margin: 15px 0;
             font-size: 9pt;
           }
           thead tr {
-            background: #1a237e;
-            color: white;
+            border-top: 2px solid #333;
+            border-bottom: 2px solid #333;
           }
           th { 
-            padding: 8px 6px; 
+            padding: 10px 8px; 
             text-align: left;
             font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8pt;
           }
           th:nth-child(2), th:nth-child(3), th:nth-child(4) {
-            text-align: center;
-          }
-          th:last-child {
             text-align: right;
           }
           td { 
-            padding: 6px; 
+            padding: 8px; 
             border-bottom: 1px solid #ddd;
           }
-          td:nth-child(2), td:nth-child(3) {
-            text-align: center;
-          }
-          td:last-child {
+          td:nth-child(2), td:nth-child(3), td:nth-child(4) {
             text-align: right;
-            font-weight: 500;
-          }
-          tbody tr:nth-child(even) {
-            background: #fafafa;
           }
           
           .totals-section {
-            margin-top: 10px;
+            margin-top: 15px;
             display: flex;
             justify-content: flex-end;
           }
           .totals-table {
-            width: 280px;
-            border: 1px solid #1a237e;
-            border-radius: 4px;
-            overflow: hidden;
+            width: 250px;
             font-size: 9pt;
           }
           .totals-table tr {
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #ddd;
           }
           .totals-table td {
-            padding: 6px 10px;
+            padding: 6px 0;
           }
           .totals-table .label {
             text-align: left;
-            color: #333;
           }
           .totals-table .value {
             text-align: right;
-            font-weight: 600;
+            font-weight: 500;
           }
           .totals-table .total-row {
-            background: #8b0000;
-            color: white;
+            border-top: 2px solid #333;
+            border-bottom: none;
           }
           .totals-table .total-row td {
-            font-size: 10pt;
+            font-size: 11pt;
             font-weight: bold;
-            padding: 8px 10px;
+            padding-top: 8px;
           }
           
           .amount-words {
-            margin-top: 8px;
-            padding: 8px 10px;
-            background: #f9f9f9;
-            border: 1px dashed #999;
+            margin-top: 15px;
+            padding: 10px 0;
+            border-top: 1px solid #ddd;
             font-size: 9pt;
             font-style: italic;
-          }
-          .amount-words strong {
-            color: #1a237e;
           }
           
           .notes-section {
-            margin-top: 8px;
-            padding: 8px;
-            background: #f5f5f5;
-            border-left: 3px solid #1a237e;
+            margin-top: 10px;
+            padding: 8px 0;
             font-size: 9pt;
             font-style: italic;
+            color: #555;
           }
           
           .footer {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #8b0000;
+            margin-top: 25px;
+            padding-top: 15px;
           }
           .thank-you {
             text-align: center;
             font-size: 9pt;
-            color: #8b0000;
-            font-weight: bold;
-            margin-bottom: 15px;
+            font-style: italic;
+            margin-bottom: 20px;
           }
           .signature-section {
             text-align: right;
@@ -563,56 +524,51 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-size: 9pt;
           }
           .signature-title {
-            font-style: italic;
-            color: #666;
             font-size: 8pt;
+            color: #666;
           }
           
           @media print { 
-            body { padding: 10px; }
+            body { padding: 10px 20px; }
           }
         </style>
       </head>
       <body>
         <div class="header">
           <div class="logo-section">
-            <img src="${LOGO_BASE64}" alt="ESPACE MAXO" />
-          </div>
-          <div class="company-info">
-            <h1 class="company-name">ESPACE MAXO</h1>
-            <p class="company-subtitle">Restaurant & Jeux VR - Fidjrossè</p>
+            <img src="${LOGO_BASE64}" alt="Logo" />
           </div>
           <div class="header-right">
-            <p><strong>Tél:</strong> +229 01 4147 0000</p>
+            <p>Tél: +229 01 4147 0000</p>
             <p>RCCM RB/COT/22 B 32037</p>
+            <p>Fidjrossè, Cotonou - Bénin</p>
           </div>
         </div>
         
-        <div class="doc-header">
-          <div>
-            <div class="doc-title">FACTURE PROFORMA</div>
-            <div class="doc-date">${dateFormatted}</div>
+        <div class="doc-title-section">
+          <div class="doc-title">Facture Proforma</div>
+          <div class="doc-info-line">
+            <span class="doc-number">N° ${proformaNum}</span> &nbsp;|&nbsp; ${dateFormatted}
           </div>
-          <div class="doc-number">N° ${proformaNum}</div>
         </div>
         
         <div class="client-section">
-          <div class="client-label">CLIENT :</div>
+          <div class="client-label">Client</div>
           <div class="client-name">${proforma.client_name}</div>
           <div class="client-details">
             ${proforma.client_phone ? `<p>Tél: ${proforma.client_phone}</p>` : ''}
             ${proforma.client_email ? `<p>Email: ${proforma.client_email}</p>` : ''}
-            ${proforma.client_address ? `<p>Adresse: ${proforma.client_address}</p>` : ''}
+            ${proforma.client_address ? `<p>${proforma.client_address}</p>` : ''}
           </div>
         </div>
         
         <table>
           <thead>
             <tr>
-              <th style="width: 50%;">DESCRIPTION</th>
-              <th style="width: 10%;">QTÉ</th>
-              <th style="width: 20%;">P.U.</th>
-              <th style="width: 20%;">MONTANT</th>
+              <th style="width: 50%;">Description</th>
+              <th style="width: 12%;">Qté</th>
+              <th style="width: 19%;">Prix Unit.</th>
+              <th style="width: 19%;">Montant</th>
             </tr>
           </thead>
           <tbody>
@@ -640,22 +596,22 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
               </tr>
             ` : ''}
             <tr>
-              <td class="label"><strong>Montant HT</strong></td>
-              <td class="value"><strong>${montantHT.toLocaleString('fr-FR')} F</strong></td>
+              <td class="label">Montant HT</td>
+              <td class="value">${montantHT.toLocaleString('fr-FR')} F</td>
             </tr>
             <tr>
               <td class="label">TVA (18%)</td>
               <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F' : 'Exonéré'}</td>
             </tr>
             <tr class="total-row">
-              <td class="label">MONTANT TTC</td>
+              <td class="label">Total TTC</td>
               <td class="value">${totalTTC.toLocaleString('fr-FR')} F CFA</td>
             </tr>
           </table>
         </div>
         
         <div class="amount-words">
-          <strong>Arrêtée la présente facture proforma à la somme de :</strong> ${totalInWords}
+          Arrêtée la présente facture proforma à la somme de : <strong>${totalInWords}</strong>
         </div>
         
         ${proforma.notes ? `
@@ -665,7 +621,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         ` : ''}
         
         <div class="footer">
-          <p class="thank-you">NOUS VOUS REMERCIONS DE VOTRE CONFIANCE !</p>
+          <p class="thank-you">Nous vous remercions de votre confiance.</p>
           <div class="signature-section">
             <p class="signature-name">AHOUANDJINOU Mères</p>
             <p class="signature-title">La Gérante</p>
