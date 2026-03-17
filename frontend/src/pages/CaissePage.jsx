@@ -2814,7 +2814,8 @@ _Gérante - Espace Maxo_
               line-height: 1.3;
             }
             .header { text-align: center; margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
-            .header h1 { font-size: 16px; font-weight: bold; }
+            .logo { width: 50px; height: 50px; margin: 0 auto 5px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
             .header p { font-size: 10px; }
             .info { margin: 8px 0; font-size: 11px; }
             .info div { display: flex; justify-content: space-between; }
@@ -2830,9 +2831,9 @@ _Gérante - Espace Maxo_
         </head>
         <body>
           <div class="header">
-            <h1>ESPACE MAXO</h1>
+            <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
             <p>Restaurant & Jeux VR</p>
-            <p>Tel: 01 41 47 00 00</p>
+            <p>Tél: +229 01 4147 0000</p>
           </div>
           
           <div class="info">
@@ -2866,17 +2867,17 @@ _Gérante - Espace Maxo_
           </div>
           ${invoice.validation_status === 'validated' ? `
           <div class="validation">
-            ✓ Validé par: ${invoice.validated_by || 'Gérante'}
+            Validé par: ${invoice.validated_by || 'Gérante'}
           </div>
           ` : `
           <div class="validation" style="color: red;">
-            ⏳ En attente de validation
+            En attente de validation
           </div>
           `}
           
           <div class="footer">
             <p>Merci de votre visite !</p>
-            <p>À bientôt chez Espace Maxo</p>
+            <p>À bientôt</p>
           </div>
         </body>
       </html>

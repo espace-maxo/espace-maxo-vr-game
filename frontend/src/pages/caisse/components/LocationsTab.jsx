@@ -573,7 +573,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
             line-height: 1.4;
           }
           .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-          .header h1 { font-size: 16px; font-weight: bold; }
+          .logo { width: 50px; height: 50px; margin: 0 auto 5px; }
+          .logo img { width: 100%; height: 100%; object-fit: contain; }
           .header p { font-size: 10px; }
           .invoice-num { text-align: center; font-size: 11px; margin: 5px 0; padding: 5px; background: #f0f0f0; }
           .section { margin: 8px 0; padding: 5px 0; border-bottom: 1px dashed #000; }
@@ -601,9 +602,9 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       </head>
       <body>
         <div class="header">
-          <h1>ESPACE MAXO</h1>
-          <p>Fidjrossè Plage, Cotonou</p>
-          <p>Tél: +229 91 00 50 84</p>
+          <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+          <p>Fidjrossè, Cotonou</p>
+          <p>Tél: +229 01 4147 0000</p>
         </div>
 
         <div class="invoice-num">
@@ -647,16 +648,16 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         </div>
 
         <div class="status ${totalToPay <= 0 ? 'status-paid' : location.deposit_paid > 0 ? 'status-partial' : 'status-pending'}">
-          ${totalToPay <= 0 ? '✓ PAYÉE' : location.deposit_paid > 0 ? '◐ ACOMPTE VERSÉ' : '○ EN ATTENTE'}
+          ${totalToPay <= 0 ? 'PAYÉE' : location.deposit_paid > 0 ? 'ACOMPTE VERSÉ' : 'EN ATTENTE'}
         </div>
 
         <div class="footer">
-          <p>Mobile Money: +229 91 00 50 84</p>
+          <p>Mobile Money: +229 01 4147 0000</p>
           <p>Merci de votre confiance !</p>
           <p style="margin-top: 5px;">Contrat N° ${location.id?.substring(0, 8).toUpperCase() || 'XXXX'}</p>
         </div>
 
-        <div class="cut-line">- - - - - ✂ - - - - -</div>
+        <div class="cut-line">- - - - - - - - - - -</div>
       </body>
       </html>
     `;
