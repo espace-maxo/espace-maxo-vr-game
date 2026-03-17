@@ -426,3 +426,31 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 2. **P2:** Refactorer CaissePage.jsx (>8000 lignes)
 3. **P3:** Corriger le bug de disparition des tables après impression bon cuisine
 4. **P4:** Améliorer l'UX mobile (indicateur de défilement horizontal sur onglets)
+
+### Fonctionnalité "Abonnements & Factures Récurrentes" ✅ (Décembre 2025)
+- **Nouvel onglet "Abonnements"** pour la Gérante et l'Admin
+- **Types supportés**: 
+  - Clients (recettes récurrentes)
+  - Fournisseurs (charges: Internet, Canal+, loyer, électricité, eau, téléphone, assurance, autre)
+- **Fonctionnalités**:
+  - Création/Modification/Suppression d'abonnements
+  - Enregistrement des paiements avec calcul automatique de la prochaine échéance
+  - Alertes visuelles : En retard (rouge), Aujourd'hui (orange), Prochains 3 jours (jaune)
+  - Statistiques : Total, Clients, Fournisseurs, Charges mensuelles
+  - Filtres par type et catégorie
+  - Historique des paiements par abonnement
+  - Icônes par catégorie (Wifi, TV, Home, Zap, etc.)
+
+### APIs Abonnements
+- `GET /api/subscriptions` - Liste avec alertes et stats
+- `POST /api/subscriptions` - Créer un abonnement
+- `GET /api/subscriptions/{id}` - Détails avec historique paiements
+- `PUT /api/subscriptions/{id}` - Modifier
+- `DELETE /api/subscriptions/{id}` - Supprimer
+- `POST /api/subscriptions/{id}/pay` - Enregistrer un paiement
+- `GET /api/subscriptions/alerts/summary` - Résumé alertes pour badge
+- `GET /api/subscriptions/payments/history` - Historique paiements
+
+### Fichiers créés
+- `/app/backend/routers/subscriptions.py` - API backend
+- `/app/frontend/src/pages/caisse/components/SubscriptionsTab.jsx` - Composant frontend
