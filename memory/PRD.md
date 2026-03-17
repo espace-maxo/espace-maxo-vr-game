@@ -398,3 +398,31 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ## Contact
 - SMS Admin: +229 97 72 08 08, +229 91 00 50 84
 - Adresse: Fidjrossè Plage, Cotonou
+
+## Dernières mises à jour (Session Actuelle - Décembre 2025)
+
+### Fonctionnalité "Mon Point" - Validation par la Gérante ✅
+- **Validation complète des rapports de fin de service**
+  - La Gérante peut Valider, Demander une révision ou Rejeter les rapports des serveurs
+  - Comparaison automatique Déclaré vs Réel avec détection des écarts
+  - Interface avec tableau de comparaison (Commandes créées, Factures validées, Total des ventes)
+  - Badge de statut dynamique (En attente, Validé, Révision demandée, Rejeté)
+  - Commentaire optionnel lors de la validation
+  - Notification automatique au serveur en cas de révision/rejet
+
+### Refactoring Backend - Phase 1 ✅
+- **Création du module `/app/backend/routers/service_reports.py`**
+  - Extraction de ~300 lignes de code de server.py
+  - Endpoints pour les rapports de service maintenant modulaires
+  - `server.py` réduit de 6306 à 6007 lignes
+  - Architecture plus maintenable
+
+### APIs "Mon Point" Validation
+- `GET /api/server-end-of-service-reports/{report_id}/compare` - Comparaison déclaré vs réel
+- `PUT /api/server-end-of-service-reports/{report_id}/validate` - Valider/Réviser/Rejeter
+
+### Prochaines étapes de Refactoring
+1. **P1:** Continuer l'extraction des modules de server.py vers /backend/routers/
+2. **P2:** Refactorer CaissePage.jsx (>8000 lignes)
+3. **P3:** Corriger le bug de disparition des tables après impression bon cuisine
+4. **P4:** Améliorer l'UX mobile (indicateur de défilement horizontal sur onglets)
