@@ -30,6 +30,7 @@ import TablesTab from "./caisse/components/TablesTab";
 import HebdoReport from "./caisse/components/HebdoReport";
 import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
+import ProformaTab from "./caisse/components/ProformaTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -3542,6 +3543,12 @@ _Gérante - Espace Maxo_
                 <Building2 className="w-4 h-4 mr-2" />Locations
               </TabsTrigger>
             )}
+            {/* Factures Proforma - Manager & Admin */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="proforma" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+                <FileText className="w-4 h-4 mr-2" />Proforma
+              </TabsTrigger>
+            )}
             {/* Instructions & Notes - Manager & Admin */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white">
@@ -6491,6 +6498,17 @@ _Gérante - Espace Maxo_
             <LocationsTab 
               currentUser={currentUser}
               formatPrice={formatPrice}
+            />
+          </TabsContent>
+          )}
+
+          {/* ==================== PROFORMA TAB (Manager/Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="proforma">
+            <ProformaTab 
+              currentUser={currentUser}
+              formatPrice={formatPrice}
+              catalog={catalog}
             />
           </TabsContent>
           )}

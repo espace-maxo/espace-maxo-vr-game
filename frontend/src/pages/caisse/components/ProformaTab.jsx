@@ -1,0 +1,815 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  FileText, Plus, Trash2, Edit2, Eye, Send, CheckCircle, 
+  RefreshCw, Search, Calendar, User, Phone, Mail, MapPin,
+  DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package
+} from "lucide-react";
+import { toast } from "sonner";
+
+const API = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
+  const [proformas, setProformas] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingProforma, setViewingProforma] = useState(null);
+  const [editingProforma, setEditingProforma] = useState(null);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    client_name: "",
+    client_phone: "",
+    client_email: "",
+    client_address: "",
+    items: [],
+    subtotal: 0,
+    discount: 0,
+    tax: 0,
+    total: 0,
+    notes: "",
+    validity_days: 30
+  });
+  
+  // Product selection
+  const [selectedDept, setSelectedDept] = useState("salle_jardin");
+  const [productSearch, setProductSearch] = useState("");
+
+  useEffect(() => {
+    fetchProformas();
+  }, []);
+
+  const fetchProformas = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API}/proforma-invoices`);
+      setProformas(res.data.proformas || []);
+      setStats(res.data.stats || {});
+    } catch (error) {
+      console.error("Error fetching proformas:", error);
+      toast.error("Erreur lors du chargement des proformas");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateTotals = (items, discount = 0, tax = 0) => {
+    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const total = subtotal - discount + tax;
+    return { subtotal, total };
+  };
+
+  const addItemToForm = (product, dept) => {
+    const existingIndex = formData.items.findIndex(i => i.name === product.name);
+    let newItems;
+    
+    if (existingIndex >= 0) {
+      newItems = [...formData.items];
+      newItems[existingIndex].quantity += 1;
+      newItems[existingIndex].subtotal = newItems[existingIndex].quantity * newItems[existingIndex].unit_price;
+    } else {
+      newItems = [...formData.items, {
+        name: product.name,
+        quantity: 1,
+        unit_price: product.price,
+        subtotal: product.price,
+        department: dept
+      }];
+    }
+    
+    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
+    setFormData({ ...formData, items: newItems, subtotal, total });
+  };
+
+  const updateItemQuantity = (index, quantity) => {
+    if (quantity < 1) return;
+    const newItems = [...formData.items];
+    newItems[index].quantity = quantity;
+    newItems[index].subtotal = quantity * newItems[index].unit_price;
+    
+    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
+    setFormData({ ...formData, items: newItems, subtotal, total });
+  };
+
+  const removeItemFromForm = (index) => {
+    const newItems = formData.items.filter((_, i) => i !== index);
+    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
+    setFormData({ ...formData, items: newItems, subtotal, total });
+  };
+
+  const updateDiscount = (discount) => {
+    const d = parseFloat(discount) || 0;
+    const { subtotal, total } = calculateTotals(formData.items, d, formData.tax);
+    setFormData({ ...formData, discount: d, subtotal, total });
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.client_name) {
+      toast.error("Le nom du client est obligatoire");
+      return;
+    }
+    if (formData.items.length === 0) {
+      toast.error("Ajoutez au moins un article");
+      return;
+    }
+
+    try {
+      const payload = {
+        ...formData,
+        created_by: currentUser?.full_name || currentUser?.username || ""
+      };
+
+      if (editingProforma) {
+        await axios.put(`${API}/proforma-invoices/${editingProforma.id}`, payload);
+        toast.success("Proforma mise à jour");
+      } else {
+        await axios.post(`${API}/proforma-invoices`, payload);
+        toast.success("Proforma créée avec succès");
+      }
+
+      setShowCreateModal(false);
+      resetForm();
+      fetchProformas();
+    } catch (error) {
+      console.error("Error saving proforma:", error);
+      toast.error("Erreur lors de l'enregistrement");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      client_name: "",
+      client_phone: "",
+      client_email: "",
+      client_address: "",
+      items: [],
+      subtotal: 0,
+      discount: 0,
+      tax: 0,
+      total: 0,
+      notes: "",
+      validity_days: 30
+    });
+    setEditingProforma(null);
+  };
+
+  const openEditModal = (proforma) => {
+    setEditingProforma(proforma);
+    setFormData({
+      client_name: proforma.client_name,
+      client_phone: proforma.client_phone || "",
+      client_email: proforma.client_email || "",
+      client_address: proforma.client_address || "",
+      items: proforma.items || [],
+      subtotal: proforma.subtotal || 0,
+      discount: proforma.discount || 0,
+      tax: proforma.tax || 0,
+      total: proforma.total || 0,
+      notes: proforma.notes || "",
+      validity_days: proforma.validity_days || 30
+    });
+    setShowCreateModal(true);
+  };
+
+  const updateStatus = async (proformaId, newStatus) => {
+    try {
+      await axios.put(`${API}/proforma-invoices/${proformaId}`, { status: newStatus });
+      toast.success(`Statut mis à jour: ${getStatusLabel(newStatus)}`);
+      fetchProformas();
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
+  const convertToInvoice = async (proforma) => {
+    if (!confirm(`Convertir la proforma ${proforma.proforma_number} en facture définitive ?`)) return;
+    
+    try {
+      const res = await axios.post(`${API}/proforma-invoices/${proforma.id}/convert`, null, {
+        params: { converted_by: currentUser?.full_name || "" }
+      });
+      toast.success(res.data.message);
+      fetchProformas();
+    } catch (error) {
+      console.error("Error converting proforma:", error);
+      toast.error("Erreur lors de la conversion");
+    }
+  };
+
+  const deleteProforma = async (proformaId) => {
+    if (!confirm("Supprimer cette proforma ?")) return;
+    
+    try {
+      await axios.delete(`${API}/proforma-invoices/${proformaId}`);
+      toast.success("Proforma supprimée");
+      fetchProformas();
+    } catch (error) {
+      console.error("Error deleting proforma:", error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const printProforma = (proforma) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Proforma ${proforma.proforma_number}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          .header h1 { color: #2563eb; margin: 0; }
+          .header p { color: #666; margin: 5px 0; }
+          .proforma-badge { background: #dbeafe; color: #1d4ed8; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+          .info-box { background: #f8fafc; padding: 15px; border-radius: 8px; }
+          .info-box h3 { margin: 0 0 10px 0; color: #333; font-size: 14px; }
+          .info-box p { margin: 5px 0; color: #555; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th { background: #1e293b; color: white; padding: 12px; text-align: left; }
+          td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+          .totals { text-align: right; }
+          .totals p { margin: 5px 0; }
+          .total-final { font-size: 1.5em; font-weight: bold; color: #059669; }
+          .validity { background: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
+          .notes { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px; }
+          .footer { margin-top: 40px; text-align: center; color: #888; font-size: 12px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>ESPACE MAXO</h1>
+          <p>Restaurant & Espace de Jeux</p>
+          <p>Fidjrossè Plage, Cotonou | +229 91 00 50 84</p>
+          <div class="proforma-badge">FACTURE PROFORMA</div>
+        </div>
+        
+        <div class="info-grid">
+          <div class="info-box">
+            <h3>PROFORMA</h3>
+            <p><strong>N°:</strong> ${proforma.proforma_number}</p>
+            <p><strong>Date:</strong> ${new Date(proforma.created_at).toLocaleDateString('fr-FR')}</p>
+            <p><strong>Valide jusqu'au:</strong> ${new Date(proforma.valid_until).toLocaleDateString('fr-FR')}</p>
+          </div>
+          <div class="info-box">
+            <h3>CLIENT</h3>
+            <p><strong>${proforma.client_name}</strong></p>
+            ${proforma.client_phone ? `<p>Tél: ${proforma.client_phone}</p>` : ''}
+            ${proforma.client_email ? `<p>Email: ${proforma.client_email}</p>` : ''}
+            ${proforma.client_address ? `<p>Adresse: ${proforma.client_address}</p>` : ''}
+          </div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Désignation</th>
+              <th style="text-align:center">Qté</th>
+              <th style="text-align:right">P.U.</th>
+              <th style="text-align:right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${proforma.items.map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td style="text-align:center">${item.quantity}</td>
+                <td style="text-align:right">${item.unit_price?.toLocaleString('fr-FR')} F</td>
+                <td style="text-align:right">${item.subtotal?.toLocaleString('fr-FR')} F</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="totals">
+          <p>Sous-total: ${proforma.subtotal?.toLocaleString('fr-FR')} F CFA</p>
+          ${proforma.discount > 0 ? `<p>Remise: -${proforma.discount?.toLocaleString('fr-FR')} F CFA</p>` : ''}
+          <p class="total-final">TOTAL: ${proforma.total?.toLocaleString('fr-FR')} F CFA</p>
+        </div>
+        
+        <div class="validity">
+          <strong>Cette proforma est valide pendant ${proforma.validity_days} jours</strong>
+          <p>Date limite: ${new Date(proforma.valid_until).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        
+        ${proforma.notes ? `
+          <div class="notes">
+            <strong>Notes:</strong>
+            <p>${proforma.notes}</p>
+          </div>
+        ` : ''}
+        
+        <div class="footer">
+          <p>Merci de votre confiance | Espace Maxo - L'excellence au service de vos événements</p>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      draft: 'Brouillon',
+      sent: 'Envoyée',
+      accepted: 'Acceptée',
+      rejected: 'Refusée',
+      converted: 'Convertie'
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusBadge = (status) => {
+    const styles = {
+      draft: 'bg-slate-500/20 text-slate-400',
+      sent: 'bg-blue-500/20 text-blue-400',
+      accepted: 'bg-green-500/20 text-green-400',
+      rejected: 'bg-red-500/20 text-red-400',
+      converted: 'bg-purple-500/20 text-purple-400'
+    };
+    return <Badge className={styles[status] || 'bg-slate-500/20 text-slate-400'}>{getStatusLabel(status)}</Badge>;
+  };
+
+  const filteredProformas = proformas.filter(p => {
+    const matchesSearch = p.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         p.proforma_number?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || p.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Get products from catalog for selection
+  const availableProducts = catalog[selectedDept] || [];
+  const filteredProducts = availableProducts.filter(p => 
+    p.name.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-xl font-bold text-blue-300 flex items-center gap-2">
+          <FileText className="w-6 h-6" />
+          Factures Proforma
+        </h2>
+        <div className="flex items-center gap-3">
+          <Button onClick={fetchProformas} variant="outline" className="border-slate-600 text-slate-300">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Actualiser
+          </Button>
+          <Button onClick={() => { resetForm(); setShowCreateModal(true); }} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Nouvelle Proforma
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-4 text-center">
+            <FileText className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-white">{stats.total || 0}</p>
+            <p className="text-xs text-slate-400">Total</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800/50 border-slate-600">
+          <CardContent className="p-4 text-center">
+            <Edit2 className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-slate-400">{stats.draft || 0}</p>
+            <p className="text-xs text-slate-400">Brouillons</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-900/30 border-blue-500/50">
+          <CardContent className="p-4 text-center">
+            <Send className="w-6 h-6 text-blue-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-blue-400">{stats.sent || 0}</p>
+            <p className="text-xs text-slate-400">Envoyées</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-green-900/30 border-green-500/50">
+          <CardContent className="p-4 text-center">
+            <CheckCircle className="w-6 h-6 text-green-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-green-400">{stats.accepted || 0}</p>
+            <p className="text-xs text-slate-400">Acceptées</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-900/30 border-amber-500/50">
+          <CardContent className="p-4 text-center">
+            <DollarSign className="w-6 h-6 text-amber-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-amber-400">{formatPrice(stats.total_value || 0)} F</p>
+            <p className="text-xs text-slate-400">Valeur totale</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Rechercher par client ou numéro..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 bg-slate-800/50 border-slate-700 text-white"
+          />
+        </div>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[150px] bg-slate-800/50 border-slate-700 text-white">
+            <SelectValue placeholder="Statut" />
+          </SelectTrigger>
+          <SelectContent className="bg-slate-800 border-slate-700">
+            <SelectItem value="all">Tous</SelectItem>
+            <SelectItem value="draft">Brouillons</SelectItem>
+            <SelectItem value="sent">Envoyées</SelectItem>
+            <SelectItem value="accepted">Acceptées</SelectItem>
+            <SelectItem value="rejected">Refusées</SelectItem>
+            <SelectItem value="converted">Converties</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Proformas List */}
+      {loading ? (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-8 text-center">
+            <RefreshCw className="w-8 h-8 text-blue-400 mx-auto animate-spin mb-3" />
+            <p className="text-slate-400">Chargement...</p>
+          </CardContent>
+        </Card>
+      ) : filteredProformas.length === 0 ? (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-8 text-center">
+            <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-400">Aucune proforma trouvée</p>
+            <p className="text-slate-500 text-sm mt-1">Créez votre première facture proforma</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredProformas.map(proforma => (
+            <Card key={proforma.id} className="bg-slate-800/50 border-slate-700 hover:border-slate-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  {/* Left: Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white font-bold">{proforma.proforma_number}</span>
+                      {getStatusBadge(proforma.status)}
+                      {proforma.status === 'converted' && proforma.converted_to_invoice && (
+                        <Badge className="bg-purple-500/20 text-purple-300">→ {proforma.converted_to_invoice}</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-sm">
+                      <span className="text-slate-300 flex items-center gap-1">
+                        <User className="w-4 h-4" />
+                        {proforma.client_name}
+                      </span>
+                      {proforma.client_phone && (
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {proforma.client_phone}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(proforma.created_at).toLocaleDateString('fr-FR')}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Valide jusqu'au {new Date(proforma.valid_until).toLocaleDateString('fr-FR')}
+                      </span>
+                      <span>{proforma.items?.length || 0} article(s)</span>
+                    </div>
+                  </div>
+                  
+                  {/* Right: Amount & Actions */}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-amber-400 font-bold text-lg">{formatPrice(proforma.total)} F</p>
+                      <p className="text-slate-500 text-xs">Total TTC</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => { setViewingProforma(proforma); setShowViewModal(true); }} className="w-8 h-8 text-slate-400 hover:text-white">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => printProforma(proforma)} className="w-8 h-8 text-slate-400 hover:text-white">
+                        <Printer className="w-4 h-4" />
+                      </Button>
+                      {proforma.status !== 'converted' && (
+                        <>
+                          <Button size="icon" variant="ghost" onClick={() => openEditModal(proforma)} className="w-8 h-8 text-blue-400 hover:text-blue-300">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          {proforma.status === 'accepted' && (
+                            <Button size="icon" variant="ghost" onClick={() => convertToInvoice(proforma)} className="w-8 h-8 text-purple-400 hover:text-purple-300" title="Convertir en facture">
+                              <ArrowRight className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button size="icon" variant="ghost" onClick={() => deleteProforma(proforma.id)} className="w-8 h-8 text-red-400 hover:text-red-300">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <FileText className="w-6 h-6 text-blue-400" />
+              {editingProforma ? 'Modifier la Proforma' : 'Nouvelle Facture Proforma'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+            {/* Left: Client Info */}
+            <div className="space-y-4">
+              <h3 className="text-slate-300 font-medium flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Informations Client
+              </h3>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Nom du client *</Label>
+                <Input
+                  value={formData.client_name}
+                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
+                  placeholder="Nom complet"
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Téléphone</Label>
+                <Input
+                  value={formData.client_phone}
+                  onChange={(e) => setFormData({ ...formData, client_phone: e.target.value })}
+                  placeholder="+229 XX XX XX XX"
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Email</Label>
+                <Input
+                  type="email"
+                  value={formData.client_email}
+                  onChange={(e) => setFormData({ ...formData, client_email: e.target.value })}
+                  placeholder="email@exemple.com"
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Adresse</Label>
+                <Input
+                  value={formData.client_address}
+                  onChange={(e) => setFormData({ ...formData, client_address: e.target.value })}
+                  placeholder="Adresse complète"
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Validité (jours)</Label>
+                <Input
+                  type="number"
+                  value={formData.validity_days}
+                  onChange={(e) => setFormData({ ...formData, validity_days: parseInt(e.target.value) || 30 })}
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm">Notes</Label>
+                <Textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Conditions particulières, remarques..."
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+            </div>
+            
+            {/* Right: Products & Summary */}
+            <div className="space-y-4">
+              <h3 className="text-slate-300 font-medium flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Articles
+              </h3>
+              
+              {/* Department Selector */}
+              <Select value={selectedDept} onValueChange={setSelectedDept}>
+                <SelectTrigger className="bg-slate-900/50 border-slate-700 text-white">
+                  <SelectValue placeholder="Département" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="salle_jardin">Plats</SelectItem>
+                  <SelectItem value="accompagnements">Accompagnements</SelectItem>
+                  <SelectItem value="bar">Bar</SelectItem>
+                  <SelectItem value="jeux">Jeux</SelectItem>
+                  <SelectItem value="location">Location</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Product Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder="Rechercher un produit..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="pl-10 bg-slate-900/50 border-slate-700 text-white"
+                />
+              </div>
+              
+              {/* Product Grid */}
+              <div className="h-32 overflow-y-auto bg-slate-900/30 rounded-lg p-2 space-y-1">
+                {filteredProducts.slice(0, 20).map((product, idx) => (
+                  <button
+                    key={`${selectedDept}-${product.id}-${idx}`}
+                    onClick={() => addItemToForm(product, selectedDept)}
+                    className="w-full text-left p-2 rounded bg-slate-700/30 hover:bg-slate-700/50 transition-colors"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-white text-sm">{product.name}</span>
+                      <span className="text-amber-400 text-sm">{formatPrice(product.price)} F</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Selected Items */}
+              <div className="bg-slate-900/50 rounded-lg p-3 max-h-48 overflow-y-auto">
+                <h4 className="text-slate-400 text-sm mb-2">Articles sélectionnés ({formData.items.length})</h4>
+                {formData.items.length === 0 ? (
+                  <p className="text-slate-500 text-center py-4 text-sm">Cliquez sur les produits pour les ajouter</p>
+                ) : (
+                  <div className="space-y-2">
+                    {formData.items.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded p-2">
+                        <span className="text-white text-sm flex-1 truncate">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity - 1)} className="w-6 h-6 text-slate-400">-</Button>
+                          <span className="text-white w-6 text-center">{item.quantity}</span>
+                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-6 h-6 text-slate-400">+</Button>
+                          <span className="text-amber-400 text-sm w-20 text-right">{formatPrice(item.subtotal)} F</span>
+                          <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Totals */}
+              <div className="bg-slate-900/50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Sous-total:</span>
+                  <span className="text-white">{formatPrice(formData.subtotal)} F</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Remise:</span>
+                  <Input
+                    type="number"
+                    value={formData.discount}
+                    onChange={(e) => updateDiscount(e.target.value)}
+                    className="w-24 h-8 bg-slate-800 border-slate-700 text-white text-right"
+                  />
+                </div>
+                <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
+                  <span className="text-white">TOTAL:</span>
+                  <span className="text-amber-400">{formatPrice(formData.total)} F CFA</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Actions */}
+          <div className="flex gap-3 pt-4 border-t border-slate-700">
+            <Button variant="outline" onClick={() => { setShowCreateModal(false); resetForm(); }} className="flex-1 border-slate-600 text-slate-300">
+              Annuler
+            </Button>
+            <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700">
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {editingProforma ? 'Mettre à jour' : 'Créer la Proforma'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Modal */}
+      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <FileText className="w-6 h-6 text-blue-400" />
+              {viewingProforma?.proforma_number}
+              {viewingProforma && getStatusBadge(viewingProforma.status)}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {viewingProforma && (
+            <div className="space-y-4 py-4">
+              {/* Client Info */}
+              <div className="bg-slate-900/50 rounded-lg p-4">
+                <h4 className="text-slate-400 text-sm mb-2">Client</h4>
+                <p className="text-white font-medium">{viewingProforma.client_name}</p>
+                {viewingProforma.client_phone && <p className="text-slate-300 text-sm">{viewingProforma.client_phone}</p>}
+                {viewingProforma.client_email && <p className="text-slate-300 text-sm">{viewingProforma.client_email}</p>}
+                {viewingProforma.client_address && <p className="text-slate-300 text-sm">{viewingProforma.client_address}</p>}
+              </div>
+              
+              {/* Items */}
+              <div className="bg-slate-900/50 rounded-lg p-4">
+                <h4 className="text-slate-400 text-sm mb-2">Articles</h4>
+                <div className="space-y-2">
+                  {viewingProforma.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span className="text-white">{item.name} x{item.quantity}</span>
+                      <span className="text-amber-400">{formatPrice(item.subtotal)} F</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-slate-700 mt-3 pt-3">
+                  <div className="flex justify-between font-bold">
+                    <span className="text-white">Total</span>
+                    <span className="text-amber-400">{formatPrice(viewingProforma.total)} F CFA</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Validity */}
+              <div className="bg-blue-900/30 rounded-lg p-4 text-center">
+                <Clock className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+                <p className="text-blue-300">Valide jusqu'au {new Date(viewingProforma.valid_until).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
+              
+              {/* Actions */}
+              {viewingProforma.status !== 'converted' && (
+                <div className="flex gap-2 pt-2">
+                  {viewingProforma.status === 'draft' && (
+                    <Button onClick={() => { updateStatus(viewingProforma.id, 'sent'); setShowViewModal(false); }} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                      <Send className="w-4 h-4 mr-2" />
+                      Marquer envoyée
+                    </Button>
+                  )}
+                  {viewingProforma.status === 'sent' && (
+                    <>
+                      <Button onClick={() => { updateStatus(viewingProforma.id, 'accepted'); setShowViewModal(false); }} className="flex-1 bg-green-600 hover:bg-green-700">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Acceptée
+                      </Button>
+                      <Button onClick={() => { updateStatus(viewingProforma.id, 'rejected'); setShowViewModal(false); }} variant="destructive" className="flex-1">
+                        <AlertCircle className="w-4 h-4 mr-2" />
+                        Refusée
+                      </Button>
+                    </>
+                  )}
+                  {viewingProforma.status === 'accepted' && (
+                    <Button onClick={() => { convertToInvoice(viewingProforma); setShowViewModal(false); }} className="flex-1 bg-purple-600 hover:bg-purple-700">
+                      <ArrowRight className="w-4 h-4 mr-2" />
+                      Convertir en Facture
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default ProformaTab;

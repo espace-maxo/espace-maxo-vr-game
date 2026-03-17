@@ -5041,6 +5041,43 @@ class LocationReservationUpdate(BaseModel):
     status: Optional[str] = None  # confirmed, completed, cancelled
     notes: Optional[str] = None
 
+# ============== PROFORMA INVOICE MODELS ==============
+
+class ProformaInvoiceItem(BaseModel):
+    name: str
+    quantity: int = 1
+    unit_price: float
+    subtotal: float
+    department: str = "autres"
+
+class ProformaInvoiceCreate(BaseModel):
+    client_name: str
+    client_phone: Optional[str] = ""
+    client_email: Optional[str] = ""
+    client_address: Optional[str] = ""
+    items: List[ProformaInvoiceItem]
+    subtotal: float
+    discount: float = 0
+    tax: float = 0
+    total: float
+    notes: Optional[str] = ""
+    validity_days: int = 30  # Validity period in days
+    created_by: str = ""
+
+class ProformaInvoiceUpdate(BaseModel):
+    client_name: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
+    client_address: Optional[str] = None
+    items: Optional[List[dict]] = None
+    subtotal: Optional[float] = None
+    discount: Optional[float] = None
+    tax: Optional[float] = None
+    total: Optional[float] = None
+    notes: Optional[str] = None
+    validity_days: Optional[int] = None
+    status: Optional[str] = None  # draft, sent, accepted, rejected, converted
+
 # ============== INSTRUCTIONS & NOTES MODELS ==============
 
 class InstructionCreate(BaseModel):
@@ -5556,6 +5593,205 @@ LOCATION_SPACES = {
     "espace_jardin": {"name": "Espace Jardin", "default_price": 30000},
     "salle_jeux": {"name": "Salle de Jeux", "default_price": 25000}
 }
+
+
+# ============== PROFORMA INVOICES ENDPOINTS ==============
+
+@api_router.get("/proforma-invoices")
+async def get_proforma_invoices(status: Optional[str] = None):
+    """Get all proforma invoices"""
+    try:
+        query = {}
+        if status:
+            query["status"] = status
+        
+        proformas = await db.proforma_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+        
+        # Calculate stats
+        total_count = len(proformas)
+        draft_count = len([p for p in proformas if p.get("status") == "draft"])
+        sent_count = len([p for p in proformas if p.get("status") == "sent"])
+        accepted_count = len([p for p in proformas if p.get("status") == "accepted"])
+        converted_count = len([p for p in proformas if p.get("status") == "converted"])
+        total_value = sum(p.get("total", 0) for p in proformas if p.get("status") in ["sent", "accepted"])
+        
+        return {
+            "proformas": proformas,
+            "stats": {
+                "total": total_count,
+                "draft": draft_count,
+                "sent": sent_count,
+                "accepted": accepted_count,
+                "converted": converted_count,
+                "total_value": total_value
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching proforma invoices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/proforma-invoices")
+async def create_proforma_invoice(proforma_data: ProformaInvoiceCreate):
+    """Create a new proforma invoice"""
+    try:
+        # Generate proforma number
+        today = datetime.now(timezone.utc)
+        date_prefix = today.strftime("%Y%m%d")
+        
+        # Get count for today
+        count = await db.proforma_invoices.count_documents({
+            "proforma_number": {"$regex": f"^PRO-{date_prefix}"}
+        })
+        proforma_number = f"PRO-{date_prefix}-{str(count + 1).zfill(4)}"
+        
+        proforma = {
+            "id": str(uuid.uuid4()),
+            "proforma_number": proforma_number,
+            "client_name": proforma_data.client_name,
+            "client_phone": proforma_data.client_phone,
+            "client_email": proforma_data.client_email,
+            "client_address": proforma_data.client_address,
+            "items": [item.model_dump() for item in proforma_data.items],
+            "subtotal": proforma_data.subtotal,
+            "discount": proforma_data.discount,
+            "tax": proforma_data.tax,
+            "total": proforma_data.total,
+            "notes": proforma_data.notes,
+            "validity_days": proforma_data.validity_days,
+            "valid_until": (today + timedelta(days=proforma_data.validity_days)).strftime("%Y-%m-%d"),
+            "status": "draft",
+            "created_by": proforma_data.created_by,
+            "created_at": today.isoformat(),
+            "updated_at": today.isoformat()
+        }
+        
+        await db.proforma_invoices.insert_one(proforma)
+        
+        return {"success": True, "proforma": {k: v for k, v in proforma.items() if k != "_id"}}
+    except Exception as e:
+        logger.error(f"Error creating proforma invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/proforma-invoices/{proforma_id}")
+async def get_proforma_invoice(proforma_id: str):
+    """Get a single proforma invoice"""
+    try:
+        proforma = await db.proforma_invoices.find_one({"id": proforma_id}, {"_id": 0})
+        if not proforma:
+            raise HTTPException(status_code=404, detail="Proforma non trouvée")
+        return {"proforma": proforma}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching proforma invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/proforma-invoices/{proforma_id}")
+async def update_proforma_invoice(proforma_id: str, update_data: ProformaInvoiceUpdate):
+    """Update a proforma invoice"""
+    try:
+        update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+        update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Recalculate validity if validity_days changed
+        if "validity_days" in update_dict:
+            proforma = await db.proforma_invoices.find_one({"id": proforma_id})
+            if proforma:
+                created = datetime.fromisoformat(proforma["created_at"].replace("Z", "+00:00"))
+                update_dict["valid_until"] = (created + timedelta(days=update_dict["validity_days"])).strftime("%Y-%m-%d")
+        
+        result = await db.proforma_invoices.update_one(
+            {"id": proforma_id},
+            {"$set": update_dict}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Proforma non trouvée")
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating proforma invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/proforma-invoices/{proforma_id}")
+async def delete_proforma_invoice(proforma_id: str):
+    """Delete a proforma invoice"""
+    try:
+        result = await db.proforma_invoices.delete_one({"id": proforma_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Proforma non trouvée")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting proforma invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/proforma-invoices/{proforma_id}/convert")
+async def convert_proforma_to_invoice(proforma_id: str, converted_by: str = ""):
+    """Convert a proforma invoice to a real invoice"""
+    try:
+        proforma = await db.proforma_invoices.find_one({"id": proforma_id}, {"_id": 0})
+        if not proforma:
+            raise HTTPException(status_code=404, detail="Proforma non trouvée")
+        
+        # Generate invoice number
+        today = datetime.now(timezone.utc)
+        date_prefix = today.strftime("%Y%m%d")
+        count = await db.invoices.count_documents({
+            "invoice_number": {"$regex": f"^EM-{date_prefix}"}
+        })
+        invoice_number = f"EM-{date_prefix}-{str(count + 1).zfill(4)}"
+        
+        # Create invoice from proforma
+        invoice = {
+            "id": str(uuid.uuid4()),
+            "invoice_number": invoice_number,
+            "customer_name": proforma["client_name"],
+            "customer_phone": proforma.get("client_phone", ""),
+            "items": proforma["items"],
+            "subtotal": proforma["subtotal"],
+            "discount": proforma.get("discount", 0),
+            "total": proforma["total"],
+            "payment_method": "especes",
+            "validation_status": "pending",
+            "created_by": converted_by or proforma.get("created_by", ""),
+            "date": today.strftime("%Y-%m-%d"),
+            "created_at": today.isoformat(),
+            "from_proforma": proforma["proforma_number"]
+        }
+        
+        await db.invoices.insert_one(invoice)
+        
+        # Update proforma status
+        await db.proforma_invoices.update_one(
+            {"id": proforma_id},
+            {"$set": {
+                "status": "converted",
+                "converted_to_invoice": invoice_number,
+                "converted_at": today.isoformat(),
+                "updated_at": today.isoformat()
+            }}
+        )
+        
+        return {
+            "success": True,
+            "invoice": {k: v for k, v in invoice.items() if k != "_id"},
+            "message": f"Proforma convertie en facture {invoice_number}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error converting proforma to invoice: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api_router.get("/locations")
 async def get_locations(
