@@ -275,6 +275,58 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     }
   };
 
+  // Function to convert number to French words
+  const numberToFrenchWords = (num) => {
+    const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+    const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
+    
+    if (num === 0) return 'zéro';
+    if (num < 0) return 'moins ' + numberToFrenchWords(-num);
+    
+    let words = '';
+    
+    if (num >= 1000000) {
+      const millions = Math.floor(num / 1000000);
+      words += (millions === 1 ? 'un million ' : numberToFrenchWords(millions) + ' millions ');
+      num %= 1000000;
+    }
+    
+    if (num >= 1000) {
+      const thousands = Math.floor(num / 1000);
+      words += (thousands === 1 ? 'mille ' : numberToFrenchWords(thousands) + ' mille ');
+      num %= 1000;
+    }
+    
+    if (num >= 100) {
+      const hundreds = Math.floor(num / 100);
+      words += (hundreds === 1 ? 'cent ' : units[hundreds] + ' cent ');
+      num %= 100;
+      if (num === 0 && hundreds > 1) words = words.trim() + 's ';
+    }
+    
+    if (num >= 20) {
+      const ten = Math.floor(num / 10);
+      const unit = num % 10;
+      
+      if (ten === 7 || ten === 9) {
+        words += tens[ten] + '-';
+        num = (ten === 7 ? 10 : 10) + unit;
+      } else {
+        words += tens[ten];
+        if (unit === 1 && ten !== 8) words += '-et';
+        if (unit > 0) words += '-' + units[unit];
+        else if (ten === 8) words += 's';
+        num = 0;
+      }
+    }
+    
+    if (num > 0 && num < 20) {
+      words += units[num];
+    }
+    
+    return words.trim().replace(/\s+/g, ' ');
+  };
+
   const printProforma = (proforma) => {
     const applyTva = proforma.apply_tva !== false;
     const subtotalCalc = proforma.items?.reduce((sum, item) => sum + item.subtotal, 0) || 0;
@@ -282,12 +334,14 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     const tvaAmount = applyTva ? Math.round(montantHT * 0.18) : 0;
     const totalTTC = montantHT + tvaAmount;
     
+    // Convert total to words
+    const totalInWords = numberToFrenchWords(totalTTC) + ' francs CFA';
+    
     // Format date in French
     const dateCreation = new Date(proforma.created_at);
-    const moisFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-    const dateFormatted = `${dateCreation.getDate()} ${moisFr[dateCreation.getMonth()]} ${dateCreation.getFullYear()}`;
+    const moisFr = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const dateFormatted = `Cotonou, le ${dateCreation.getDate()} ${moisFr[dateCreation.getMonth()]} ${dateCreation.getFullYear()}`;
     
-    // Generate proforma number in format: 00 XX /MM/YY/ES
     const proformaNum = proforma.proforma_number || 'N/A';
     
     const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -297,30 +351,29 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       <head>
         <title>Proforma ${proforma.proforma_number}</title>
         <style>
-          @page { margin: 15mm; size: A4; }
-          * { box-sizing: border-box; }
+          @page { margin: 10mm; size: A4; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
           body { 
-            font-family: 'Times New Roman', Times, serif; 
-            padding: 20px 40px; 
+            font-family: Arial, Helvetica, sans-serif; 
+            padding: 15px 25px; 
             max-width: 800px; 
             margin: 0 auto;
             color: #000;
-            font-size: 12pt;
-            line-height: 1.4;
+            font-size: 10pt;
+            line-height: 1.3;
           }
           
-          /* Header with logo */
           .header {
             display: flex;
-            align-items: flex-start;
-            gap: 20px;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #1a237e;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #1a237e;
           }
           .logo-section {
-            width: 120px;
-            height: 120px;
+            width: 80px;
+            height: 80px;
             flex-shrink: 0;
           }
           .logo-section img {
@@ -332,93 +385,85 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             flex: 1;
           }
           .company-name {
-            font-size: 28pt;
+            font-size: 22pt;
             font-weight: bold;
             color: #1a237e;
             margin: 0;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
           }
-          .company-location {
-            font-size: 14pt;
+          .company-subtitle {
+            font-size: 9pt;
+            color: #666;
+            margin-top: 2px;
+          }
+          .header-right {
+            text-align: right;
+            font-size: 9pt;
             color: #333;
-            margin: 5px 0;
-          }
-          .company-date {
-            font-size: 12pt;
-            color: #555;
           }
           
-          /* Contact and document info */
-          .doc-info {
+          .doc-header {
             display: flex;
             justify-content: space-between;
-            margin: 20px 0;
-            padding: 15px;
-            background: #f9f9f9;
-            border-left: 4px solid #8b0000;
-          }
-          .doc-info-left {
-            text-align: left;
-          }
-          .doc-info-right {
-            text-align: right;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px 12px;
+            background: #f5f5f5;
+            border-left: 3px solid #8b0000;
           }
           .doc-title {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #8b0000;
-            margin-bottom: 10px;
-          }
-          .doc-number {
             font-size: 14pt;
             font-weight: bold;
-            letter-spacing: 1px;
+            color: #8b0000;
+          }
+          .doc-number {
+            font-size: 11pt;
+            font-weight: bold;
             color: #1a237e;
           }
-          .rccm {
-            font-size: 10pt;
-            color: #666;
-            margin-top: 5px;
+          .doc-date {
+            font-size: 9pt;
+            color: #555;
+            margin-top: 3px;
           }
           
-          /* Client section */
           .client-section {
-            margin: 25px 0;
-            padding: 15px;
-            border: 2px solid #1a237e;
-            border-radius: 8px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #1a237e;
+            border-radius: 4px;
           }
           .client-label {
             font-weight: bold;
-            font-size: 14pt;
+            font-size: 10pt;
             color: #1a237e;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
           }
           .client-name {
-            font-size: 16pt;
+            font-size: 11pt;
             font-weight: bold;
           }
           .client-details {
-            font-size: 11pt;
+            font-size: 9pt;
             color: #333;
-            margin-top: 5px;
+            margin-top: 3px;
           }
+          .client-details p { margin: 1px 0; }
           
-          /* Table */
           table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 20px 0;
+            margin: 10px 0;
+            font-size: 9pt;
           }
           thead tr {
             background: #1a237e;
             color: white;
           }
           th { 
-            padding: 12px 10px; 
+            padding: 8px 6px; 
             text-align: left;
             font-weight: bold;
-            font-size: 11pt;
           }
           th:nth-child(2), th:nth-child(3), th:nth-child(4) {
             text-align: center;
@@ -427,9 +472,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             text-align: right;
           }
           td { 
-            padding: 10px; 
+            padding: 6px; 
             border-bottom: 1px solid #ddd;
-            font-size: 11pt;
           }
           td:nth-child(2), td:nth-child(3) {
             text-align: center;
@@ -441,135 +485,133 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           tbody tr:nth-child(even) {
             background: #fafafa;
           }
-          tbody tr:hover {
-            background: #e8eaf6;
-          }
           
-          /* Totals */
           .totals-section {
-            margin-top: 20px;
+            margin-top: 10px;
             display: flex;
             justify-content: flex-end;
           }
           .totals-table {
-            width: 350px;
-            border: 2px solid #1a237e;
-            border-radius: 8px;
+            width: 280px;
+            border: 1px solid #1a237e;
+            border-radius: 4px;
             overflow: hidden;
+            font-size: 9pt;
           }
           .totals-table tr {
             border-bottom: 1px solid #eee;
           }
           .totals-table td {
-            padding: 10px 15px;
-            border: none;
+            padding: 6px 10px;
           }
           .totals-table .label {
             text-align: left;
             color: #333;
-            font-size: 11pt;
           }
           .totals-table .value {
             text-align: right;
             font-weight: 600;
-            font-size: 11pt;
           }
           .totals-table .total-row {
             background: #8b0000;
             color: white;
           }
           .totals-table .total-row td {
-            font-size: 14pt;
+            font-size: 10pt;
             font-weight: bold;
-            padding: 12px 15px;
+            padding: 8px 10px;
           }
           
-          /* Notes */
+          .amount-words {
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: #f9f9f9;
+            border: 1px dashed #999;
+            font-size: 9pt;
+            font-style: italic;
+          }
+          .amount-words strong {
+            color: #1a237e;
+          }
+          
           .notes-section {
-            margin-top: 20px;
-            padding: 15px;
-            background: #e8eaf6;
-            border-left: 4px solid #1a237e;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f5f5f5;
+            border-left: 3px solid #1a237e;
+            font-size: 9pt;
             font-style: italic;
           }
           
-          /* Footer */
           .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #8b0000;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #8b0000;
           }
           .thank-you {
             text-align: center;
-            font-size: 12pt;
+            font-size: 9pt;
             color: #8b0000;
             font-weight: bold;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
           }
           .signature-section {
             text-align: right;
-            margin-top: 20px;
           }
           .signature-name {
             font-weight: bold;
-            font-size: 12pt;
+            font-size: 9pt;
           }
           .signature-title {
             font-style: italic;
             color: #666;
+            font-size: 8pt;
           }
           
           @media print { 
-            body { padding: 0; }
-            .header { break-inside: avoid; }
-            table { break-inside: auto; }
-            tr { break-inside: avoid; }
+            body { padding: 10px; }
           }
         </style>
       </head>
       <body>
-        <!-- Header with Logo -->
         <div class="header">
           <div class="logo-section">
             <img src="${LOGO_BASE64}" alt="ESPACE MAXO" />
           </div>
           <div class="company-info">
             <h1 class="company-name">ESPACE MAXO</h1>
-            <p class="company-location">Cotonou, Fidjrossè</p>
-            <p class="company-date">${dateFormatted}</p>
+            <p class="company-subtitle">Restaurant & Jeux VR - Fidjrossè</p>
+          </div>
+          <div class="header-right">
+            <p><strong>Tél:</strong> +229 01 4147 0000</p>
+            <p>RCCM RB/COT/22 B 32037</p>
           </div>
         </div>
         
-        <!-- Document Info -->
-        <div class="doc-info">
-          <div class="doc-info-left">
-            <p style="margin: 0;"><strong>Tél:</strong> +229 01 4147 0000</p>
-            <p class="rccm">RCCM RB/COT/22 B 32037</p>
-          </div>
-          <div class="doc-info-right">
+        <div class="doc-header">
+          <div>
             <div class="doc-title">FACTURE PROFORMA</div>
-            <div class="doc-number">N° ${proformaNum}</div>
+            <div class="doc-date">${dateFormatted}</div>
           </div>
+          <div class="doc-number">N° ${proformaNum}</div>
         </div>
         
-        <!-- Client Section -->
         <div class="client-section">
           <div class="client-label">CLIENT :</div>
           <div class="client-name">${proforma.client_name}</div>
           <div class="client-details">
-            ${proforma.client_phone ? `<p style="margin: 2px 0;">Tél: ${proforma.client_phone}</p>` : ''}
-            ${proforma.client_email ? `<p style="margin: 2px 0;">Email: ${proforma.client_email}</p>` : ''}
-            ${proforma.client_address ? `<p style="margin: 2px 0;">Adresse: ${proforma.client_address}</p>` : ''}
+            ${proforma.client_phone ? `<p>Tél: ${proforma.client_phone}</p>` : ''}
+            ${proforma.client_email ? `<p>Email: ${proforma.client_email}</p>` : ''}
+            ${proforma.client_address ? `<p>Adresse: ${proforma.client_address}</p>` : ''}
           </div>
         </div>
         
-        <!-- Items Table -->
         <table>
           <thead>
             <tr>
               <th style="width: 50%;">DESCRIPTION</th>
               <th style="width: 10%;">QTÉ</th>
-              <th style="width: 20%;">PRIX UNITAIRE</th>
+              <th style="width: 20%;">P.U.</th>
               <th style="width: 20%;">MONTANT</th>
             </tr>
           </thead>
@@ -585,14 +627,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           </tbody>
         </table>
         
-        <!-- Totals -->
         <div class="totals-section">
           <table class="totals-table">
-            <tr>
-              <td class="label">Sous-total</td>
-              <td class="value">${subtotalCalc.toLocaleString('fr-FR')} F</td>
-            </tr>
             ${proforma.discount > 0 ? `
+              <tr>
+                <td class="label">Sous-total</td>
+                <td class="value">${subtotalCalc.toLocaleString('fr-FR')} F</td>
+              </tr>
               <tr>
                 <td class="label">Remise</td>
                 <td class="value">-${proforma.discount?.toLocaleString('fr-FR')} F</td>
@@ -613,20 +654,21 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           </table>
         </div>
         
+        <div class="amount-words">
+          <strong>Arrêtée la présente facture proforma à la somme de :</strong> ${totalInWords}
+        </div>
+        
         ${proforma.notes ? `
           <div class="notes-section">
-            <strong>Notes :</strong><br/>
-            ${proforma.notes}
+            <strong>Notes :</strong> ${proforma.notes}
           </div>
         ` : ''}
         
-        <!-- Footer -->
         <div class="footer">
-          <p class="thank-you">NOUS VOUS REMERCIONS DE VOTRE CONFIANCE ET À BIENTÔT !</p>
-          
+          <p class="thank-you">NOUS VOUS REMERCIONS DE VOTRE CONFIANCE !</p>
           <div class="signature-section">
-            <p class="signature-name">AHOUANDJINOU MÈRES</p>
-            <p class="signature-title">LA GÉRANTE</p>
+            <p class="signature-name">AHOUANDJINOU Mères</p>
+            <p class="signature-title">La Gérante</p>
           </div>
         </div>
       </body>
