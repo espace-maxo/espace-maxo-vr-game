@@ -5063,6 +5063,7 @@ class ProformaInvoiceCreate(BaseModel):
     notes: Optional[str] = ""
     validity_days: int = 30  # Validity period in days
     created_by: str = ""
+    apply_tva: bool = True  # Option to apply/not apply TVA
 
 class ProformaInvoiceUpdate(BaseModel):
     client_name: Optional[str] = None
@@ -5077,6 +5078,7 @@ class ProformaInvoiceUpdate(BaseModel):
     notes: Optional[str] = None
     validity_days: Optional[int] = None
     status: Optional[str] = None  # draft, sent, accepted, rejected, converted
+    apply_tva: Optional[bool] = None  # Option to apply/not apply TVA
 
 # ============== INSTRUCTIONS & NOTES MODELS ==============
 
@@ -5663,7 +5665,8 @@ async def create_proforma_invoice(proforma_data: ProformaInvoiceCreate):
             "status": "draft",
             "created_by": proforma_data.created_by,
             "created_at": today.isoformat(),
-            "updated_at": today.isoformat()
+            "updated_at": today.isoformat(),
+            "apply_tva": proforma_data.apply_tva
         }
         
         await db.proforma_invoices.insert_one(proforma)

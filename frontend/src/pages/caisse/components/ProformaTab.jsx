@@ -42,12 +42,20 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     tax: 0,
     total: 0,
     notes: "",
-    validity_days: 30
+    validity_days: 30,
+    apply_tva: true  // Option pour activer/désactiver la TVA
   });
   
   // Product selection
   const [selectedDept, setSelectedDept] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
+  
+  // Manual product entry
+  const [manualProduct, setManualProduct] = useState({
+    name: "",
+    quantity: 1,
+    unit_price: 0
+  });
 
   useEffect(() => {
     fetchProformas();
@@ -67,10 +75,14 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     }
   };
 
-  const calculateTotals = (items, discount = 0, tax = 0) => {
+  const TVA_RATE = 0.18; // Taux de TVA 18%
+
+  const calculateTotals = (items, discount = 0, applyTva = true) => {
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-    const total = subtotal - discount + tax;
-    return { subtotal, total };
+    const montantHT = subtotal - discount;
+    const tvaAmount = applyTva ? Math.round(montantHT * TVA_RATE) : 0;
+    const total = montantHT + tvaAmount;
+    return { subtotal, montantHT, tvaAmount, total };
   };
 
   const addItemToForm = (product, dept) => {
@@ -91,8 +103,36 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       }];
     }
     
-    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
-    setFormData({ ...formData, items: newItems, subtotal, total });
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
+  };
+
+  // Add manual product entry
+  const addManualProduct = () => {
+    if (!manualProduct.name.trim()) {
+      toast.error("Veuillez entrer une désignation");
+      return;
+    }
+    if (manualProduct.unit_price <= 0) {
+      toast.error("Veuillez entrer un prix unitaire valide");
+      return;
+    }
+    
+    const newItem = {
+      name: manualProduct.name.trim(),
+      quantity: manualProduct.quantity || 1,
+      unit_price: parseFloat(manualProduct.unit_price),
+      subtotal: (manualProduct.quantity || 1) * parseFloat(manualProduct.unit_price),
+      department: "autres"
+    };
+    
+    const newItems = [...formData.items, newItem];
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
+    
+    // Reset manual product form
+    setManualProduct({ name: "", quantity: 1, unit_price: 0 });
+    toast.success(`${newItem.name} ajouté`);
   };
 
   const updateItemQuantity = (index, quantity) => {
@@ -101,20 +141,26 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     newItems[index].quantity = quantity;
     newItems[index].subtotal = quantity * newItems[index].unit_price;
     
-    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
-    setFormData({ ...formData, items: newItems, subtotal, total });
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
   };
 
   const removeItemFromForm = (index) => {
     const newItems = formData.items.filter((_, i) => i !== index);
-    const { subtotal, total } = calculateTotals(newItems, formData.discount, formData.tax);
-    setFormData({ ...formData, items: newItems, subtotal, total });
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
   };
 
   const updateDiscount = (discount) => {
     const d = parseFloat(discount) || 0;
-    const { subtotal, total } = calculateTotals(formData.items, d, formData.tax);
-    setFormData({ ...formData, discount: d, subtotal, total });
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(formData.items, d, formData.apply_tva);
+    setFormData({ ...formData, discount: d, subtotal, tax: tvaAmount, total });
+  };
+
+  const toggleTva = () => {
+    const newApplyTva = !formData.apply_tva;
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(formData.items, formData.discount, newApplyTva);
+    setFormData({ ...formData, apply_tva: newApplyTva, tax: tvaAmount, total });
   };
 
   const handleSubmit = async () => {
@@ -162,25 +208,29 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       tax: 0,
       total: 0,
       notes: "",
-      validity_days: 30
+      validity_days: 30,
+      apply_tva: true
     });
     setEditingProforma(null);
   };
 
   const openEditModal = (proforma) => {
     setEditingProforma(proforma);
+    const applyTva = proforma.apply_tva !== false; // Default to true if not set
+    const { subtotal, montantHT, tvaAmount, total } = calculateTotals(proforma.items || [], proforma.discount || 0, applyTva);
     setFormData({
       client_name: proforma.client_name,
       client_phone: proforma.client_phone || "",
       client_email: proforma.client_email || "",
       client_address: proforma.client_address || "",
       items: proforma.items || [],
-      subtotal: proforma.subtotal || 0,
+      subtotal: subtotal,
       discount: proforma.discount || 0,
-      tax: proforma.tax || 0,
-      total: proforma.total || 0,
+      tax: tvaAmount,
+      total: total,
       notes: proforma.notes || "",
-      validity_days: proforma.validity_days || 30
+      validity_days: proforma.validity_days || 30,
+      apply_tva: applyTva
     });
     setShowCreateModal(true);
   };
@@ -225,6 +275,12 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
   };
 
   const printProforma = (proforma) => {
+    const applyTva = proforma.apply_tva !== false;
+    const subtotalCalc = proforma.items?.reduce((sum, item) => sum + item.subtotal, 0) || 0;
+    const montantHT = subtotalCalc - (proforma.discount || 0);
+    const tvaAmount = applyTva ? Math.round(montantHT * 0.18) : 0;
+    const totalTTC = montantHT + tvaAmount;
+    
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -244,9 +300,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
           th { background: #1e293b; color: white; padding: 12px; text-align: left; }
           td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-          .totals { text-align: right; }
-          .totals p { margin: 5px 0; }
-          .total-final { font-size: 1.5em; font-weight: bold; color: #059669; }
+          .totals { text-align: right; margin-top: 20px; }
+          .totals-table { margin-left: auto; width: 300px; }
+          .totals-table td { padding: 8px 12px; }
+          .totals-table .label { text-align: left; color: #555; }
+          .totals-table .value { text-align: right; font-weight: 500; }
+          .totals-table .total-row { border-top: 2px solid #333; font-size: 1.2em; }
+          .totals-table .total-row .value { color: #059669; font-weight: bold; }
           .validity { background: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
           .notes { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px; }
           .footer { margin-top: 40px; text-align: center; color: #888; font-size: 12px; }
@@ -282,8 +342,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             <tr>
               <th>Désignation</th>
               <th style="text-align:center">Qté</th>
-              <th style="text-align:right">P.U.</th>
-              <th style="text-align:right">Total</th>
+              <th style="text-align:right">Prix Unitaire</th>
+              <th style="text-align:right">Montant</th>
             </tr>
           </thead>
           <tbody>
@@ -299,9 +359,30 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         </table>
         
         <div class="totals">
-          <p>Sous-total: ${proforma.subtotal?.toLocaleString('fr-FR')} F CFA</p>
-          ${proforma.discount > 0 ? `<p>Remise: -${proforma.discount?.toLocaleString('fr-FR')} F CFA</p>` : ''}
-          <p class="total-final">TOTAL: ${proforma.total?.toLocaleString('fr-FR')} F CFA</p>
+          <table class="totals-table">
+            <tr>
+              <td class="label">Sous-total</td>
+              <td class="value">${subtotalCalc.toLocaleString('fr-FR')} F CFA</td>
+            </tr>
+            ${proforma.discount > 0 ? `
+              <tr>
+                <td class="label">Remise</td>
+                <td class="value">-${proforma.discount?.toLocaleString('fr-FR')} F CFA</td>
+              </tr>
+            ` : ''}
+            <tr>
+              <td class="label"><strong>Montant HT</strong></td>
+              <td class="value"><strong>${montantHT.toLocaleString('fr-FR')} F CFA</strong></td>
+            </tr>
+            <tr>
+              <td class="label">TVA (18%)</td>
+              <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F CFA' : 'Non applicable'}</td>
+            </tr>
+            <tr class="total-row">
+              <td class="label"><strong>MONTANT TTC</strong></td>
+              <td class="value">${totalTTC.toLocaleString('fr-FR')} F CFA</td>
+            </tr>
+          </table>
         </div>
         
         <div class="validity">
@@ -626,66 +707,85 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                 Articles
               </h3>
               
-              {/* Department Selector */}
-              <Select value={selectedDept} onValueChange={setSelectedDept}>
-                <SelectTrigger className="bg-slate-900/50 border-slate-700 text-white">
-                  <SelectValue placeholder="Département" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="salle_jardin">Plats</SelectItem>
-                  <SelectItem value="accompagnements">Accompagnements</SelectItem>
-                  <SelectItem value="bar">Bar</SelectItem>
-                  <SelectItem value="jeux">Jeux</SelectItem>
-                  <SelectItem value="location">Location</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              {/* Product Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  placeholder="Rechercher un produit..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="pl-10 bg-slate-900/50 border-slate-700 text-white"
-                />
-              </div>
-              
-              {/* Product Grid */}
-              <div className="h-32 overflow-y-auto bg-slate-900/30 rounded-lg p-2 space-y-1">
-                {filteredProducts.slice(0, 20).map((product, idx) => (
-                  <button
-                    key={`${selectedDept}-${product.id}-${idx}`}
-                    onClick={() => addItemToForm(product, selectedDept)}
-                    className="w-full text-left p-2 rounded bg-slate-700/30 hover:bg-slate-700/50 transition-colors"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="text-white text-sm">{product.name}</span>
-                      <span className="text-amber-400 text-sm">{formatPrice(product.price)} F</span>
+              {/* Manual Product Entry */}
+              <div className="bg-slate-900/50 rounded-lg p-4 space-y-3 border border-slate-700">
+                <h4 className="text-slate-400 text-sm font-medium">Ajouter un article</h4>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <Label className="text-slate-500 text-xs">Désignation *</Label>
+                    <Input
+                      data-testid="proforma-item-designation"
+                      value={manualProduct.name}
+                      onChange={(e) => setManualProduct({ ...manualProduct, name: e.target.value })}
+                      placeholder="Nom du produit ou service"
+                      className="bg-slate-800 border-slate-600 text-white mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-slate-500 text-xs">Quantité</Label>
+                      <Input
+                        data-testid="proforma-item-quantity"
+                        type="number"
+                        min="1"
+                        value={manualProduct.quantity}
+                        onChange={(e) => setManualProduct({ ...manualProduct, quantity: parseInt(e.target.value) || 1 })}
+                        className="bg-slate-800 border-slate-600 text-white mt-1"
+                      />
                     </div>
-                  </button>
-                ))}
+                    <div>
+                      <Label className="text-slate-500 text-xs">Prix unitaire (F CFA) *</Label>
+                      <Input
+                        data-testid="proforma-item-price"
+                        type="number"
+                        min="0"
+                        value={manualProduct.unit_price}
+                        onChange={(e) => setManualProduct({ ...manualProduct, unit_price: parseFloat(e.target.value) || 0 })}
+                        className="bg-slate-800 border-slate-600 text-white mt-1"
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    data-testid="proforma-add-item-btn"
+                    onClick={addManualProduct}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter l'article
+                  </Button>
+                </div>
               </div>
               
               {/* Selected Items */}
-              <div className="bg-slate-900/50 rounded-lg p-3 max-h-48 overflow-y-auto">
-                <h4 className="text-slate-400 text-sm mb-2">Articles sélectionnés ({formData.items.length})</h4>
+              <div className="bg-slate-900/50 rounded-lg p-3 max-h-52 overflow-y-auto">
+                <h4 className="text-slate-400 text-sm mb-2">Articles de la proforma ({formData.items.length})</h4>
                 {formData.items.length === 0 ? (
-                  <p className="text-slate-500 text-center py-4 text-sm">Cliquez sur les produits pour les ajouter</p>
+                  <p className="text-slate-500 text-center py-6 text-sm">Ajoutez des articles ci-dessus</p>
                 ) : (
                   <div className="space-y-2">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between text-xs text-slate-500 px-2 pb-1 border-b border-slate-700">
+                      <span className="flex-1">Désignation</span>
+                      <span className="w-20 text-center">Qté</span>
+                      <span className="w-20 text-right">P.U.</span>
+                      <span className="w-24 text-right">Montant</span>
+                      <span className="w-8"></span>
+                    </div>
                     {formData.items.map((item, index) => (
                       <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded p-2">
-                        <span className="text-white text-sm flex-1 truncate">{item.name}</span>
-                        <div className="flex items-center gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity - 1)} className="w-6 h-6 text-slate-400">-</Button>
-                          <span className="text-white w-6 text-center">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-6 h-6 text-slate-400">+</Button>
-                          <span className="text-amber-400 text-sm w-20 text-right">{formatPrice(item.subtotal)} F</span>
-                          <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400">
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-white text-sm truncate block">{item.name}</span>
                         </div>
+                        <div className="flex items-center gap-1 w-20 justify-center">
+                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity - 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">-</Button>
+                          <span className="text-white w-6 text-center text-sm">{item.quantity}</span>
+                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">+</Button>
+                        </div>
+                        <span className="text-slate-400 text-xs w-20 text-right">{formatPrice(item.unit_price)} F</span>
+                        <span className="text-amber-400 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
+                        <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400 hover:text-red-300 ml-1">
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -693,7 +793,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
               </div>
               
               {/* Totals */}
-              <div className="bg-slate-900/50 rounded-lg p-4 space-y-2">
+              <div className="bg-slate-900/50 rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Sous-total:</span>
                   <span className="text-white">{formatPrice(formData.subtotal)} F</span>
@@ -707,8 +807,29 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                     className="w-24 h-8 bg-slate-800 border-slate-700 text-white text-right"
                   />
                 </div>
+                <div className="flex justify-between text-sm border-t border-slate-700 pt-2">
+                  <span className="text-slate-300 font-medium">Montant HT:</span>
+                  <span className="text-white font-medium">{formatPrice(formData.subtotal - formData.discount)} F</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">TVA (18%):</span>
+                    <button
+                      type="button"
+                      onClick={toggleTva}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        formData.apply_tva 
+                          ? 'bg-green-600/30 text-green-400 hover:bg-green-600/40' 
+                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                      }`}
+                    >
+                      {formData.apply_tva ? 'Activée' : 'Désactivée'}
+                    </button>
+                  </div>
+                  <span className="text-white">{formData.apply_tva ? `${formatPrice(formData.tax)} F` : '—'}</span>
+                </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
-                  <span className="text-white">TOTAL:</span>
+                  <span className="text-white">MONTANT TTC:</span>
                   <span className="text-amber-400">{formatPrice(formData.total)} F CFA</span>
                 </div>
               </div>
@@ -753,20 +874,58 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
               {/* Items */}
               <div className="bg-slate-900/50 rounded-lg p-4">
                 <h4 className="text-slate-400 text-sm mb-2">Articles</h4>
+                {/* Header */}
+                <div className="flex justify-between text-xs text-slate-500 mb-2 pb-1 border-b border-slate-700">
+                  <span className="flex-1">Désignation</span>
+                  <span className="w-12 text-center">Qté</span>
+                  <span className="w-20 text-right">P.U.</span>
+                  <span className="w-24 text-right">Montant</span>
+                </div>
                 <div className="space-y-2">
                   {viewingProforma.items?.map((item, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-white">{item.name} x{item.quantity}</span>
-                      <span className="text-amber-400">{formatPrice(item.subtotal)} F</span>
+                      <span className="text-white flex-1">{item.name}</span>
+                      <span className="text-slate-400 w-12 text-center">{item.quantity}</span>
+                      <span className="text-slate-400 w-20 text-right">{formatPrice(item.unit_price)} F</span>
+                      <span className="text-amber-400 w-24 text-right">{formatPrice(item.subtotal)} F</span>
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-slate-700 mt-3 pt-3">
-                  <div className="flex justify-between font-bold">
-                    <span className="text-white">Total</span>
-                    <span className="text-amber-400">{formatPrice(viewingProforma.total)} F CFA</span>
-                  </div>
-                </div>
+                {/* Totals */}
+                {(() => {
+                  const applyTva = viewingProforma.apply_tva !== false;
+                  const subtotalCalc = viewingProforma.items?.reduce((sum, item) => sum + item.subtotal, 0) || 0;
+                  const discountVal = viewingProforma.discount || 0;
+                  const montantHT = subtotalCalc - discountVal;
+                  const tvaAmount = applyTva ? Math.round(montantHT * 0.18) : 0;
+                  const totalTTC = montantHT + tvaAmount;
+                  return (
+                    <div className="border-t border-slate-700 mt-3 pt-3 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">Sous-total</span>
+                        <span className="text-white">{formatPrice(subtotalCalc)} F</span>
+                      </div>
+                      {discountVal > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Remise</span>
+                          <span className="text-red-400">-{formatPrice(discountVal)} F</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-medium">
+                        <span className="text-slate-300">Montant HT</span>
+                        <span className="text-white">{formatPrice(montantHT)} F</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">TVA (18%)</span>
+                        <span className="text-white">{applyTva ? `${formatPrice(tvaAmount)} F` : 'Non applicable'}</span>
+                      </div>
+                      <div className="flex justify-between font-bold pt-2 border-t border-slate-600">
+                        <span className="text-white">Montant TTC</span>
+                        <span className="text-amber-400">{formatPrice(totalTTC)} F CFA</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               
               {/* Validity */}

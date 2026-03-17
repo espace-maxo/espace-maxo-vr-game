@@ -314,6 +314,23 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - [x] **Bug Fix: Mon Point Serveur** (Mars 2026)
   - Corrigé le filtre backend: utilise `created_by` au lieu de `server_name`
   - Corrigé le filtre date: utilise regex sur `created_at` au lieu de `date` inexistant
+- [x] **Factures Proforma avec saisie manuelle** (Mars 2026) - NOUVEAU
+  - Onglet "Proforma" pour la Gérante et l'Admin
+  - Création de devis/factures proforma avec saisie manuelle des articles
+  - Champs par article : Désignation, Quantité, Prix unitaire, Montant (calculé)
+  - Totaux avec option TVA : Sous-total, Remise, Montant HT, TVA (18%), Montant TTC
+  - Toggle TVA activé/désactivé pour les clients exonérés
+  - Impression PDF avec détails complets HT/TVA/TTC
+  - Workflow : Brouillon → Envoyée → Acceptée/Refusée → Convertie en facture
+  - Statistiques : Total, Brouillons, Envoyées, Acceptées, Valeur totale
+
+### APIs Proforma Invoices (Mars 2026)
+- `GET /api/proforma-invoices` - Liste des proformas avec statistiques
+- `POST /api/proforma-invoices` - Créer une proforma
+- `GET /api/proforma-invoices/{id}` - Détails d'une proforma
+- `PUT /api/proforma-invoices/{id}` - Modifier une proforma (statut, items, etc.)
+- `DELETE /api/proforma-invoices/{id}` - Supprimer une proforma
+- `POST /api/proforma-invoices/{id}/convert` - Convertir en facture définitive
 
 ## Architecture
 
@@ -355,6 +372,9 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
             │   └── components/
             │       ├── TablesTab.jsx (Suivi des Tables - NOUVEAU)
             │       ├── HebdoReport.jsx (Point Hebdomadaire - NOUVEAU)
+            │       ├── ProformaTab.jsx (Factures Proforma - NOUVEAU)
+            │       ├── InstructionsTab.jsx (Notes & Instructions)
+            │       ├── LocationsTab.jsx (Gestion Locations)
             │       ├── LoginView.jsx
             │       ├── TableBar.jsx
             │       ├── BillPanel.jsx
