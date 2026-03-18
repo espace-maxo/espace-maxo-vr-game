@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, ClipboardList
+  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
 import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
+import ShareModal, { ShareButton } from "./caisse/components/ShareModal";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -285,6 +286,9 @@ const CaissePage = () => {
   const [serviceReports, setServiceReports] = useState([]);
   const [unreadServiceReportsCount, setUnreadServiceReportsCount] = useState(0);
   const [showServiceReportsPanel, setShowServiceReportsPanel] = useState(false);
+  
+  // ============== SHARE MODAL ==============
+  const [showShareModal, setShowShareModal] = useState(false);
   
   // Detailed view of a server's point (for Manager)
   const [viewingServerReport, setViewingServerReport] = useState(null);
@@ -3407,6 +3411,8 @@ _Gérante - Espace Maxo_
                    'Serveur'}
                 </Badge>
               </div>
+              {/* Share QR Code Button */}
+              <ShareButton onClick={() => setShowShareModal(true)} />
               <Button variant="ghost" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                 <LogOut className="w-5 h-5" />
               </Button>
@@ -8096,6 +8102,9 @@ _Gérante - Espace Maxo_
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Share Modal with QR Code */}
+      <ShareModal open={showShareModal} onOpenChange={setShowShareModal} />
     </div>
   );
 };
