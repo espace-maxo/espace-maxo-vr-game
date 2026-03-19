@@ -556,7 +556,7 @@ const CaissePage = () => {
         // New invoice validated! Play sound and show notification
         playNotificationSound();
         if (currentUser?.role === 'server') {
-          toast.success("🧾 Votre commande est devenue un bon définitif !", {
+          toast.success("🧾 Votre commande est devenue une facture définitif !", {
             duration: 5000,
             style: { background: '#166534', color: 'white' }
           });
@@ -1928,7 +1928,7 @@ const CaissePage = () => {
 📅 Date: ${rapportData.date}
 
 *RÉSUMÉ:*
-• Bons Total: ${rapportData.totalInvoices}
+• Factures Total: ${rapportData.totalInvoices}
 • ✅ Validées: ${rapportData.validatedInvoices}
 • ⏳ En attente: ${rapportData.pendingInvoices}
 • 💰 CA Validé: ${formatPrice(rapportData.validatedRevenue)} FCFA
@@ -2110,9 +2110,20 @@ _Gérante - Espace Maxo_
       
       toast.success("Bon de commande envoyé à la cuisine !");
       
-      // Close the table after invoice is created
+      // Mark the table as having an invoice but DON'T delete it (keep tracking)
       if (activeTableId) {
-        await closeTable(activeTableId);
+        // Update table status to "invoiced" instead of deleting
+        try {
+          await axios.put(`${API}/caisse/tables/${activeTableId}`, {
+            status: "invoiced",
+            invoice_created_at: new Date().toISOString()
+          });
+        } catch (e) {
+          console.log("Could not update table status:", e);
+        }
+        // Clear current selection but keep table in system for tracking
+        selectTable(null);
+        clearBill();
       } else {
         clearBill();
       }
@@ -2187,7 +2198,7 @@ _Gérante - Espace Maxo_
       await axios.post(`${API}/wallet/debit`, {
         phone: selectedClient.phone,
         amount: pendingInvoiceData.total,
-        description: `Bon de Commande Caisse - ${pendingInvoiceData.items.length} articles`
+        description: `Facture Caisse - ${pendingInvoiceData.items.length} articles`
       });
       
       pendingInvoiceData.payment_method = "wallet";
@@ -2233,11 +2244,11 @@ _Gérante - Espace Maxo_
     
     // Only admin can delete validated invoices
     if (invoice.validation_status === 'validated' && currentUser?.role !== 'admin') {
-      toast.error("Seul l'administrateur peut supprimer un bon validé");
+      toast.error("Seul l'administrateur peut supprimer une facture validé");
       return;
     }
     
-    if (!confirm("Supprimer ce bon ?")) return;
+    if (!confirm("Supprimer cette facture ?")) return;
     try {
       await axios.delete(`${API}/invoices/${invoiceId}`);
       toast.success("Bon supprimé");
@@ -2253,11 +2264,11 @@ _Gérante - Espace Maxo_
     if (!invoice) return;
     
     if (currentUser?.role !== 'admin') {
-      toast.error("Seul l'administrateur principal peut annuler un bon validé");
+      toast.error("Seul l'administrateur principal peut annuler une facture validé");
       return;
     }
     
-    const reason = prompt("Motif d'annulation du bon :");
+    const reason = prompt("Motif d'annulation de la facture :");
     if (!reason) return;
     
     try {
@@ -2384,10 +2395,10 @@ _Gérante - Espace Maxo_
 
   // Approve modification request (manager only)
   const approveModificationRequest = async (requestId) => {
-    if (!confirm("Autoriser la modification de ce bon ?")) return;
+    if (!confirm("Autoriser la modification de cette facture ?")) return;
     try {
       await axios.put(`${API}/modification-requests/${requestId}/approve?approved_by=${encodeURIComponent(currentUser?.full_name || 'Manager')}`);
-      toast.success("Modification autorisée - Le serveur peut maintenant modifier le bon");
+      toast.success("Modification autorisée - Le serveur peut maintenant modifier la facture");
       fetchAllData();
       fetchModificationRequests();
     } catch (error) {
@@ -2572,7 +2583,7 @@ _Gérante - Espace Maxo_
         <body>
           <div class="header">
             <div class="kitchen-title">CUISINE</div>
-            <div class="subtitle">Bon de Commande</div>
+            <div class="subtitle">Facture</div>
           </div>
           <div class="table-box">
             <div class="table-label">TABLE N°</div>
@@ -2686,7 +2697,7 @@ _Gérante - Espace Maxo_
         <body>
           <div class="header">
             <div class="bar-title">BAR</div>
-            <div class="subtitle">Bon de Commande</div>
+            <div class="subtitle">Facture</div>
           </div>
           <div class="table-box">
             <div class="table-label">TABLE N°</div>
@@ -2799,7 +2810,7 @@ _Gérante - Espace Maxo_
         <body>
           <div class="header">
             <div class="games-title">JEUX</div>
-            <div class="subtitle">Bon de Commande</div>
+            <div class="subtitle">Facture</div>
           </div>
           <div class="table-box">
             <div class="table-label">TABLE N°</div>
@@ -2879,6 +2890,7 @@ _Gérante - Espace Maxo_
             .footer { text-align: center; margin-top: 10px; font-size: 10px; border-top: 1px dashed #000; padding-top: 8px; }
             .server { font-size: 10px; margin-top: 5px; }
             .validation { font-size: 10px; margin-top: 3px; }
+            .doc-title { font-size: 9px; font-weight: bold; text-align: center; margin: 5px 0; letter-spacing: 1px; }
           </style>
         </head>
         <body>
@@ -2887,6 +2899,8 @@ _Gérante - Espace Maxo_
             <p>Restaurant & Jeux VR</p>
             <p>Tél: +229 01 4147 0000</p>
           </div>
+          
+          <div class="doc-title">BON DE COMMANDE</div>
           
           <div class="info">
             <div><span>N°:</span><span><b>${invoice.invoice_number}</b></span></div>
@@ -2941,7 +2955,7 @@ _Gérante - Espace Maxo_
   // Download PDF from backend
   const downloadPDF = async (invoice) => {
     if (!invoice.id || invoice.id === "PREVIEW") {
-      toast.error("Veuillez d'abord enregistrer le bon de commande");
+      toast.error("Veuillez d'abord enregistrer le facture");
       return;
     }
     try {
@@ -2951,7 +2965,7 @@ _Gérante - Espace Maxo_
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `bon_commande_${invoice.invoice_number || invoice.id}.pdf`);
+      link.setAttribute('download', `facture_${invoice.invoice_number || invoice.id}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -3547,7 +3561,7 @@ _Gérante - Espace Maxo_
               </TabsTrigger>
             )}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-              <Printer className="w-4 h-4 mr-2" />Bons
+              <Printer className="w-4 h-4 mr-2" />Factures
               {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
                 <Badge className="ml-1 bg-orange-600 text-white text-xs">{invoices.filter(i => i.validation_status === 'pending').length}</Badge>
               )}
@@ -3558,7 +3572,7 @@ _Gérante - Espace Maxo_
               </TabsTrigger>
             )}
             <TabsTrigger value="invoices" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
-              <FileText className="w-4 h-4 mr-2" />Bons
+              <FileText className="w-4 h-4 mr-2" />Factures
             </TabsTrigger>
             <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
               <BarChart3 className="w-4 h-4 mr-2" />Statistiques
@@ -3757,7 +3771,7 @@ _Gérante - Espace Maxo_
                   <CardHeader className="pb-2">
                     <CardTitle className="text-green-400 flex items-center gap-2">
                       <Printer className="w-6 h-6" />
-                      BONS DE COMMANDE À IMPRIMER
+                      FACTURES À IMPRIMER
                       <Badge className="bg-green-500/30 text-green-300 ml-2 text-lg px-3">
                         {invoices.filter(i => i.validation_status === 'validated').length}
                       </Badge>
@@ -3765,7 +3779,7 @@ _Gérante - Espace Maxo_
                   </CardHeader>
                   <CardContent>
                     {invoices.filter(i => i.validation_status === 'validated').length === 0 ? (
-                      <p className="text-slate-400 text-center py-4">Aucun bon validé à imprimer</p>
+                      <p className="text-slate-400 text-center py-4">Aucune facture validé à imprimer</p>
                     ) : (
                       <div className="space-y-2 max-h-[300px] overflow-y-auto">
                         {invoices.filter(i => i.validation_status === 'validated').map(invoice => (
@@ -3798,7 +3812,7 @@ _Gérante - Espace Maxo_
                                   variant="ghost"
                                   onClick={() => cancelValidatedInvoice(invoice.id)}
                                   className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                                  title="Annuler ce bon"
+                                  title="Annuler cette facture"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -3833,7 +3847,7 @@ _Gérante - Espace Maxo_
                 <details className="bg-slate-800/30 rounded-lg border border-slate-700">
                   <summary className="p-4 cursor-pointer text-slate-400 hover:text-white flex items-center gap-2">
                     <Plus className="w-5 h-5" />
-                    <span>Créer un bon (optionnel)</span>
+                    <span>Créer une facture (optionnel)</span>
                   </summary>
                   <div className="p-4 pt-0">
                     {/* Multi-Table Bar */}
@@ -3943,7 +3957,7 @@ _Gérante - Espace Maxo_
                                     <span className="text-amber-500">{formatPrice(total)} F</span>
                                   </div>
                                   <Button onClick={saveInvoice} className="w-full mt-2 bg-amber-500 hover:bg-amber-600" size="sm">
-                                    CRÉER BON
+                                    CRÉER FACTURE
                                   </Button>
                                 </>
                               )}
@@ -4172,7 +4186,7 @@ _Gérante - Espace Maxo_
                         disabled={!customItem.name || customItem.price <= 0}
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Ajouter au bon
+                        Ajouter à la facture
                       </Button>
                     </CardContent>
                   </Card>
@@ -4187,7 +4201,7 @@ _Gérante - Espace Maxo_
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
                           <Receipt className="w-5 h-5" />
-                          {activeTable ? `Table ${activeTable.table_number}` : 'Bon de Commande'}
+                          {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
                         </CardTitle>
                         {currentBill.length > 0 && (
                           <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
@@ -4350,7 +4364,7 @@ _Gérante - Espace Maxo_
                     <CardHeader className="pb-2">
                       <CardTitle className="text-green-400 flex items-center gap-2 text-base">
                         <Printer className="w-5 h-5" />
-                        BONS DE COMMANDE À IMPRIMER
+                        FACTURES À IMPRIMER
                         <Badge className="bg-green-500/30 text-green-300 ml-2">
                           {invoices.filter(i => i.validation_status === 'validated').length}
                         </Badge>
@@ -4389,7 +4403,7 @@ _Gérante - Espace Maxo_
                     <CardHeader className="pb-2">
                       <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
                         <FileText className="w-5 h-5" />
-                        BONS DÉFINITIFS DU JOUR
+                        FACTURES DÉFINITIVES DU JOUR
                         <Badge className="bg-slate-600/50 text-slate-300 ml-2">
                           {invoices.filter(i => i.validation_status === 'validated').length}
                         </Badge>
@@ -4442,7 +4456,7 @@ _Gérante - Espace Maxo_
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h2 className="text-xl font-bold text-orange-400 flex items-center gap-2">
                   <Printer className="w-6 h-6" />
-                  Bons de Commande
+                  Factures
                   <Badge className="bg-orange-500/20 text-orange-300 text-lg px-3">
                     {invoices.filter(i => i.validation_status === 'pending').length}
                   </Badge>
@@ -4474,7 +4488,7 @@ _Gérante - Espace Maxo_
                         </div>
                         <div className="flex gap-2">
                           <Button size="sm" onClick={() => approveCancellationRequest(req.id)} className="bg-red-600 hover:bg-red-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />Annuler Bon
+                            <CheckCircle className="w-4 h-4 mr-1" />Annuler Facture
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => rejectCancellationRequest(req.id)} className="border-slate-600 text-slate-400">
                             Refuser
@@ -4522,7 +4536,7 @@ _Gérante - Espace Maxo_
                 <div className="mb-4 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
                   <p className="text-orange-300 text-sm flex items-center gap-2">
                     <Printer className="w-4 h-4" />
-                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Bon" pour transformer le bon en bon définitif</span>
+                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Bon" pour transformer la facture en facture définitive</span>
                   </p>
                 </div>
               )}
@@ -4532,7 +4546,7 @@ _Gérante - Espace Maxo_
                 <Card className="bg-slate-800/30 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <Printer className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Aucun bon de commande en attente</p>
+                    <p className="text-slate-500">Aucun facture en attente</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -4693,7 +4707,7 @@ _Gérante - Espace Maxo_
                   </SelectContent>
                 </Select>
                 <Badge className="bg-blue-500/20 text-blue-400">
-                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} bon(s)
+                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} facture(s)
                 </Badge>
                 {stats && (
                   <Badge className="bg-amber-500/20 text-amber-400">
@@ -4706,7 +4720,7 @@ _Gérante - Espace Maxo_
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">Aucun bon pour cette date</p>
+                    <p className="text-slate-400">Aucune facture pour cette date</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -4824,7 +4838,7 @@ _Gérante - Espace Maxo_
                       </div>
                       <div className="mt-3 pt-3 border-t border-amber-500/20">
                         <p className="text-slate-400 text-xs">
-                          {monthlyStats.validated_invoices} bons validés sur {monthlyStats.total_invoices} total
+                          {monthlyStats.validated_invoices} factures validées sur {monthlyStats.total_invoices} total
                         </p>
                       </div>
                     </CardContent>
@@ -5120,7 +5134,7 @@ _Gérante - Espace Maxo_
                         <CardContent className="p-4 text-center">
                           <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
                           <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
-                          <p className="text-slate-400 text-sm">Bons Total</p>
+                          <p className="text-slate-400 text-sm">Factures Total</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
@@ -5160,7 +5174,7 @@ _Gérante - Espace Maxo_
                           <thead>
                             <tr className="border-b border-slate-700">
                               <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Bons</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
                               <th className="text-center py-2 text-slate-400 text-sm">Validées</th>
                               <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
                               <th className="text-right py-2 text-slate-400 text-sm">Total</th>
@@ -5204,10 +5218,10 @@ _Gérante - Espace Maxo_
                           <div>
                             <CardTitle className="text-blue-400 flex items-center gap-2">
                               <User className="w-5 h-5" />
-                              Détail des bons - {selectedServerDetail}
+                              Détail des factures - {selectedServerDetail}
                             </CardTitle>
                             <p className="text-slate-400 text-sm mt-1">
-                              {serverInvoices.length} bon(s) • Total: {formatPrice(serverInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
+                              {serverInvoices.length} facture(s) • Total: {formatPrice(serverInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
                             </p>
                           </div>
                           <Button 
@@ -5221,7 +5235,7 @@ _Gérante - Espace Maxo_
                         </CardHeader>
                         <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
                           {serverInvoices.length === 0 ? (
-                            <p className="text-slate-400 text-center py-4">Aucun bon pour ce serveur</p>
+                            <p className="text-slate-400 text-center py-4">Aucune facture pour ce serveur</p>
                           ) : (
                             serverInvoices.map(invoice => (
                               <div 
@@ -5467,7 +5481,7 @@ _Gérante - Espace Maxo_
                                         ))}
                                       </Pie>
                                       <Tooltip 
-                                        formatter={(value, name, props) => [`${formatPrice(value)} F (${props.payload.count} bons)`, 'Montant']}
+                                        formatter={(value, name, props) => [`${formatPrice(value)} F (${props.payload.count} factures)`, 'Montant']}
                                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                                       />
                                     </PieChart>
@@ -5482,7 +5496,7 @@ _Gérante - Espace Maxo_
                                       </div>
                                       <div className="text-right">
                                         <p className="text-amber-400 font-bold">{formatPrice(payment.value)} F</p>
-                                        <p className="text-slate-500 text-xs">{payment.count} bon(s)</p>
+                                        <p className="text-slate-500 text-xs">{payment.count} facture(s)</p>
                                       </div>
                                     </div>
                                   ))}
@@ -5559,7 +5573,7 @@ _Gérante - Espace Maxo_
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <h2 className="text-xl font-bold text-slate-300 flex items-center gap-2">
                   <Calendar className="w-6 h-6" />
-                  Historique des Bons de Commande
+                  Historique des Factures
                 </h2>
                 <div className="flex items-center gap-3">
                   <Input
@@ -5569,7 +5583,7 @@ _Gérante - Espace Maxo_
                     className="bg-slate-800/50 border-slate-700 text-white w-auto"
                   />
                   <Badge className="bg-slate-600/50 text-slate-300">
-                    {historyInvoices.length} bon(s)
+                    {historyInvoices.length} facture(s)
                   </Badge>
                   {historyInvoices.length > 0 && (
                     <Badge className="bg-green-500/20 text-green-400">
@@ -5584,7 +5598,7 @@ _Gérante - Espace Maxo_
                 <Card className="bg-slate-800/30 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Aucun bon validé pour cette date</p>
+                    <p className="text-slate-500">Aucune facture validé pour cette date</p>
                     <p className="text-slate-600 text-sm mt-2">Sélectionnez une autre date dans le calendrier</p>
                   </CardContent>
                 </Card>
@@ -5695,7 +5709,7 @@ _Gérante - Espace Maxo_
                       <CardContent className="p-4 text-center">
                         <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
                         <p className="text-3xl font-bold text-green-400">{serverDailyReport.validated_count}</p>
-                        <p className="text-slate-400 text-sm">Bons validés</p>
+                        <p className="text-slate-400 text-sm">Factures validées</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
@@ -5773,12 +5787,12 @@ _Gérante - Espace Maxo_
                     <CardHeader className="pb-2">
                       <CardTitle className="text-slate-300 flex items-center gap-2">
                         <FileText className="w-5 h-5" />
-                        Mes Bons du Jour
+                        Mes Factures du Jour
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       {serverDailyReport.invoices?.length === 0 ? (
-                        <p className="text-slate-500 text-center py-8">Aucun bon pour cette date</p>
+                        <p className="text-slate-500 text-center py-8">Aucune facture pour cette date</p>
                       ) : (
                         <div className="space-y-2">
                           {serverDailyReport.invoices?.map((invoice) => (
@@ -6701,7 +6715,7 @@ _Gérante - Espace Maxo_
                             <span className="text-white font-medium">Caisse (Bons)</span>
                             <span className="text-green-400 font-bold">{formatPrice(activityReport.income?.caisse?.total || 0)} F</span>
                           </div>
-                          <p className="text-slate-400 text-sm">{activityReport.income?.caisse?.count || 0} bons</p>
+                          <p className="text-slate-400 text-sm">{activityReport.income?.caisse?.count || 0} factures</p>
                           {/* By department */}
                           <div className="mt-2 space-y-1">
                             {Object.entries(activityReport.income?.caisse?.by_department || {}).map(([dept, amount]) => (
@@ -6794,7 +6808,7 @@ _Gérante - Espace Maxo_
                             <div key={server} className="bg-slate-700/30 rounded-lg p-3">
                               <p className="text-white font-medium">{server}</p>
                               <p className="text-green-400 font-bold">{formatPrice(data.total)} F</p>
-                              <p className="text-slate-500 text-sm">{data.count} bons</p>
+                              <p className="text-slate-500 text-sm">{data.count} factures</p>
                             </div>
                           ))}
                         </div>
@@ -6824,7 +6838,7 @@ _Gérante - Espace Maxo_
       <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle>Bon de Commande {viewInvoice?.invoice_number}</DialogTitle>
+            <DialogTitle>Facture {viewInvoice?.invoice_number}</DialogTitle>
           </DialogHeader>
           {viewInvoice && (
             <div className="space-y-4">
@@ -6867,7 +6881,7 @@ _Gérante - Espace Maxo_
               {viewInvoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
                 <Button onClick={() => { validateInvoice(viewInvoice.id); setViewInvoice(null); }} className="w-full bg-green-600 hover:bg-green-700">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Valider ce bon de commande
+                  Valider ce facture
                 </Button>
               )}
             </div>
@@ -7048,7 +7062,7 @@ _Gérante - Espace Maxo_
                 className="w-full h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
               >
                 <Clock className="w-4 h-4 mr-2" />
-                Paiement différé (créer le bon)
+                Paiement différé (créer la facture)
               </Button>
             </div>
 
@@ -7826,7 +7840,7 @@ _Gérante - Espace Maxo_
                             </td>
                           </tr>
                           <tr className="border-b border-slate-700">
-                            <td className="py-3 text-slate-300">Bons validés</td>
+                            <td className="py-3 text-slate-300">Factures validées</td>
                             <td className="py-3 text-center text-white font-medium">{reportComparison.declared?.validated_invoices}</td>
                             <td className="py-3 text-center text-white font-medium">{reportComparison.actual?.validated_invoices}</td>
                             <td className={`py-3 text-center font-bold ${reportComparison.actual?.validated_invoices === reportComparison.declared?.validated_invoices ? 'text-green-400' : 'text-orange-400'}`}>
@@ -7870,7 +7884,7 @@ _Gérante - Espace Maxo_
                   <CardContent className="p-4 text-center">
                     <CheckCircle className="w-6 h-6 text-green-400 mx-auto mb-1" />
                     <p className="text-2xl font-bold text-green-400">{viewingServerDetailedReport.validated_count}</p>
-                    <p className="text-slate-400 text-xs">Bons validés</p>
+                    <p className="text-slate-400 text-xs">Factures validées</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
@@ -7963,12 +7977,12 @@ _Gérante - Espace Maxo_
                 <CardHeader className="pb-2">
                   <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
                     <FileText className="w-5 h-5" />
-                    Bons du Jour ({viewingServerDetailedReport.invoices?.length || 0})
+                    Factures du Jour ({viewingServerDetailedReport.invoices?.length || 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {viewingServerDetailedReport.invoices?.length === 0 ? (
-                    <p className="text-slate-500 text-center py-6">Aucun bon pour cette date</p>
+                    <p className="text-slate-500 text-center py-6">Aucune facture pour cette date</p>
                   ) : (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {viewingServerDetailedReport.invoices?.map((invoice) => (

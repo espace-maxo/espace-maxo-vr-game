@@ -608,7 +608,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         </div>
 
         <div class="invoice-num">
-          <strong>FACTURE N° ${invoiceNumber}</strong><br>
+          <strong style="font-size: 9px; letter-spacing: 1px;">BON DE COMMANDE</strong><br>
+          <strong>N° ${invoiceNumber}</strong><br>
           ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
         </div>
 

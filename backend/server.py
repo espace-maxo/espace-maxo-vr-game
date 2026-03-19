@@ -3829,6 +3829,8 @@ class CaisseTableUpdate(BaseModel):
     payment_method: Optional[str] = None
     discount: Optional[int] = None
     notes: Optional[str] = None
+    status: Optional[str] = None  # "open", "invoiced", "closed"
+    invoice_created_at: Optional[str] = None
 
 @api_router.get("/caisse/tables/status")
 async def get_tables_status():
@@ -4000,6 +4002,10 @@ async def update_caisse_table(table_id: str, table_data: CaisseTableUpdate):
             update_data["discount"] = table_data.discount
         if table_data.notes is not None:
             update_data["notes"] = table_data.notes
+        if table_data.status is not None:
+            update_data["status"] = table_data.status
+        if table_data.invoice_created_at is not None:
+            update_data["invoice_created_at"] = table_data.invoice_created_at
         
         result = await db.caisse_tables.update_one(
             {"id": table_id},
