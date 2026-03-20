@@ -184,6 +184,7 @@ const CaissePage = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ pin: "", password: "" });
   const [loginMode, setLoginMode] = useState("pin"); // pin or admin
+  const [showForgotCodeModal, setShowForgotCodeModal] = useState(false);
   
   // Main state
   const [activeTab, setActiveTab] = useState("commande");
@@ -3170,8 +3171,51 @@ _Gérante - Espace Maxo_
             <Button onClick={handleLogin} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-6 text-lg shadow-lg">
               Se connecter
             </Button>
+            
+            {/* Code oublié */}
+            <div className="text-center pt-2">
+              <button 
+                onClick={() => setShowForgotCodeModal(true)}
+                className="text-amber-400 hover:text-amber-300 text-sm underline"
+              >
+                Code et identifiant oublié ?
+              </button>
+            </div>
           </CardContent>
         </Card>
+        
+        {/* Modal Code Oublié */}
+        <Dialog open={showForgotCodeModal} onOpenChange={setShowForgotCodeModal}>
+          <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-400">
+                <AlertCircle className="w-5 h-5" />
+                Code et identifiant oublié
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-slate-300">
+                Si vous avez oublié votre code PIN ou votre identifiant, veuillez contacter :
+              </p>
+              <div className="bg-slate-900/50 p-4 rounded-lg space-y-2">
+                <p className="text-white font-medium">L'Administrateur ou la Gérante</p>
+                <p className="text-amber-400 flex items-center gap-2">
+                  <Smartphone className="w-4 h-4" />
+                  +229 01 4147 0000
+                </p>
+              </div>
+              <p className="text-slate-400 text-sm">
+                Ils pourront vous communiquer vos identifiants ou réinitialiser votre code PIN.
+              </p>
+            </div>
+            <Button 
+              onClick={() => setShowForgotCodeModal(false)} 
+              className="w-full bg-amber-500 hover:bg-amber-600"
+            >
+              Compris
+            </Button>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -3797,14 +3841,17 @@ _Gérante - Espace Maxo_
                               </p>
                             </div>
                             <div className="flex gap-2 shrink-0">
-                              <Button 
-                                onClick={() => printTicket(invoice)} 
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                                size="sm"
-                              >
-                                <Printer className="w-4 h-4 mr-2" />
-                                IMPRIMER
-                              </Button>
+                              {/* Print button - Manager/Admin only */}
+                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                                <Button 
+                                  onClick={() => printTicket(invoice)} 
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  size="sm"
+                                >
+                                  <Printer className="w-4 h-4 mr-2" />
+                                  IMPRIMER
+                                </Button>
+                              )}
                               {/* Admin can cancel directly, Manager can request cancellation */}
                               {currentUser?.role === 'admin' ? (
                                 <Button 
@@ -4586,36 +4633,41 @@ _Gérante - Espace Maxo_
                             </div>
                           </div>
                           <div className="flex gap-1 shrink-0 flex-wrap">
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => printKitchenOrder(invoice)}
-                              className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                              title="Cuisine"
-                            >
-                              <Printer className="w-4 h-4 mr-1" />
-                              <span className="hidden sm:inline">Cuisine</span>
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => printBarOrder(invoice)}
-                              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
-                              title="Bar"
-                            >
-                              <Wine className="w-4 h-4 mr-1" />
-                              <span className="hidden sm:inline">Bar</span>
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => printGamesOrder(invoice)}
-                              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                              title="Jeux"
-                            >
-                              <Gamepad2 className="w-4 h-4 mr-1" />
-                              <span className="hidden sm:inline">Jeux</span>
-                            </Button>
+                            {/* Print buttons - Manager/Admin only */}
+                            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                              <>
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => printKitchenOrder(invoice)}
+                                  className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                                  title="Cuisine"
+                                >
+                                  <Printer className="w-4 h-4 mr-1" />
+                                  <span className="hidden sm:inline">Cuisine</span>
+                                </Button>
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => printBarOrder(invoice)}
+                                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                  title="Bar"
+                                >
+                                  <Wine className="w-4 h-4 mr-1" />
+                                  <span className="hidden sm:inline">Bar</span>
+                                </Button>
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => printGamesOrder(invoice)}
+                                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                                  title="Jeux"
+                                >
+                                  <Gamepad2 className="w-4 h-4 mr-1" />
+                                  <span className="hidden sm:inline">Jeux</span>
+                                </Button>
+                              </>
+                            )}
                             <Button 
                               size="sm"
                               variant="ghost"
@@ -4785,9 +4837,12 @@ _Gérante - Espace Maxo_
                             <Button variant="ghost" size="sm" onClick={() => setViewInvoice(invoice)} className="text-slate-400 hover:text-white">
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => printTicket(invoice)} className="text-slate-400 hover:text-white" title="Imprimer ticket">
-                              <Printer className="w-4 h-4" />
-                            </Button>
+                            {/* Print button - Manager/Admin only */}
+                            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                              <Button variant="ghost" size="sm" onClick={() => printTicket(invoice)} className="text-slate-400 hover:text-white" title="Imprimer ticket">
+                                <Printer className="w-4 h-4" />
+                              </Button>
+                            )}
                             {invoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
                               <Button variant="ghost" size="sm" onClick={() => validateInvoice(invoice.id)} className="text-green-400 hover:text-green-300" title="Valider">
                                 <CheckCircle className="w-4 h-4" />
@@ -5287,14 +5342,17 @@ _Gérante - Espace Maxo_
                                       >
                                         <Eye className="w-3 h-3" />
                                       </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="ghost" 
-                                        onClick={() => printTicket(invoice)}
-                                        className="text-slate-400 hover:text-white h-7 px-2"
-                                      >
-                                        <Printer className="w-3 h-3" />
-                                      </Button>
+                                      {/* Print button - Manager/Admin only */}
+                                      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="ghost" 
+                                          onClick={() => printTicket(invoice)}
+                                          className="text-slate-400 hover:text-white h-7 px-2"
+                                        >
+                                          <Printer className="w-3 h-3" />
+                                        </Button>
+                                      )}
                                       {invoice.validation_status !== 'validated' && (
                                         <Button 
                                           size="sm" 
@@ -6869,14 +6927,23 @@ _Gérante - Espace Maxo_
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700"><span>TOTAL</span><span className="text-amber-500">{formatPrice(viewInvoice.total)} FCFA</span></div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => printTicket(viewInvoice)} variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-500/10">
-                  <Printer className="w-4 h-4 mr-2" />
-                  Ticket 80mm
-                </Button>
-                <Button onClick={() => downloadPDF(viewInvoice)} className="bg-amber-500 hover:bg-amber-600">
-                  <Download className="w-4 h-4 mr-2" />
-                  PDF A4
-                </Button>
+                {/* Print/Download buttons - Manager/Admin only */}
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') ? (
+                  <>
+                    <Button onClick={() => printTicket(viewInvoice)} variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-500/10">
+                      <Printer className="w-4 h-4 mr-2" />
+                      Ticket 80mm
+                    </Button>
+                    <Button onClick={() => downloadPDF(viewInvoice)} className="bg-amber-500 hover:bg-amber-600">
+                      <Download className="w-4 h-4 mr-2" />
+                      PDF A4
+                    </Button>
+                  </>
+                ) : (
+                  <div className="col-span-2 text-center py-2">
+                    <p className="text-slate-500 text-sm">Contactez la gérante pour imprimer</p>
+                  </div>
+                )}
               </div>
               {viewInvoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
                 <Button onClick={() => { validateInvoice(viewInvoice.id); setViewInvoice(null); }} className="w-full bg-green-600 hover:bg-green-700">
