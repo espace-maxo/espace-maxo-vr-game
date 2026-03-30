@@ -4201,8 +4201,8 @@ _Gérante - Espace Maxo_
                   </Card>
                 )}
                 
-                {/* Custom item form for "Autres" department */}
-                {activeDepartment === "autres" && activeTableId && (
+                {/* Custom item form for "Autres" department - Manager/Admin only */}
+                {activeDepartment === "autres" && activeTableId && (currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                   <Card className="mt-4 bg-slate-700/30 border-slate-600">
                     <CardContent className="p-4">
                       <h4 className="text-slate-300 font-semibold mb-3">Saisie manuelle</h4>
@@ -4994,10 +4994,13 @@ _Gérante - Espace Maxo_
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-white">Gestion des produits</h2>
-                <Button onClick={() => { setEditProduct(null); setProductForm({ name: "", price: 0, department: "bar", unit: "unité", category: "" }); setShowProductModal(true); }} className="bg-purple-500 hover:bg-purple-600">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ajouter un produit
-                </Button>
+                {/* Add product button - Manager/Admin only */}
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                  <Button onClick={() => { setEditProduct(null); setProductForm({ name: "", price: 0, department: "bar", unit: "unité", category: "" }); setShowProductModal(true); }} className="bg-purple-500 hover:bg-purple-600">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter un produit
+                  </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -5026,12 +5029,17 @@ _Gérante - Espace Maxo_
                               </div>
                             </div>
                             <div className="flex gap-1 ml-2">
-                              <Button size="icon" variant="ghost" onClick={() => { setEditProduct(product); setProductForm({...product, department: dept}); setShowProductModal(true); }} className="w-7 h-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20">
-                                <Edit2 className="w-3 h-3" />
-                              </Button>
-                              <Button size="icon" variant="ghost" onClick={() => deleteProduct(product.id)} className="w-7 h-7 text-red-400 hover:text-red-300 hover:bg-red-500/20">
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
+                              {/* Edit/Delete buttons - Manager/Admin only */}
+                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                                <>
+                                  <Button size="icon" variant="ghost" onClick={() => { setEditProduct(product); setProductForm({...product, department: dept}); setShowProductModal(true); }} className="w-7 h-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20">
+                                    <Edit2 className="w-3 h-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => deleteProduct(product.id)} className="w-7 h-7 text-red-400 hover:text-red-300 hover:bg-red-500/20">
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -7254,7 +7262,8 @@ _Gérante - Espace Maxo_
                 </div>
                 
                 {/* Custom Item for "Autres" */}
-                {editingDepartment === "autres" && (
+                {/* Custom item in edit mode - Manager/Admin only */}
+                {editingDepartment === "autres" && (currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                   <div className="bg-slate-700/30 rounded-lg p-2 space-y-1">
                     <p className="text-xs text-slate-400 font-medium">Article personnalisé</p>
                     <div className="flex gap-1">
