@@ -3834,30 +3834,34 @@ class CaisseTableUpdate(BaseModel):
 
 @api_router.get("/caisse/tables/status")
 async def get_tables_status():
-    """Get status of all 20 tables (free/occupied with timing)"""
+    """Get status of all 20 tables (free/occupied/invoiced with timing)"""
     try:
-        # Get all occupied tables
-        occupied_tables = await db.caisse_tables.find({}, {"_id": 0}).to_list(100)
+        # Get all tables (occupied or invoiced)
+        all_tables = await db.caisse_tables.find({}, {"_id": 0}).to_list(100)
         
-        # Create a map of occupied tables by table number
-        occupied_map = {}
-        for table in occupied_tables:
-            occupied_map[table["table_number"]] = table
+        # Create a map of tables by table number
+        tables_map = {}
+        for table in all_tables:
+            tables_map[table["table_number"]] = table
         
         # Generate status for all 20 tables
         tables_status = []
         now = datetime.now(timezone.utc)
         
         for i in range(1, 21):
-            if i in occupied_map:
-                table = occupied_map[i]
+            if i in tables_map:
+                table = tables_map[i]
+                table_status = table.get("status", "occupied")  # Default to occupied for backwards compatibility
+                
                 # Calculate service duration in minutes
                 created_at = datetime.fromisoformat(table["created_at"].replace("Z", "+00:00"))
                 duration_seconds = (now - created_at).total_seconds()
                 duration_minutes = int(duration_seconds / 60)
                 
-                # Determine status color based on duration
-                if duration_minutes < 15:
+                # Determine status color based on duration and invoice status
+                if table_status == "invoiced":
+                    status_color = "blue"  # Blue for invoiced tables
+                elif duration_minutes < 15:
                     status_color = "green"
                 elif duration_minutes < 30:
                     status_color = "orange"
@@ -3869,7 +3873,7 @@ async def get_tables_status():
                 
                 tables_status.append({
                     "table_number": i,
-                    "status": "occupied",
+                    "status": table_status if table_status == "invoiced" else "occupied",
                     "status_color": status_color,
                     "server_name": table.get("server_name", ""),
                     "server_id": table.get("server_id", ""),
@@ -3879,7 +3883,8 @@ async def get_tables_status():
                     "duration_minutes": duration_minutes,
                     "duration_formatted": f"{duration_minutes // 60}h{duration_minutes % 60:02d}" if duration_minutes >= 60 else f"{duration_minutes}min",
                     "created_at": table.get("created_at"),
-                    "table_id": table.get("id")
+                    "table_id": table.get("id"),
+                    "invoice_created_at": table.get("invoice_created_at")
                 })
             else:
                 tables_status.append({
@@ -3898,17 +3903,18 @@ async def get_tables_status():
                 })
         
         # Calculate statistics
-        occupied_count = len(occupied_tables)
+        occupied_count = len([t for t in tables_status if t["status"] in ("occupied", "invoiced")])
         free_count = 20 - occupied_count
         
         # Average service time for occupied tables
-        total_duration = sum(t["duration_minutes"] for t in tables_status if t["status"] == "occupied")
+        total_duration = sum(t["duration_minutes"] for t in tables_status if t["status"] in ("occupied", "invoiced"))
         avg_duration = total_duration / occupied_count if occupied_count > 0 else 0
         
         # Count by status color
         green_count = len([t for t in tables_status if t["status_color"] == "green"])
         orange_count = len([t for t in tables_status if t["status_color"] == "orange"])
         red_count = len([t for t in tables_status if t["status_color"] == "red"])
+        blue_count = len([t for t in tables_status if t["status_color"] == "blue"])
         
         return {
             "tables": tables_status,

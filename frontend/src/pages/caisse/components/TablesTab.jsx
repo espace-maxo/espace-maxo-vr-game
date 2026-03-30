@@ -103,6 +103,10 @@ const TablesTab = ({
           <span className="text-slate-400">{"> 30 min (Critique)"}</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded bg-blue-500/30 border-2 border-blue-500"></div>
+          <span className="text-slate-400">Facturée</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-slate-700 border-2 border-slate-600"></div>
           <span className="text-slate-400">Libre</span>
         </div>
@@ -119,16 +123,20 @@ const TablesTab = ({
               transition-all hover:scale-105
               ${table.status === 'free' 
                 ? 'bg-slate-800/50 border-slate-600 hover:border-slate-500' 
-                : table.status_color === 'green'
-                  ? 'bg-green-900/30 border-green-500 shadow-lg shadow-green-500/20'
-                  : table.status_color === 'orange'
-                    ? 'bg-orange-900/30 border-orange-500 shadow-lg shadow-orange-500/20 animate-pulse'
-                    : 'bg-red-900/30 border-red-500 shadow-lg shadow-red-500/20 animate-pulse'
+                : table.status === 'invoiced'
+                  ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
+                  : table.status_color === 'green'
+                    ? 'bg-green-900/30 border-green-500 shadow-lg shadow-green-500/20'
+                    : table.status_color === 'orange'
+                      ? 'bg-orange-900/30 border-orange-500 shadow-lg shadow-orange-500/20 animate-pulse'
+                      : 'bg-red-900/30 border-red-500 shadow-lg shadow-red-500/20 animate-pulse'
               }
             `}
             title={table.status === 'free' 
               ? `Table ${table.table_number} - Libre` 
-              : `Cliquez pour voir les détails`
+              : table.status === 'invoiced'
+                ? `Table ${table.table_number} - Facturée`
+                : `Cliquez pour voir les détails`
             }
           >
             <span className={`text-lg font-bold ${
@@ -136,7 +144,7 @@ const TablesTab = ({
             }`}>
               {table.table_number}
             </span>
-            {table.status === 'occupied' && (
+            {(table.status === 'occupied' || table.status === 'invoiced') && (
               <>
                 <span className={`text-xs font-bold ${
                   table.status_color === 'green' ? 'text-green-400' :
@@ -180,12 +188,12 @@ const TablesTab = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {tablesStatus.tables?.filter(t => t.status === 'occupied')
+                  {tablesStatus.tables?.filter(t => t.status === 'occupied' || t.status === 'invoiced')
                     .sort((a, b) => b.duration_minutes - a.duration_minutes)
                     .map(table => (
                     <tr key={table.table_number} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                       <td className="p-2">
-                        <Badge className="bg-teal-500/20 text-teal-400 font-bold">
+                        <Badge className={table.status === 'invoiced' ? "bg-blue-500/20 text-blue-400 font-bold" : "bg-teal-500/20 text-teal-400 font-bold"}>
                           Table {table.table_number}
                         </Badge>
                       </td>
@@ -195,10 +203,11 @@ const TablesTab = ({
                       <td className="p-2 text-right font-bold text-amber-400">{formatPrice(table.total)} F</td>
                       <td className="p-2 text-center">
                         <span className={`font-bold ${
+                          table.status === 'invoiced' ? 'text-blue-400' :
                           table.status_color === 'green' ? 'text-green-400' :
                           table.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
                         }`}>
-                          {table.duration_formatted}
+                          {table.status === 'invoiced' ? 'Facturée' : table.duration_formatted}
                         </span>
                       </td>
                       <td className="p-2 text-center">
