@@ -1804,18 +1804,23 @@ const CaissePage = () => {
   };
 
   // Stop table service (Manager action)
-  const stopTableService = async (tableId, tableNumber) => {
+  const stopTableService = async (tableId, tableNumber, silent = false) => {
     try {
       const res = await axios.post(`${API}/caisse/tables/${tableId}/stop-service`);
       if (res.data.success) {
         const { duration_minutes, quality_status } = res.data.service_record;
         const qualityText = quality_status === 'excellent' ? 'Excellent' : quality_status === 'acceptable' ? 'Acceptable' : 'Lent';
-        toast.success(`Table ${tableNumber} libérée ! Durée: ${duration_minutes}min (${qualityText})`);
+        if (!silent) {
+          toast.success(`Table ${tableNumber} libérée ! Durée: ${duration_minutes}min (${qualityText})`);
+        }
         fetchTablesStatus();
+        fetchOpenTables();
       }
     } catch (error) {
       console.error("Error stopping table service:", error);
-      toast.error("Erreur lors de l'arrêt du service");
+      if (!silent) {
+        toast.error("Erreur lors de l'arrêt du service");
+      }
     }
   };
 
@@ -3605,7 +3610,7 @@ _Gérante - Espace Maxo_
               </TabsTrigger>
             )}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-              <Printer className="w-4 h-4 mr-2" />Factures
+              <Printer className="w-4 h-4 mr-2" />BONS
               {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
                 <Badge className="ml-1 bg-orange-600 text-white text-xs">{invoices.filter(i => i.validation_status === 'pending').length}</Badge>
               )}

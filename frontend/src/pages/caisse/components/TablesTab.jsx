@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { LayoutGrid, RefreshCw, Clock, Timer, X, User, ShoppingCart, Eye } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { LayoutGrid, RefreshCw, Clock, Timer, X, User, ShoppingCart, Eye, Zap } from "lucide-react";
+import { toast } from "sonner";
 
 const TablesTab = ({ 
   tablesStatus, 
@@ -13,6 +15,41 @@ const TablesTab = ({
   openTables = []  // Add openTables prop for order details
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
+  const [autoStopEnabled, setAutoStopEnabled] = useState(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem('caisse_auto_stop_tables');
+    return saved === 'true';
+  });
+
+  // Auto-stop invoiced tables when feature is enabled
+  useEffect(() => {
+    if (autoStopEnabled && tablesStatus.tables) {
+      const invoicedTables = tablesStatus.tables.filter(t => t.status === 'invoiced');
+      if (invoicedTables.length > 0) {
+        // Stop each invoiced table automatically
+        invoicedTables.forEach(async (table) => {
+          if (table.table_id) {
+            try {
+              await stopTableService(table.table_id, table.table_number, true); // silent mode
+            } catch (e) {
+              console.log(`Auto-stop failed for table ${table.table_number}`);
+            }
+          }
+        });
+      }
+    }
+  }, [tablesStatus.tables, autoStopEnabled, stopTableService]);
+
+  // Save preference to localStorage
+  const handleAutoStopToggle = (enabled) => {
+    setAutoStopEnabled(enabled);
+    localStorage.setItem('caisse_auto_stop_tables', enabled.toString());
+    if (enabled) {
+      toast.success("Arrêt automatique activé - Les tables facturées seront libérées automatiquement");
+    } else {
+      toast.info("Arrêt automatique désactivé");
+    }
+  };
 
   // Find table details from openTables
   const getTableDetails = (tableNumber) => {
@@ -34,7 +71,17 @@ const TablesTab = ({
           <LayoutGrid className="w-6 h-6" />
           Suivi des Tables
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Auto-stop toggle */}
+          <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700">
+            <Zap className={`w-4 h-4 ${autoStopEnabled ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span className="text-sm text-slate-300">Arrêt auto</span>
+            <Switch
+              checked={autoStopEnabled}
+              onCheckedChange={handleAutoStopToggle}
+              className="data-[state=checked]:bg-amber-500"
+            />
+          </div>
           <Button 
             variant="outline" 
             size="sm" 
