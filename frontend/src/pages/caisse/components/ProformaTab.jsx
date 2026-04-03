@@ -39,6 +39,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     client_phone: "",
     client_email: "",
     client_address: "",
+    client_ifu: "",  // Numéro IFU du client
     items: [],
     subtotal: 0,
     discount: 0,
@@ -205,6 +206,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       client_phone: "",
       client_email: "",
       client_address: "",
+      client_ifu: "",
       items: [],
       subtotal: 0,
       discount: 0,
@@ -226,6 +228,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       client_phone: proforma.client_phone || "",
       client_email: proforma.client_email || "",
       client_address: proforma.client_address || "",
+      client_ifu: proforma.client_ifu || "",
       items: proforma.items || [],
       subtotal: subtotal,
       discount: proforma.discount || 0,
@@ -636,6 +639,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             ${proforma.client_phone ? `<p>Tél: ${proforma.client_phone}</p>` : ''}
             ${proforma.client_email ? `<p>Email: ${proforma.client_email}</p>` : ''}
             ${proforma.client_address ? `<p>${proforma.client_address}</p>` : ''}
+            ${proforma.client_ifu ? `<p><strong>IFU:</strong> ${proforma.client_ifu}</p>` : ''}
           </div>
         </div>
         
@@ -1047,6 +1051,16 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
               </div>
               
               <div>
+                <Label className="text-slate-400 text-sm">Numéro IFU</Label>
+                <Input
+                  value={formData.client_ifu}
+                  onChange={(e) => setFormData({ ...formData, client_ifu: e.target.value })}
+                  placeholder="Identifiant Fiscal Unique"
+                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                />
+              </div>
+              
+              <div>
                 <Label className="text-slate-400 text-sm">Validité (jours)</Label>
                 <Input
                   type="number"
@@ -1236,6 +1250,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                 {viewingProforma.client_phone && <p className="text-slate-300 text-sm">{viewingProforma.client_phone}</p>}
                 {viewingProforma.client_email && <p className="text-slate-300 text-sm">{viewingProforma.client_email}</p>}
                 {viewingProforma.client_address && <p className="text-slate-300 text-sm">{viewingProforma.client_address}</p>}
+                {viewingProforma.client_ifu && <p className="text-slate-300 text-sm">IFU: {viewingProforma.client_ifu}</p>}
               </div>
               
               {/* Items */}
