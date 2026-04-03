@@ -416,7 +416,8 @@ const CaissePage = () => {
   };
 
   // ============== MULTI-TABLE MANAGEMENT ==============
-  const fetchOpenTables = async () => {
+  
+  const fetchOpenTables = async (skipAutoSelect = false) => {
     if (!currentUser) return;
     try {
       const serverId = currentUser.id || currentUser.username;
@@ -425,12 +426,21 @@ const CaissePage = () => {
         axios.get(`${API}/caisse/tables/available`, { params: { server_id: serverId } })
       ]);
       
-      setOpenTables(tablesRes.data.tables || []);
+      const tables = tablesRes.data.tables || [];
+      setOpenTables(tables);
       setAvailableTableNumbers(availableRes.data.available_tables || []);
       
-      // If no active table but tables exist, select the first one
-      if (!activeTableId && tablesRes.data.tables?.length > 0) {
-        selectTable(tablesRes.data.tables[0]);
+      // Only auto-select if:
+      // - No active table
+      // - There are tables available
+      // - skipAutoSelect is false
+      // - Select only tables that are NOT "invoiced" (still have pending items)
+      if (!activeTableId && tables.length > 0 && !skipAutoSelect) {
+        const activeTable = tables.find(t => t.status !== 'invoiced' && (t.items?.length > 0));
+        if (activeTable) {
+          selectTable(activeTable);
+        }
+        // Don't auto-select invoiced tables - let user choose
       }
     } catch (error) {
       console.error("Error fetching tables:", error);
@@ -2181,10 +2191,11 @@ _Gérante - Espace Maxo_
       
       // Mark the table as having an invoice but DON'T delete it (keep tracking)
       if (activeTableId) {
-        // Update table status to "invoiced" instead of deleting
+        // Update table status to "invoiced" and CLEAR items since they're now in the invoice
         try {
           await axios.put(`${API}/caisse/tables/${activeTableId}`, {
             status: "invoiced",
+            items: [], // Clear items since the order has been sent
             invoice_created_at: new Date().toISOString()
           });
         } catch (e) {
@@ -2201,10 +2212,12 @@ _Gérante - Espace Maxo_
       setSelectedClient(null);
       setDiscount(0);
       setNotes("");
+      setActiveTableId(null);
+      setCurrentBill([]);
       
       // Refresh data immediately to update invoice lists
       await fetchAllData();
-      await fetchOpenTables();
+      await fetchOpenTables(true); // Skip auto-select after sending order
       setPendingInvoiceData(null);
       
       // For servers, switch to BONS tab to show them their pending invoice
