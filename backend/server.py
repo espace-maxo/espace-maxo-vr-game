@@ -5223,16 +5223,27 @@ async def get_weekly_report(week_start: Optional[str] = None):
         expenses_by_status = {"completed": 0, "approved": 0, "pending": 0, "revision_requested": 0}
         
         for expense in all_expenses:
-            # Determine date: use assigned_week first, then status-based dates
+            # Determine which day to attribute this expense to
+            # Priority: assigned_week > completed_at/approved_at > created_at
+            expense_date = None
+            
             if expense.get("assigned_week"):
-                # If assigned to a week, use the planned_date or first day of assigned week
-                date = expense.get("planned_date", expense.get("assigned_week"))[:10]
+                # If explicitly assigned to this week, use the approved_at date if within this week,
+                # otherwise use the first day of the week (the Monday)
+                approved_date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
+                
+                # Check if approved_date is within the requested week
+                if approved_date >= start_str and approved_date <= end_str:
+                    expense_date = approved_date
+                else:
+                    # Use the assigned week's Monday
+                    expense_date = expense.get("assigned_week")[:10]
             elif expense.get("status") == "completed":
-                date = (expense.get("completed_at") or expense.get("created_at", ""))[:10]
+                expense_date = (expense.get("completed_at") or expense.get("created_at", ""))[:10]
             elif expense.get("status") == "approved":
-                date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
+                expense_date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
             else:
-                date = expense.get("created_at", "")[:10]
+                expense_date = expense.get("created_at", "")[:10]
             
             # Count completed AND approved expenses in totals (both are validated expenses)
             if expense.get("status") in ["completed", "approved"]:
@@ -5244,11 +5255,13 @@ async def get_weekly_report(week_start: Optional[str] = None):
             status = expense.get("status", "pending")
             expenses_by_status[status] = expenses_by_status.get(status, 0) + expense.get("amount", 0)
             
-            if date in daily_data:
-                daily_data[date]["expenses"]["count"] += 1
+            # Add to daily data if date is within our week range
+            if expense_date and expense_date in daily_data:
+                daily_data[expense_date]["expenses"]["count"] += 1
                 # Count both completed and approved in daily totals
-                daily_data[date]["expenses"]["total"] += expense.get("amount", 0) if expense.get("status") in ["completed", "approved"] else 0
-                daily_data[date]["expenses"]["items"].append({
+                if expense.get("status") in ["completed", "approved"]:
+                    daily_data[expense_date]["expenses"]["total"] += expense.get("amount", 0)
+                daily_data[expense_date]["expenses"]["items"].append({
                     "id": expense.get("id"),
                     "description": expense.get("description"),
                     "amount": expense.get("amount", 0),
