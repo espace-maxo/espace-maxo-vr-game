@@ -5150,6 +5150,122 @@ async def assign_expense_to_week(expense_id: str, week_start: str = Body(..., em
         logger.error(f"Error assigning expense to week: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== MONSIEUR ORDERS (Owner's meal orders) ==============
+
+@api_router.get("/monsieur-orders")
+async def get_monsieur_orders():
+    """Get all owner meal orders tracked by manager"""
+    try:
+        orders = await db.monsieur_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        
+        # Calculate totals
+        total_unpaid = sum(o.get("total", 0) for o in orders if o.get("status") == "non_regle")
+        total_paid = sum(o.get("total", 0) for o in orders if o.get("status") == "regle")
+        
+        return {
+            "orders": orders,
+            "stats": {
+                "total_unpaid": total_unpaid,
+                "total_paid": total_paid,
+                "total": total_unpaid + total_paid,
+                "count_unpaid": len([o for o in orders if o.get("status") == "non_regle"]),
+                "count_paid": len([o for o in orders if o.get("status") == "regle"])
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching monsieur orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/monsieur-orders")
+async def create_monsieur_order(
+    items: list = Body(...),
+    total: float = Body(...),
+    notes: str = Body(None),
+    created_by: str = Body(...)
+):
+    """Create a new owner meal order"""
+    try:
+        order = {
+            "id": str(uuid.uuid4()),
+            "items": items,
+            "total": total,
+            "notes": notes,
+            "status": "non_regle",  # non_regle or regle
+            "created_by": created_by,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "paid_at": None,
+            "paid_by": None
+        }
+        
+        await db.monsieur_orders.insert_one(order)
+        if "_id" in order:
+            del order["_id"]
+        
+        return {"success": True, "order": order}
+    except Exception as e:
+        logger.error(f"Error creating monsieur order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/monsieur-orders/{order_id}")
+async def update_monsieur_order(
+    order_id: str,
+    items: list = Body(None),
+    total: float = Body(None),
+    notes: str = Body(None),
+    status: str = Body(None),
+    paid_by: str = Body(None)
+):
+    """Update an owner meal order"""
+    try:
+        order = await db.monsieur_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        update_data = {}
+        if items is not None:
+            update_data["items"] = items
+        if total is not None:
+            update_data["total"] = total
+        if notes is not None:
+            update_data["notes"] = notes
+        if status is not None:
+            update_data["status"] = status
+            if status == "regle":
+                update_data["paid_at"] = datetime.now(timezone.utc).isoformat()
+                update_data["paid_by"] = paid_by
+            elif status == "non_regle":
+                update_data["paid_at"] = None
+                update_data["paid_by"] = None
+        
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.monsieur_orders.update_one(
+            {"id": order_id},
+            {"$set": update_data}
+        )
+        
+        updated = await db.monsieur_orders.find_one({"id": order_id}, {"_id": 0})
+        return {"success": True, "order": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating monsieur order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/monsieur-orders/{order_id}")
+async def delete_monsieur_order(order_id: str):
+    """Delete an owner meal order"""
+    try:
+        result = await db.monsieur_orders.delete_one({"id": order_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting monsieur order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== MONSIEUR PURCHASES (Owner's unpaid invoices) ==============
 
 @api_router.get("/monsieur-purchases")

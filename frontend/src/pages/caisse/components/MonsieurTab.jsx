@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { 
   UserCircle, Plus, Check, X, Edit2, Trash2, 
-  FileText, Calendar, AlertCircle, CheckCircle, Receipt
+  UtensilsCrossed, Calendar, AlertCircle, CheckCircle, Receipt,
+  Search, Minus
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -17,47 +18,45 @@ import { fr } from "date-fns/locale";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
-const MonsieurTab = ({ currentUser, formatPrice }) => {
-  const [purchases, setPurchases] = useState([]);
+const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
+  const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({ total_unpaid: 0, total_paid: 0, count_unpaid: 0, count_paid: 0 });
   const [showModal, setShowModal] = useState(false);
-  const [editingPurchase, setEditingPurchase] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [filter, setFilter] = useState("all"); // all, non_regle, regle
   
-  const [formData, setFormData] = useState({
-    description: "",
-    amount: "",
-    supplier: "",
-    invoice_number: "",
-    invoice_date: format(new Date(), "yyyy-MM-dd"),
-    notes: ""
-  });
+  // Order creation state
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    fetchPurchases();
+    fetchOrders();
   }, []);
 
-  const fetchPurchases = async () => {
+  const fetchOrders = async () => {
     try {
-      const res = await axios.get(`${API}/monsieur-purchases`);
-      setPurchases(res.data.purchases || []);
+      const res = await axios.get(`${API}/monsieur-orders`);
+      setOrders(res.data.orders || []);
       setStats(res.data.stats || { total_unpaid: 0, total_paid: 0, count_unpaid: 0, count_paid: 0 });
     } catch (error) {
-      console.error("Error fetching monsieur purchases:", error);
-      toast.error("Erreur lors du chargement des achats Monsieur");
+      console.error("Error fetching monsieur orders:", error);
+      // If endpoint doesn't exist yet, use the old one
+      try {
+        const res = await axios.get(`${API}/monsieur-purchases`);
+        setOrders(res.data.purchases || []);
+        setStats(res.data.stats || { total_unpaid: 0, total_paid: 0, count_unpaid: 0, count_paid: 0 });
+      } catch (e) {
+        console.error("Fallback also failed:", e);
+      }
     }
   };
 
   const resetForm = () => {
-    setFormData({
-      description: "",
-      amount: "",
-      supplier: "",
-      invoice_number: "",
-      invoice_date: format(new Date(), "yyyy-MM-dd"),
-      notes: ""
-    });
-    setEditingPurchase(null);
+    setSelectedItems([]);
+    setSearchTerm("");
+    setNotes("");
+    setEditingOrder(null);
   };
 
   const openCreateModal = () => {
@@ -65,80 +64,120 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
     setShowModal(true);
   };
 
-  const openEditModal = (purchase) => {
-    setEditingPurchase(purchase);
-    setFormData({
-      description: purchase.description || "",
-      amount: purchase.amount || "",
-      supplier: purchase.supplier || "",
-      invoice_number: purchase.invoice_number || "",
-      invoice_date: purchase.invoice_date || format(new Date(), "yyyy-MM-dd"),
-      notes: purchase.notes || ""
-    });
+  const openEditModal = (order) => {
+    setEditingOrder(order);
+    setSelectedItems(order.items || []);
+    setNotes(order.notes || "");
     setShowModal(true);
   };
 
+  // Filter products based on search term
+  const filteredProducts = products.filter(p => 
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.category?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Add product to order
+  const addProduct = (product) => {
+    const existing = selectedItems.find(item => item.product_id === product.id);
+    if (existing) {
+      setSelectedItems(selectedItems.map(item => 
+        item.product_id === product.id 
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      setSelectedItems([...selectedItems, {
+        product_id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+        category: product.category
+      }]);
+    }
+  };
+
+  // Remove or decrease product quantity
+  const decreaseProduct = (productId) => {
+    const existing = selectedItems.find(item => item.product_id === productId);
+    if (existing && existing.quantity > 1) {
+      setSelectedItems(selectedItems.map(item => 
+        item.product_id === productId 
+          ? { ...item, quantity: item.quantity - 1 }
+          : item
+      ));
+    } else {
+      setSelectedItems(selectedItems.filter(item => item.product_id !== productId));
+    }
+  };
+
+  // Calculate total
+  const calculateTotal = () => {
+    return selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
   const handleSubmit = async () => {
-    if (!formData.description || !formData.amount) {
-      toast.error("Veuillez remplir la description et le montant");
+    if (selectedItems.length === 0) {
+      toast.error("Veuillez sélectionner au moins un produit");
       return;
     }
 
+    const total = calculateTotal();
+    const orderData = {
+      items: selectedItems,
+      total: total,
+      notes: notes,
+      created_by: currentUser?.name || "Gérante"
+    };
+
     try {
-      if (editingPurchase) {
-        await axios.put(`${API}/monsieur-purchases/${editingPurchase.id}`, {
-          ...formData,
-          amount: parseFloat(formData.amount)
-        });
-        toast.success("Achat modifié avec succès");
+      if (editingOrder) {
+        await axios.put(`${API}/monsieur-orders/${editingOrder.id}`, orderData);
+        toast.success("Commande modifiée avec succès");
       } else {
-        await axios.post(`${API}/monsieur-purchases`, {
-          ...formData,
-          amount: parseFloat(formData.amount),
-          created_by: currentUser?.name || "Gérante"
-        });
-        toast.success("Achat enregistré avec succès");
+        await axios.post(`${API}/monsieur-orders`, orderData);
+        toast.success("Commande Monsieur enregistrée");
       }
       
       setShowModal(false);
       resetForm();
-      fetchPurchases();
+      fetchOrders();
     } catch (error) {
-      console.error("Error saving purchase:", error);
+      console.error("Error saving order:", error);
       toast.error("Erreur lors de l'enregistrement");
     }
   };
 
-  const toggleStatus = async (purchase) => {
-    const newStatus = purchase.status === "regle" ? "non_regle" : "regle";
+  const toggleStatus = async (order) => {
+    const newStatus = order.status === "regle" ? "non_regle" : "regle";
     try {
-      await axios.put(`${API}/monsieur-purchases/${purchase.id}`, {
+      await axios.put(`${API}/monsieur-orders/${order.id}`, {
         status: newStatus,
         paid_by: newStatus === "regle" ? (currentUser?.name || "Gérante") : null
       });
       toast.success(newStatus === "regle" ? "Marqué comme réglé" : "Marqué comme non réglé");
-      fetchPurchases();
+      fetchOrders();
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Erreur lors de la mise à jour du statut");
     }
   };
 
-  const deletePurchase = async (purchaseId) => {
-    if (!confirm("Supprimer cet achat ?")) return;
+  const deleteOrder = async (orderId) => {
+    if (!confirm("Supprimer cette commande Monsieur ?")) return;
     try {
-      await axios.delete(`${API}/monsieur-purchases/${purchaseId}`);
-      toast.success("Achat supprimé");
-      fetchPurchases();
+      await axios.delete(`${API}/monsieur-orders/${orderId}`);
+      toast.success("Commande supprimée");
+      fetchOrders();
     } catch (error) {
-      console.error("Error deleting purchase:", error);
+      console.error("Error deleting order:", error);
       toast.error("Erreur lors de la suppression");
     }
   };
 
-  const filteredPurchases = purchases.filter(p => {
+  const filteredOrders = orders.filter(o => {
     if (filter === "all") return true;
-    return p.status === filter;
+    return o.status === filter;
   });
 
   return (
@@ -147,9 +186,9 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-purple-300 flex items-center gap-2">
           <UserCircle className="w-6 h-6" />
-          Achats Monsieur
+          Commandes Monsieur
           <Badge className="bg-purple-500/30 text-purple-300 ml-2">
-            Propriétaire
+            Promoteur
           </Badge>
         </h2>
         <Button 
@@ -157,7 +196,7 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
           className="bg-purple-600 hover:bg-purple-700"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Nouvel Achat
+          Nouvelle Commande
         </Button>
       </div>
 
@@ -196,7 +235,7 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
           onClick={() => setFilter("all")}
           className={filter === "all" ? "bg-purple-600" : "border-slate-600 text-slate-400"}
         >
-          Tous ({purchases.length})
+          Tous ({orders.length})
         </Button>
         <Button
           size="sm"
@@ -216,75 +255,82 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
         </Button>
       </div>
 
-      {/* Purchases List */}
+      {/* Orders List */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardContent className="p-4">
-          {filteredPurchases.length === 0 ? (
+          {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
-              <UserCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Aucun achat enregistré</p>
+              <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Aucune commande Monsieur</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredPurchases.map(purchase => (
+              {filteredOrders.map(order => (
                 <div 
-                  key={purchase.id}
+                  key={order.id}
                   className={`rounded-lg p-4 border ${
-                    purchase.status === "regle" 
+                    order.status === "regle" 
                       ? "bg-green-900/20 border-green-500/30" 
                       : "bg-red-900/20 border-red-500/30"
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
                         <Badge className={`text-xs ${
-                          purchase.status === "regle" 
+                          order.status === "regle" 
                             ? "bg-green-500/20 text-green-400" 
                             : "bg-red-500/20 text-red-400"
                         }`}>
-                          {purchase.status === "regle" ? "✓ Réglé" : "✗ Non réglé"}
+                          {order.status === "regle" ? "✓ Réglé" : "✗ Non réglé"}
                         </Badge>
-                        {purchase.invoice_number && (
-                          <Badge className="bg-slate-600/30 text-slate-400 text-xs">
-                            N° {purchase.invoice_number}
-                          </Badge>
-                        )}
+                        <span className="text-slate-500 text-xs">
+                          {format(new Date(order.created_at), "dd/MM/yyyy à HH:mm", { locale: fr })}
+                        </span>
                       </div>
-                      <p className="text-white font-medium mt-1">{purchase.description}</p>
+                      
+                      {/* Items list */}
+                      <div className="space-y-1 mb-2">
+                        {(order.items || []).map((item, idx) => (
+                          <div key={idx} className="flex justify-between text-sm">
+                            <span className="text-slate-300">
+                              {item.quantity}x {item.name}
+                            </span>
+                            <span className="text-slate-400">
+                              {formatPrice(item.price * item.quantity)} F
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      
                       <p className={`text-xl font-bold ${
-                        purchase.status === "regle" ? "text-green-400" : "text-red-400"
+                        order.status === "regle" ? "text-green-400" : "text-red-400"
                       }`}>
-                        {formatPrice(purchase.amount)} F
+                        Total: {formatPrice(order.total)} F
                       </p>
-                      <div className="text-xs text-slate-500 mt-1 space-y-0.5">
-                        {purchase.supplier && <p>Fournisseur: {purchase.supplier}</p>}
-                        {purchase.invoice_date && (
-                          <p>Date facture: {format(new Date(purchase.invoice_date), "dd/MM/yyyy", { locale: fr })}</p>
-                        )}
-                        <p>Créé le: {format(new Date(purchase.created_at), "dd/MM/yyyy à HH:mm", { locale: fr })}</p>
-                        {purchase.status === "regle" && purchase.paid_at && (
-                          <p className="text-green-400">
-                            Réglé le: {format(new Date(purchase.paid_at), "dd/MM/yyyy", { locale: fr })}
-                            {purchase.paid_by && ` par ${purchase.paid_by}`}
-                          </p>
-                        )}
-                      </div>
-                      {purchase.notes && (
-                        <p className="text-slate-400 text-sm mt-2 italic">"{purchase.notes}"</p>
+                      
+                      {order.notes && (
+                        <p className="text-slate-400 text-sm mt-2 italic">"{order.notes}"</p>
+                      )}
+                      
+                      {order.status === "regle" && order.paid_at && (
+                        <p className="text-green-400 text-xs mt-1">
+                          Réglé le: {format(new Date(order.paid_at), "dd/MM/yyyy", { locale: fr })}
+                          {order.paid_by && ` par ${order.paid_by}`}
+                        </p>
                       )}
                     </div>
                     
                     <div className="flex gap-2 shrink-0">
                       <Button
                         size="sm"
-                        onClick={() => toggleStatus(purchase)}
-                        className={purchase.status === "regle" 
+                        onClick={() => toggleStatus(order)}
+                        className={order.status === "regle" 
                           ? "bg-red-600 hover:bg-red-700" 
                           : "bg-green-600 hover:bg-green-700"
                         }
                       >
-                        {purchase.status === "regle" ? (
+                        {order.status === "regle" ? (
                           <><X className="w-4 h-4 mr-1" /> Non réglé</>
                         ) : (
                           <><Check className="w-4 h-4 mr-1" /> Réglé</>
@@ -293,7 +339,7 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => openEditModal(purchase)}
+                        onClick={() => openEditModal(order)}
                         className="border-slate-600 text-slate-400 hover:bg-slate-700"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -301,7 +347,7 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => deletePurchase(purchase.id)}
+                        onClick={() => deleteOrder(order.id)}
                         className="border-red-600/50 text-red-400 hover:bg-red-600/20"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -320,83 +366,106 @@ const MonsieurTab = ({ currentUser, formatPrice }) => {
         setShowModal(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-purple-400">
-              <UserCircle className="w-5 h-5" />
-              {editingPurchase ? "Modifier l'achat" : "Nouvel achat Monsieur"}
+              <UtensilsCrossed className="w-5 h-5" />
+              {editingOrder ? "Modifier la commande" : "Nouvelle commande Monsieur"}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
+            {/* Search Products */}
             <div>
-              <Label className="text-slate-400 text-sm">Description *</Label>
-              <Input
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Ex: Matériaux de construction"
-                className="bg-slate-900/50 border-slate-700 text-white mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label className="text-slate-400 text-sm">Montant (F CFA) *</Label>
-              <Input
-                type="number"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                placeholder="0"
-                className="bg-slate-900/50 border-slate-700 text-white mt-1"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-slate-400 text-sm">Fournisseur</Label>
+              <Label className="text-slate-400 text-sm">Rechercher un produit</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <Input
-                  value={formData.supplier}
-                  onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                  placeholder="Nom du fournisseur"
-                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-400 text-sm">N° Facture</Label>
-                <Input
-                  value={formData.invoice_number}
-                  onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                  placeholder="FAC-001"
-                  className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Rechercher..."
+                  className="bg-slate-900/50 border-slate-700 text-white pl-10"
                 />
               </div>
             </div>
             
-            <div>
-              <Label className="text-slate-400 text-sm">Date de facture</Label>
-              <Input
-                type="date"
-                value={formData.invoice_date}
-                onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
-                className="bg-slate-900/50 border-slate-700 text-white mt-1"
-              />
+            {/* Products Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+              {filteredProducts.slice(0, 12).map(product => (
+                <Button
+                  key={product.id}
+                  variant="outline"
+                  onClick={() => addProduct(product)}
+                  className="h-auto py-2 px-3 border-slate-600 text-left justify-start hover:bg-purple-500/20 hover:border-purple-500"
+                >
+                  <div className="w-full">
+                    <p className="text-white text-sm font-medium truncate">{product.name}</p>
+                    <p className="text-amber-400 text-xs">{formatPrice(product.price)} F</p>
+                  </div>
+                </Button>
+              ))}
             </div>
             
+            {/* Selected Items */}
+            {selectedItems.length > 0 && (
+              <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+                <h4 className="text-slate-400 text-sm mb-2">Commande</h4>
+                <div className="space-y-2">
+                  {selectedItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => decreaseProduct(item.product_id)}
+                          className="h-6 w-6 p-0 text-red-400 hover:bg-red-500/20"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span className="text-white text-sm">
+                          {item.quantity}x {item.name}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => addProduct({ id: item.product_id, name: item.name, price: item.price })}
+                          className="h-6 w-6 p-0 text-green-400 hover:bg-green-500/20"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <span className="text-amber-400 font-medium">
+                        {formatPrice(item.price * item.quantity)} F
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-slate-700 mt-3 pt-3 flex justify-between">
+                  <span className="text-white font-bold">TOTAL</span>
+                  <span className="text-purple-400 font-bold text-lg">{formatPrice(calculateTotal())} F</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Notes */}
             <div>
-              <Label className="text-slate-400 text-sm">Notes</Label>
+              <Label className="text-slate-400 text-sm">Notes (optionnel)</Label>
               <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Notes supplémentaires..."
-                className="bg-slate-900/50 border-slate-700 text-white mt-1 min-h-[80px]"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notes sur la commande..."
+                className="bg-slate-900/50 border-slate-700 text-white mt-1 min-h-[60px]"
               />
             </div>
             
+            {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button
                 onClick={handleSubmit}
-                className="flex-1 bg-purple-600 hover:bg-purple-700"
+                disabled={selectedItems.length === 0}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
               >
-                {editingPurchase ? "Modifier" : "Enregistrer"}
+                {editingOrder ? "Modifier" : "Enregistrer"}
               </Button>
               <Button
                 variant="outline"

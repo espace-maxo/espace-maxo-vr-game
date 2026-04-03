@@ -5876,6 +5876,7 @@ _Gérante - Espace Maxo_
                   <MonsieurTab 
                     currentUser={currentUser}
                     formatPrice={formatPrice}
+                    products={products}
                   />
                 </TabsContent>
               )}
