@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
   Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
+import { fr } from "date-fns/locale";
 
 const HebdoReport = ({ 
   weeklyReport, 
@@ -17,6 +18,50 @@ const HebdoReport = ({
   sendWeeklyWhatsApp, 
   formatPrice 
 }) => {
+  // Generate list of last 12 weeks (Lundi-Dimanche)
+  const weekOptions = useMemo(() => {
+    const weeks = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 12; i++) {
+      const weekStart = startOfWeek(subWeeks(today, i), { weekStartsOn: 1 }); // 1 = Monday
+      const weekEnd = addWeeks(weekStart, 1);
+      weekEnd.setDate(weekEnd.getDate() - 1); // Sunday
+      
+      const value = format(weekStart, "yyyy-MM-dd");
+      const label = `${format(weekStart, "dd MMM", { locale: fr })} - ${format(weekEnd, "dd MMM yyyy", { locale: fr })}`;
+      const isCurrentWeek = i === 0;
+      
+      weeks.push({ value, label, isCurrentWeek });
+    }
+    
+    return weeks;
+  }, []);
+
+  // Ensure weekStartDate is always a Monday
+  const handleWeekChange = (newDate) => {
+    const date = new Date(newDate);
+    const monday = startOfWeek(date, { weekStartsOn: 1 });
+    setWeekStartDate(format(monday, "yyyy-MM-dd"));
+  };
+
+  // Navigate to previous/next week
+  const navigateWeek = (direction) => {
+    const currentDate = new Date(weekStartDate);
+    const newDate = direction === 'prev' 
+      ? subWeeks(currentDate, 1) 
+      : addWeeks(currentDate, 1);
+    setWeekStartDate(format(newDate, "yyyy-MM-dd"));
+  };
+
+  // Get current week label for display
+  const getCurrentWeekLabel = () => {
+    const weekStart = new Date(weekStartDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    return `Lun ${format(weekStart, "dd/MM")} → Dim ${format(weekEnd, "dd/MM/yyyy")}`;
+  };
+
   return (
     <div className="space-y-4">
       {/* Header avec boutons d'action */}
@@ -29,29 +74,42 @@ const HebdoReport = ({
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => {
-              const newDate = new Date(weekStartDate);
-              newDate.setDate(newDate.getDate() - 7);
-              setWeekStartDate(format(newDate, "yyyy-MM-dd"));
-            }}
+            onClick={() => navigateWeek('prev')}
             className="border-slate-600 text-slate-300"
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Input
-            type="date"
-            value={weekStartDate}
-            onChange={(e) => setWeekStartDate(e.target.value)}
-            className="bg-slate-800/50 border-slate-700 text-white w-auto"
-          />
+          
+          {/* Week Selector Dropdown */}
+          <Select value={weekStartDate} onValueChange={handleWeekChange}>
+            <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-[220px]">
+              <Calendar className="w-4 h-4 mr-2 text-cyan-400" />
+              <SelectValue placeholder="Sélectionner une semaine">
+                {getCurrentWeekLabel()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700">
+              {weekOptions.map((week) => (
+                <SelectItem 
+                  key={week.value} 
+                  value={week.value}
+                  className="text-white hover:bg-slate-700 focus:bg-slate-700"
+                >
+                  <div className="flex items-center gap-2">
+                    {week.isCurrentWeek && (
+                      <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">Cette semaine</Badge>
+                    )}
+                    <span>{week.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => {
-              const newDate = new Date(weekStartDate);
-              newDate.setDate(newDate.getDate() + 7);
-              setWeekStartDate(format(newDate, "yyyy-MM-dd"));
-            }}
+            onClick={() => navigateWeek('next')}
             className="border-slate-600 text-slate-300"
           >
             <ChevronRight className="w-4 h-4" />
