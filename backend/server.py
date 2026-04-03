@@ -5067,6 +5067,7 @@ async def create_expense(expense: ExpenseCreate):
             "approved_by": None,
             "approved_at": None,
             "completed_at": None,
+            "assigned_week": expense.assigned_week if hasattr(expense, 'assigned_week') else None,  # Week assignment (YYYY-MM-DD of Monday)
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
@@ -5128,6 +5129,27 @@ async def delete_expense(expense_id: str):
         logger.error(f"Error deleting expense: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.put("/expenses/{expense_id}/assign-week")
+async def assign_expense_to_week(expense_id: str, week_start: str = Body(..., embed=True)):
+    """Assign an expense to a specific week (week_start should be Monday's date YYYY-MM-DD)"""
+    try:
+        expense = await db.expenses.find_one({"id": expense_id})
+        if not expense:
+            raise HTTPException(status_code=404, detail="Expense not found")
+        
+        await db.expenses.update_one(
+            {"id": expense_id},
+            {"$set": {"assigned_week": week_start}}
+        )
+        
+        updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        return {"success": True, "expense": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning expense to week: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== WEEKLY SUMMARY ENDPOINT ==============
 
 @api_router.get("/reports/weekly")
@@ -5154,13 +5176,14 @@ async def get_weekly_report(week_start: Optional[str] = None):
             "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
         }, {"_id": 0}).to_list(1000)
         
-        # Get ALL expenses for the week (completed for actual, approved for pending)
+        # Get ALL expenses for the week (completed, approved, or assigned to this week)
         all_expenses = await db.expenses.find({
             "$or": [
                 {"status": "completed", "completed_at": {"$gte": start_str, "$lte": end_str}},
                 {"status": "approved", "approved_at": {"$gte": start_str, "$lte": end_str}},
                 {"status": "pending", "created_at": {"$gte": start_str, "$lte": end_str}},
-                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}}
+                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}},
+                {"assigned_week": start_str}  # Expenses explicitly assigned to this week
             ]
         }, {"_id": 0}).to_list(500)
         
@@ -5200,16 +5223,19 @@ async def get_weekly_report(week_start: Optional[str] = None):
         expenses_by_status = {"completed": 0, "approved": 0, "pending": 0, "revision_requested": 0}
         
         for expense in all_expenses:
-            # Use completed_at, approved_at, or created_at depending on status
-            if expense.get("status") == "completed":
+            # Determine date: use assigned_week first, then status-based dates
+            if expense.get("assigned_week"):
+                # If assigned to a week, use the planned_date or first day of assigned week
+                date = expense.get("planned_date", expense.get("assigned_week"))[:10]
+            elif expense.get("status") == "completed":
                 date = (expense.get("completed_at") or expense.get("created_at", ""))[:10]
             elif expense.get("status") == "approved":
                 date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
             else:
                 date = expense.get("created_at", "")[:10]
             
-            # Only count completed expenses in totals
-            if expense.get("status") == "completed":
+            # Count completed AND approved expenses in totals (both are validated expenses)
+            if expense.get("status") in ["completed", "approved"]:
                 total_expenses += expense.get("amount", 0)
                 cat = expense.get("category", "autres")
                 expenses_by_category[cat] = expenses_by_category.get(cat, 0) + expense.get("amount", 0)
@@ -5220,7 +5246,8 @@ async def get_weekly_report(week_start: Optional[str] = None):
             
             if date in daily_data:
                 daily_data[date]["expenses"]["count"] += 1
-                daily_data[date]["expenses"]["total"] += expense.get("amount", 0) if expense.get("status") == "completed" else 0
+                # Count both completed and approved in daily totals
+                daily_data[date]["expenses"]["total"] += expense.get("amount", 0) if expense.get("status") in ["completed", "approved"] else 0
                 daily_data[date]["expenses"]["items"].append({
                     "id": expense.get("id"),
                     "description": expense.get("description"),
@@ -5228,7 +5255,8 @@ async def get_weekly_report(week_start: Optional[str] = None):
                     "category": expense.get("category"),
                     "status": expense.get("status"),
                     "is_group": expense.get("is_group", False),
-                    "items": expense.get("items")
+                    "items": expense.get("items"),
+                    "assigned_week": expense.get("assigned_week")
                 })
         
         # Calculate daily results

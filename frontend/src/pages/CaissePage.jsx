@@ -325,6 +325,10 @@ const CaissePage = () => {
   const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
   const [showAllExpenses, setShowAllExpenses] = useState(false);
+  
+  // Expense week assignment
+  const [showWeekAssignModal, setShowWeekAssignModal] = useState(false);
+  const [expenseToAssign, setExpenseToAssign] = useState(null);
 
   // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
@@ -960,6 +964,18 @@ const CaissePage = () => {
     } catch (error) {
       console.error("Error deleting expense:", error);
       toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // Assign an expense to a specific week
+  const assignExpenseToWeek = async (expenseId, weekStart) => {
+    try {
+      await axios.put(`${API}/expenses/${expenseId}/assign-week`, { week_start: weekStart });
+      toast.success("Dépense rattachée à la semaine");
+      fetchExpenses();
+    } catch (error) {
+      console.error("Error assigning expense to week:", error);
+      toast.error("Erreur lors du rattachement");
     }
   };
 
@@ -6152,7 +6168,7 @@ _Gérante - Espace Maxo_
                           <th className="p-2 text-right">P.U.</th>
                           <th className="p-2 text-right">Total</th>
                           <th className="p-2">Statut</th>
-                          <th className="p-2">Fournisseur</th>
+                          <th className="p-2">Semaine</th>
                           {currentUser?.role === 'admin' && <th className="p-2 text-center">Actions</th>}
                         </tr>
                       </thead>
@@ -6203,7 +6219,27 @@ _Gérante - Espace Maxo_
                                    expense.status === 'revision_requested' ? 'À réviser' : 'Refusée'}
                                 </Badge>
                               </td>
-                              <td className="p-2 text-slate-400 text-xs">{expense.supplier || '-'}</td>
+                              <td className="p-2">
+                                {expense.assigned_week ? (
+                                  <Badge className="text-xs bg-cyan-500/20 text-cyan-400">
+                                    {format(new Date(expense.assigned_week), "dd/MM")}
+                                  </Badge>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setExpenseToAssign(expense);
+                                      setShowWeekAssignModal(true);
+                                    }}
+                                    className="h-6 text-xs text-slate-500 hover:text-cyan-400 p-1"
+                                  >
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    Rattacher
+                                  </Button>
+                                )}
+                              </td>
                               {currentUser?.role === 'admin' && (
                                 <td className="p-2 text-center">
                                   <Button 
@@ -6574,6 +6610,19 @@ _Gérante - Espace Maxo_
                               <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
                             </div>
                             <div className="flex gap-2 flex-wrap shrink-0">
+                              {/* Week assignment button */}
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setExpenseToAssign(expense);
+                                  setShowWeekAssignModal(true);
+                                }}
+                                className={`border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20 ${expense.assigned_week ? 'bg-cyan-500/20' : ''}`}
+                              >
+                                <Calendar className="w-4 h-4 mr-1" />
+                                {expense.assigned_week ? format(new Date(expense.assigned_week), "dd/MM") : 'Semaine'}
+                              </Button>
                               <Button 
                                 size="sm"
                                 variant="outline"
@@ -7800,6 +7849,84 @@ _Gérante - Espace Maxo_
               Fermer
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Week Assignment Modal for Expenses */}
+      <Dialog open={showWeekAssignModal} onOpenChange={(open) => {
+        setShowWeekAssignModal(open);
+        if (!open) setExpenseToAssign(null);
+      }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-cyan-400">
+              <Calendar className="w-5 h-5" />
+              Rattacher à une semaine
+            </DialogTitle>
+          </DialogHeader>
+          {expenseToAssign && (
+            <div className="space-y-4 py-4">
+              <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+                <p className="text-slate-400 text-sm">Dépense sélectionnée:</p>
+                <p className="text-white font-medium">{expenseToAssign.description}</p>
+                <p className="text-amber-400 font-bold">{formatPrice(expenseToAssign.amount)} F</p>
+              </div>
+              
+              <div>
+                <Label className="text-slate-400 text-sm mb-2 block">Sélectionner la semaine</Label>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {/* Generate last 8 weeks */}
+                  {Array.from({ length: 8 }, (_, i) => {
+                    const weekStart = new Date();
+                    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1 - (i * 7)); // Monday
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+                    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+                    const isCurrentWeek = i === 0;
+                    const isSelected = expenseToAssign.assigned_week === weekStartStr;
+                    
+                    return (
+                      <Button
+                        key={weekStartStr}
+                        variant={isSelected ? "default" : "outline"}
+                        className={`w-full justify-start ${
+                          isSelected 
+                            ? 'bg-cyan-600 text-white' 
+                            : 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                        }`}
+                        onClick={async () => {
+                          await assignExpenseToWeek(expenseToAssign.id, weekStartStr);
+                          setShowWeekAssignModal(false);
+                          setExpenseToAssign(null);
+                        }}
+                      >
+                        <Calendar className="w-4 h-4 mr-2" />
+                        {format(weekStart, "dd/MM")} - {format(weekEnd, "dd/MM/yyyy")}
+                        {isCurrentWeek && (
+                          <Badge className="ml-2 bg-cyan-500/30 text-cyan-300 text-xs">Cette semaine</Badge>
+                        )}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              {expenseToAssign.assigned_week && (
+                <Button
+                  variant="outline"
+                  className="w-full border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  onClick={async () => {
+                    await assignExpenseToWeek(expenseToAssign.id, null);
+                    setShowWeekAssignModal(false);
+                    setExpenseToAssign(null);
+                  }}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Retirer le rattachement
+                </Button>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
