@@ -2165,7 +2165,7 @@ _Gérante - Espace Maxo_
 
   const createInvoice = async (invoiceData) => {
     try {
-      await axios.post(`${API}/invoices`, invoiceData);
+      const response = await axios.post(`${API}/invoices`, invoiceData);
       
       // Update client stats if selected
       if (selectedClient) {
@@ -2175,7 +2175,9 @@ _Gérante - Espace Maxo_
         });
       }
       
-      toast.success("Bon de commande envoyé à la cuisine !");
+      toast.success("✓ Commande envoyée avec succès ! En attente de validation par la gérante.", {
+        duration: 4000
+      });
       
       // Mark the table as having an invoice but DON'T delete it (keep tracking)
       if (activeTableId) {
@@ -2195,9 +2197,21 @@ _Gérante - Espace Maxo_
         clearBill();
       }
       
-      fetchAllData();
-      fetchOpenTables();
+      // Clear other order-related states
+      setSelectedClient(null);
+      setDiscount(0);
+      setNotes("");
+      
+      // Refresh data immediately to update invoice lists
+      await fetchAllData();
+      await fetchOpenTables();
       setPendingInvoiceData(null);
+      
+      // For servers, switch to BONS tab to show them their pending invoice
+      if (currentUser?.role === 'server') {
+        setActiveTab('bons');
+      }
+      
     } catch (error) {
       console.error("Error saving invoice:", error);
       toast.error("Erreur lors de l'enregistrement");
@@ -4473,10 +4487,12 @@ _Gérante - Espace Maxo_
                           {/* Actions */}
                           <div className="pt-2">
                             <Button onClick={saveInvoice} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold py-6 text-lg">
-                              <FileText className="w-5 h-5 mr-2" />
-                              CRÉER FACTURE
+                              <Send className="w-5 h-5 mr-2" />
+                              ENVOYER LA COMMANDE
                             </Button>
-                            <p className="text-slate-500 text-xs text-center mt-2">Le bon sera envoyé à la gérante pour validation</p>
+                            <p className="text-slate-500 text-xs text-center mt-2">
+                              La commande sera envoyée à la gérante pour validation
+                            </p>
                           </div>
                         </div>
                       </>
