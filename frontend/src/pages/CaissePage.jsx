@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
   Receipt, Plus, Minus, Trash2, Printer, Save, Search,
-  Gamepad2, Wine, TreePine, Calculator, Clock, User,
+  Gamepad2, Wine, TreePine, Calculator, Clock, User, UserCircle,
   CreditCard, Wallet, CheckCircle, X, Eye, Download,
   BarChart3, TrendingUp, Calendar, Filter, Users, Package,
   Edit2, Settings, LogOut, FileText, ChevronLeft, ChevronRight,
@@ -33,6 +33,7 @@ import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
 import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
 import ShareModal, { ShareButton } from "./caisse/components/ShareModal";
+import MonsieurTab from "./caisse/components/MonsieurTab";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -4577,6 +4578,34 @@ _Gérante - Espace Maxo_
 
           {/* ==================== BONS DE COMMANDE TAB ==================== */}
           <TabsContent value="bons">
+            {/* Sub-tabs for Factures and Monsieur */}
+            <Tabs defaultValue="factures" className="w-full">
+              <TabsList className="bg-slate-800/50 border-b border-slate-700 w-full justify-start mb-4">
+                <TabsTrigger 
+                  value="factures" 
+                  className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Factures
+                  {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
+                    <Badge className="ml-1 bg-orange-600 text-white text-xs">
+                      {invoices.filter(i => i.validation_status === 'pending').length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                {currentUser?.role === 'manager' && (
+                  <TabsTrigger 
+                    value="monsieur" 
+                    className="data-[state=active]:bg-purple-500 data-[state=active]:text-white"
+                  >
+                    <UserCircle className="w-4 h-4 mr-2" />
+                    Monsieur
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              {/* Factures Sub-tab */}
+              <TabsContent value="factures">
             <div className="space-y-4">
               {/* Header with date filter */}
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -5810,6 +5839,18 @@ _Gérante - Espace Maxo_
                 </div>
               )}
             </div>
+              </TabsContent>
+
+              {/* Monsieur Sub-tab - Manager only */}
+              {currentUser?.role === 'manager' && (
+                <TabsContent value="monsieur">
+                  <MonsieurTab 
+                    currentUser={currentUser}
+                    formatPrice={formatPrice}
+                  />
+                </TabsContent>
+              )}
+            </Tabs>
           </TabsContent>
 
           {/* ==================== SERVER DAILY REPORT TAB ==================== */}

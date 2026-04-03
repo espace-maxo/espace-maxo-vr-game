@@ -5150,6 +5150,137 @@ async def assign_expense_to_week(expense_id: str, week_start: str = Body(..., em
         logger.error(f"Error assigning expense to week: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== MONSIEUR PURCHASES (Owner's unpaid invoices) ==============
+
+@api_router.get("/monsieur-purchases")
+async def get_monsieur_purchases():
+    """Get all owner purchases tracked by manager"""
+    try:
+        purchases = await db.monsieur_purchases.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        
+        # Calculate totals
+        total_unpaid = sum(p.get("amount", 0) for p in purchases if p.get("status") == "non_regle")
+        total_paid = sum(p.get("amount", 0) for p in purchases if p.get("status") == "regle")
+        
+        return {
+            "purchases": purchases,
+            "stats": {
+                "total_unpaid": total_unpaid,
+                "total_paid": total_paid,
+                "total": total_unpaid + total_paid,
+                "count_unpaid": len([p for p in purchases if p.get("status") == "non_regle"]),
+                "count_paid": len([p for p in purchases if p.get("status") == "regle"])
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching monsieur purchases: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/monsieur-purchases")
+async def create_monsieur_purchase(
+    description: str = Body(...),
+    amount: float = Body(...),
+    supplier: str = Body(None),
+    invoice_number: str = Body(None),
+    invoice_date: str = Body(None),
+    notes: str = Body(None),
+    created_by: str = Body(...)
+):
+    """Create a new owner purchase record"""
+    try:
+        purchase = {
+            "id": str(uuid.uuid4()),
+            "description": description,
+            "amount": amount,
+            "supplier": supplier,
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date,
+            "notes": notes,
+            "status": "non_regle",  # non_regle or regle
+            "created_by": created_by,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "paid_at": None,
+            "paid_by": None
+        }
+        
+        await db.monsieur_purchases.insert_one(purchase)
+        if "_id" in purchase:
+            del purchase["_id"]
+        
+        return {"success": True, "purchase": purchase}
+    except Exception as e:
+        logger.error(f"Error creating monsieur purchase: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/monsieur-purchases/{purchase_id}")
+async def update_monsieur_purchase(
+    purchase_id: str,
+    description: str = Body(None),
+    amount: float = Body(None),
+    supplier: str = Body(None),
+    invoice_number: str = Body(None),
+    invoice_date: str = Body(None),
+    notes: str = Body(None),
+    status: str = Body(None),
+    paid_by: str = Body(None)
+):
+    """Update an owner purchase record"""
+    try:
+        purchase = await db.monsieur_purchases.find_one({"id": purchase_id})
+        if not purchase:
+            raise HTTPException(status_code=404, detail="Purchase not found")
+        
+        update_data = {}
+        if description is not None:
+            update_data["description"] = description
+        if amount is not None:
+            update_data["amount"] = amount
+        if supplier is not None:
+            update_data["supplier"] = supplier
+        if invoice_number is not None:
+            update_data["invoice_number"] = invoice_number
+        if invoice_date is not None:
+            update_data["invoice_date"] = invoice_date
+        if notes is not None:
+            update_data["notes"] = notes
+        if status is not None:
+            update_data["status"] = status
+            if status == "regle":
+                update_data["paid_at"] = datetime.now(timezone.utc).isoformat()
+                update_data["paid_by"] = paid_by
+            elif status == "non_regle":
+                update_data["paid_at"] = None
+                update_data["paid_by"] = None
+        
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.monsieur_purchases.update_one(
+            {"id": purchase_id},
+            {"$set": update_data}
+        )
+        
+        updated = await db.monsieur_purchases.find_one({"id": purchase_id}, {"_id": 0})
+        return {"success": True, "purchase": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating monsieur purchase: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/monsieur-purchases/{purchase_id}")
+async def delete_monsieur_purchase(purchase_id: str):
+    """Delete an owner purchase record"""
+    try:
+        result = await db.monsieur_purchases.delete_one({"id": purchase_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Purchase not found")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting monsieur purchase: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== WEEKLY SUMMARY ENDPOINT ==============
 
 @api_router.get("/reports/weekly")
