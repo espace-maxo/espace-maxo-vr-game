@@ -291,6 +291,9 @@ const CaissePage = () => {
   // ============== SHARE MODAL ==============
   const [showShareModal, setShowShareModal] = useState(false);
   
+  // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
+  const [unreadNotesCount, setUnreadNotesCount] = useState(0);
+  
   // Detailed view of a server's point (for Manager)
   const [viewingServerReport, setViewingServerReport] = useState(null);
   const [viewingServerDetailedReport, setViewingServerDetailedReport] = useState(null);
@@ -848,6 +851,47 @@ const CaissePage = () => {
       console.error("Error marking all notifications as read:", error);
     }
   };
+
+  // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
+  
+  const fetchUnreadNotesCount = async () => {
+    if (!currentUser?.role) return;
+    try {
+      const res = await axios.get(`${API}/instructions/unread-count`, {
+        params: { reader_role: currentUser.role }
+      });
+      const newCount = res.data.unread_count || 0;
+      
+      // Play sound if new notes arrived
+      if (newCount > unreadNotesCount && unreadNotesCount > 0) {
+        playNotificationSound();
+        toast.info(`${newCount - unreadNotesCount} nouvelle(s) note(s) reçue(s)`);
+      }
+      
+      setUnreadNotesCount(newCount);
+    } catch (error) {
+      console.error("Error fetching unread notes count:", error);
+    }
+  };
+
+  const markAllNotesRead = async () => {
+    if (!currentUser?.role) return;
+    try {
+      await axios.put(`${API}/instructions/mark-all-read`, { reader_role: currentUser.role });
+      setUnreadNotesCount(0);
+    } catch (error) {
+      console.error("Error marking all notes as read:", error);
+    }
+  };
+
+  // Fetch unread notes count periodically for manager/admin
+  useEffect(() => {
+    if (isAuthenticated && (currentUser?.role === 'manager' || currentUser?.role === 'admin')) {
+      fetchUnreadNotesCount();
+      const interval = setInterval(fetchUnreadNotesCount, 15000); // Check every 15 seconds
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, currentUser?.role]);
 
   // ============== SERVER DAILY REPORT FUNCTIONS ==============
   
@@ -3682,8 +3726,22 @@ _Gérante - Espace Maxo_
             )}
             {/* Instructions & Notes - Manager & Admin */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+              <TabsTrigger 
+                value="instructions" 
+                className="data-[state=active]:bg-teal-600 data-[state=active]:text-white"
+                onClick={() => {
+                  // Mark all notes as read when opening the tab
+                  if (unreadNotesCount > 0) {
+                    markAllNotesRead();
+                  }
+                }}
+              >
                 <MessageSquare className="w-4 h-4 mr-2" />Notes
+                {unreadNotesCount > 0 && (
+                  <Badge className="ml-1 bg-red-500 text-white text-xs animate-pulse">
+                    {unreadNotesCount > 9 ? '9+' : unreadNotesCount}
+                  </Badge>
+                )}
               </TabsTrigger>
             )}
             {/* Abonnements & Factures Récurrentes - Manager & Admin */}
@@ -6678,6 +6736,7 @@ _Gérante - Espace Maxo_
             <InstructionsTab 
               currentUser={currentUser}
               formatPrice={formatPrice}
+              onNotesRead={() => setUnreadNotesCount(0)}
             />
           </TabsContent>
           )}

@@ -5896,7 +5896,8 @@ async def delete_location(location_id: str):
 async def get_instructions(
     is_archived: Optional[bool] = None,
     sender_role: Optional[str] = None,
-    priority: Optional[str] = None
+    priority: Optional[str] = None,
+    reader_role: Optional[str] = None
 ):
     """Get all instructions/notes"""
     try:
@@ -5909,9 +5910,89 @@ async def get_instructions(
             query["priority"] = priority
         
         instructions = await db.instructions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-        return {"instructions": instructions}
+        
+        # Calculate unread count for the requesting role
+        unread_count = 0
+        for inst in instructions:
+            read_by = inst.get("read_by", [])
+            # A note is unread for a role if:
+            # - The role didn't create it (sender_role != reader_role)
+            # - The role hasn't read it yet (not in read_by)
+            if reader_role and inst.get("sender_role") != reader_role and reader_role not in read_by:
+                unread_count += 1
+        
+        return {"instructions": instructions, "unread_count": unread_count}
     except Exception as e:
         logger.error(f"Error fetching instructions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/instructions/unread-count")
+async def get_instructions_unread_count(reader_role: str):
+    """Get count of unread instructions for a specific role"""
+    try:
+        # Get all non-archived instructions
+        instructions = await db.instructions.find(
+            {"is_archived": {"$ne": True}}, 
+            {"_id": 0, "sender_role": 1, "read_by": 1}
+        ).to_list(500)
+        
+        unread_count = 0
+        for inst in instructions:
+            read_by = inst.get("read_by", [])
+            # Count as unread if: sender is different role AND current role hasn't read it
+            if inst.get("sender_role") != reader_role and reader_role not in read_by:
+                unread_count += 1
+        
+        return {"unread_count": unread_count}
+    except Exception as e:
+        logger.error(f"Error getting unread count: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/instructions/{instruction_id}/mark-read")
+async def mark_instruction_read(instruction_id: str, reader_role: str = Body(..., embed=True)):
+    """Mark an instruction as read by a specific role"""
+    try:
+        instruction = await db.instructions.find_one({"id": instruction_id})
+        if not instruction:
+            raise HTTPException(status_code=404, detail="Instruction not found")
+        
+        read_by = instruction.get("read_by", [])
+        if reader_role not in read_by:
+            read_by.append(reader_role)
+            await db.instructions.update_one(
+                {"id": instruction_id},
+                {"$set": {"read_by": read_by}}
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error marking instruction as read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/instructions/mark-all-read")
+async def mark_all_instructions_read(reader_role: str = Body(..., embed=True)):
+    """Mark all instructions as read by a specific role"""
+    try:
+        # Find all instructions not created by this role that aren't marked as read by them
+        instructions = await db.instructions.find(
+            {"sender_role": {"$ne": reader_role}},
+            {"_id": 0, "id": 1, "read_by": 1}
+        ).to_list(500)
+        
+        for inst in instructions:
+            read_by = inst.get("read_by", [])
+            if reader_role not in read_by:
+                read_by.append(reader_role)
+                await db.instructions.update_one(
+                    {"id": inst["id"]},
+                    {"$set": {"read_by": read_by}}
+                )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error marking all instructions as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/instructions")
@@ -5921,6 +6002,7 @@ async def create_instruction(instruction: InstructionCreate):
         instruction_dict = instruction.model_dump()
         instruction_dict["id"] = str(uuid.uuid4())
         instruction_dict["is_read"] = False
+        instruction_dict["read_by"] = []  # Track which roles have read this
         instruction_dict["is_archived"] = False
         instruction_dict["created_at"] = datetime.now(timezone.utc).isoformat()
         instruction_dict["updated_at"] = datetime.now(timezone.utc).isoformat()

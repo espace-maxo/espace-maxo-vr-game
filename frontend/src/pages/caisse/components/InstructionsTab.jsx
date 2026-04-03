@@ -26,7 +26,7 @@ const PRIORITY_CONFIG = {
   urgent: { label: "Urgente", color: "text-red-400", bgColor: "bg-red-500/20 animate-pulse" }
 };
 
-const InstructionsTab = ({ currentUser, formatPrice }) => {
+const InstructionsTab = ({ currentUser, formatPrice, onNotesRead }) => {
   const [instructions, setInstructions] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingInstruction, setEditingInstruction] = useState(null);
@@ -50,16 +50,39 @@ const InstructionsTab = ({ currentUser, formatPrice }) => {
     fetchInstructions();
   }, [showArchived]);
 
+  // Mark all notes as read when component mounts
+  useEffect(() => {
+    const markAllAsRead = async () => {
+      if (currentUser?.role) {
+        try {
+          await axios.put(`${API}/instructions/mark-all-read`, { reader_role: currentUser.role });
+          if (onNotesRead) onNotesRead();
+        } catch (e) {
+          console.error("Error marking notes as read:", e);
+        }
+      }
+    };
+    markAllAsRead();
+  }, [currentUser?.role]);
+
   const fetchInstructions = async () => {
     try {
       const res = await axios.get(`${API}/instructions`, {
-        params: { is_archived: showArchived }
+        params: { is_archived: showArchived, reader_role: currentUser?.role }
       });
       setInstructions(res.data.instructions || []);
     } catch (error) {
       console.error("Error fetching instructions:", error);
       toast.error("Erreur lors du chargement des notes");
     }
+  };
+
+  // Check if an instruction is unread for current user
+  const isUnread = (instruction) => {
+    if (!currentUser?.role) return false;
+    if (instruction.sender_role === currentUser.role) return false; // Own notes are always "read"
+    const readBy = instruction.read_by || [];
+    return !readBy.includes(currentUser.role);
   };
 
   const handleSubmit = async () => {
