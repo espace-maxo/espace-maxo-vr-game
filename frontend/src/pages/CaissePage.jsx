@@ -4608,10 +4608,10 @@ _Gérante - Espace Maxo_
           {/* ==================== BONS DE COMMANDE TAB ==================== */}
           <TabsContent value="bons">
             {/* Sub-tabs for Factures and Monsieur */}
-            <Tabs defaultValue="factures" className="w-full">
+            <Tabs defaultValue="bons-factures" className="w-full">
               <TabsList className="bg-slate-800/50 border-b border-slate-700 w-full justify-start mb-4">
                 <TabsTrigger 
-                  value="factures" 
+                  value="bons-factures" 
                   className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
                 >
                   <Printer className="w-4 h-4 mr-2" />
@@ -4624,7 +4624,7 @@ _Gérante - Espace Maxo_
                 </TabsTrigger>
                 {currentUser?.role === 'manager' && (
                   <TabsTrigger 
-                    value="monsieur" 
+                    value="bons-monsieur" 
                     className="data-[state=active]:bg-purple-500 data-[state=active]:text-white"
                   >
                     <UserCircle className="w-4 h-4 mr-2" />
@@ -4634,7 +4634,7 @@ _Gérante - Espace Maxo_
               </TabsList>
 
               {/* Factures Sub-tab */}
-              <TabsContent value="factures">
+              <TabsContent value="bons-factures">
             <div className="space-y-4">
               {/* Header with date filter */}
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -4869,6 +4869,19 @@ _Gérante - Espace Maxo_
                 </div>
               )}
             </div>
+              </TabsContent>
+
+              {/* Monsieur Sub-tab - Manager only */}
+              {currentUser?.role === 'manager' && (
+                <TabsContent value="bons-monsieur">
+                  <MonsieurTab 
+                    currentUser={currentUser}
+                    formatPrice={formatPrice}
+                    products={products}
+                  />
+                </TabsContent>
+              )}
+            </Tabs>
           </TabsContent>
 
           {/* ==================== INVOICES TAB ==================== */}
@@ -5868,19 +5881,6 @@ _Gérante - Espace Maxo_
                 </div>
               )}
             </div>
-              </TabsContent>
-
-              {/* Monsieur Sub-tab - Manager only */}
-              {currentUser?.role === 'manager' && (
-                <TabsContent value="monsieur">
-                  <MonsieurTab 
-                    currentUser={currentUser}
-                    formatPrice={formatPrice}
-                    products={products}
-                  />
-                </TabsContent>
-              )}
-            </Tabs>
           </TabsContent>
 
           {/* ==================== SERVER DAILY REPORT TAB ==================== */}
@@ -7077,9 +7077,7 @@ _Gérante - Espace Maxo_
             </div>
           </TabsContent>
           )}
-
         </Tabs>
-        )}
       </div>
 
       {/* ==================== MODALS ==================== */}
