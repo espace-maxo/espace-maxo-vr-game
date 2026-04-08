@@ -85,6 +85,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
   const canManageLocations = isAdmin || isManager; // Both can create/edit/delete
+  const canGenerateLocationInvoices = isManager; // Only manager can generate invoices for locations
 
   // Calculate total price based on selected spaces
   const calculateTotalPrice = (selectedSpaces) => {
@@ -896,6 +897,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                         >
                           <FileText className="w-4 h-4" />
                         </Button>
+                        {canGenerateLocationInvoices && (
                         <Button 
                           size="sm" 
                           variant="ghost" 
@@ -905,6 +907,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                         >
                           <Receipt className="w-4 h-4" />
                         </Button>
+                        )}
                         {canManageLocations && (
                           <>
                             <Button 
@@ -1214,7 +1217,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
               )}
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid ${canGenerateLocationInvoices ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                 {/* Print Contract Button */}
                 <Button
                   onClick={() => generateContract(viewingLocation)}
@@ -1224,7 +1227,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                   Contrat
                 </Button>
 
-                {/* Generate Invoice Button */}
+                {/* Generate Invoice Button - Manager only */}
+                {canGenerateLocationInvoices && (
                 <Button
                   onClick={() => openInvoiceChoice(viewingLocation)}
                   className="bg-amber-600 hover:bg-amber-700"
@@ -1232,6 +1236,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                   <Receipt className="w-4 h-4 mr-2" />
                   Facture
                 </Button>
+                )}
               </div>
 
               {/* Manager/Admin Actions */}

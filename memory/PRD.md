@@ -3,6 +3,21 @@
 ## Problem Statement
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
+---
+## Recent Updates (08/04/2026)
+
+### Bug Fix Critique - Interface Réparée
+- **Problème**: Erreur JSX "Adjacent JSX elements must be wrapped" qui rendait les onglets (Factures → Historique) invisibles
+- **Cause**: Structure `<Tabs>` mal fermée suite à l'ajout des sous-onglets "Monsieur"
+- **Solution**: Ajout du `)}` manquant pour fermer correctement le bloc ternaire principal du composant
+
+### Restriction Factures Location - Gérante Uniquement
+- **Nouvelle règle métier**: Seule la gérante (manager) peut générer des factures pour les locations
+- L'admin peut toujours gérer les locations (créer, modifier, supprimer) mais ne peut PAS générer de factures
+- Les boutons "Facture" dans l'onglet Locations ne sont visibles que pour le rôle "manager"
+
+---
+
 ## What's Been Implemented
 
 ### Phase 16 - Logiciel Caisse Pro (Mars 2026)

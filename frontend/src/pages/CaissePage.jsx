@@ -7078,6 +7078,7 @@ _Gérante - Espace Maxo_
           </TabsContent>
           )}
         </Tabs>
+        )}
       </div>
 
       {/* ==================== MODALS ==================== */}
