@@ -4,6 +4,21 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (11/04/2026)
+
+### Rapport Hebdomadaire - Recettes Locations Intégrées
+- Ajout d'une nouvelle carte "Locations" (violette) dans le résumé du rapport hebdomadaire
+- Ajout d'une carte "Total Recettes" (cyan) qui combine ventes + locations
+- Nouvelle colonne "Locations" dans le tableau jour par jour
+- Section détaillée "Locations par Espace" avec liste des réservations de la semaine
+- Le bénéfice/résultat inclut désormais les recettes des locations
+
+### Restriction Factures Location - Gérante Uniquement (Confirmée)
+- Seule la gérante (manager) peut générer des factures pour les locations
+- L'admin peut toujours gérer les locations (créer, modifier, supprimer) mais ne voit pas le bouton "Facture"
+- Variable `canGenerateLocationInvoices` ajoutée dans `LocationsTab.jsx`
+
+---
 ## Recent Updates (08/04/2026)
 
 ### Bug Fix Critique - Interface Réparée

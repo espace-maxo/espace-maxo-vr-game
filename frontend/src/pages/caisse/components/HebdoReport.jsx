@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
-  Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer
+  Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2
 } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -145,12 +145,19 @@ const HebdoReport = ({
           </div>
 
           {/* Résumé en cartes */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
             <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
               <CardContent className="p-4 text-center">
                 <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</p>
                 <p className="text-xs text-slate-400">{weeklyReport.sales?.count || 0} ventes</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-purple-900/30 to-violet-900/20 border-purple-500/50">
+              <CardContent className="p-4 text-center">
+                <Building2 className="w-6 h-6 text-purple-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-purple-400">{formatPrice(weeklyReport.locations?.total || 0)} F</p>
+                <p className="text-xs text-slate-400">{weeklyReport.locations?.count || 0} locations</p>
               </CardContent>
             </Card>
             <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
@@ -169,11 +176,11 @@ const HebdoReport = ({
                 <p className="text-xs text-slate-400">{weeklyReport.is_profitable ? 'Bénéfice' : 'Perte'}</p>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
+            <Card className="bg-gradient-to-br from-cyan-900/30 to-blue-900/20 border-cyan-500/50">
               <CardContent className="p-4 text-center">
-                <Clock className="w-6 h-6 text-amber-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-amber-400">{weeklyReport.expenses?.all_count || 0}</p>
-                <p className="text-xs text-slate-400">Demandes totales</p>
+                <TrendingUp className="w-6 h-6 text-cyan-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-cyan-400">{formatPrice(weeklyReport.total_income || (weeklyReport.sales?.total || 0) + (weeklyReport.locations?.total || 0))} F</p>
+                <p className="text-xs text-slate-400">Total Recettes</p>
               </CardContent>
             </Card>
           </div>
@@ -193,10 +200,10 @@ const HebdoReport = ({
                     <tr className="text-left text-slate-400 border-b border-slate-700">
                       <th className="p-3">Jour</th>
                       <th className="p-3">Date</th>
-                      <th className="p-3 text-right text-green-400">Recettes</th>
+                      <th className="p-3 text-right text-green-400">Ventes</th>
+                      <th className="p-3 text-right text-purple-400">Locations</th>
                       <th className="p-3 text-right text-red-400">Dépenses</th>
                       <th className="p-3 text-right">Résultat</th>
-                      <th className="p-3 text-center">Détails Achats</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -209,37 +216,15 @@ const HebdoReport = ({
                           <span className="text-slate-500 text-xs ml-1">({data.sales?.count || 0})</span>
                         </td>
                         <td className="p-3 text-right">
+                          <span className="text-purple-400 font-bold">{formatPrice(data.locations?.total || 0)} F</span>
+                          <span className="text-slate-500 text-xs ml-1">({data.locations?.count || 0})</span>
+                        </td>
+                        <td className="p-3 text-right">
                           <span className="text-red-400 font-bold">{formatPrice(data.expenses?.total || 0)} F</span>
                           <span className="text-slate-500 text-xs ml-1">({data.expenses?.count || 0})</span>
                         </td>
                         <td className={`p-3 text-right font-bold ${data.result >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {data.result >= 0 ? '+' : ''}{formatPrice(data.result)} F
-                        </td>
-                        <td className="p-3">
-                          {data.expenses?.items?.length > 0 ? (
-                            <div className="space-y-1 max-h-24 overflow-y-auto">
-                              {data.expenses.items.map((exp, idx) => (
-                                <div key={idx} className="text-xs flex justify-between items-center bg-slate-700/30 rounded px-2 py-1">
-                                  <span className="text-slate-300 truncate max-w-[150px]" title={exp.description}>
-                                    {exp.is_group ? '📦 ' : ''}{exp.description}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <Badge className={`text-xs ${
-                                      exp.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                                      exp.status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
-                                      exp.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                                      'bg-orange-500/20 text-orange-400'
-                                    }`}>
-                                      {exp.status === 'completed' ? '✓' : exp.status === 'approved' ? '→' : exp.status === 'pending' ? '?' : '↻'}
-                                    </Badge>
-                                    <span className="text-slate-400">{formatPrice(exp.amount)} F</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-slate-600 text-xs">-</span>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -248,11 +233,11 @@ const HebdoReport = ({
                     <tr className="bg-slate-900/50 font-bold">
                       <td colSpan="2" className="p-3 text-white">TOTAL SEMAINE</td>
                       <td className="p-3 text-right text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</td>
+                      <td className="p-3 text-right text-purple-400">{formatPrice(weeklyReport.locations?.total || 0)} F</td>
                       <td className="p-3 text-right text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</td>
                       <td className={`p-3 text-right ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
                       </td>
-                      <td className="p-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -278,6 +263,52 @@ const HebdoReport = ({
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Locations par Espace */}
+          {weeklyReport.locations?.by_space && Object.keys(weeklyReport.locations.by_space).length > 0 && (
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-purple-400 flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Locations par Espace
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(weeklyReport.locations.by_space).map(([space, amount]) => (
+                    <div key={space} className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 text-center">
+                      <p className="text-purple-300 text-sm">{space}</p>
+                      <p className="text-purple-400 font-bold text-lg">{formatPrice(amount)} F</p>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Liste détaillée des locations */}
+                {weeklyReport.locations?.details?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-slate-400 text-sm mb-2">Détail des locations :</p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {weeklyReport.locations.details.map((loc, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded-lg px-3 py-2">
+                          <div>
+                            <span className="text-white font-medium">{loc.customer_name}</span>
+                            <span className="text-slate-400 text-sm ml-2">({loc.space_type})</span>
+                            {loc.event_type && (
+                              <Badge className="ml-2 bg-slate-600/50 text-slate-300 text-xs">{loc.event_type}</Badge>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-purple-400 font-bold">{formatPrice(loc.rental_amount)} F</p>
+                            <p className="text-slate-500 text-xs">{loc.reservation_date}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

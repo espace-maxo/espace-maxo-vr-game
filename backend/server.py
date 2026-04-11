@@ -5568,6 +5568,85 @@ async def get_weekly_report(week_start: Optional[str] = None):
             else:
                 daily_data[date]["service"] = {"count": 0, "avg_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
         
+        # ============== LOCATIONS (RENTALS) INCOME ==============
+        # Get confirmed/completed locations for the week based on reservation_date
+        locations = await db.location_reservations.find({
+            "status": {"$in": ["confirmed", "completed"]},
+            "reservation_date": {"$gte": start_str, "$lte": end_str[:10]}
+        }, {"_id": 0}).to_list(500)
+        
+        # Calculate total locations income
+        total_locations_income = 0
+        locations_count = 0
+        locations_by_space = {}
+        locations_details = []
+        
+        # Initialize locations in daily data
+        for date in daily_data:
+            daily_data[date]["locations"] = {"count": 0, "total": 0, "items": []}
+        
+        for loc in locations:
+            rental_amount = loc.get("rental_amount", 0)
+            deposit_paid = loc.get("deposit_paid", 0)
+            # Count the deposit paid as the income received
+            income = deposit_paid if deposit_paid > 0 else rental_amount
+            
+            total_locations_income += rental_amount
+            locations_count += 1
+            
+            # Track by space type
+            space_type = loc.get("space_type", "autre")
+            # Handle combined spaces
+            if "+" in space_type:
+                space_label = "Pack combiné"
+            else:
+                space_labels = {
+                    "salle_fete": "Salle de Fête",
+                    "espace_jardin": "Espace Jardin", 
+                    "salle_jeux": "Salle de Jeux"
+                }
+                space_label = space_labels.get(space_type, space_type)
+            
+            locations_by_space[space_label] = locations_by_space.get(space_label, 0) + rental_amount
+            
+            # Add to daily data
+            res_date = loc.get("reservation_date", "")[:10]
+            if res_date in daily_data:
+                daily_data[res_date]["locations"]["count"] += 1
+                daily_data[res_date]["locations"]["total"] += rental_amount
+                daily_data[res_date]["locations"]["items"].append({
+                    "id": loc.get("id"),
+                    "customer_name": loc.get("customer_name"),
+                    "space_type": space_label,
+                    "rental_amount": rental_amount,
+                    "deposit_paid": deposit_paid,
+                    "event_type": loc.get("event_type")
+                })
+            
+            locations_details.append({
+                "id": loc.get("id"),
+                "customer_name": loc.get("customer_name"),
+                "space_type": space_label,
+                "reservation_date": loc.get("reservation_date"),
+                "rental_amount": rental_amount,
+                "deposit_paid": deposit_paid,
+                "event_type": loc.get("event_type"),
+                "status": loc.get("status")
+            })
+        
+        # Recalculate daily results including locations
+        for date in daily_data:
+            locations_income = daily_data[date]["locations"]["total"]
+            daily_data[date]["result"] = (
+                daily_data[date]["sales"]["total"] + 
+                locations_income - 
+                daily_data[date]["expenses"]["total"]
+            )
+        
+        # Recalculate total result including locations
+        total_income = total_sales + total_locations_income
+        result = total_income - total_expenses
+        
         return {
             "week_start": start_str,
             "week_end": end_str[:10],
@@ -5575,6 +5654,12 @@ async def get_weekly_report(week_start: Optional[str] = None):
             "sales": {
                 "total": total_sales,
                 "count": len(invoices),
+            },
+            "locations": {
+                "total": total_locations_income,
+                "count": locations_count,
+                "by_space": locations_by_space,
+                "details": locations_details
             },
             "expenses": {
                 "total": total_expenses,
@@ -5585,6 +5670,7 @@ async def get_weekly_report(week_start: Optional[str] = None):
             },
             "daily": daily_data,
             "service_quality": service_stats,
+            "total_income": total_income,
             "result": result,
             "is_profitable": result >= 0
         }
