@@ -6,6 +6,13 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (12/04/2026)
 
+### Suivi des Tables - Arrêt Automatique Amélioré
+- **Arrêt automatique** : Les tables sont maintenant automatiquement libérées lorsque leur facture est validée par la gérante
+- Le numéro de table est maintenant stocké dans chaque facture pour permettre le suivi
+- Les statistiques de qualité de service sont enregistrées automatiquement (durée, qualité: excellent/acceptable/lent)
+- **Arrêt manuel** : Le bouton "Arrêter" reste disponible dans l'onglet Tables pour arrêter manuellement si nécessaire
+- Toggle "Arrêt auto" toujours disponible pour arrêter les tables facturées automatiquement depuis l'onglet Tables
+
 ### Gérante - Accès à la Prise de Commandes
 - L'onglet **"Commande"** est maintenant visible et accessible pour la gérante (manager)
 - La gérante voit la même interface que les serveurs pour prendre des commandes

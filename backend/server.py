@@ -413,6 +413,7 @@ class InvoiceCreate(BaseModel):
     notes: str = ""
     created_by: str = ""  # Server/cashier name
     validation_status: str = "pending"  # pending, validated
+    table_number: Optional[int] = None  # Table number for tracking
 
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -433,6 +434,7 @@ class Invoice(BaseModel):
     validation_status: str = "pending"  # pending, validated
     validated_by: str = ""
     validated_at: str = ""
+    table_number: Optional[int] = None  # Table number for tracking
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -3206,7 +3208,8 @@ async def create_invoice(invoice_data: InvoiceCreate):
             totals_by_department=invoice_data.totals_by_department,
             notes=invoice_data.notes,
             created_by=invoice_data.created_by,
-            validation_status=invoice_data.validation_status
+            validation_status=invoice_data.validation_status,
+            table_number=invoice_data.table_number
         )
         
         invoice_dict = invoice.model_dump()
@@ -3307,6 +3310,9 @@ async def get_invoice(invoice_id: str):
 async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
     """Update an existing invoice"""
     try:
+        # Get the current invoice to check if validation status is changing
+        current_invoice = await db.invoices.find_one({"id": invoice_id})
+        
         invoice_data["updated_at"] = datetime.now(timezone.utc).isoformat()
         result = await db.invoices.update_one(
             {"id": invoice_id},
@@ -3314,6 +3320,56 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
         )
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Facture non trouvée")
+        
+        # If invoice is being validated, automatically stop the table service
+        if (invoice_data.get("validation_status") == "validated" and 
+            current_invoice and 
+            current_invoice.get("validation_status") != "validated"):
+            # Find and stop the associated table
+            table_number = current_invoice.get("table_number")
+            if table_number:
+                table = await db.caisse_tables.find_one({"table_number": table_number})
+                if table:
+                    # Calculate service duration
+                    created_at = datetime.fromisoformat(table["created_at"].replace("Z", "+00:00"))
+                    now = datetime.now(timezone.utc)
+                    duration_seconds = (now - created_at).total_seconds()
+                    duration_minutes = int(duration_seconds / 60)
+                    
+                    # Determine quality status
+                    if duration_minutes < 15:
+                        quality_status = "excellent"
+                    elif duration_minutes < 30:
+                        quality_status = "acceptable"
+                    else:
+                        quality_status = "slow"
+                    
+                    # Calculate total amount
+                    total = current_invoice.get("total", 0)
+                    
+                    # Record service stats
+                    service_record = {
+                        "id": str(uuid.uuid4()),
+                        "table_number": table["table_number"],
+                        "server_id": table.get("server_id", ""),
+                        "server_name": table.get("server_name", ""),
+                        "client_name": table.get("client_name", "Client"),
+                        "items_count": len(current_invoice.get("items", [])),
+                        "total_amount": total,
+                        "duration_minutes": duration_minutes,
+                        "quality_status": quality_status,
+                        "started_at": table["created_at"],
+                        "stopped_at": now.isoformat(),
+                        "date": now.strftime("%Y-%m-%d")
+                    }
+                    
+                    # Save to service_stats collection
+                    await db.service_stats.insert_one(service_record)
+                    
+                    # Delete the table (service completed)
+                    await db.caisse_tables.delete_one({"id": table["id"]})
+                    logger.info(f"Auto-stopped table {table_number} after invoice validation")
+        
         return {"success": True}
     except HTTPException:
         raise

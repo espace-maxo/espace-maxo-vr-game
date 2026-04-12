@@ -2150,7 +2150,8 @@ _Gérante - Espace Maxo_
         totals_by_department: totalByDepartment,
         notes,
         created_by: currentUser?.full_name || currentUser?.username || "admin",
-        validation_status: "pending"
+        validation_status: "pending",
+        table_number: activeTable?.table_number || null
       };
       setPendingInvoiceData(invoiceData);
       setShowMobilePaymentModal(true);
@@ -2169,7 +2170,8 @@ _Gérante - Espace Maxo_
       totals_by_department: totalByDepartment,
       notes,
       created_by: currentUser?.full_name || currentUser?.username || "admin",
-      validation_status: "pending"
+      validation_status: "pending",
+      table_number: activeTable?.table_number || null
     });
   };
 
