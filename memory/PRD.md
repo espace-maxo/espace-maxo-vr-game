@@ -6,6 +6,13 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (12/04/2026)
 
+### Gestion des Points Serveurs - Actions Complètes
+- **Valider** : Approuver le point du serveur
+- **Réviser** : Demander une modification/explication au serveur
+- **Rejeter** : Refuser le point avec commentaire
+- **Supprimer** : Suppression sécurisée avec code **0631** requis
+- Notifications envoyées au serveur si révision demandée ou rejet
+
 ### Interface Gérante - Simplification
 - **Suppression menus Historique et Statistiques** pour la gérante
 - **Nouvel onglet "Points Serveurs"** créé avec vue en grille des rapports de fin de service

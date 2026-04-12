@@ -1087,6 +1087,32 @@ const CaissePage = () => {
   // State for report comparison
   const [reportComparison, setReportComparison] = useState(null);
   const [validationComment, setValidationComment] = useState("");
+  const [deleteReportCode, setDeleteReportCode] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Delete a server report with confirmation code
+  const handleDeleteServerReport = async (reportId) => {
+    const CORRECT_CODE = "0631";
+    
+    if (deleteReportCode !== CORRECT_CODE) {
+      toast.error("Code de suppression incorrect");
+      return;
+    }
+    
+    try {
+      await axios.delete(`${API}/server-end-of-service-reports/${reportId}`);
+      toast.success("Point supprimé avec succès");
+      fetchServiceReports();
+      setViewingServerReport(null);
+      setViewingServerDetailedReport(null);
+      setReportComparison(null);
+      setDeleteReportCode("");
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
 
   // Open detailed view of a server's daily report with comparison
   const openServerReportDetail = async (report) => {
@@ -8442,6 +8468,54 @@ _Gérante - Espace Maxo_
                         Rejeter
                       </Button>
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* DELETE SECTION - For manager with code verification */}
+              {currentUser?.role === 'manager' && (
+                <Card className="bg-slate-900/50 border-slate-600">
+                  <CardContent className="p-4">
+                    {!showDeleteConfirm ? (
+                      <Button 
+                        onClick={() => setShowDeleteConfirm(true)}
+                        variant="outline"
+                        className="w-full border-red-500/50 text-red-400 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Supprimer ce point
+                      </Button>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-red-400 text-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span>Entrez le code de suppression pour confirmer</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="password"
+                            value={deleteReportCode}
+                            onChange={(e) => setDeleteReportCode(e.target.value)}
+                            placeholder="Code à 4 chiffres"
+                            className="bg-slate-800 border-slate-600 text-white flex-1"
+                            maxLength={4}
+                          />
+                          <Button 
+                            onClick={() => handleDeleteServerReport(viewingServerReport.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Confirmer
+                          </Button>
+                          <Button 
+                            onClick={() => { setShowDeleteConfirm(false); setDeleteReportCode(""); }}
+                            variant="outline"
+                            className="border-slate-500"
+                          >
+                            Annuler
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

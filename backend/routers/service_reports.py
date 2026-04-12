@@ -327,3 +327,27 @@ async def mark_server_notification_read(notification_id: str):
     except Exception as e:
         logger.error(f"Error marking notification as read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/server-end-of-service-reports/{report_id}")
+async def delete_service_report(report_id: str):
+    """Delete a service report (requires code verification on frontend)"""
+    try:
+        report = await db.server_end_of_service_reports.find_one({"id": report_id})
+        if not report:
+            raise HTTPException(status_code=404, detail="Rapport non trouvé")
+        
+        # Delete the report
+        result = await db.server_end_of_service_reports.delete_one({"id": report_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Rapport non trouvé")
+        
+        logger.info(f"Service report {report_id} deleted for server {report.get('server_name')}")
+        
+        return {"success": True, "message": "Rapport supprimé avec succès"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting service report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
