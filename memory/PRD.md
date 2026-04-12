@@ -6,6 +6,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (12/04/2026)
 
+### Mode de Paiement à la Validation Bon-Client
+- **Modal de sélection** du mode de paiement affichée au clic sur "Bon-Client"
+- Récapitulatif de la facture (Client, Serveur, Articles, Total)
+- 3 modes de paiement : **Espèces**, **Mobile Money**, **Carte**
+- Le mode de paiement est enregistré dans la facture
+- Visible dans le **Point du serveur** avec badge coloré par mode de paiement
+  - 💵 Espèces (vert), 📱 Mobile (orange), 💳 Carte (bleu)
+
 ### Gestion des Points Serveurs - Actions Complètes
 - **Valider** : Approuver le point du serveur
 - **Réviser** : Demander une modification/explication au serveur

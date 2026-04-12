@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek } from "date-fns";
@@ -235,6 +235,9 @@ const CaissePage = () => {
   const [showClientModal, setShowClientModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [pendingValidationInvoice, setPendingValidationInvoice] = useState(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
   const [pendingInvoiceData, setPendingInvoiceData] = useState(null);
   const [editProduct, setEditProduct] = useState(null);
   const [editClient, setEditClient] = useState(null);
@@ -2343,15 +2346,34 @@ _Gérante - Espace Maxo_
     toast.info("Bon créé - Paiement en attente");
   };
 
-  const validateInvoice = async (invoiceId) => {
+  // Open payment method modal before validating invoice
+  const validateInvoice = (invoiceId) => {
+    const invoice = invoices.find(i => i.id === invoiceId);
+    if (!invoice) return;
+    setPendingValidationInvoice(invoice);
+    setSelectedPaymentMethod(invoice.payment_method || "cash");
+    setShowPaymentMethodModal(true);
+  };
+
+  // Actually validate the invoice with selected payment method
+  const confirmValidateInvoice = async () => {
+    if (!pendingValidationInvoice) return;
+    
     try {
-      const invoice = invoices.find(i => i.id === invoiceId);
-      await axios.put(`${API}/invoices/${invoiceId}`, {
+      await axios.put(`${API}/invoices/${pendingValidationInvoice.id}`, {
         validation_status: "validated",
         validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
-        validated_at: new Date().toISOString()
+        validated_at: new Date().toISOString(),
+        payment_method: selectedPaymentMethod
       });
-      toast.success(`Bon ${invoice?.invoice_number || ''} transformé ! Le serveur ${invoice?.created_by || ''} va recevoir une notification.`);
+      toast.success(`Bon ${pendingValidationInvoice?.invoice_number || ''} transformé ! Mode de paiement: ${
+        selectedPaymentMethod === 'cash' ? 'Espèces' : 
+        selectedPaymentMethod === 'mobile' ? 'Mobile Money' : 
+        selectedPaymentMethod === 'card' ? 'Carte Bancaire' : selectedPaymentMethod
+      }`);
+      setShowPaymentMethodModal(false);
+      setPendingValidationInvoice(null);
+      setSelectedPaymentMethod("cash");
       fetchAllData();
     } catch (error) {
       console.error("Error validating invoice:", error);
@@ -7154,6 +7176,117 @@ _Gérante - Espace Maxo_
       </div>
 
       {/* ==================== MODALS ==================== */}
+
+      {/* Payment Method Selection Modal for Bon-Client validation */}
+      <Dialog open={showPaymentMethodModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowPaymentMethodModal(false);
+          setPendingValidationInvoice(null);
+        }
+      }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-400">
+              <CreditCard className="w-5 h-5" />
+              Transformer en Bon-Client
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Sélectionnez le mode de paiement pour la facture {pendingValidationInvoice?.invoice_number}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {pendingValidationInvoice && (
+            <div className="space-y-4">
+              {/* Invoice Summary */}
+              <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Client:</span>
+                  <span className="text-white">{pendingValidationInvoice.customer_name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Serveur:</span>
+                  <span className="text-white">{pendingValidationInvoice.created_by}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Articles:</span>
+                  <span className="text-white">{pendingValidationInvoice.items?.length || 0}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg border-t border-slate-700 pt-2 mt-2">
+                  <span className="text-slate-300">Total:</span>
+                  <span className="text-green-400">{formatPrice(pendingValidationInvoice.total)} F</span>
+                </div>
+              </div>
+              
+              {/* Payment Method Selection */}
+              <div className="space-y-3">
+                <Label className="text-slate-300">Mode de paiement</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    type="button"
+                    variant={selectedPaymentMethod === 'cash' ? 'default' : 'outline'}
+                    onClick={() => setSelectedPaymentMethod('cash')}
+                    className={`flex flex-col items-center py-4 h-auto ${
+                      selectedPaymentMethod === 'cash' 
+                        ? 'bg-green-600 hover:bg-green-700 border-green-500' 
+                        : 'border-slate-600 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Banknote className="w-6 h-6 mb-1" />
+                    <span className="text-xs">Espèces</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={selectedPaymentMethod === 'mobile' ? 'default' : 'outline'}
+                    onClick={() => setSelectedPaymentMethod('mobile')}
+                    className={`flex flex-col items-center py-4 h-auto ${
+                      selectedPaymentMethod === 'mobile' 
+                        ? 'bg-orange-600 hover:bg-orange-700 border-orange-500' 
+                        : 'border-slate-600 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Smartphone className="w-6 h-6 mb-1" />
+                    <span className="text-xs">Mobile Money</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={selectedPaymentMethod === 'card' ? 'default' : 'outline'}
+                    onClick={() => setSelectedPaymentMethod('card')}
+                    className={`flex flex-col items-center py-4 h-auto ${
+                      selectedPaymentMethod === 'card' 
+                        ? 'bg-blue-600 hover:bg-blue-700 border-blue-500' 
+                        : 'border-slate-600 hover:bg-slate-700'
+                    }`}
+                  >
+                    <CreditCard className="w-6 h-6 mb-1" />
+                    <span className="text-xs">Carte</span>
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPaymentMethodModal(false);
+                    setPendingValidationInvoice(null);
+                  }}
+                  className="flex-1 border-slate-600"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={confirmValidateInvoice}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Valider
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       
       {/* View Invoice Modal */}
       <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
@@ -8396,7 +8529,7 @@ _Gérante - Espace Maxo_
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {viewingServerDetailedReport.invoices?.map((invoice) => (
                         <div key={invoice.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
                             <span className="text-white font-medium">{invoice.invoice_number}</span>
                             <Badge className={
                               invoice.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' :
@@ -8408,6 +8541,19 @@ _Gérante - Espace Maxo_
                             </Badge>
                             {invoice.table_number && (
                               <Badge className="bg-slate-600/50 text-slate-300">Table {invoice.table_number}</Badge>
+                            )}
+                            {/* Payment Method Badge */}
+                            {invoice.payment_method && invoice.validation_status === 'validated' && (
+                              <Badge className={
+                                invoice.payment_method === 'cash' ? 'bg-green-600/30 text-green-300' :
+                                invoice.payment_method === 'mobile' ? 'bg-orange-600/30 text-orange-300' :
+                                invoice.payment_method === 'card' ? 'bg-blue-600/30 text-blue-300' :
+                                'bg-slate-600/30 text-slate-300'
+                              }>
+                                {invoice.payment_method === 'cash' ? '💵 Espèces' : 
+                                 invoice.payment_method === 'mobile' ? '📱 Mobile' : 
+                                 invoice.payment_method === 'card' ? '💳 Carte' : invoice.payment_method}
+                              </Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-3">
