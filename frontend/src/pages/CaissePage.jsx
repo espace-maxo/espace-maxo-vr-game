@@ -1092,6 +1092,9 @@ const CaissePage = () => {
   const [validationComment, setValidationComment] = useState("");
   const [deleteReportCode, setDeleteReportCode] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedReports, setSelectedReports] = useState([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteCode, setBulkDeleteCode] = useState("");
 
   // Delete a server report with confirmation code
   const handleDeleteServerReport = async (reportId) => {
@@ -1113,6 +1116,69 @@ const CaissePage = () => {
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error("Error deleting report:", error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // Toggle selection of a report
+  const toggleReportSelection = (reportId) => {
+    setSelectedReports(prev => 
+      prev.includes(reportId) 
+        ? prev.filter(id => id !== reportId)
+        : [...prev, reportId]
+    );
+  };
+
+  // Select/Deselect all reports
+  const toggleSelectAllReports = () => {
+    if (selectedReports.length === serviceReports.length) {
+      setSelectedReports([]);
+    } else {
+      setSelectedReports(serviceReports.map(r => r.id));
+    }
+  };
+
+  // Bulk delete selected reports
+  const handleBulkDeleteReports = async () => {
+    const CORRECT_CODE = "0631";
+    
+    if (bulkDeleteCode !== CORRECT_CODE) {
+      toast.error("Code de suppression incorrect");
+      return;
+    }
+    
+    if (selectedReports.length === 0) {
+      toast.error("Aucun point sélectionné");
+      return;
+    }
+    
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const reportId of selectedReports) {
+        try {
+          await axios.delete(`${API}/server-end-of-service-reports/${reportId}`);
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          console.error(`Error deleting report ${reportId}:`, error);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(`${successCount} point(s) supprimé(s) avec succès`);
+      }
+      if (errorCount > 0) {
+        toast.error(`${errorCount} point(s) n'ont pas pu être supprimés`);
+      }
+      
+      fetchServiceReports();
+      setSelectedReports([]);
+      setBulkDeleteCode("");
+      setShowBulkDeleteConfirm(false);
+    } catch (error) {
+      console.error("Error in bulk delete:", error);
       toast.error("Erreur lors de la suppression");
     }
   };
@@ -5859,8 +5925,36 @@ _Gérante - Espace Maxo_
                 <h2 className="text-xl font-bold text-indigo-300 flex items-center gap-2">
                   <ClipboardList className="w-6 h-6" />
                   Points des Serveurs
+                  {selectedReports.length > 0 && (
+                    <Badge className="bg-red-500/20 text-red-400 ml-2">
+                      {selectedReports.length} sélectionné{selectedReports.length > 1 ? 's' : ''}
+                    </Badge>
+                  )}
                 </h2>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Select All / Deselect All */}
+                  {serviceReports.length > 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={toggleSelectAllReports}
+                      className="border-slate-500/50 text-slate-400 hover:bg-slate-500/20"
+                    >
+                      {selectedReports.length === serviceReports.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </Button>
+                  )}
+                  {/* Bulk Delete Button */}
+                  {selectedReports.length > 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setShowBulkDeleteConfirm(true)}
+                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Supprimer ({selectedReports.length})
+                    </Button>
+                  )}
                   {unreadServiceReportsCount > 0 && (
                     <Button 
                       size="sm" 
@@ -5868,7 +5962,7 @@ _Gérante - Espace Maxo_
                       onClick={markAllServiceReportsRead}
                       className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
                     >
-                      Tout marquer lu ({unreadServiceReportsCount} non lu{unreadServiceReportsCount > 1 ? 's' : ''})
+                      Tout marquer lu ({unreadServiceReportsCount})
                     </Button>
                   )}
                   <Button 
@@ -5883,6 +5977,43 @@ _Gérante - Espace Maxo_
                 </div>
               </div>
 
+              {/* Bulk Delete Confirmation */}
+              {showBulkDeleteConfirm && (
+                <Card className="bg-red-900/20 border-red-500/50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <AlertTriangle className="w-5 h-5 text-red-400" />
+                      <span className="text-red-300 font-medium">
+                        Supprimer {selectedReports.length} point{selectedReports.length > 1 ? 's' : ''} ?
+                      </span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="password"
+                        value={bulkDeleteCode}
+                        onChange={(e) => setBulkDeleteCode(e.target.value)}
+                        placeholder="Code de suppression (4 chiffres)"
+                        className="bg-slate-800 border-slate-600 text-white flex-1 max-w-xs"
+                        maxLength={4}
+                      />
+                      <Button 
+                        onClick={handleBulkDeleteReports}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Confirmer
+                      </Button>
+                      <Button 
+                        onClick={() => { setShowBulkDeleteConfirm(false); setBulkDeleteCode(""); }}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Service Reports Grid */}
               {serviceReports.length === 0 ? (
                 <Card className="bg-slate-800/50 border-slate-700">
@@ -5896,16 +6027,31 @@ _Gérante - Espace Maxo_
                   {serviceReports.map(report => (
                     <Card 
                       key={report.id}
-                      onClick={() => openServerReportDetail(report)}
-                      className={`cursor-pointer transition-all hover:scale-[1.02] ${
-                        report.is_read 
-                          ? 'bg-slate-800/50 border-slate-700 hover:border-slate-600' 
-                          : 'bg-indigo-900/30 border-indigo-500/50 hover:border-indigo-400'
+                      className={`transition-all hover:scale-[1.02] ${
+                        selectedReports.includes(report.id)
+                          ? 'bg-red-900/20 border-red-500/50'
+                          : report.is_read 
+                            ? 'bg-slate-800/50 border-slate-700 hover:border-slate-600' 
+                            : 'bg-indigo-900/30 border-indigo-500/50 hover:border-indigo-400'
                       }`}
                     >
                       <CardContent className="p-4">
+                        {/* Selection Checkbox + Header */}
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
+                            {/* Checkbox */}
+                            <div 
+                              onClick={(e) => { e.stopPropagation(); toggleReportSelection(report.id); }}
+                              className={`w-5 h-5 rounded border-2 cursor-pointer flex items-center justify-center transition-all ${
+                                selectedReports.includes(report.id)
+                                  ? 'bg-red-500 border-red-500'
+                                  : 'border-slate-500 hover:border-slate-400'
+                              }`}
+                            >
+                              {selectedReports.includes(report.id) && (
+                                <CheckCircle className="w-4 h-4 text-white" />
+                              )}
+                            </div>
                             {!report.is_read && (
                               <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
                             )}
@@ -5927,39 +6073,45 @@ _Gérante - Espace Maxo_
                           </Badge>
                         </div>
                         
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                          <div className="bg-slate-700/50 rounded p-2 text-center">
-                            <p className="text-indigo-400 font-bold text-lg">{report.total_invoices}</p>
-                            <p className="text-slate-500 text-xs">Commandes</p>
+                        {/* Clickable content area */}
+                        <div 
+                          onClick={() => openServerReportDetail(report)}
+                          className="cursor-pointer"
+                        >
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                            <div className="bg-slate-700/50 rounded p-2 text-center">
+                              <p className="text-indigo-400 font-bold text-lg">{report.total_invoices}</p>
+                              <p className="text-slate-500 text-xs">Commandes</p>
+                            </div>
+                            <div className="bg-slate-700/50 rounded p-2 text-center">
+                              <p className="text-green-400 font-bold text-lg">{report.validated_invoices}</p>
+                              <p className="text-slate-500 text-xs">Validées</p>
+                            </div>
+                            <div className="bg-slate-700/50 rounded p-2 text-center">
+                              <p className="text-amber-400 font-bold text-lg">{formatPrice(report.total_sales)}</p>
+                              <p className="text-slate-500 text-xs">CA (F)</p>
+                            </div>
                           </div>
-                          <div className="bg-slate-700/50 rounded p-2 text-center">
-                            <p className="text-green-400 font-bold text-lg">{report.validated_invoices}</p>
-                            <p className="text-slate-500 text-xs">Validées</p>
-                          </div>
-                          <div className="bg-slate-700/50 rounded p-2 text-center">
-                            <p className="text-amber-400 font-bold text-lg">{formatPrice(report.total_sales)}</p>
-                            <p className="text-slate-500 text-xs">CA (F)</p>
-                          </div>
-                        </div>
 
-                        {report.observation && (
-                          <div className="p-2 bg-slate-700/30 rounded text-xs mb-2">
-                            <p className="text-slate-400 font-medium mb-1">Observation:</p>
-                            <p className="text-slate-300 italic line-clamp-2">"{report.observation}"</p>
+                          {report.observation && (
+                            <div className="p-2 bg-slate-700/30 rounded text-xs mb-2">
+                              <p className="text-slate-400 font-medium mb-1">Observation:</p>
+                              <p className="text-slate-300 italic line-clamp-2">"{report.observation}"</p>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(report.created_at).toLocaleString('fr-FR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </span>
+                            <span className="text-indigo-400 flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              Voir détails
+                            </span>
                           </div>
-                        )}
-                        
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(report.created_at).toLocaleString('fr-FR', {
-                              day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </span>
-                          <span className="text-indigo-400 flex items-center gap-1">
-                            <Eye className="w-3 h-3" />
-                            Voir détails
-                          </span>
                         </div>
                       </CardContent>
                     </Card>
