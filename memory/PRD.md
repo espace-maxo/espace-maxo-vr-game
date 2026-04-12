@@ -6,6 +6,12 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (12/04/2026)
 
+### Interface Gérante - Simplification
+- **Suppression menus Historique et Statistiques** pour la gérante
+- **Nouvel onglet "Points Serveurs"** créé avec vue en grille des rapports de fin de service
+- **Suppression des graphiques** dans l'onglet Rapport pour la gérante (conservés uniquement pour l'admin)
+- **Retrait de la notification Points** de la barre supérieure (remplacé par l'onglet dédié)
+
 ### Suivi des Tables - Arrêt Automatique Amélioré
 - **Arrêt automatique** : Les tables sont maintenant automatiquement libérées lorsque leur facture est validée par la gérante
 - Le numéro de table est maintenant stocké dans chaque facture pour permettre le suivi

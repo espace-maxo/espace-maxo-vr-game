@@ -3425,103 +3425,6 @@ _Gérante - Espace Maxo_
                 </div>
               )}
 
-              {/* Service Reports Bell for Manager (Points des serveurs) */}
-              {currentUser?.role === 'manager' && (
-                <div className="relative">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => setShowServiceReportsPanel(!showServiceReportsPanel)}
-                    className="text-slate-400 hover:text-white hover:bg-slate-700/50 relative"
-                  >
-                    <ClipboardList className="w-5 h-5" />
-                    {unreadServiceReportsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">
-                        {unreadServiceReportsCount > 9 ? '9+' : unreadServiceReportsCount}
-                      </span>
-                    )}
-                  </Button>
-                  
-                  {/* Service Reports Panel */}
-                  {showServiceReportsPanel && (
-                    <div className="absolute right-0 top-12 w-80 sm:w-96 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-[500px] overflow-y-auto">
-                      <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-                        <h3 className="text-white font-semibold flex items-center gap-2">
-                          <ClipboardList className="w-4 h-4" />
-                          Points des Serveurs
-                        </h3>
-                        {unreadServiceReportsCount > 0 && (
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={markAllServiceReportsRead}
-                            className="text-xs text-blue-400 hover:text-blue-300"
-                          >
-                            Tout marquer lu
-                          </Button>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        {serviceReports.length === 0 ? (
-                          <p className="text-slate-500 text-center py-4 text-sm">Aucun point reçu</p>
-                        ) : (
-                          serviceReports.slice(0, 20).map(report => (
-                            <div 
-                              key={report.id}
-                              onClick={() => openServerReportDetail(report)}
-                              className={`p-3 rounded-lg mb-2 cursor-pointer transition-all hover:scale-[1.02] ${
-                                report.is_read ? 'bg-slate-700/30 hover:bg-slate-700/50' : 'bg-indigo-900/30 border border-indigo-500/30 hover:bg-indigo-900/50'
-                              }`}
-                            >
-                              <div className="flex items-start gap-2">
-                                <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                                  report.is_read ? 'bg-slate-400' : 'bg-indigo-400'
-                                }`}></div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-white text-sm font-medium flex items-center gap-2">
-                                      <User className="w-4 h-4" />
-                                      {report.server_name}
-                                    </p>
-                                    <Eye className="w-4 h-4 text-slate-400" />
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
-                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
-                                      <p className="text-indigo-400 font-bold">{report.total_invoices}</p>
-                                      <p className="text-slate-500">Commandes</p>
-                                    </div>
-                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
-                                      <p className="text-green-400 font-bold">{report.validated_invoices}</p>
-                                      <p className="text-slate-500">Validées</p>
-                                    </div>
-                                    <div className="bg-slate-700/50 rounded p-1.5 text-center">
-                                      <p className="text-amber-400 font-bold">{formatPrice(report.total_sales)} F</p>
-                                      <p className="text-slate-500">Total</p>
-                                    </div>
-                                  </div>
-                                  {report.observation && (
-                                    <div className="mt-2 p-2 bg-slate-700/30 rounded text-xs">
-                                      <p className="text-slate-400 font-medium mb-1">Observation:</p>
-                                      <p className="text-slate-300 italic truncate">"{report.observation}"</p>
-                                    </div>
-                                  )}
-                                  <p className="text-slate-500 text-xs mt-2 flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
-                                    {new Date(report.created_at).toLocaleString('fr-FR', {
-                                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                                    })}
-                                    <span className="ml-auto text-indigo-400 text-xs">Cliquer pour détails →</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Revision Notifications for Manager (Achats à réviser) */}
               {currentUser?.role === 'manager' && revisionExpensesCount > 0 && (
                 <Button 
@@ -3713,9 +3616,11 @@ _Gérante - Espace Maxo_
             <TabsTrigger value="invoices" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-2" />Factures
             </TabsTrigger>
+            {currentUser?.role !== 'manager' && (
             <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
               <BarChart3 className="w-4 h-4 mr-2" />Statistiques
             </TabsTrigger>
+            )}
             <TabsTrigger value="products" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
               <Package className="w-4 h-4 mr-2" />Produits
             </TabsTrigger>
@@ -3732,13 +3637,21 @@ _Gérante - Espace Maxo_
                 <FileText className="w-4 h-4 mr-2" />Rapport
               </TabsTrigger>
             )}
+            {currentUser?.role !== 'manager' && (
             <TabsTrigger value="historique" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white">
               <Calendar className="w-4 h-4 mr-2" />Historique
             </TabsTrigger>
+            )}
             {/* Server Daily Report - Only for servers */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
                 <ClipboardList className="w-4 h-4 mr-2" />Mon Point
+              </TabsTrigger>
+            )}
+            {/* Points des Serveurs - Only for manager */}
+            {currentUser?.role === 'manager' && (
+              <TabsTrigger value="points_serveurs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+                <ClipboardList className="w-4 h-4 mr-2" />Points Serveurs
               </TabsTrigger>
             )}
             {/* Manager: Achats/Dépenses */}
@@ -5532,7 +5445,8 @@ _Gérante - Espace Maxo_
                       </Card>
                     )}
 
-                    {/* Charts Section */}
+                    {/* Charts Section - Admin Only */}
+                    {currentUser?.role === 'admin' && (
                     <div className="grid md:grid-cols-2 gap-4">
                       {/* Pie Chart - By Department */}
                       <Card className="bg-slate-800/50 border-slate-700">
@@ -5650,8 +5564,10 @@ _Gérante - Espace Maxo_
                         </CardContent>
                       </Card>
                     </div>
+                    )}
 
-                    {/* Payment Methods Pie Chart */}
+                    {/* Payment Methods Pie Chart - Admin Only */}
+                    {currentUser?.role === 'admin' && (
                     <Card className="bg-slate-800/50 border-slate-700">
                       <CardHeader>
                         <CardTitle className="text-white text-lg flex items-center gap-2">
@@ -5725,6 +5641,7 @@ _Gérante - Espace Maxo_
                         </div>
                       </CardContent>
                     </Card>
+                    )}
 
                     {/* Signature & Generate PDF */}
                     <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
@@ -5884,6 +5801,126 @@ _Gérante - Espace Maxo_
               )}
             </div>
           </TabsContent>
+
+          {/* ==================== POINTS DES SERVEURS TAB (MANAGER ONLY) ==================== */}
+          {currentUser?.role === 'manager' && (
+          <TabsContent value="points_serveurs">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-indigo-300 flex items-center gap-2">
+                  <ClipboardList className="w-6 h-6" />
+                  Points des Serveurs
+                </h2>
+                <div className="flex items-center gap-3">
+                  {unreadServiceReportsCount > 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={markAllServiceReportsRead}
+                      className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                    >
+                      Tout marquer lu ({unreadServiceReportsCount} non lu{unreadServiceReportsCount > 1 ? 's' : ''})
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={fetchServiceReports}
+                    className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                    Actualiser
+                  </Button>
+                </div>
+              </div>
+
+              {/* Service Reports Grid */}
+              {serviceReports.length === 0 ? (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="py-12 text-center">
+                    <ClipboardList className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-400">Aucun point de serveur reçu</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {serviceReports.map(report => (
+                    <Card 
+                      key={report.id}
+                      onClick={() => openServerReportDetail(report)}
+                      className={`cursor-pointer transition-all hover:scale-[1.02] ${
+                        report.is_read 
+                          ? 'bg-slate-800/50 border-slate-700 hover:border-slate-600' 
+                          : 'bg-indigo-900/30 border-indigo-500/50 hover:border-indigo-400'
+                      }`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {!report.is_read && (
+                              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
+                            )}
+                            <p className="text-white font-semibold flex items-center gap-2">
+                              <User className="w-4 h-4 text-indigo-400" />
+                              {report.server_name}
+                            </p>
+                          </div>
+                          <Badge className={`text-xs ${
+                            report.status === 'validated' ? 'bg-green-500/20 text-green-400' :
+                            report.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                            report.status === 'revision_requested' ? 'bg-orange-500/20 text-orange-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>
+                            {report.status === 'validated' ? 'Validé' :
+                             report.status === 'rejected' ? 'Rejeté' :
+                             report.status === 'revision_requested' ? 'À réviser' :
+                             'En attente'}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          <div className="bg-slate-700/50 rounded p-2 text-center">
+                            <p className="text-indigo-400 font-bold text-lg">{report.total_invoices}</p>
+                            <p className="text-slate-500 text-xs">Commandes</p>
+                          </div>
+                          <div className="bg-slate-700/50 rounded p-2 text-center">
+                            <p className="text-green-400 font-bold text-lg">{report.validated_invoices}</p>
+                            <p className="text-slate-500 text-xs">Validées</p>
+                          </div>
+                          <div className="bg-slate-700/50 rounded p-2 text-center">
+                            <p className="text-amber-400 font-bold text-lg">{formatPrice(report.total_sales)}</p>
+                            <p className="text-slate-500 text-xs">CA (F)</p>
+                          </div>
+                        </div>
+
+                        {report.observation && (
+                          <div className="p-2 bg-slate-700/30 rounded text-xs mb-2">
+                            <p className="text-slate-400 font-medium mb-1">Observation:</p>
+                            <p className="text-slate-300 italic line-clamp-2">"{report.observation}"</p>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(report.created_at).toLocaleString('fr-FR', {
+                              day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                          <span className="text-indigo-400 flex items-center gap-1">
+                            <Eye className="w-3 h-3" />
+                            Voir détails
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          )}
 
           {/* ==================== SERVER DAILY REPORT TAB ==================== */}
           {currentUser?.role === 'server' && (
