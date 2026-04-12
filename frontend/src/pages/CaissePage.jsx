@@ -4722,7 +4722,7 @@ _Gérante - Espace Maxo_
                 <div className="mb-4 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
                   <p className="text-orange-300 text-sm flex items-center gap-2">
                     <Printer className="w-4 h-4" />
-                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Bon" pour transformer la facture en facture définitive</span>
+                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Bon-Client" pour transformer le bon en facture définitive</span>
                   </p>
                 </div>
               )}
@@ -4851,7 +4851,7 @@ _Gérante - Espace Maxo_
                                   className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
                                 >
                                   <FileText className="w-4 h-4 mr-1" />
-                                  Bon
+                                  Bon-Client
                                 </Button>
                                 <Button 
                                   size="sm"
