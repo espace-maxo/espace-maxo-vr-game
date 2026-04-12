@@ -4,6 +4,16 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (12/04/2026)
+
+### Gérante - Accès à la Prise de Commandes
+- L'onglet **"Commande"** est maintenant visible et accessible pour la gérante (manager)
+- La gérante voit la même interface que les serveurs pour prendre des commandes
+- Bouton **"Prendre une commande"** ajouté dans l'onglet "Tables" pour un accès rapide
+- Dans le tableau des tables occupées : bouton **"Commander"** pour reprendre une commande existante
+- L'onglet par défaut pour la gérante est désormais "Commande" (au lieu de "BONS")
+
+---
 ## Recent Updates (11/04/2026)
 
 ### Rapport Hebdomadaire - Recettes Locations Intégrées

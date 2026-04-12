@@ -714,7 +714,7 @@ const CaissePage = () => {
       
       // Set default tab based on role
       if (currentUser?.role === 'manager') {
-        setActiveTab("bons"); // Manager starts on Bons tab (no Commande access)
+        setActiveTab("commande"); // Manager starts on Commande tab (can take orders)
       }
     }
   }, [filterDate, isAuthenticated]);
@@ -3691,8 +3691,8 @@ _Gérante - Espace Maxo_
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
-            {/* Commande tab - hidden for manager */}
-            {currentUser?.role !== 'manager' && (
+            {/* Commande tab - visible for servers and manager */}
+            {(currentUser?.role === 'server' || currentUser?.role === 'manager') && (
               <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
                 <Calculator className="w-4 h-4 mr-2" />Commande
               </TabsTrigger>
@@ -3804,8 +3804,8 @@ _Gérante - Espace Maxo_
 
           {/* ==================== COMMANDE TAB (Creation only) ==================== */}
           <TabsContent value="commande">
-            {/* ============== MANAGER/ADMIN VIEW: Priority on validations ============== */}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') ? (
+            {/* ============== ADMIN VIEW: Priority on validations ============== */}
+            {currentUser?.role === 'admin' ? (
               <div className="space-y-4">
                 {/* ADMIN ONLY: Cancellation Requests */}
                 {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
@@ -6061,6 +6061,13 @@ _Gérante - Espace Maxo_
               stopTableService={stopTableService}
               formatPrice={formatPrice}
               openTables={openTables}
+              currentUser={currentUser}
+              onTakeOrder={(tableNumber) => {
+                // Navigate to commande tab
+                setActiveTab("commande");
+                // If a specific table number is provided, we could select it
+                // For now, just switch to the commande tab
+              }}
             />
           </TabsContent>
           )}

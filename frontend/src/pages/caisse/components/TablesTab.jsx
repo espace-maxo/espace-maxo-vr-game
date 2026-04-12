@@ -12,7 +12,9 @@ const TablesTab = ({
   fetchTablesStatus, 
   stopTableService, 
   formatPrice,
-  openTables = []  // Add openTables prop for order details
+  openTables = [],  // Add openTables prop for order details
+  onTakeOrder,      // Callback to navigate to order tab with selected table
+  currentUser       // Current user for role-based features
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [autoStopEnabled, setAutoStopEnabled] = useState(() => {
@@ -91,6 +93,17 @@ const TablesTab = ({
             <RefreshCw className="w-4 h-4 mr-1" />
             Actualiser
           </Button>
+          {/* Manager: Quick access to take order */}
+          {currentUser?.role === 'manager' && onTakeOrder && (
+            <Button 
+              size="sm" 
+              onClick={() => onTakeOrder(null)}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              <ShoppingCart className="w-4 h-4 mr-1" />
+              Prendre une commande
+            </Button>
+          )}
         </div>
       </div>
 
@@ -231,7 +244,7 @@ const TablesTab = ({
                     <th className="p-2 text-right">Total</th>
                     <th className="p-2 text-center">Durée</th>
                     <th className="p-2 text-center">Statut</th>
-                    <th className="p-2 text-center">Action</th>
+                    <th className="p-2 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -265,15 +278,27 @@ const TablesTab = ({
                         }`}></div>
                       </td>
                       <td className="p-2 text-center">
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          onClick={() => stopTableService(table.table_id, table.table_number)}
-                          className="border-red-500/50 text-red-400 hover:bg-red-500/20 h-8"
-                        >
-                          <X className="w-4 h-4 mr-1" />
-                          Arrêter
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          {currentUser?.role === 'manager' && onTakeOrder && table.status !== 'invoiced' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => onTakeOrder(table.table_number)}
+                              className="bg-amber-500 hover:bg-amber-600 text-white h-8"
+                            >
+                              <ShoppingCart className="w-4 h-4 mr-1" />
+                              Commander
+                            </Button>
+                          )}
+                          <Button 
+                            size="sm"
+                            variant="outline"
+                            onClick={() => stopTableService(table.table_id, table.table_number)}
+                            className="border-red-500/50 text-red-400 hover:bg-red-500/20 h-8"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Arrêter
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
