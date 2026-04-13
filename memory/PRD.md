@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (13/04/2026)
+
+### Rapport - Nouveau Sous-menu "Point Financier"
+- L'onglet Rapport contient maintenant 2 sous-onglets :
+  - **Rapport Journalier** : Point de caisse quotidien existant
+  - **Point Financier** (nouveau) : Remise de fonds par mode de paiement
+- Le Point Financier affiche :
+  - Total des recettes validées du jour
+  - Répartition par mode : **Espèces**, **Mobile Money**, **Carte Bancaire**, **Chèque**, **Porte-monnaie/Crédit**
+  - Tableau détaillé des transactions validées
+
+### Prise de Commande - Instructions Particulières Client
+- Nouveau champ **"Instructions particulières du client"** ajouté avant le bouton "ENVOYER LA COMMANDE"
+- Placeholder : "Ex: Sans oignon, bien cuit, allergie aux arachides..."
+- Les instructions sont enregistrées avec la commande
+
+### Correction API Activité - Total Dépenses
+- Requête MongoDB modifiée pour rechercher les dépenses par `completed_at` OU `created_at`
+
+---
 ## Recent Updates (12/04/2026)
 
 ### Mode de Paiement à la Validation Bon-Client

@@ -5833,9 +5833,13 @@ async def get_activity_report(
         
         # ============== EXPENSES (Dépenses) ==============
         
+        # Query expenses by both completed_at and created_at
         expenses = await db.expenses.find({
             "status": "completed",
-            "completed_at": {"$gte": start_str, "$lte": end_str}
+            "$or": [
+                {"completed_at": {"$gte": start_str, "$lte": end_str}},
+                {"created_at": {"$gte": start_str, "$lte": end_str}}
+            ]
         }, {"_id": 0}).to_list(500)
         
         total_expenses = sum(e.get("amount", 0) for e in expenses)
