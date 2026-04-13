@@ -238,6 +238,7 @@ const CaissePage = () => {
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [pendingValidationInvoice, setPendingValidationInvoice] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [pendingInvoiceData, setPendingInvoiceData] = useState(null);
   const [editProduct, setEditProduct] = useState(null);
   const [editClient, setEditClient] = useState(null);
@@ -2418,6 +2419,9 @@ _Gérante - Espace Maxo_
     if (!invoice) return;
     setPendingValidationInvoice(invoice);
     setSelectedPaymentMethod(invoice.payment_method || "cash");
+    // Set invoice date to the original creation date or today
+    const originalDate = invoice.created_at ? invoice.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
+    setInvoiceDate(originalDate);
     setShowPaymentMethodModal(true);
   };
 
@@ -2426,13 +2430,19 @@ _Gérante - Espace Maxo_
     if (!pendingValidationInvoice) return;
     
     try {
+      // Create the new date with time from original invoice
+      const newCreatedAt = invoiceDate + 'T' + (pendingValidationInvoice.created_at?.split('T')[1] || '12:00:00.000Z');
+      
       await axios.put(`${API}/invoices/${pendingValidationInvoice.id}`, {
         validation_status: "validated",
         validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
         validated_at: new Date().toISOString(),
-        payment_method: selectedPaymentMethod
+        payment_method: selectedPaymentMethod,
+        created_at: newCreatedAt // Update the invoice date
       });
-      toast.success(`Bon ${pendingValidationInvoice?.invoice_number || ''} transformé ! Mode de paiement: ${
+      
+      const dateFormatted = new Date(invoiceDate).toLocaleDateString('fr-FR');
+      toast.success(`Bon ${pendingValidationInvoice?.invoice_number || ''} transformé ! Date: ${dateFormatted}, Mode: ${
         selectedPaymentMethod === 'cash' ? 'Espèces' : 
         selectedPaymentMethod === 'mobile' ? 'Mobile Money' : 
         selectedPaymentMethod === 'card' ? 'Carte Bancaire' : selectedPaymentMethod
@@ -2440,6 +2450,7 @@ _Gérante - Espace Maxo_
       setShowPaymentMethodModal(false);
       setPendingValidationInvoice(null);
       setSelectedPaymentMethod("cash");
+      setInvoiceDate(new Date().toISOString().split('T')[0]);
       fetchAllData();
     } catch (error) {
       console.error("Error validating invoice:", error);
@@ -7367,6 +7378,20 @@ _Gérante - Espace Maxo_
                   <span className="text-slate-300">Total:</span>
                   <span className="text-green-400">{formatPrice(pendingValidationInvoice.total)} F</span>
                 </div>
+              </div>
+
+              {/* Invoice Date Selection */}
+              <div className="space-y-2">
+                <Label className="text-slate-300 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Date de facturation
+                </Label>
+                <Input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  className="bg-slate-900 border-slate-600 text-white"
+                />
               </div>
               
               {/* Payment Method Selection */}
