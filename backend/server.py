@@ -6587,6 +6587,8 @@ class FinancialPointCreate(BaseModel):
     notes: str = ""
     created_by: str = ""
     billettage: dict = {}
+    momo_number: str = ""
+    destination: str = "admin"  # "admin" ou "banque"
 
 @api_router.get("/financial-points")
 async def get_financial_points(date: str = None, status: str = None, period_type: str = None):
@@ -6661,7 +6663,9 @@ async def create_financial_point(data: FinancialPointCreate):
             "signed": False,
             "signed_by": None,
             "signed_at": None,
-            "billettage": data.billettage
+            "billettage": data.billettage,
+            "momo_number": data.momo_number,
+            "destination": data.destination
         }
         
         await db.financial_points.insert_one(point)
@@ -6940,8 +6944,15 @@ async def generate_financial_point_pdf(point_id: str):
 
 <div class="period">{period_label}</div>
 
+<div style="display:flex;justify-content:center;gap:20px;margin-bottom:15px;">
+  <div style="background:{'#eff6ff' if point.get('destination') == 'banque' else '#ecfdf5'};border:1px solid {'#93c5fd' if point.get('destination') == 'banque' else '#6ee7b7'};border-radius:8px;padding:8px 20px;font-size:11pt;font-weight:bold;color:{'#1d4ed8' if point.get('destination') == 'banque' else '#059669'};">
+    {"Verse a la banque" if point.get('destination') == 'banque' else "Remis a l'administrateur"}
+  </div>
+  {"<div style='background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:8px 20px;font-size:11pt;color:#c2410c;'>Momo : " + point.get('momo_number', '') + "</div>" if point.get('momo_number') else ""}
+</div>
+
 <table>
-  <thead><tr><th>Mode de paiement</th><th>Montant</th></tr></thead>
+  <thead><tr><th>Point du reversement</th><th>Montant</th></tr></thead>
   <tbody>
     {rows_html}
     <tr class="total-row">
