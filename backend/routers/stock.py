@@ -438,7 +438,7 @@ async def get_dashboard():
 @router.post("/seed")
 async def seed_full_data(force: bool = False):
     """Seed the complete restaurant stock database with 25 categories and ~500 products"""
-    from routers.stock_data import CATEGORIES, PRODUCTS
+    from routers.stock_data import CATEGORIES, SUPPLIERS, P
     
     existing = await db.stock_products.count_documents({})
     if existing > 0 and not force:
@@ -470,33 +470,27 @@ async def seed_full_data(force: bool = False):
     cat_ids = [c["id"] for c in cat_docs]
     
     # Create suppliers
-    suppliers = [
-        {"name": "Marche Dantokpa", "phone": "+229 97 00 11 22", "product_types": "Legumes, condiments, cereales", "address": "Cotonou"},
-        {"name": "Sodibo Distribution", "phone": "+229 97 33 44 55", "product_types": "Boissons, sodas", "address": "Cotonou"},
-        {"name": "Froid Benin", "phone": "+229 97 66 77 88", "product_types": "Produits congeles, viandes, poissons", "address": "Cotonou"},
-        {"name": "Clean Express", "phone": "+229 97 99 00 11", "product_types": "Produits de nettoyage, hygiene", "address": "Cotonou"},
-        {"name": "Ets Koudjo & Fils", "phone": "+229 96 12 34 56", "product_types": "Epicerie, emballages", "address": "Cotonou"},
-        {"name": "Agro-Benin SARL", "phone": "+229 95 45 67 89", "product_types": "Produits agricoles, cereales", "address": "Porto-Novo"},
-    ]
     sup_docs = []
-    for s in suppliers:
+    for s in SUPPLIERS:
         sup_docs.append({**s, "id": str(uuid.uuid4()), "email": "", "notes": "", "created_at": now})
     await db.stock_suppliers.insert_many(sup_docs)
     
     # Create products
     product_docs = []
     counters = {}
-    for cat_idx, sub_cat, prefix, name, unit, smin, smax, price, loc in PRODUCTS:
-        if prefix not in counters:
-            counters[prefix] = 0
-        counters[prefix] += 1
-        code = f"{prefix}-{counters[prefix]:03d}"
+    prefixes = ["CF","LG","FR","LM","VI","VO","PM","PL","OE","HG","EC","BP","SG","BN","BA","CB","EM","EH","GE","AT","PD","SL","SF","FA","SR"]
+    for cat_idx, name, unit, smin, price, loc in P:
+        pf = prefixes[cat_idx]
+        if pf not in counters:
+            counters[pf] = 0
+        counters[pf] += 1
+        code = f"{pf}-{counters[pf]:03d}"
         
-        # Randomize initial stock
+        smax = max(smin * 4, 20)
         r = random.random()
         if r < 0.05:
             qty = 0
-        elif r < 0.20:
+        elif r < 0.18:
             qty = random.randint(0, max(1, smin - 1))
         else:
             qty = random.randint(smin, smax)
@@ -505,27 +499,14 @@ async def seed_full_data(force: bool = False):
         statut = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
         
         product_docs.append({
-            "id": str(uuid.uuid4()),
-            "code": code,
-            "name": name,
-            "category_id": cat_ids[cat_idx],
-            "subcategory": sub_cat,
-            "unit": unit,
-            "quantity": qty,
-            "stock_min": smin,
-            "stock_max": smax,
-            "purchase_price": price,
-            "valeur_stock": valeur,
-            "supplier_id": "",
-            "storage_location": loc,
-            "is_active": True,
-            "photo_url": "",
-            "date_achat": "",
-            "date_peremption": "",
-            "observation": "",
-            "statut": statut,
-            "created_at": now,
-            "updated_at": now
+            "id": str(uuid.uuid4()), "code": code, "name": name,
+            "category_id": cat_ids[cat_idx], "subcategory": "",
+            "unit": unit, "quantity": qty, "stock_min": smin, "stock_max": smax,
+            "purchase_price": price, "valeur_stock": valeur,
+            "supplier_id": "", "storage_location": loc,
+            "is_active": True, "photo_url": "",
+            "date_achat": "", "date_peremption": "", "observation": "",
+            "statut": statut, "created_at": now, "updated_at": now
         })
     
     await db.stock_products.insert_many(product_docs)
