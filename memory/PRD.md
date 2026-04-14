@@ -4,7 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
-## Recent Updates (13/04/2026)
+## Recent Updates (13/04/2026 - Session 2)
+
+### Point Financier - Fonctionnalité Complète (DONE)
+- **Composant extrait** : `PointFinancierTab.jsx` créé dans `/app/frontend/src/pages/caisse/components/`
+- **Type de période** : Toggle Hebdomadaire / Journalier avec navigation par semaine ou sélection de date
+- **Saisie manuelle** : 6 champs (Espèces, Mobile Money, Carte Bancaire, Chèque, Portefeuille/Crédit, Autres) + Notes
+- **Total automatique** : Calcul en temps réel du total
+- **Workflow strict** :
+  1. **Gérante saisit** les montants manuellement → Statut "En attente de validation"
+  2. **Admin valide** → Statut "Validé par Admin"
+  3. **Signature électronique** (canvas de dessin) → Statut "Signé" + verrouillage complet
+- **Verrouillage** : Une fois signé, les champs sont désactivés. Seul l'Admin peut modifier ou supprimer
+- **Backend** : period_type (weekly/daily), end_date pour les plages hebdomadaires
+- **Tests** : 18/18 backend PASSED, 100% frontend PASSED
+
+### Début du Refactoring
+- `PointFinancierTab.jsx` est le premier composant majeur extrait de `CaissePage.jsx`
+- ~200 lignes retirées de CaissePage.jsx (états, fonctions, JSX du Point Financier)
+
+---
+## Recent Updates (13/04/2026 - Session 1)
 
 ### Rapport - Nouveau Sous-menu "Point Financier"
 - L'onglet Rapport contient maintenant 2 sous-onglets :

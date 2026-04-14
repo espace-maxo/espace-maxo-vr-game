@@ -34,6 +34,7 @@ import ProformaTab from "./caisse/components/ProformaTab";
 import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
 import ShareModal, { ShareButton } from "./caisse/components/ShareModal";
 import MonsieurTab from "./caisse/components/MonsieurTab";
+import PointFinancierTab from "./caisse/components/PointFinancierTab";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -253,6 +254,7 @@ const CaissePage = () => {
   const [rapportDate, setRapportDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [rapportData, setRapportData] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureData, setSignatureData] = useState(null);
   const [signature, setSignature] = useState("");
   const [selectedServerDetail, setSelectedServerDetail] = useState(null);
   const [serverInvoices, setServerInvoices] = useState([]);
@@ -5857,201 +5859,7 @@ _Gérante - Espace Maxo_
 
                 {/* Point Financier Tab */}
                 <TabsContent value="point-financier">
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                      <div>
-                        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                          <Banknote className="w-6 h-6 text-green-400" />
-                          Point Financier
-                        </h2>
-                        <p className="text-slate-400 text-sm">Remise de fonds par mode de paiement</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Input
-                          type="date"
-                          value={rapportDate}
-                          onChange={(e) => setRapportDate(e.target.value)}
-                          className="bg-slate-800/50 border-slate-700 text-white"
-                        />
-                        <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300">
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Actualiser
-                        </Button>
-                      </div>
-                    </div>
-
-                    {rapportData ? (
-                      <>
-                        {/* Total du jour */}
-                        <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
-                          <CardContent className="p-6 text-center">
-                            <Banknote className="w-12 h-12 text-green-400 mx-auto mb-3" />
-                            <p className="text-4xl font-bold text-green-400">{formatPrice(rapportData.validatedRevenue)} F</p>
-                            <p className="text-slate-400 text-sm mt-2">Total des recettes validées du {new Date(rapportDate).toLocaleDateString('fr-FR')}</p>
-                          </CardContent>
-                        </Card>
-
-                        {/* Répartition par mode de paiement */}
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader>
-                            <CardTitle className="text-white flex items-center gap-2">
-                              <CreditCard className="w-5 h-5 text-blue-400" />
-                              Remise de Fonds par Mode de Paiement
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="grid gap-4 md:grid-cols-3">
-                              {/* Espèces */}
-                              <Card className="bg-green-900/20 border-green-500/30">
-                                <CardContent className="p-4 text-center">
-                                  <div className="w-12 h-12 mx-auto mb-3 bg-green-500/20 rounded-full flex items-center justify-center">
-                                    <Banknote className="w-6 h-6 text-green-400" />
-                                  </div>
-                                  <p className="text-2xl font-bold text-green-400">
-                                    {formatPrice(rapportData.invoices?.filter(i => i.payment_method === 'cash' && i.validation_status === 'validated').reduce((sum, i) => sum + (i.total || 0), 0) || 0)} F
-                                  </p>
-                                  <p className="text-slate-400 text-sm mt-1">Espèces</p>
-                                  <p className="text-slate-500 text-xs mt-1">
-                                    {rapportData.invoices?.filter(i => i.payment_method === 'cash' && i.validation_status === 'validated').length || 0} transaction(s)
-                                  </p>
-                                </CardContent>
-                              </Card>
-
-                              {/* Mobile Money */}
-                              <Card className="bg-orange-900/20 border-orange-500/30">
-                                <CardContent className="p-4 text-center">
-                                  <div className="w-12 h-12 mx-auto mb-3 bg-orange-500/20 rounded-full flex items-center justify-center">
-                                    <Smartphone className="w-6 h-6 text-orange-400" />
-                                  </div>
-                                  <p className="text-2xl font-bold text-orange-400">
-                                    {formatPrice(rapportData.invoices?.filter(i => i.payment_method === 'mobile' && i.validation_status === 'validated').reduce((sum, i) => sum + (i.total || 0), 0) || 0)} F
-                                  </p>
-                                  <p className="text-slate-400 text-sm mt-1">Mobile Money</p>
-                                  <p className="text-slate-500 text-xs mt-1">
-                                    {rapportData.invoices?.filter(i => i.payment_method === 'mobile' && i.validation_status === 'validated').length || 0} transaction(s)
-                                  </p>
-                                </CardContent>
-                              </Card>
-
-                              {/* Carte Bancaire */}
-                              <Card className="bg-blue-900/20 border-blue-500/30">
-                                <CardContent className="p-4 text-center">
-                                  <div className="w-12 h-12 mx-auto mb-3 bg-blue-500/20 rounded-full flex items-center justify-center">
-                                    <CreditCard className="w-6 h-6 text-blue-400" />
-                                  </div>
-                                  <p className="text-2xl font-bold text-blue-400">
-                                    {formatPrice(rapportData.invoices?.filter(i => i.payment_method === 'card' && i.validation_status === 'validated').reduce((sum, i) => sum + (i.total || 0), 0) || 0)} F
-                                  </p>
-                                  <p className="text-slate-400 text-sm mt-1">Carte Bancaire</p>
-                                  <p className="text-slate-500 text-xs mt-1">
-                                    {rapportData.invoices?.filter(i => i.payment_method === 'card' && i.validation_status === 'validated').length || 0} transaction(s)
-                                  </p>
-                                </CardContent>
-                              </Card>
-                            </div>
-
-                            {/* Autres modes de paiement */}
-                            <div className="grid gap-4 md:grid-cols-2 mt-4">
-                              {/* Chèque */}
-                              <Card className="bg-purple-900/20 border-purple-500/30">
-                                <CardContent className="p-4 text-center">
-                                  <div className="w-10 h-10 mx-auto mb-2 bg-purple-500/20 rounded-full flex items-center justify-center">
-                                    <FileText className="w-5 h-5 text-purple-400" />
-                                  </div>
-                                  <p className="text-xl font-bold text-purple-400">
-                                    {formatPrice(rapportData.invoices?.filter(i => i.payment_method === 'cheque' && i.validation_status === 'validated').reduce((sum, i) => sum + (i.total || 0), 0) || 0)} F
-                                  </p>
-                                  <p className="text-slate-400 text-sm">Chèque</p>
-                                  <p className="text-slate-500 text-xs">
-                                    {rapportData.invoices?.filter(i => i.payment_method === 'cheque' && i.validation_status === 'validated').length || 0} transaction(s)
-                                  </p>
-                                </CardContent>
-                              </Card>
-
-                              {/* Porte-monnaie / Crédit */}
-                              <Card className="bg-amber-900/20 border-amber-500/30">
-                                <CardContent className="p-4 text-center">
-                                  <div className="w-10 h-10 mx-auto mb-2 bg-amber-500/20 rounded-full flex items-center justify-center">
-                                    <Wallet className="w-5 h-5 text-amber-400" />
-                                  </div>
-                                  <p className="text-xl font-bold text-amber-400">
-                                    {formatPrice(rapportData.invoices?.filter(i => (i.payment_method === 'wallet' || i.payment_method === 'credit') && i.validation_status === 'validated').reduce((sum, i) => sum + (i.total || 0), 0) || 0)} F
-                                  </p>
-                                  <p className="text-slate-400 text-sm">Porte-monnaie / Crédit</p>
-                                  <p className="text-slate-500 text-xs">
-                                    {rapportData.invoices?.filter(i => (i.payment_method === 'wallet' || i.payment_method === 'credit') && i.validation_status === 'validated').length || 0} transaction(s)
-                                  </p>
-                                </CardContent>
-                              </Card>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        {/* Détail des transactions */}
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader>
-                            <CardTitle className="text-white flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-amber-400" />
-                              Détail des Transactions Validées
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="text-left text-slate-400 border-b border-slate-700">
-                                    <th className="p-2">N° Facture</th>
-                                    <th className="p-2">Heure</th>
-                                    <th className="p-2">Serveur</th>
-                                    <th className="p-2">Mode</th>
-                                    <th className="p-2 text-right">Montant</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {rapportData.invoices?.filter(i => i.validation_status === 'validated').map((invoice) => (
-                                    <tr key={invoice.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                                      <td className="p-2 text-white font-medium">{invoice.invoice_number}</td>
-                                      <td className="p-2 text-slate-400">{new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</td>
-                                      <td className="p-2 text-slate-300">{invoice.created_by}</td>
-                                      <td className="p-2">
-                                        <Badge className={
-                                          invoice.payment_method === 'cash' ? 'bg-green-500/20 text-green-400' :
-                                          invoice.payment_method === 'mobile' ? 'bg-orange-500/20 text-orange-400' :
-                                          invoice.payment_method === 'card' ? 'bg-blue-500/20 text-blue-400' :
-                                          invoice.payment_method === 'cheque' ? 'bg-purple-500/20 text-purple-400' :
-                                          'bg-amber-500/20 text-amber-400'
-                                        }>
-                                          {invoice.payment_method === 'cash' ? 'Espèces' :
-                                           invoice.payment_method === 'mobile' ? 'Mobile' :
-                                           invoice.payment_method === 'card' ? 'Carte' :
-                                           invoice.payment_method === 'cheque' ? 'Chèque' :
-                                           invoice.payment_method || 'Autre'}
-                                        </Badge>
-                                      </td>
-                                      <td className="p-2 text-right text-green-400 font-bold">{formatPrice(invoice.total)} F</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                                <tfoot>
-                                  <tr className="bg-slate-900/50 font-bold">
-                                    <td colSpan="4" className="p-2 text-white">TOTAL</td>
-                                    <td className="p-2 text-right text-green-400">{formatPrice(rapportData.validatedRevenue)} F</td>
-                                  </tr>
-                                </tfoot>
-                              </table>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </>
-                    ) : (
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardContent className="py-12 text-center">
-                          <Banknote className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                          <p className="text-slate-400">Chargement du point financier...</p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
+                  <PointFinancierTab currentUser={currentUser} />
                 </TabsContent>
               </Tabs>
             </TabsContent>

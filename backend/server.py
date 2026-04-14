@@ -6519,6 +6519,233 @@ async def toggle_task(instruction_id: str, task_index: int, completed: bool = Bo
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== FINANCIAL POINT (Point Financier) ====================
+
+class FinancialPointCreate(BaseModel):
+    date: str  # YYYY-MM-DD (date de début pour hebdo, date unique pour journalier)
+    end_date: str = ""  # YYYY-MM-DD (date de fin pour hebdo, vide pour journalier)
+    period_type: str = "weekly"  # "weekly" ou "daily"
+    cash_amount: float = 0  # Espèces
+    mobile_amount: float = 0  # Mobile Money
+    card_amount: float = 0  # Carte bancaire
+    cheque_amount: float = 0  # Chèque
+    wallet_amount: float = 0  # Porte-monnaie/Crédit
+    other_amount: float = 0  # Autres
+    notes: str = ""  # Observations
+    created_by: str = ""  # Gérante qui crée
+
+@api_router.get("/financial-points")
+async def get_financial_points(date: str = None, status: str = None, period_type: str = None):
+    """Get financial points, optionally filtered by date, status, or period_type"""
+    try:
+        query = {}
+        if date:
+            query["$or"] = [{"date": date}, {"date": {"$lte": date}, "end_date": {"$gte": date}}]
+        if status:
+            query["status"] = status
+        if period_type:
+            query["period_type"] = period_type
+        
+        points = await db.financial_points.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+        return {"financial_points": points}
+    except Exception as e:
+        logger.error(f"Error fetching financial points: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/financial-points/{point_id}")
+async def get_financial_point(point_id: str):
+    """Get a specific financial point"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        return point
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/financial-points")
+async def create_financial_point(data: FinancialPointCreate):
+    """Create a new financial point (by manager)"""
+    try:
+        # Check if a point already exists for this date/period
+        if data.period_type == "weekly" and data.end_date:
+            existing = await db.financial_points.find_one({
+                "period_type": "weekly",
+                "date": data.date,
+                "end_date": data.end_date
+            })
+        else:
+            existing = await db.financial_points.find_one({
+                "date": data.date,
+                "period_type": data.period_type
+            })
+        if existing:
+            raise HTTPException(status_code=400, detail="Un point financier existe déjà pour cette période")
+        
+        total = data.cash_amount + data.mobile_amount + data.card_amount + data.cheque_amount + data.wallet_amount + data.other_amount
+        
+        point = {
+            "id": str(uuid.uuid4()),
+            "date": data.date,
+            "end_date": data.end_date,
+            "period_type": data.period_type,
+            "cash_amount": data.cash_amount,
+            "mobile_amount": data.mobile_amount,
+            "card_amount": data.card_amount,
+            "cheque_amount": data.cheque_amount,
+            "wallet_amount": data.wallet_amount,
+            "other_amount": data.other_amount,
+            "total_amount": total,
+            "notes": data.notes,
+            "created_by": data.created_by,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": "pending",
+            "admin_validated": False,
+            "admin_validated_by": None,
+            "admin_validated_at": None,
+            "signed": False,
+            "signed_by": None,
+            "signed_at": None,
+            "signature_data": None
+        }
+        
+        await db.financial_points.insert_one(point)
+        point.pop("_id", None)
+        
+        logger.info(f"Financial point created for {data.date} ({data.period_type}) by {data.created_by}")
+        return {"success": True, "financial_point": point}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/financial-points/{point_id}")
+async def update_financial_point(point_id: str, data: dict = Body(...)):
+    """Update a financial point (only if not signed, or by admin)"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        # Check if point is signed - only admin can modify
+        is_admin = data.pop("is_admin", False)
+        if point.get("signed") and not is_admin:
+            raise HTTPException(status_code=403, detail="Ce point financier est signé et ne peut être modifié que par l'administrateur")
+        
+        # Recalculate total if amounts are updated
+        if any(key in data for key in ["cash_amount", "mobile_amount", "card_amount", "cheque_amount", "wallet_amount", "other_amount"]):
+            cash = data.get("cash_amount", point.get("cash_amount", 0))
+            mobile = data.get("mobile_amount", point.get("mobile_amount", 0))
+            card = data.get("card_amount", point.get("card_amount", 0))
+            cheque = data.get("cheque_amount", point.get("cheque_amount", 0))
+            wallet = data.get("wallet_amount", point.get("wallet_amount", 0))
+            other = data.get("other_amount", point.get("other_amount", 0))
+            data["total_amount"] = cash + mobile + card + cheque + wallet + other
+        
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.financial_points.update_one(
+            {"id": point_id},
+            {"$set": data}
+        )
+        
+        updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        return {"success": True, "financial_point": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/financial-points/{point_id}/admin-validate")
+async def admin_validate_financial_point(point_id: str, admin_name: str = Body(..., embed=True)):
+    """Admin validates a financial point (required before signing)"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        if point.get("admin_validated"):
+            raise HTTPException(status_code=400, detail="Ce point est déjà validé par l'administrateur")
+        
+        await db.financial_points.update_one(
+            {"id": point_id},
+            {"$set": {
+                "admin_validated": True,
+                "admin_validated_by": admin_name,
+                "admin_validated_at": datetime.now(timezone.utc).isoformat(),
+                "status": "admin_validated"
+            }}
+        )
+        
+        updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        logger.info(f"Financial point {point_id} validated by admin {admin_name}")
+        return {"success": True, "financial_point": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/financial-points/{point_id}/sign")
+async def sign_financial_point(point_id: str, signature_data: str = Body(...), signer_name: str = Body(...)):
+    """Sign a financial point (only after admin validation)"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        if not point.get("admin_validated"):
+            raise HTTPException(status_code=400, detail="Ce point doit d'abord être validé par l'administrateur avant de pouvoir être signé")
+        
+        if point.get("signed"):
+            raise HTTPException(status_code=400, detail="Ce point est déjà signé")
+        
+        await db.financial_points.update_one(
+            {"id": point_id},
+            {"$set": {
+                "signed": True,
+                "signed_by": signer_name,
+                "signed_at": datetime.now(timezone.utc).isoformat(),
+                "signature_data": signature_data,
+                "status": "signed"
+            }}
+        )
+        
+        updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        logger.info(f"Financial point {point_id} signed by {signer_name}")
+        return {"success": True, "financial_point": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error signing financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/financial-points/{point_id}")
+async def delete_financial_point(point_id: str, is_admin: bool = False):
+    """Delete a financial point (only by admin if signed)"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        if point.get("signed") and not is_admin:
+            raise HTTPException(status_code=403, detail="Seul l'administrateur peut supprimer un point financier signé")
+        
+        await db.financial_points.delete_one({"id": point_id})
+        logger.info(f"Financial point {point_id} deleted")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include modular routers with /api prefix
 api_router.include_router(service_reports_router)
 api_router.include_router(subscriptions_router)
