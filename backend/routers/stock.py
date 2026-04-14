@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
+import random
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 db = None
@@ -400,75 +401,93 @@ async def get_dashboard():
 # ==================== SEED DATA ====================
 
 @router.post("/seed")
-async def seed_demo_data():
-    """Seed demo categories, suppliers and products"""
+async def seed_full_data(force: bool = False):
+    """Seed the complete restaurant stock database with 25 categories and ~500 products"""
+    from routers.stock_data import CATEGORIES, PRODUCTS
+    
     existing = await db.stock_products.count_documents({})
-    if existing > 0:
-        return {"success": True, "message": "Données déjà présentes"}
+    if existing > 0 and not force:
+        return {"success": True, "message": f"Donnees deja presentes ({existing} produits). Utilisez force=true pour reinitialiser."}
     
-    # Categories
-    cats = [
-        {"id": str(uuid.uuid4()), "name": "Matières premières", "color": "#f59e0b", "icon": "Wheat", "description": "Riz, farine, huile..."},
-        {"id": str(uuid.uuid4()), "name": "Boissons", "color": "#3b82f6", "icon": "Wine", "description": "Sodas, eau, jus..."},
-        {"id": str(uuid.uuid4()), "name": "Produits alimentaires", "color": "#10b981", "icon": "Apple", "description": "Viandes, poissons, légumes..."},
-        {"id": str(uuid.uuid4()), "name": "Produits de nettoyage", "color": "#8b5cf6", "icon": "Sparkles", "description": "Détergents, savons..."},
-        {"id": str(uuid.uuid4()), "name": "Emballages", "color": "#ec4899", "icon": "Package", "description": "Barquettes, sachets..."},
-        {"id": str(uuid.uuid4()), "name": "Consommables", "color": "#6366f1", "icon": "Utensils", "description": "Serviettes, gobelets..."},
-        {"id": str(uuid.uuid4()), "name": "Produits congelés", "color": "#06b6d4", "icon": "Snowflake", "description": "Surgelés..."},
-        {"id": str(uuid.uuid4()), "name": "Épices et condiments", "color": "#f97316", "icon": "Flame", "description": "Sel, poivre, piment..."},
-    ]
-    for c in cats:
-        c["created_at"] = datetime.now(timezone.utc).isoformat()
-    await db.stock_categories.insert_many(cats)
+    # Clear existing data if forcing
+    if force and existing > 0:
+        await db.stock_products.delete_many({})
+        await db.stock_categories.delete_many({})
+        await db.stock_suppliers.delete_many({})
+        await db.stock_movements.delete_many({})
+        await db.stock_purchases.delete_many({})
     
-    cat_ids = {c["name"]: c["id"] for c in cats}
-    
-    # Suppliers
-    suppliers = [
-        {"id": str(uuid.uuid4()), "name": "Marché Dantokpa", "phone": "+229 97 00 11 22", "product_types": "Légumes, condiments", "address": "Cotonou"},
-        {"id": str(uuid.uuid4()), "name": "Sodibo Distribution", "phone": "+229 97 33 44 55", "product_types": "Boissons", "address": "Cotonou"},
-        {"id": str(uuid.uuid4()), "name": "Froid Bénin", "phone": "+229 97 66 77 88", "product_types": "Produits congelés, viandes", "address": "Cotonou"},
-        {"id": str(uuid.uuid4()), "name": "Clean Express", "phone": "+229 97 99 00 11", "product_types": "Produits de nettoyage", "address": "Cotonou"},
-    ]
-    for s in suppliers:
-        s["email"] = ""
-        s["notes"] = ""
-        s["created_at"] = datetime.now(timezone.utc).isoformat()
-    await db.stock_suppliers.insert_many(suppliers)
-    
-    sup_ids = {s["name"]: s["id"] for s in suppliers}
-    
-    # Products
     now = datetime.now(timezone.utc).isoformat()
-    products = [
-        {"code": "MP-001", "name": "Riz (25kg)", "category_id": cat_ids["Matières premières"], "unit": "sac", "quantity": 8, "stock_min": 3, "stock_max": 20, "purchase_price": 15000, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Réserve A"},
-        {"code": "MP-002", "name": "Huile végétale (5L)", "category_id": cat_ids["Matières premières"], "unit": "bidon", "quantity": 12, "stock_min": 4, "stock_max": 30, "purchase_price": 5500, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Réserve A"},
-        {"code": "MP-003", "name": "Farine de blé (10kg)", "category_id": cat_ids["Matières premières"], "unit": "sac", "quantity": 5, "stock_min": 2, "stock_max": 15, "purchase_price": 6000, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Réserve A"},
-        {"code": "PA-001", "name": "Poulet entier", "category_id": cat_ids["Produits alimentaires"], "unit": "kg", "quantity": 15, "stock_min": 5, "stock_max": 50, "purchase_price": 2500, "supplier_id": sup_ids["Froid Bénin"], "storage_location": "Chambre froide"},
-        {"code": "PA-002", "name": "Poisson (Tilapia)", "category_id": cat_ids["Produits alimentaires"], "unit": "kg", "quantity": 10, "stock_min": 3, "stock_max": 30, "purchase_price": 3000, "supplier_id": sup_ids["Froid Bénin"], "storage_location": "Chambre froide"},
-        {"code": "PA-003", "name": "Tomate fraîche", "category_id": cat_ids["Produits alimentaires"], "unit": "kg", "quantity": 8, "stock_min": 5, "stock_max": 25, "purchase_price": 800, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Cuisine"},
-        {"code": "PA-004", "name": "Oignon", "category_id": cat_ids["Produits alimentaires"], "unit": "kg", "quantity": 6, "stock_min": 5, "stock_max": 20, "purchase_price": 600, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Cuisine"},
-        {"code": "PA-005", "name": "Mayonnaise (500g)", "category_id": cat_ids["Produits alimentaires"], "unit": "pot", "quantity": 4, "stock_min": 3, "stock_max": 15, "purchase_price": 1500, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Réfrigérateur"},
-        {"code": "BO-001", "name": "Coca-Cola (33cl)", "category_id": cat_ids["Boissons"], "unit": "casier", "quantity": 6, "stock_min": 3, "stock_max": 20, "purchase_price": 6000, "supplier_id": sup_ids["Sodibo Distribution"], "storage_location": "Bar"},
-        {"code": "BO-002", "name": "Eau minérale (1.5L)", "category_id": cat_ids["Boissons"], "unit": "pack", "quantity": 10, "stock_min": 5, "stock_max": 30, "purchase_price": 2500, "supplier_id": sup_ids["Sodibo Distribution"], "storage_location": "Bar"},
-        {"code": "BO-003", "name": "Bière Flag (60cl)", "category_id": cat_ids["Boissons"], "unit": "casier", "quantity": 4, "stock_min": 3, "stock_max": 15, "purchase_price": 7500, "supplier_id": sup_ids["Sodibo Distribution"], "storage_location": "Bar"},
-        {"code": "EM-001", "name": "Barquettes aluminium", "category_id": cat_ids["Emballages"], "unit": "paquet", "quantity": 15, "stock_min": 5, "stock_max": 50, "purchase_price": 2000, "supplier_id": "", "storage_location": "Réserve B"},
-        {"code": "CO-001", "name": "Serviettes en papier", "category_id": cat_ids["Consommables"], "unit": "paquet", "quantity": 20, "stock_min": 5, "stock_max": 40, "purchase_price": 500, "supplier_id": "", "storage_location": "Salle"},
-        {"code": "CO-002", "name": "Gobelets plastique", "category_id": cat_ids["Consommables"], "unit": "paquet", "quantity": 2, "stock_min": 5, "stock_max": 30, "purchase_price": 1000, "supplier_id": "", "storage_location": "Bar"},
-        {"code": "NE-001", "name": "Détergent liquide (5L)", "category_id": cat_ids["Produits de nettoyage"], "unit": "bidon", "quantity": 3, "stock_min": 2, "stock_max": 10, "purchase_price": 3500, "supplier_id": sup_ids["Clean Express"], "storage_location": "Ménage"},
-        {"code": "SU-001", "name": "Crevettes surgelées", "category_id": cat_ids["Produits congelés"], "unit": "kg", "quantity": 0, "stock_min": 3, "stock_max": 15, "purchase_price": 8000, "supplier_id": sup_ids["Froid Bénin"], "storage_location": "Congélateur"},
-        {"code": "EP-001", "name": "Piment frais", "category_id": cat_ids["Épices et condiments"], "unit": "kg", "quantity": 1, "stock_min": 2, "stock_max": 10, "purchase_price": 1500, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Cuisine"},
-        {"code": "EP-002", "name": "Sel (1kg)", "category_id": cat_ids["Épices et condiments"], "unit": "paquet", "quantity": 10, "stock_min": 3, "stock_max": 20, "purchase_price": 300, "supplier_id": sup_ids["Marché Dantokpa"], "storage_location": "Cuisine"},
+    
+    # Create categories
+    cat_docs = []
+    for c in CATEGORIES:
+        cat_docs.append({
+            "id": str(uuid.uuid4()),
+            "name": c["name"],
+            "description": c["description"],
+            "color": c["color"],
+            "icon": "Package",
+            "created_at": now
+        })
+    await db.stock_categories.insert_many(cat_docs)
+    cat_ids = [c["id"] for c in cat_docs]
+    
+    # Create suppliers
+    suppliers = [
+        {"name": "Marche Dantokpa", "phone": "+229 97 00 11 22", "product_types": "Legumes, condiments, cereales", "address": "Cotonou"},
+        {"name": "Sodibo Distribution", "phone": "+229 97 33 44 55", "product_types": "Boissons, sodas", "address": "Cotonou"},
+        {"name": "Froid Benin", "phone": "+229 97 66 77 88", "product_types": "Produits congeles, viandes, poissons", "address": "Cotonou"},
+        {"name": "Clean Express", "phone": "+229 97 99 00 11", "product_types": "Produits de nettoyage, hygiene", "address": "Cotonou"},
+        {"name": "Ets Koudjo & Fils", "phone": "+229 96 12 34 56", "product_types": "Epicerie, emballages", "address": "Cotonou"},
+        {"name": "Agro-Benin SARL", "phone": "+229 95 45 67 89", "product_types": "Produits agricoles, cereales", "address": "Porto-Novo"},
     ]
+    sup_docs = []
+    for s in suppliers:
+        sup_docs.append({**s, "id": str(uuid.uuid4()), "email": "", "notes": "", "created_at": now})
+    await db.stock_suppliers.insert_many(sup_docs)
     
-    for p in products:
-        p["id"] = str(uuid.uuid4())
-        p["is_active"] = True
-        p["photo_url"] = ""
-        p["created_at"] = now
-        p["updated_at"] = now
+    # Create products
+    product_docs = []
+    counters = {}
+    for cat_idx, prefix, name, unit, smin, smax, price, loc in PRODUCTS:
+        # Generate unique code
+        if prefix not in counters:
+            counters[prefix] = 0
+        counters[prefix] += 1
+        code = f"{prefix}-{counters[prefix]:03d}"
+        
+        # Randomize initial stock (some at 0 for rupture demo, some low for alerts)
+        qty = random.randint(0, smax)
+        # ~5% chance of 0 stock, ~15% chance below min
+        r = random.random()
+        if r < 0.05:
+            qty = 0
+        elif r < 0.20:
+            qty = random.randint(0, max(1, smin - 1))
+        
+        product_docs.append({
+            "id": str(uuid.uuid4()),
+            "code": code,
+            "name": name,
+            "category_id": cat_ids[cat_idx],
+            "unit": unit,
+            "quantity": qty,
+            "stock_min": smin,
+            "stock_max": smax,
+            "purchase_price": price,
+            "supplier_id": "",
+            "storage_location": loc,
+            "is_active": True,
+            "photo_url": "",
+            "created_at": now,
+            "updated_at": now
+        })
     
-    await db.stock_products.insert_many(products)
+    await db.stock_products.insert_many(product_docs)
     
-    # Clean _id from inserted docs
-    return {"success": True, "message": f"{len(products)} produits, {len(cats)} catégories, {len(suppliers)} fournisseurs créés"}
+    return {
+        "success": True,
+        "message": f"{len(product_docs)} produits, {len(cat_docs)} categories, {len(sup_docs)} fournisseurs crees"
+    }
+

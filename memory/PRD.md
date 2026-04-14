@@ -34,7 +34,8 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - **Achats** : Creation avec liste articles, calcul total auto, MAJ stock auto, creation mouvements auto
 - **Fournisseurs** : CRUD complet avec cards
 - **Categories** : CRUD complet, 8 categories predefinies
-- **Donnees demo** : 18 produits, 8 categories, 4 fournisseurs (restaurant africain realiste)
+- **Donnees demo** : **441 produits**, 25 categories, 6 fournisseurs (catalogue complet restaurant Benin)
+- **25 Categories** : Cereales/farines, Legumes, Fruits, Legumineuses, Viandes, Volailles, Poissons/mer, Produits laitiers, Oeufs, Huiles, Epices/condiments, Boulangerie/patisserie, Surgeles, Boissons NA, Boissons alcoolisees, Cocktails/bar, Emballages, Entretien/hygiene, Gaz/energie, Articles table, Petit-dejeuner, Sauces locales, Semi-finis, Fournitures admin, Produits specifiques
 - **Tests** : 34/34 backend + 100% frontend PASSED
 
 ### Phases suivantes (a venir)
