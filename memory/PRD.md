@@ -25,18 +25,29 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - **Route** : `/stock` (page standalone comme `/caisse`)
 - **Backend** : `/app/backend/routers/stock.py` (router modulaire)
 - **Frontend** : `/app/frontend/src/pages/StockPage.jsx`
+- **Donnees** : `/app/backend/routers/stock_data.py` (catalogue produits)
 - **Collections MongoDB** : `stock_products`, `stock_categories`, `stock_suppliers`, `stock_movements`, `stock_purchases`
 
-### Fonctionnalites implementees
-- **Tableau de bord** : 5 cartes de synthese, alertes rupture/faible, stock par categorie, derniers mouvements
-- **Produits** : CRUD complet, recherche, filtres (categorie, alerte), code produit, unite, seuils min/max, prix achat, fournisseur, emplacement, statut couleur
-- **Mouvements** : Entree, Sortie, Perte, Casse, Ajustement, Retour fournisseur - MAJ auto stock
-- **Achats** : Creation avec liste articles, calcul total auto, MAJ stock auto, creation mouvements auto
-- **Fournisseurs** : CRUD complet avec cards
-- **Categories** : CRUD complet, 8 categories predefinies
-- **Donnees demo** : **441 produits**, 25 categories, 6 fournisseurs (catalogue complet restaurant Benin)
-- **25 Categories** : Cereales/farines, Legumes, Fruits, Legumineuses, Viandes, Volailles, Poissons/mer, Produits laitiers, Oeufs, Huiles, Epices/condiments, Boulangerie/patisserie, Surgeles, Boissons NA, Boissons alcoolisees, Cocktails/bar, Emballages, Entretien/hygiene, Gaz/energie, Articles table, Petit-dejeuner, Sauces locales, Semi-finis, Fournitures admin, Produits specifiques
-- **Tests** : 34/34 backend + 100% frontend PASSED
+### Structure des donnees (9 categories)
+1. **Cuisine** (89 produits) : cereales, legumes, viandes, volailles, poissons, laitiers, huiles, epices, produits locaux
+2. **Petit-dejeuner** (17 produits) : boissons chaudes, pain, accompagnements
+3. **Bar et boissons** (33 produits) : boissons NA, alcoolisees, cocktails
+4. **Grillades** (14 produits) : viandes, accompagnements, combustibles
+5. **Emballages et service** (21 produits) : emballages, vaisselle jetable, consommables
+6. **Entretien et hygiene** (20 produits) : nettoyage, materiel, hygiene
+7. **Consommables administratifs** (9 produits) : papeterie, impression
+8. **Evenements et service traiteur** (9 produits) : decorations, vaisselle, materiel
+9. **Espace jeux** (9 produits) : tickets, piles, entretien
+
+### Champs produit
+code_produit, nom_produit, categorie, **sous_categorie**, unite_mesure, quantite_stock, stock_minimum, stock_maximum, prix_achat_unitaire, **valeur_stock** (calcule auto), fournisseur, **date_achat**, **date_peremption**, emplacement_stockage, **statut** (calcule auto), **observation**
+
+### Regles metier implementees
+- valeur_stock = quantite x prix_achat (calcul auto)
+- statut auto : rupture (rouge) si stock=0, faible (orange) si stock<=min, normal (vert)
+- toute entree augmente le stock, toute sortie diminue
+- blocage sortie si stock insuffisant
+- 8 fournisseurs de demo, 221 produits
 
 ### Phases suivantes (a venir)
 - Phase 2 : Inventaire physique + Rapports/Stats + Export PDF/Excel

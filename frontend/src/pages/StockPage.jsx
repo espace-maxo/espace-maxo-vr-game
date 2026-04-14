@@ -20,7 +20,7 @@ import { Toaster } from "@/components/ui/sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
-const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","bac","sac","bidon","pot","pack","unite"];
+const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","bac","sac","bidon","pot","pack","unite","regime","botte","boite","plateau","paire","rame","cartouche","rouleau","bloc","lot","aerosol","douzaine","barquette","brique","plaquette","bombe","fagot","flacon","tablette"];
 const MOVEMENT_TYPES = [
   { value: "entree", label: "Entree", color: "emerald", icon: ArrowDown },
   { value: "sortie", label: "Sortie", color: "red", icon: ArrowUp },
@@ -64,7 +64,7 @@ export default function StockPage() {
   const [editingItem, setEditingItem] = useState(null);
 
   // Forms
-  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "" });
+  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" });
   const [movementForm, setMovementForm] = useState({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" });
   const [purchaseForm, setPurchaseForm] = useState({ supplier_id: "", supplier_name: "", purchase_date: "", items: [], notes: "" });
   const [purchaseItem, setPurchaseItem] = useState({ product_id: "", quantity: 0, unit_price: 0 });
@@ -140,7 +140,7 @@ export default function StockPage() {
 
   const openEditProduct = (p) => {
     setEditingItem(p);
-    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "" });
+    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
     setShowProductModal(true);
   };
 
@@ -370,7 +370,7 @@ export default function StockPage() {
               <div className="flex gap-2">
                 <Button onClick={() => { setShowMovementModal(true); setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); }}
                   className="bg-blue-600 hover:bg-blue-700" data-testid="new-movement-btn"><ArrowUpDown className="w-4 h-4 mr-1" /> Mouvement</Button>
-                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "" }); setShowProductModal(true); }}
+                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" }); setShowProductModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-product-btn"><Plus className="w-4 h-4 mr-1" /> Nouveau Produit</Button>
               </div>
             </div>
@@ -407,7 +407,7 @@ export default function StockPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                      <th className="p-3">Code</th><th className="p-3">Produit</th><th className="p-3">Categorie</th><th className="p-3">Stock</th><th className="p-3">Min</th><th className="p-3">Unite</th><th className="p-3 text-right">Prix Achat</th><th className="p-3 text-right">Valeur</th><th className="p-3">Statut</th><th className="p-3"></th>
+                      <th className="p-3">Code</th><th className="p-3">Produit</th><th className="p-3">Categorie</th><th className="p-3">Sous-cat.</th><th className="p-3">Stock</th><th className="p-3">Min</th><th className="p-3">Unite</th><th className="p-3 text-right">Prix Achat</th><th className="p-3 text-right">Valeur</th><th className="p-3">Statut</th><th className="p-3">Lieu</th><th className="p-3"></th>
                     </tr></thead>
                     <tbody>
                       {products.map(p => {
@@ -416,13 +416,15 @@ export default function StockPage() {
                           <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                             <td className="p-3 text-slate-500 font-mono text-xs">{p.code}</td>
                             <td className="p-3 text-white font-medium">{p.name}</td>
-                            <td className="p-3 text-slate-400">{catName(p.category_id)}</td>
+                            <td className="p-3 text-slate-400 text-xs">{catName(p.category_id)}</td>
+                            <td className="p-3 text-slate-500 text-xs">{p.subcategory || "-"}</td>
                             <td className="p-3"><span className={`font-bold ${p.quantity <= 0 ? 'text-red-400' : p.quantity <= p.stock_min ? 'text-orange-400' : 'text-emerald-400'}`}>{p.quantity}</span></td>
                             <td className="p-3 text-slate-500">{p.stock_min}</td>
                             <td className="p-3 text-slate-400">{p.unit}</td>
                             <td className="p-3 text-right text-slate-300">{formatPrice(p.purchase_price)} F</td>
                             <td className="p-3 text-right text-emerald-400">{formatPrice(p.quantity * p.purchase_price)} F</td>
                             <td className="p-3"><Badge className={status.color + " text-xs"}>{status.label}</Badge></td>
+                            <td className="p-3 text-slate-500 text-xs">{p.storage_location}</td>
                             <td className="p-3">
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400" onClick={() => openEditProduct(p)}><Edit2 className="w-3.5 h-3.5" /></Button>
@@ -577,15 +579,35 @@ export default function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Categorie *</Label>
-                <Select value={productForm.category_id} onValueChange={v => setProductForm(p => ({...p, category_id: v}))}>
+                <Select value={productForm.category_id} onValueChange={v => setProductForm(p => ({...p, category_id: v, subcategory: ""}))}>
                   <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choisir" /></SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">{categories.map(c => <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div><Label className="text-slate-300 text-xs">Sous-categorie</Label>
+                {(() => {
+                  const selectedCat = categories.find(c => c.id === productForm.category_id);
+                  const subs = selectedCat?.subcategories || [];
+                  return subs.length > 0 ? (
+                    <Select value={productForm.subcategory || "none"} onValueChange={v => setProductForm(p => ({...p, subcategory: v === "none" ? "" : v}))}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choisir" /></SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none" className="text-slate-400">Aucune</SelectItem>{subs.map(s => <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  ) : <Input value={productForm.subcategory} onChange={e => setProductForm(p => ({...p, subcategory: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Sous-categorie" />;
+                })()}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Unite</Label>
                 <Select value={productForm.unit} onValueChange={v => setProductForm(p => ({...p, unit: v}))}>
                   <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">{UNITS.map(u => <SelectItem key={u} value={u} className="text-white">{u}</SelectItem>)}</SelectContent>
+                  <SelectContent className="bg-slate-800 border-slate-700 max-h-[200px]">{UNITS.map(u => <SelectItem key={u} value={u} className="text-white">{u}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-slate-300 text-xs">Fournisseur</Label>
+                <Select value={productForm.supplier_id || "none"} onValueChange={v => setProductForm(p => ({...p, supplier_id: v === "none" ? "" : v}))}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Aucun" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none" className="text-slate-400">Aucun</SelectItem>{suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-white">{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -596,14 +618,13 @@ export default function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><Input type="number" value={productForm.purchase_price} onChange={e => setProductForm(p => ({...p, purchase_price: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Fournisseur</Label>
-                <Select value={productForm.supplier_id || "none"} onValueChange={v => setProductForm(p => ({...p, supplier_id: v === "none" ? "" : v}))}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Aucun" /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none" className="text-slate-400">Aucun</SelectItem>{suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-white">{s.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
             </div>
-            <div><Label className="text-slate-300 text-xs">Emplacement de stockage</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Ex: Reserve A, Chambre froide..." /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-slate-300 text-xs">Date d'achat</Label><Input type="date" value={productForm.date_achat} onChange={e => setProductForm(p => ({...p, date_achat: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Date de peremption</Label><Input type="date" value={productForm.date_peremption} onChange={e => setProductForm(p => ({...p, date_peremption: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+            </div>
+            <div><Label className="text-slate-300 text-xs">Observation</Label><Textarea value={productForm.observation} onChange={e => setProductForm(p => ({...p, observation: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" rows={2} placeholder="Remarques..." /></div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveProduct}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
           </div>
         </DialogContent>

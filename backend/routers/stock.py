@@ -19,11 +19,13 @@ class StockCategoryCreate(BaseModel):
     description: str = ""
     color: str = "#3b82f6"
     icon: str = "Package"
+    subcategories: list = []
 
 class StockProductCreate(BaseModel):
     code: str = ""
     name: str
     category_id: str
+    subcategory: str = ""
     unit: str = "kg"
     quantity: float = 0
     stock_min: float = 5
@@ -33,6 +35,9 @@ class StockProductCreate(BaseModel):
     storage_location: str = ""
     is_active: bool = True
     photo_url: str = ""
+    date_achat: str = ""
+    date_peremption: str = ""
+    observation: str = ""
 
 class StockMovementCreate(BaseModel):
     product_id: str
@@ -138,15 +143,21 @@ async def create_product(data: StockProductCreate):
         "code": data.code or f"PRD-{str(uuid.uuid4())[:6].upper()}",
         "name": data.name,
         "category_id": data.category_id,
+        "subcategory": data.subcategory,
         "unit": data.unit,
         "quantity": data.quantity,
         "stock_min": data.stock_min,
         "stock_max": data.stock_max,
         "purchase_price": data.purchase_price,
+        "valeur_stock": data.quantity * data.purchase_price,
         "supplier_id": data.supplier_id,
         "storage_location": data.storage_location,
         "is_active": data.is_active,
         "photo_url": data.photo_url,
+        "date_achat": data.date_achat,
+        "date_peremption": data.date_peremption,
+        "observation": data.observation,
+        "statut": "rupture" if data.quantity <= 0 else ("faible" if data.quantity <= data.stock_min else "normal"),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
@@ -159,6 +170,15 @@ async def update_product(product_id: str, data: dict = Body(...)):
     data.pop("_id", None)
     data.pop("id", None)
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    # Recalculate valeur_stock and statut
+    product = await db.stock_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(404, "Produit non trouve")
+    qty = data.get("quantity", product.get("quantity", 0))
+    price = data.get("purchase_price", product.get("purchase_price", 0))
+    smin = data.get("stock_min", product.get("stock_min", 5))
+    data["valeur_stock"] = qty * price
+    data["statut"] = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
     await db.stock_products.update_one({"id": product_id}, {"$set": data})
     updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
     return {"success": True, "product": updated}
@@ -230,10 +250,12 @@ async def create_movement(data: StockMovementCreate):
     await db.stock_movements.insert_one(movement)
     movement.pop("_id", None)
     
-    # Update product quantity
+    # Update product quantity + valeur_stock + statut
+    new_valeur = new_qty * product.get("purchase_price", 0)
+    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= product.get("stock_min", 5) else "normal")
     await db.stock_products.update_one(
         {"id": data.product_id},
-        {"$set": {"quantity": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
     return {"success": True, "movement": movement}
@@ -350,6 +372,7 @@ async def create_purchase(data: StockPurchaseCreate):
 @router.get("/dashboard")
 async def get_dashboard():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    peremption_limit = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
     
     products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)
     categories = await db.stock_categories.find({}, {"_id": 0}).to_list(100)
@@ -361,6 +384,10 @@ async def get_dashboard():
     faible = [p for p in products if 0 < p.get("quantity", 0) <= p.get("stock_min", 5)]
     critical = len(rupture) + len(faible)
     
+    # Products near expiry
+    peremption_proche = [p for p in products if p.get("date_peremption") and p["date_peremption"] <= peremption_limit and p["date_peremption"] >= today]
+    expired = [p for p in products if p.get("date_peremption") and p["date_peremption"] < today]
+    
     # Today's movements
     today_movements = await db.stock_movements.find(
         {"created_at": {"$gte": today}}, {"_id": 0}
@@ -369,10 +396,7 @@ async def get_dashboard():
     entrees_today = sum(1 for m in today_movements if m.get("movement_type") in ["entree", "retour_fournisseur"])
     sorties_today = sum(1 for m in today_movements if m.get("movement_type") in ["sortie", "perte", "casse"])
     
-    # Recent movements
     recent_movements = await db.stock_movements.find({}, {"_id": 0}).sort("created_at", -1).to_list(10)
-    
-    # Recent purchases
     recent_purchases = await db.stock_purchases.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
     
     # Stock by category
@@ -385,6 +409,14 @@ async def get_dashboard():
         stock_by_category[cname]["count"] += 1
         stock_by_category[cname]["value"] += p.get("quantity", 0) * p.get("purchase_price", 0)
     
+    # Top sorted products (most movements)
+    top_sorted = await db.stock_movements.aggregate([
+        {"$match": {"movement_type": "sortie"}},
+        {"$group": {"_id": "$product_name", "total": {"$sum": "$quantity"}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 10}
+    ]).to_list(10)
+    
     return {
         "total_products": total_products,
         "critical_products": critical,
@@ -393,9 +425,12 @@ async def get_dashboard():
         "sorties_today": sorties_today,
         "rupture": [{"id": p["id"], "name": p["name"], "code": p.get("code", ""), "unit": p.get("unit", "")} for p in rupture[:20]],
         "faible": [{"id": p["id"], "name": p["name"], "quantity": p["quantity"], "stock_min": p.get("stock_min", 5), "unit": p.get("unit", "")} for p in faible[:20]],
+        "peremption_proche": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"]} for p in peremption_proche[:10]],
+        "expired": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"]} for p in expired[:10]],
         "recent_movements": recent_movements,
         "recent_purchases": recent_purchases,
-        "stock_by_category": stock_by_category
+        "stock_by_category": stock_by_category,
+        "top_sorted": top_sorted
     }
 
 # ==================== SEED DATA ====================
@@ -428,6 +463,7 @@ async def seed_full_data(force: bool = False):
             "description": c["description"],
             "color": c["color"],
             "icon": "Package",
+            "subcategories": c.get("subcategories", []),
             "created_at": now
         })
     await db.stock_categories.insert_many(cat_docs)
@@ -450,36 +486,44 @@ async def seed_full_data(force: bool = False):
     # Create products
     product_docs = []
     counters = {}
-    for cat_idx, prefix, name, unit, smin, smax, price, loc in PRODUCTS:
-        # Generate unique code
+    for cat_idx, sub_cat, prefix, name, unit, smin, smax, price, loc in PRODUCTS:
         if prefix not in counters:
             counters[prefix] = 0
         counters[prefix] += 1
         code = f"{prefix}-{counters[prefix]:03d}"
         
-        # Randomize initial stock (some at 0 for rupture demo, some low for alerts)
-        qty = random.randint(0, smax)
-        # ~5% chance of 0 stock, ~15% chance below min
+        # Randomize initial stock
         r = random.random()
         if r < 0.05:
             qty = 0
         elif r < 0.20:
             qty = random.randint(0, max(1, smin - 1))
+        else:
+            qty = random.randint(smin, smax)
+        
+        valeur = qty * price
+        statut = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
         
         product_docs.append({
             "id": str(uuid.uuid4()),
             "code": code,
             "name": name,
             "category_id": cat_ids[cat_idx],
+            "subcategory": sub_cat,
             "unit": unit,
             "quantity": qty,
             "stock_min": smin,
             "stock_max": smax,
             "purchase_price": price,
+            "valeur_stock": valeur,
             "supplier_id": "",
             "storage_location": loc,
             "is_active": True,
             "photo_url": "",
+            "date_achat": "",
+            "date_peremption": "",
+            "observation": "",
+            "statut": statut,
             "created_at": now,
             "updated_at": now
         })
