@@ -5376,21 +5376,6 @@ _Gérante - Espace Maxo_
           {/* ==================== RAPPORT JOURNALIER TAB ==================== */}
           {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
             <TabsContent value="rapport">
-              {/* Sub-tabs for Rapport */}
-              <Tabs defaultValue="rapport-journalier" className="w-full">
-                <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
-                  <TabsTrigger value="rapport-journalier" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Rapport Journalier
-                  </TabsTrigger>
-                  <TabsTrigger value="point-financier" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
-                    <Banknote className="w-4 h-4 mr-2" />
-                    Point Financier
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Rapport Journalier Tab */}
-                <TabsContent value="rapport-journalier">
               <div className="space-y-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
@@ -5855,13 +5840,6 @@ _Gérante - Espace Maxo_
                   </Card>
                 )}
               </div>
-                </TabsContent>
-
-                {/* Point Financier Tab */}
-                <TabsContent value="point-financier">
-                  <PointFinancierTab currentUser={currentUser} />
-                </TabsContent>
-              </Tabs>
             </TabsContent>
           )}
 
@@ -7114,14 +7092,33 @@ _Gérante - Espace Maxo_
           {/* ==================== POINT HEBDOMADAIRE TAB ==================== */}
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="hebdo">
-            <HebdoReport 
-              weeklyReport={weeklyReport}
-              weekStartDate={weekStartDate}
-              setWeekStartDate={setWeekStartDate}
-              generateWeeklyPDF={generateWeeklyPDF}
-              sendWeeklyWhatsApp={sendWeeklyWhatsApp}
-              formatPrice={formatPrice}
-            />
+            <Tabs defaultValue="point-hebdo" className="w-full">
+              <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
+                <TabsTrigger value="point-hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Point Hebdomadaire
+                </TabsTrigger>
+                <TabsTrigger value="point-financier" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                  <Banknote className="w-4 h-4 mr-2" />
+                  Point Financier
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="point-hebdo">
+                <HebdoReport 
+                  weeklyReport={weeklyReport}
+                  weekStartDate={weekStartDate}
+                  setWeekStartDate={setWeekStartDate}
+                  generateWeeklyPDF={generateWeeklyPDF}
+                  sendWeeklyWhatsApp={sendWeeklyWhatsApp}
+                  formatPrice={formatPrice}
+                />
+              </TabsContent>
+
+              <TabsContent value="point-financier">
+                <PointFinancierTab currentUser={currentUser} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
           )}
 

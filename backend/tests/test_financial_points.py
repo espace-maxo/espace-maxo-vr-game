@@ -1,6 +1,6 @@
 """
 Test suite for Financial Points (Point Financier) feature
-Tests the complete workflow: Create -> Admin Validate -> Sign -> Lock
+Tests the complete workflow: Create -> Admin Validate -> Sign (consent-based) -> Lock/Unlock
 
 Endpoints tested:
 - POST /api/financial-points (create with period_type weekly/daily)
@@ -8,7 +8,9 @@ Endpoints tested:
 - GET /api/financial-points/{id} (get single point)
 - PUT /api/financial-points/{id} (update, blocked after signing for non-admin)
 - POST /api/financial-points/{id}/admin-validate (admin validation)
-- POST /api/financial-points/{id}/sign (signing after admin validation)
+- POST /api/financial-points/{id}/sign (consent-based signing - no signature_data, uses consent_text)
+- POST /api/financial-points/{id}/unlock (admin unlocks signed point for modification)
+- GET /api/financial-points/{id}/pdf (generates HTML/PDF document)
 - DELETE /api/financial-points/{id} (only admin can delete signed points)
 """
 
@@ -46,6 +48,7 @@ def unique_week_dates():
         "start": monday.strftime("%Y-%m-%d"),
         "end": sunday.strftime("%Y-%m-%d")
     }
+
 
 class TestFinancialPointsCreate:
     """Tests for creating financial points"""
@@ -255,10 +258,10 @@ class TestFinancialPointsRetrieve:
 
 
 class TestFinancialPointsWorkflow:
-    """Tests for the complete workflow: Create -> Admin Validate -> Sign"""
+    """Tests for the complete workflow: Create -> Admin Validate -> Sign (consent-based)"""
     
-    def test_complete_workflow(self, api_client, unique_date):
-        """Test the complete workflow: create -> admin validate -> sign"""
+    def test_complete_workflow_consent_based(self, api_client, unique_date):
+        """Test the complete workflow with consent-based signing (no signature_data)"""
         # Step 1: Create a financial point
         payload = {
             "date": unique_date,
@@ -270,7 +273,7 @@ class TestFinancialPointsWorkflow:
             "cheque_amount": 0,
             "wallet_amount": 0,
             "other_amount": 0,
-            "notes": "Complete workflow test",
+            "notes": "Complete workflow test - consent based",
             "created_by": "Test Manager"
         }
         
@@ -296,12 +299,12 @@ class TestFinancialPointsWorkflow:
         assert validated_point["status"] == "admin_validated"
         assert validated_point["signed"] == False
         
-        # Step 3: Sign the point
+        # Step 3: Sign the point with consent (NEW: no signature_data, uses consent_text)
         sign_response = api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
             json={
-                "signature_data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                "signer_name": "Test Signer"
+                "signer_name": "Test Signer",
+                "consent_text": "Je certifie l'exactitude des montants renseignes dans ce point financier."
             }
         )
         assert sign_response.status_code == 200
@@ -310,11 +313,12 @@ class TestFinancialPointsWorkflow:
         assert signed_point["signed"] == True
         assert signed_point["signed_by"] == "Test Signer"
         assert signed_point["status"] == "signed"
-        assert signed_point["signature_data"] is not None
+        # NEW: consent_text is stored instead of signature_data
+        assert signed_point.get("consent_text") is not None
         
         # Cleanup
         api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
-        print("✅ test_complete_workflow PASSED")
+        print("✅ test_complete_workflow_consent_based PASSED")
     
     def test_cannot_sign_without_admin_validation(self, api_client, unique_date):
         """Test that signing fails without admin validation"""
@@ -341,8 +345,8 @@ class TestFinancialPointsWorkflow:
         sign_response = api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
             json={
-                "signature_data": "data:image/png;base64,test",
-                "signer_name": "Test Signer"
+                "signer_name": "Test Signer",
+                "consent_text": "Je certifie l'exactitude des montants"
             }
         )
         
@@ -423,14 +427,14 @@ class TestFinancialPointsWorkflow:
         # First sign
         sign_response1 = api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test", "signer_name": "Signer 1"}
+            json={"signer_name": "Signer 1", "consent_text": "Je certifie"}
         )
         assert sign_response1.status_code == 200
         
         # Second sign should fail
         sign_response2 = api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test2", "signer_name": "Signer 2"}
+            json={"signer_name": "Signer 2", "consent_text": "Je certifie"}
         )
         assert sign_response2.status_code == 400
         assert "déjà signé" in sign_response2.json().get("detail", "")
@@ -438,6 +442,247 @@ class TestFinancialPointsWorkflow:
         # Cleanup
         api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
         print("✅ test_cannot_sign_twice PASSED")
+
+
+class TestFinancialPointsUnlock:
+    """Tests for the unlock endpoint - admin can unlock signed points for modification"""
+    
+    def test_admin_unlock_signed_point(self, api_client, unique_date):
+        """Test that admin can unlock a signed point for modification"""
+        # Create, validate, and sign a point
+        payload = {
+            "date": unique_date,
+            "end_date": "",
+            "period_type": "daily",
+            "cash_amount": 15000,
+            "mobile_amount": 5000,
+            "card_amount": 0,
+            "cheque_amount": 0,
+            "wallet_amount": 0,
+            "other_amount": 0,
+            "notes": "Test unlock",
+            "created_by": "Test Manager"
+        }
+        
+        create_response = api_client.post(f"{BASE_URL}/api/financial-points", json=payload)
+        assert create_response.status_code == 200
+        point_id = create_response.json()["financial_point"]["id"]
+        
+        # Validate and sign
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/admin-validate",
+            json={"admin_name": "Test Admin"}
+        )
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/sign",
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
+        )
+        
+        # Verify it's signed
+        get_response = api_client.get(f"{BASE_URL}/api/financial-points/{point_id}")
+        assert get_response.json()["signed"] == True
+        
+        # Admin unlocks the point
+        unlock_response = api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/unlock",
+            json={"admin_name": "Admin Unlocker"}
+        )
+        
+        assert unlock_response.status_code == 200
+        unlocked_point = unlock_response.json()["financial_point"]
+        
+        # Verify unlocked state
+        assert unlocked_point["signed"] == False
+        assert unlocked_point["signed_by"] is None
+        assert unlocked_point["signed_at"] is None
+        assert unlocked_point["consent_text"] is None
+        assert unlocked_point["status"] == "admin_validated"  # Returns to admin_validated state
+        assert unlocked_point.get("unlocked_by") == "Admin Unlocker"
+        assert unlocked_point.get("unlocked_at") is not None
+        
+        # Cleanup
+        api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
+        print("✅ test_admin_unlock_signed_point PASSED")
+    
+    def test_cannot_unlock_unsigned_point(self, api_client, unique_date):
+        """Test that unlocking an unsigned point fails"""
+        # Create a point (not signed)
+        payload = {
+            "date": unique_date,
+            "end_date": "",
+            "period_type": "daily",
+            "cash_amount": 10000,
+            "mobile_amount": 0,
+            "card_amount": 0,
+            "cheque_amount": 0,
+            "wallet_amount": 0,
+            "other_amount": 0,
+            "notes": "Test unlock unsigned",
+            "created_by": "Test Manager"
+        }
+        
+        create_response = api_client.post(f"{BASE_URL}/api/financial-points", json=payload)
+        assert create_response.status_code == 200
+        point_id = create_response.json()["financial_point"]["id"]
+        
+        # Try to unlock (should fail - not signed)
+        unlock_response = api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/unlock",
+            json={"admin_name": "Admin"}
+        )
+        
+        assert unlock_response.status_code == 400
+        assert "n'est pas signé" in unlock_response.json().get("detail", "")
+        
+        # Cleanup
+        api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
+        print("✅ test_cannot_unlock_unsigned_point PASSED")
+    
+    def test_unlock_allows_re_signing(self, api_client, unique_date):
+        """Test that after unlock, the point can be signed again"""
+        # Create, validate, sign, unlock, then sign again
+        payload = {
+            "date": unique_date,
+            "end_date": "",
+            "period_type": "daily",
+            "cash_amount": 12000,
+            "mobile_amount": 0,
+            "card_amount": 0,
+            "cheque_amount": 0,
+            "wallet_amount": 0,
+            "other_amount": 0,
+            "notes": "Test re-sign after unlock",
+            "created_by": "Test Manager"
+        }
+        
+        create_response = api_client.post(f"{BASE_URL}/api/financial-points", json=payload)
+        assert create_response.status_code == 200
+        point_id = create_response.json()["financial_point"]["id"]
+        
+        # Validate and sign
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/admin-validate",
+            json={"admin_name": "Test Admin"}
+        )
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/sign",
+            json={"signer_name": "First Signer", "consent_text": "Je certifie"}
+        )
+        
+        # Unlock
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/unlock",
+            json={"admin_name": "Admin"}
+        )
+        
+        # Sign again (should work)
+        sign_response = api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/sign",
+            json={"signer_name": "Second Signer", "consent_text": "Je certifie apres modification"}
+        )
+        
+        assert sign_response.status_code == 200
+        re_signed_point = sign_response.json()["financial_point"]
+        assert re_signed_point["signed"] == True
+        assert re_signed_point["signed_by"] == "Second Signer"
+        
+        # Cleanup
+        api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
+        print("✅ test_unlock_allows_re_signing PASSED")
+
+
+class TestFinancialPointsPDF:
+    """Tests for the PDF generation endpoint"""
+    
+    def test_get_pdf_for_signed_point(self, api_client, unique_date):
+        """Test generating PDF for a signed financial point"""
+        # Create, validate, and sign a point
+        payload = {
+            "date": unique_date,
+            "end_date": "",
+            "period_type": "daily",
+            "cash_amount": 25000,
+            "mobile_amount": 10000,
+            "card_amount": 5000,
+            "cheque_amount": 0,
+            "wallet_amount": 0,
+            "other_amount": 0,
+            "notes": "Test PDF generation",
+            "created_by": "Test Manager"
+        }
+        
+        create_response = api_client.post(f"{BASE_URL}/api/financial-points", json=payload)
+        assert create_response.status_code == 200
+        point_id = create_response.json()["financial_point"]["id"]
+        
+        # Validate and sign
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/admin-validate",
+            json={"admin_name": "Test Admin"}
+        )
+        api_client.post(
+            f"{BASE_URL}/api/financial-points/{point_id}/sign",
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
+        )
+        
+        # Get PDF
+        pdf_response = api_client.get(f"{BASE_URL}/api/financial-points/{point_id}/pdf")
+        
+        assert pdf_response.status_code == 200
+        # The endpoint returns HTML (weasyprint not available)
+        content_type = pdf_response.headers.get("content-type", "")
+        assert "text/html" in content_type or "application/pdf" in content_type
+        
+        # Verify HTML content contains expected elements
+        content = pdf_response.text
+        assert "ESPACE MAXO" in content
+        assert "Point Financier" in content
+        assert "25 000" in content or "25000" in content  # Cash amount
+        assert "Test Signer" in content  # Signer name
+        
+        # Cleanup
+        api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
+        print("✅ test_get_pdf_for_signed_point PASSED")
+    
+    def test_get_pdf_for_unsigned_point(self, api_client, unique_date):
+        """Test that PDF can be generated for unsigned points too (shows status)"""
+        # Create a point (not signed)
+        payload = {
+            "date": unique_date,
+            "end_date": "",
+            "period_type": "daily",
+            "cash_amount": 15000,
+            "mobile_amount": 0,
+            "card_amount": 0,
+            "cheque_amount": 0,
+            "wallet_amount": 0,
+            "other_amount": 0,
+            "notes": "Test PDF unsigned",
+            "created_by": "Test Manager"
+        }
+        
+        create_response = api_client.post(f"{BASE_URL}/api/financial-points", json=payload)
+        assert create_response.status_code == 200
+        point_id = create_response.json()["financial_point"]["id"]
+        
+        # Get PDF (should work even for unsigned)
+        pdf_response = api_client.get(f"{BASE_URL}/api/financial-points/{point_id}/pdf")
+        
+        assert pdf_response.status_code == 200
+        content = pdf_response.text
+        assert "ESPACE MAXO" in content
+        assert "En attente" in content  # Status should show pending
+        
+        # Cleanup
+        api_client.delete(f"{BASE_URL}/api/financial-points/{point_id}?is_admin=true")
+        print("✅ test_get_pdf_for_unsigned_point PASSED")
+    
+    def test_get_pdf_nonexistent_point_returns_404(self, api_client):
+        """Test that getting PDF for non-existent point returns 404"""
+        response = api_client.get(f"{BASE_URL}/api/financial-points/nonexistent-id-12345/pdf")
+        
+        assert response.status_code == 404
+        print("✅ test_get_pdf_nonexistent_point_returns_404 PASSED")
 
 
 class TestFinancialPointsUpdate:
@@ -513,7 +758,7 @@ class TestFinancialPointsUpdate:
         )
         api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test", "signer_name": "Test Signer"}
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
         )
         
         # Try to update without admin flag
@@ -557,7 +802,7 @@ class TestFinancialPointsUpdate:
         )
         api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test", "signer_name": "Test Signer"}
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
         )
         
         # Admin can update
@@ -638,7 +883,7 @@ class TestFinancialPointsDelete:
         )
         api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test", "signer_name": "Test Signer"}
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
         )
         
         # Try to delete without admin flag
@@ -679,7 +924,7 @@ class TestFinancialPointsDelete:
         )
         api_client.post(
             f"{BASE_URL}/api/financial-points/{point_id}/sign",
-            json={"signature_data": "data:image/png;base64,test", "signer_name": "Test Signer"}
+            json={"signer_name": "Test Signer", "consent_text": "Je certifie"}
         )
         
         # Admin can delete

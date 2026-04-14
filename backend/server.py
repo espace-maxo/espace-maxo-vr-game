@@ -6692,8 +6692,8 @@ async def admin_validate_financial_point(point_id: str, admin_name: str = Body(.
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/financial-points/{point_id}/sign")
-async def sign_financial_point(point_id: str, signature_data: str = Body(...), signer_name: str = Body(...)):
-    """Sign a financial point (only after admin validation)"""
+async def sign_financial_point(point_id: str, signer_name: str = Body(...), consent_text: str = Body(default="Je certifie l'exactitude des montants")):
+    """Sign a financial point with consent (only after admin validation)"""
     try:
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
@@ -6711,7 +6711,7 @@ async def sign_financial_point(point_id: str, signature_data: str = Body(...), s
                 "signed": True,
                 "signed_by": signer_name,
                 "signed_at": datetime.now(timezone.utc).isoformat(),
-                "signature_data": signature_data,
+                "consent_text": consent_text,
                 "status": "signed"
             }}
         )
@@ -6743,6 +6743,203 @@ async def delete_financial_point(point_id: str, is_admin: bool = False):
         raise
     except Exception as e:
         logger.error(f"Error deleting financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/financial-points/{point_id}/unlock")
+async def unlock_financial_point(point_id: str, admin_name: str = Body(..., embed=True)):
+    """Admin unlocks a signed financial point for modification"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        if not point.get("signed"):
+            raise HTTPException(status_code=400, detail="Ce point n'est pas signé")
+        
+        await db.financial_points.update_one(
+            {"id": point_id},
+            {"$set": {
+                "signed": False,
+                "signed_by": None,
+                "signed_at": None,
+                "consent_text": None,
+                "status": "admin_validated",
+                "unlocked_by": admin_name,
+                "unlocked_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        logger.info(f"Financial point {point_id} unlocked by admin {admin_name}")
+        return {"success": True, "financial_point": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unlocking financial point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/financial-points/{point_id}/pdf")
+async def generate_financial_point_pdf(point_id: str):
+    """Generate PDF for a signed financial point"""
+    try:
+        point = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        if not point:
+            raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        def fmt_price(val):
+            return f"{val:,.0f}".replace(",", " ")
+        
+        period_label = ""
+        if point.get("period_type") == "weekly":
+            try:
+                from datetime import datetime as dt_parse
+                start = dt_parse.fromisoformat(point["date"]).strftime("%d/%m/%Y")
+                end = dt_parse.fromisoformat(point.get("end_date", point["date"])).strftime("%d/%m/%Y")
+                period_label = f"Semaine du {start} au {end}"
+            except:
+                period_label = f"Semaine du {point['date']}"
+        else:
+            try:
+                from datetime import datetime as dt_parse
+                d = dt_parse.fromisoformat(point["date"]).strftime("%d/%m/%Y")
+                period_label = f"Journée du {d}"
+            except:
+                period_label = f"Journée du {point['date']}"
+        
+        signed_at_str = ""
+        if point.get("signed_at"):
+            try:
+                from datetime import datetime as dt_parse
+                sa = dt_parse.fromisoformat(point["signed_at"].replace("Z", "+00:00"))
+                signed_at_str = sa.strftime("%d/%m/%Y à %H:%M")
+            except:
+                signed_at_str = point["signed_at"]
+        
+        validated_at_str = ""
+        if point.get("admin_validated_at"):
+            try:
+                from datetime import datetime as dt_parse
+                va = dt_parse.fromisoformat(point["admin_validated_at"].replace("Z", "+00:00"))
+                validated_at_str = va.strftime("%d/%m/%Y à %H:%M")
+            except:
+                validated_at_str = point["admin_validated_at"]
+        
+        amounts = [
+            ("Espèces", point.get("cash_amount", 0)),
+            ("Mobile Money", point.get("mobile_amount", 0)),
+            ("Carte Bancaire", point.get("card_amount", 0)),
+            ("Chèque", point.get("cheque_amount", 0)),
+            ("Portefeuille / Crédit", point.get("wallet_amount", 0)),
+            ("Autres", point.get("other_amount", 0)),
+        ]
+        
+        rows_html = ""
+        for label, amt in amounts:
+            if amt > 0:
+                rows_html += f'<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">{label}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:bold;">{fmt_price(amt)} F</td></tr>'
+        
+        status_label = "Signé" if point.get("signed") else ("Validé" if point.get("admin_validated") else "En attente")
+        status_color = "#059669" if point.get("signed") else ("#2563eb" if point.get("admin_validated") else "#d97706")
+        
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  @page {{ size: A4; margin: 20mm; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; margin: 0; padding: 20px; }}
+  .header {{ text-align: center; border-bottom: 3px solid #0891b2; padding-bottom: 15px; margin-bottom: 25px; }}
+  .header h1 {{ color: #0891b2; margin: 0; font-size: 22pt; }}
+  .header h2 {{ color: #64748b; margin: 5px 0 0; font-size: 12pt; font-weight: normal; }}
+  .meta {{ display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 10pt; color: #64748b; }}
+  .meta-item {{ text-align: center; }}
+  .meta-item strong {{ display: block; color: #1e293b; font-size: 11pt; }}
+  .period {{ background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; text-align: center; font-size: 13pt; font-weight: bold; color: #0369a1; margin-bottom: 20px; }}
+  .status {{ display: inline-block; background: {status_color}; color: white; padding: 4px 16px; border-radius: 20px; font-size: 10pt; font-weight: bold; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+  thead th {{ background: #0891b2; color: white; padding: 10px 12px; text-align: left; font-size: 11pt; }}
+  thead th:last-child {{ text-align: right; }}
+  .total-row {{ background: #f0fdf4; }}
+  .total-row td {{ padding: 12px; font-size: 14pt; font-weight: bold; color: #059669; border-top: 2px solid #059669; }}
+  .notes {{ background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; margin: 15px 0; font-size: 10pt; }}
+  .signatures {{ display: flex; justify-content: space-between; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }}
+  .sig-box {{ text-align: center; width: 45%; }}
+  .sig-line {{ border-bottom: 1px solid #94a3b8; height: 40px; margin-bottom: 5px; }}
+  .sig-label {{ font-size: 9pt; color: #64748b; }}
+  .sig-name {{ font-size: 10pt; font-weight: bold; color: #1e293b; }}
+  .consent {{ background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px; margin: 15px 0; font-size: 9pt; color: #166534; }}
+  .footer {{ text-align: center; margin-top: 30px; font-size: 8pt; color: #94a3b8; }}
+</style>
+</head><body>
+<div class="header">
+  <h1>ESPACE MAXO</h1>
+  <h2>Point Financier - Remise de Fonds</h2>
+</div>
+
+<div style="text-align:center;margin-bottom:15px;">
+  <span class="status">{status_label}</span>
+</div>
+
+<div class="period">{period_label}</div>
+
+<table>
+  <thead><tr><th>Mode de paiement</th><th>Montant</th></tr></thead>
+  <tbody>
+    {rows_html}
+    <tr class="total-row">
+      <td>TOTAL GENERAL</td>
+      <td style="text-align:right;">{fmt_price(point.get('total_amount', 0))} F</td>
+    </tr>
+  </tbody>
+</table>
+
+{"<div class='notes'><strong>Notes :</strong> " + point.get('notes', '') + "</div>" if point.get('notes') else ""}
+
+{"<div class='consent'>Consentement : " + (point.get('consent_text') or 'Je certifie l exactitude des montants') + "</div>" if point.get('signed') else ""}
+
+<div class="signatures">
+  <div class="sig-box">
+    <div class="sig-name">{point.get('created_by', '-')}</div>
+    <div class="sig-line"></div>
+    <div class="sig-label">Créé par</div>
+  </div>
+  <div class="sig-box">
+    <div class="sig-name">{point.get('admin_validated_by', '-')}</div>
+    <div class="sig-line"></div>
+    <div class="sig-label">Validé par (Admin){f" - {validated_at_str}" if validated_at_str else ""}</div>
+  </div>
+</div>
+
+{"<div style='text-align:center;margin-top:15px;'><strong>Signé par :</strong> " + (point.get('signed_by') or '-') + (" le " + signed_at_str if signed_at_str else '') + "</div>" if point.get('signed') else ""}
+
+<div class="footer">
+  Document généré automatiquement - Espace Maxo - Caisse Pro<br/>
+  {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}
+</div>
+</body></html>"""
+
+        pdf_buffer = io.BytesIO()
+        try:
+            from weasyprint import HTML
+            HTML(string=html).write_pdf(pdf_buffer)
+        except ImportError:
+            pdf_buffer.write(html.encode('utf-8'))
+            pdf_buffer.seek(0)
+            return StreamingResponse(
+                pdf_buffer,
+                media_type="text/html",
+                headers={"Content-Disposition": f'inline; filename="point_financier_{point["date"]}.html"'}
+            )
+        
+        pdf_buffer.seek(0)
+        filename = f"point_financier_{point['date']}.pdf"
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating financial point PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
