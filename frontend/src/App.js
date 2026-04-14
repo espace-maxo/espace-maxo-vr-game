@@ -19,6 +19,7 @@ import DeliveryPage from "@/pages/DeliveryPage";
 import JoinUsPage from "@/pages/JoinUsPage";
 import TableReservationPage from "@/pages/TableReservationPage";
 import CaissePage from "@/pages/CaissePage";
+import StockPage from "@/pages/StockPage";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         <Routes>
           {/* Standalone Caisse - No navbar/footer */}
           <Route path="/caisse" element={<CaissePage />} />
+          <Route path="/stock" element={<StockPage />} />
           
           {/* Main website with navbar/footer */}
           <Route path="/*" element={

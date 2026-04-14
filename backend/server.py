@@ -23,6 +23,7 @@ from twilio.rest import Client as TwilioClient
 # Import modular routers
 from routers.service_reports import router as service_reports_router, set_db as set_service_reports_db
 from routers.subscriptions import router as subscriptions_router, set_db as set_subscriptions_db
+from routers.stock import router as stock_router, set_db as set_stock_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -35,6 +36,7 @@ db = client[os.environ['DB_NAME']]
 # Initialize router databases
 set_service_reports_db(db)
 set_subscriptions_db(db)
+set_stock_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -7017,6 +7019,7 @@ async def generate_financial_point_pdf(point_id: str):
 # Include modular routers with /api prefix
 api_router.include_router(service_reports_router)
 api_router.include_router(subscriptions_router)
+api_router.include_router(stock_router)
 
 app.include_router(api_router)
 
