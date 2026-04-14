@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Gamepad2, Phone, Lock, CalendarClock, Truck, Wallet, Users, UtensilsCrossed } from "lucide-react";
+import { Menu, X, Gamepad2, Phone, Lock, CalendarClock, Truck, Wallet, Users, UtensilsCrossed, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -15,6 +15,7 @@ const Navbar = () => {
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
     { label: "Admin", path: "/admin", icon: "lock" },
+    { label: "Stock", path: "/stock", icon: "warehouse" },
   ];
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + "/");
@@ -31,6 +32,8 @@ const Navbar = () => {
         return <Users className="w-4 h-4" />;
       case "table":
         return <UtensilsCrossed className="w-4 h-4" />;
+      case "warehouse":
+        return <Warehouse className="w-4 h-4" />;
       default:
         return null;
     }
