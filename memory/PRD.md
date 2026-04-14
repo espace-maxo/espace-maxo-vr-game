@@ -6,18 +6,14 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (13/04/2026 - Session 2)
 
-### Point Financier / Reversement des Recettes - Complete (DONE)
-- **Renomme** : "Point Financier" → "Reversement des Recettes"
-- **Sous-onglet Hebdo** : Accessible via Hebdo > Point Financier
-- **4 modes de paiement** : Especes, Mobile Money, Cheque, Portefeuille/Credit (Carte Bancaire et Autres supprimes)
-- **Workflow inverse** :
-  1. Gerante saisit les montants reverses
-  2. **Gerante signe** (consentement par checkbox)
-  3. **Admin valide** (verrouillage final + PDF)
-- **Comparaison automatique** : Tableau montrant les ecarts entre le reversement et les recettes enregistrees dans le systeme (Point Hebdo) par mode de paiement
-- Endpoint `/api/reports/revenue-by-payment` pour les donnees de comparaison
+### Reversement des Recettes - Complete (DONE)
+- **Onglet** : "Reversement" sous Hebdo
+- **4 modes** : Especes, Mobile Money, Cheque, **Credit**
+- **Billettage des Especes** : Decomposition en coupures FCFA (10000 a 5 F), calcul auto, bouton "Appliquer", stocke en base et affiche dans le PDF
+- **Workflow** : Gerante saisit + signe → Admin valide → PDF verrouille
+- **Comparaison** : Ecarts reversement vs recettes Point Hebdo par mode de paiement
 - Seul l'admin peut supprimer ou autoriser la modification
-- **Tests** : 10/10 backend + 22/22 frontend PASSED
+- **Tests** : 11/11 backend + 100% frontend PASSED
 
 ---
 ## Recent Updates (13/04/2026 - Session 1)
