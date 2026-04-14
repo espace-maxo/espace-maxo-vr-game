@@ -6,20 +6,18 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (13/04/2026 - Session 2)
 
-### Point Financier - Fonctionnalité Complète (DONE)
-- **Composant extrait** : `PointFinancierTab.jsx` dans `/app/frontend/src/pages/caisse/components/`
-- **Deplace dans Hebdo** : Sous-onglet de l'onglet Hebdo (Point Hebdomadaire + Point Financier)
-- **Type de periode** : Toggle Hebdomadaire / Journalier avec navigation par semaine ou date
-- **Saisie manuelle** : 6 champs (Especes, Mobile Money, Carte Bancaire, Cheque, Portefeuille/Credit, Autres) + Notes
-- **Workflow strict** :
-  1. Gerante saisit les montants → Statut "En attente de validation"
-  2. Admin valide → Statut "Valide par Admin"
-  3. **Signature par consentement** (checkbox + clic) → Statut "Signe" + verrouillage complet
-- **Apres signature** : Vue PDF avec boutons "Consulter le PDF" et "Telecharger le PDF"
-- **Admin seul** peut : Supprimer un point signe OU Autoriser la modification (deverrouiller)
-- **Endpoint PDF** : `/api/financial-points/{id}/pdf` genere un document HTML/PDF professionnel
-- **Endpoint Unlock** : `/api/financial-points/{id}/unlock` permet a l'admin de deverrouiller
-- **Tests** : 24/24 backend PASSED, 13/13 frontend PASSED
+### Point Financier / Reversement des Recettes - Complete (DONE)
+- **Renomme** : "Point Financier" → "Reversement des Recettes"
+- **Sous-onglet Hebdo** : Accessible via Hebdo > Point Financier
+- **4 modes de paiement** : Especes, Mobile Money, Cheque, Portefeuille/Credit (Carte Bancaire et Autres supprimes)
+- **Workflow inverse** :
+  1. Gerante saisit les montants reverses
+  2. **Gerante signe** (consentement par checkbox)
+  3. **Admin valide** (verrouillage final + PDF)
+- **Comparaison automatique** : Tableau montrant les ecarts entre le reversement et les recettes enregistrees dans le systeme (Point Hebdo) par mode de paiement
+- Endpoint `/api/reports/revenue-by-payment` pour les donnees de comparaison
+- Seul l'admin peut supprimer ou autoriser la modification
+- **Tests** : 10/10 backend + 22/22 frontend PASSED
 
 ---
 ## Recent Updates (13/04/2026 - Session 1)
