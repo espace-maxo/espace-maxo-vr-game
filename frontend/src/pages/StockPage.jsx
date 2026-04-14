@@ -72,12 +72,14 @@ export default function StockPage() {
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", color: "#3b82f6" });
 
   const seed = async () => {
+    setLoading(true);
     try {
       await axios.post(`${API}/seed`);
       setSeeded(true);
       fetchAll();
-      toast.success("Donnees de demonstration chargees");
+      toast.success("Donnees de demonstration chargees - 441 produits");
     } catch { toast.error("Erreur"); }
+    finally { setLoading(false); }
   };
 
   const fetchDashboard = useCallback(async () => {
@@ -117,6 +119,13 @@ export default function StockPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
+
+  // Auto-seed if database is empty on first load
+  useEffect(() => {
+    if (dashboard && dashboard.total_products === 0 && !seeded && !loading) {
+      seed();
+    }
+  }, [dashboard]);
 
   // Product CRUD
   const saveProduct = async () => {
@@ -401,7 +410,21 @@ export default function StockPage() {
 
             <div className="text-slate-500 text-sm">{products.length} produit(s)</div>
 
+            {/* Empty state with seed button */}
+            {products.length === 0 && (
+              <Card className="bg-slate-900/80 border-slate-800">
+                <CardContent className="py-12 text-center">
+                  <Package className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400 mb-4">Aucun produit trouve dans la base de donnees.</p>
+                  <Button onClick={seed} className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={loading}>
+                    <Plus className="w-4 h-4 mr-2" /> {loading ? "Chargement en cours..." : "Charger les 441 produits de demonstration"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Product Table */}
+            {products.length > 0 && (
             <Card className="bg-slate-900/80 border-slate-800">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -439,6 +462,7 @@ export default function StockPage() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
         )}
 
