@@ -8,12 +8,15 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 
 ### Reversement des Recettes - Complete (DONE)
 - **Onglet** : "Reversement" sous Hebdo
-- **4 modes** : Especes, Mobile Money, Cheque, **Credit**
-- **Billettage des Especes** : Decomposition en coupures FCFA (10000 a 5 F), calcul auto, bouton "Appliquer", stocke en base et affiche dans le PDF
+- **4 modes** : Especes, Mobile Money, Cheque, Credit
+- **Billettage** : Vue Billets (10000-500) / Pieces (200-5), sous-totaux visuels, bouton "Appliquer"
+- **Numero Momo** : Champ sous Mobile Money
+- **Destination** : "Remis a l'administrateur" ou "Verse a la banque"
+- **PDF** : "Point du reversement", badge destination, Momo, billettage
 - **Workflow** : Gerante saisit + signe → Admin valide → PDF verrouille
-- **Comparaison** : Ecarts reversement vs recettes Point Hebdo par mode de paiement
-- Seul l'admin peut supprimer ou autoriser la modification
-- **Tests** : 11/11 backend + 100% frontend PASSED
+- **Comparaison** : Ecarts reversement vs recettes Point Hebdo
+- Seul l'admin peut supprimer/deverrouiller
+- **Tests** : 10/10 backend + 100% frontend PASSED
 
 ---
 ## Recent Updates (13/04/2026 - Session 1)
