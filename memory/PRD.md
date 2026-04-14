@@ -19,7 +19,30 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 - **Tests** : 10/10 backend + 100% frontend PASSED
 
 ---
-## Recent Updates (13/04/2026 - Session 1)
+## Module Gestion de Stock - Phase 1 (DONE - 14/04/2026)
+
+### Architecture
+- **Route** : `/stock` (page standalone comme `/caisse`)
+- **Backend** : `/app/backend/routers/stock.py` (router modulaire)
+- **Frontend** : `/app/frontend/src/pages/StockPage.jsx`
+- **Collections MongoDB** : `stock_products`, `stock_categories`, `stock_suppliers`, `stock_movements`, `stock_purchases`
+
+### Fonctionnalites implementees
+- **Tableau de bord** : 5 cartes de synthese, alertes rupture/faible, stock par categorie, derniers mouvements
+- **Produits** : CRUD complet, recherche, filtres (categorie, alerte), code produit, unite, seuils min/max, prix achat, fournisseur, emplacement, statut couleur
+- **Mouvements** : Entree, Sortie, Perte, Casse, Ajustement, Retour fournisseur - MAJ auto stock
+- **Achats** : Creation avec liste articles, calcul total auto, MAJ stock auto, creation mouvements auto
+- **Fournisseurs** : CRUD complet avec cards
+- **Categories** : CRUD complet, 8 categories predefinies
+- **Donnees demo** : 18 produits, 8 categories, 4 fournisseurs (restaurant africain realiste)
+- **Tests** : 34/34 backend + 100% frontend PASSED
+
+### Phases suivantes (a venir)
+- Phase 2 : Inventaire physique + Rapports/Stats + Export PDF/Excel
+- Phase 3 : Recettes/Fiches techniques + Consommation auto + Lien produits Caisse
+- Phase 4 : Gestion utilisateurs stock + Parametres + Bonus
+
+---
 
 ### Rapport - Nouveau Sous-menu "Point Financier"
 - L'onglet Rapport contient maintenant 2 sous-onglets :
