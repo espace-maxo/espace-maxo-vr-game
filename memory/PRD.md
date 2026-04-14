@@ -7,21 +7,19 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ## Recent Updates (13/04/2026 - Session 2)
 
 ### Point Financier - Fonctionnalité Complète (DONE)
-- **Composant extrait** : `PointFinancierTab.jsx` créé dans `/app/frontend/src/pages/caisse/components/`
-- **Type de période** : Toggle Hebdomadaire / Journalier avec navigation par semaine ou sélection de date
-- **Saisie manuelle** : 6 champs (Espèces, Mobile Money, Carte Bancaire, Chèque, Portefeuille/Crédit, Autres) + Notes
-- **Total automatique** : Calcul en temps réel du total
+- **Composant extrait** : `PointFinancierTab.jsx` dans `/app/frontend/src/pages/caisse/components/`
+- **Deplace dans Hebdo** : Sous-onglet de l'onglet Hebdo (Point Hebdomadaire + Point Financier)
+- **Type de periode** : Toggle Hebdomadaire / Journalier avec navigation par semaine ou date
+- **Saisie manuelle** : 6 champs (Especes, Mobile Money, Carte Bancaire, Cheque, Portefeuille/Credit, Autres) + Notes
 - **Workflow strict** :
-  1. **Gérante saisit** les montants manuellement → Statut "En attente de validation"
-  2. **Admin valide** → Statut "Validé par Admin"
-  3. **Signature électronique** (canvas de dessin) → Statut "Signé" + verrouillage complet
-- **Verrouillage** : Une fois signé, les champs sont désactivés. Seul l'Admin peut modifier ou supprimer
-- **Backend** : period_type (weekly/daily), end_date pour les plages hebdomadaires
-- **Tests** : 18/18 backend PASSED, 100% frontend PASSED
-
-### Début du Refactoring
-- `PointFinancierTab.jsx` est le premier composant majeur extrait de `CaissePage.jsx`
-- ~200 lignes retirées de CaissePage.jsx (états, fonctions, JSX du Point Financier)
+  1. Gerante saisit les montants → Statut "En attente de validation"
+  2. Admin valide → Statut "Valide par Admin"
+  3. **Signature par consentement** (checkbox + clic) → Statut "Signe" + verrouillage complet
+- **Apres signature** : Vue PDF avec boutons "Consulter le PDF" et "Telecharger le PDF"
+- **Admin seul** peut : Supprimer un point signe OU Autoriser la modification (deverrouiller)
+- **Endpoint PDF** : `/api/financial-points/{id}/pdf` genere un document HTML/PDF professionnel
+- **Endpoint Unlock** : `/api/financial-points/{id}/unlock` permet a l'admin de deverrouiller
+- **Tests** : 24/24 backend PASSED, 13/13 frontend PASSED
 
 ---
 ## Recent Updates (13/04/2026 - Session 1)
