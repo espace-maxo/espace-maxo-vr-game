@@ -1,0 +1,105 @@
+{
+  "summary": "Comprehensive testing of Reversement des Recettes feature with REVERSED workflow. All backend tests passed (10/10). Frontend workflow fully verified: Only 4 payment modes (no Carte Bancaire, no Autres), REVERSED workflow (Gerante signs FIRST, Admin validates AFTER), comparison table with Ecart column, PDF generation after admin validation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "HebdoReport table",
+        "issues": ["Console warning: HTML hydration error - <tr> cannot be child of <span> in tbody. This is a React rendering issue but does not affect functionality."]
+      }
+    ]
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/reports/revenue-by-payment - NEW endpoint returns revenue by payment method",
+    "✅ Backend: GET /api/reports/revenue-by-payment?week_start= - filters by week",
+    "✅ Backend: GET /api/reports/revenue-by-payment?date= - filters by date",
+    "✅ Backend: POST /api/financial-points - only 4 payment fields (no card_amount, no other_amount)",
+    "✅ Backend: POST /api/financial-points/{id}/sign - Gerante signs FIRST (no admin validation required)",
+    "✅ Backend: POST /api/financial-points/{id}/admin-validate - Admin validates AFTER signature (requires signed=true)",
+    "✅ Backend: POST /api/financial-points/{id}/unlock - Admin can unlock for modification",
+    "✅ Backend: GET /api/financial-points/{id}/pdf - PDF shows 'Reversement des Recettes'",
+    "✅ Backend: Full REVERSED workflow: Create → Sign (Gerante) → Validate (Admin)",
+    "✅ Backend: Manager can create AND sign financial points",
+    "✅ Frontend: Navigate /caisse > Admin login > Hebdo > Point Financier sub-tab",
+    "✅ Frontend: Only 4 payment fields visible (Especes, Mobile Money, Cheque, Portefeuille/Credit)",
+    "✅ Frontend: NO Carte Bancaire field, NO Autres field",
+    "✅ Frontend: Title says 'Reversement des Recettes'",
+    "✅ Frontend: 'TOTAL REVERSEMENT' label in total section",
+    "✅ Frontend: Comparison table 'Comparaison Reversement / Recettes Point Hebdo' with Ecart column",
+    "✅ Frontend: Workflow guide shows: 1. Saisie Gerante → 2. Signature Gerante → 3. Validation Admin & PDF",
+    "✅ Frontend: Sign button says 'Signer (Gerante)'",
+    "✅ Frontend: Admin sees 'Valider (Admin)' button after signature",
+    "✅ Frontend: After full validation: 'Reversement Valide & Verrouille' with PDF buttons",
+    "✅ Frontend: Admin controls: 'Autoriser la modification' and 'Supprimer' buttons",
+    "✅ Frontend: Manager (PIN 2468) can view but NOT validate, unlock, or delete validated points"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_reversement_recettes.py",
+    "/app/test_reports/pytest/reversement_recettes_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: Console hydration warnings in HebdoReport table (span inside tbody) - cosmetic issue, does not affect functionality"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reversement_recettes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest tests passed)",
+    "frontend": "100% (22/22 features verified)"
+  },
+  "test_credentials": {
+    "admin_login": "Click 'Admin' button, password 'Caisse2026'",
+    "manager_login": "Click 'Serveur (PIN)' button, PIN '2468' (Mères AHOUANDJINOU)"
+  },
+  "seed_data_creation": "Created and validated test financial point during testing (95,000 F total)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reversement des Recettes feature fully working with REVERSED workflow. Key changes from previous iteration: (1) Only 4 payment modes - Carte Bancaire and Autres REMOVED, (2) Workflow REVERSED: Gerante signs FIRST, Admin validates AFTER, (3) NEW /reports/revenue-by-payment endpoint for comparison data, (4) Comparison table shows discrepancies between reversement and system-recorded revenue by payment method. All role-based permissions working correctly.",
+  "features_verified": {
+    "payment_modes": {
+      "status": "WORKING",
+      "notes": "Only 4 modes: Especes, Mobile Money, Cheque, Portefeuille/Credit. NO Carte Bancaire, NO Autres."
+    },
+    "reversed_workflow": {
+      "status": "WORKING",
+      "notes": "Gerante signs FIRST (no admin validation required), Admin validates AFTER (requires signed=true)"
+    },
+    "comparison_table": {
+      "status": "WORKING",
+      "notes": "Shows Reversement vs Recettes (Systeme) with Ecart column for each payment mode"
+    },
+    "revenue_by_payment_endpoint": {
+      "status": "WORKING",
+      "notes": "NEW endpoint /reports/revenue-by-payment returns validated invoice revenue by payment method"
+    },
+    "pdf_generation": {
+      "status": "WORKING",
+      "notes": "PDF shows 'Reversement des Recettes' title, available after admin validation"
+    },
+    "admin_controls": {
+      "status": "WORKING",
+      "notes": "Admin can validate, unlock, and delete. Manager cannot."
+    },
+    "manager_permissions": {
+      "status": "WORKING",
+      "notes": "Manager can create and sign, but cannot validate, unlock, or delete"
+    }
+  },
+  "backend_api_tests": {
+    "GET /api/reports/revenue-by-payment": "PASS - Returns revenue by payment method",
+    "GET /api/reports/revenue-by-payment?week_start=": "PASS - Filters by week",
+    "GET /api/reports/revenue-by-payment?date=": "PASS - Filters by date",
+    "POST /api/financial-points (4 fields only)": "PASS - Creates with only 4 payment fields",
+    "POST /api/financial-points/{id}/sign (without admin validation)": "PASS - Gerante signs FIRST",
+    "POST /api/financial-points/{id}/admin-validate (without signature)": "PASS - Returns 400",
+    "POST /api/financial-points/{id}/admin-validate (with signature)": "PASS - Admin validates AFTER",
+    "POST /api/financial-points/{id}/unlock": "PASS - Admin unlocks signed point",
+    "GET /api/financial-points/{id}/pdf": "PASS - Returns HTML with Reversement title"
+  }
+}

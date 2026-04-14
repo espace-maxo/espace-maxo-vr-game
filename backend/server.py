@@ -6519,20 +6519,73 @@ async def toggle_task(instruction_id: str, task_index: int, completed: bool = Bo
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== FINANCIAL POINT (Point Financier) ====================
+# ==================== FINANCIAL POINT (Point Financier / Reversement) ====================
+
+@api_router.get("/reports/revenue-by-payment")
+async def get_revenue_by_payment_method(week_start: str = None, date: str = None):
+    """Get validated invoice revenue grouped by payment method for comparison with reversement"""
+    try:
+        if week_start:
+            start = datetime.fromisoformat(week_start)
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            start_str = start.strftime("%Y-%m-%d")
+            end_str = end.strftime("%Y-%m-%d") + "T23:59:59Z"
+        elif date:
+            start_str = date
+            end_str = date + "T23:59:59Z"
+        else:
+            today = datetime.now(timezone.utc)
+            start = today - timedelta(days=today.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            start_str = start.strftime("%Y-%m-%d")
+            end_str = end.strftime("%Y-%m-%d") + "T23:59:59Z"
+        
+        invoices = await db.invoices.find({
+            "validation_status": "validated",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0, "total": 1, "payment_method": 1}).to_list(5000)
+        
+        by_method = {"cash": 0, "mobile": 0, "card": 0, "cheque": 0, "wallet": 0, "credit": 0, "other": 0}
+        total = 0
+        for inv in invoices:
+            method = inv.get("payment_method", "cash")
+            amt = inv.get("total", 0)
+            total += amt
+            if method in by_method:
+                by_method[method] += amt
+            else:
+                by_method["other"] += amt
+        
+        # Group wallet+credit
+        by_method["wallet"] = by_method.get("wallet", 0) + by_method.pop("credit", 0)
+        
+        return {
+            "period_start": start_str,
+            "total": total,
+            "count": len(invoices),
+            "by_method": {
+                "cash": by_method.get("cash", 0),
+                "mobile": by_method.get("mobile", 0),
+                "cheque": by_method.get("cheque", 0),
+                "wallet": by_method.get("wallet", 0),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting revenue by payment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class FinancialPointCreate(BaseModel):
-    date: str  # YYYY-MM-DD (date de début pour hebdo, date unique pour journalier)
-    end_date: str = ""  # YYYY-MM-DD (date de fin pour hebdo, vide pour journalier)
-    period_type: str = "weekly"  # "weekly" ou "daily"
+    date: str
+    end_date: str = ""
+    period_type: str = "weekly"
     cash_amount: float = 0  # Espèces
     mobile_amount: float = 0  # Mobile Money
-    card_amount: float = 0  # Carte bancaire
     cheque_amount: float = 0  # Chèque
-    wallet_amount: float = 0  # Porte-monnaie/Crédit
-    other_amount: float = 0  # Autres
-    notes: str = ""  # Observations
-    created_by: str = ""  # Gérante qui crée
+    wallet_amount: float = 0  # Portefeuille/Crédit
+    notes: str = ""
+    created_by: str = ""
 
 @api_router.get("/financial-points")
 async def get_financial_points(date: str = None, status: str = None, period_type: str = None):
@@ -6585,7 +6638,7 @@ async def create_financial_point(data: FinancialPointCreate):
         if existing:
             raise HTTPException(status_code=400, detail="Un point financier existe déjà pour cette période")
         
-        total = data.cash_amount + data.mobile_amount + data.card_amount + data.cheque_amount + data.wallet_amount + data.other_amount
+        total = data.cash_amount + data.mobile_amount + data.cheque_amount + data.wallet_amount
         
         point = {
             "id": str(uuid.uuid4()),
@@ -6594,10 +6647,8 @@ async def create_financial_point(data: FinancialPointCreate):
             "period_type": data.period_type,
             "cash_amount": data.cash_amount,
             "mobile_amount": data.mobile_amount,
-            "card_amount": data.card_amount,
             "cheque_amount": data.cheque_amount,
             "wallet_amount": data.wallet_amount,
-            "other_amount": data.other_amount,
             "total_amount": total,
             "notes": data.notes,
             "created_by": data.created_by,
@@ -6637,14 +6688,12 @@ async def update_financial_point(point_id: str, data: dict = Body(...)):
             raise HTTPException(status_code=403, detail="Ce point financier est signé et ne peut être modifié que par l'administrateur")
         
         # Recalculate total if amounts are updated
-        if any(key in data for key in ["cash_amount", "mobile_amount", "card_amount", "cheque_amount", "wallet_amount", "other_amount"]):
+        if any(key in data for key in ["cash_amount", "mobile_amount", "cheque_amount", "wallet_amount"]):
             cash = data.get("cash_amount", point.get("cash_amount", 0))
             mobile = data.get("mobile_amount", point.get("mobile_amount", 0))
-            card = data.get("card_amount", point.get("card_amount", 0))
             cheque = data.get("cheque_amount", point.get("cheque_amount", 0))
             wallet = data.get("wallet_amount", point.get("wallet_amount", 0))
-            other = data.get("other_amount", point.get("other_amount", 0))
-            data["total_amount"] = cash + mobile + card + cheque + wallet + other
+            data["total_amount"] = cash + mobile + cheque + wallet
         
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         
@@ -6663,11 +6712,14 @@ async def update_financial_point(point_id: str, data: dict = Body(...)):
 
 @api_router.post("/financial-points/{point_id}/admin-validate")
 async def admin_validate_financial_point(point_id: str, admin_name: str = Body(..., embed=True)):
-    """Admin validates a financial point (required before signing)"""
+    """Admin validates a signed financial point (final step - locks the document)"""
     try:
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
             raise HTTPException(status_code=404, detail="Point financier non trouvé")
+        
+        if not point.get("signed"):
+            raise HTTPException(status_code=400, detail="Ce point doit d'abord être signé par la gérante")
         
         if point.get("admin_validated"):
             raise HTTPException(status_code=400, detail="Ce point est déjà validé par l'administrateur")
@@ -6693,14 +6745,11 @@ async def admin_validate_financial_point(point_id: str, admin_name: str = Body(.
 
 @api_router.post("/financial-points/{point_id}/sign")
 async def sign_financial_point(point_id: str, signer_name: str = Body(...), consent_text: str = Body(default="Je certifie l'exactitude des montants")):
-    """Sign a financial point with consent (only after admin validation)"""
+    """Manager signs a financial point with consent (before admin validation)"""
     try:
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
             raise HTTPException(status_code=404, detail="Point financier non trouvé")
-        
-        if not point.get("admin_validated"):
-            raise HTTPException(status_code=400, detail="Ce point doit d'abord être validé par l'administrateur avant de pouvoir être signé")
         
         if point.get("signed"):
             raise HTTPException(status_code=400, detail="Ce point est déjà signé")
@@ -6827,10 +6876,8 @@ async def generate_financial_point_pdf(point_id: str):
         amounts = [
             ("Espèces", point.get("cash_amount", 0)),
             ("Mobile Money", point.get("mobile_amount", 0)),
-            ("Carte Bancaire", point.get("card_amount", 0)),
             ("Chèque", point.get("cheque_amount", 0)),
             ("Portefeuille / Crédit", point.get("wallet_amount", 0)),
-            ("Autres", point.get("other_amount", 0)),
         ]
         
         rows_html = ""
@@ -6871,7 +6918,7 @@ async def generate_financial_point_pdf(point_id: str):
 </head><body>
 <div class="header">
   <h1>ESPACE MAXO</h1>
-  <h2>Point Financier - Remise de Fonds</h2>
+  <h2>Reversement des Recettes</h2>
 </div>
 
 <div style="text-align:center;margin-bottom:15px;">
@@ -6885,7 +6932,7 @@ async def generate_financial_point_pdf(point_id: str):
   <tbody>
     {rows_html}
     <tr class="total-row">
-      <td>TOTAL GENERAL</td>
+      <td>TOTAL REVERSEMENT</td>
       <td style="text-align:right;">{fmt_price(point.get('total_amount', 0))} F</td>
     </tr>
   </tbody>
@@ -6893,25 +6940,23 @@ async def generate_financial_point_pdf(point_id: str):
 
 {"<div class='notes'><strong>Notes :</strong> " + point.get('notes', '') + "</div>" if point.get('notes') else ""}
 
-{"<div class='consent'>Consentement : " + (point.get('consent_text') or 'Je certifie l exactitude des montants') + "</div>" if point.get('signed') else ""}
+{"<div class='consent'>Consentement : " + (point.get('consent_text') or 'Je certifie l exactitude des montants reverses') + "</div>" if point.get('signed') else ""}
 
 <div class="signatures">
   <div class="sig-box">
-    <div class="sig-name">{point.get('created_by', '-')}</div>
+    <div class="sig-name">{point.get('signed_by') or point.get('created_by', '-')}</div>
     <div class="sig-line"></div>
-    <div class="sig-label">Créé par</div>
+    <div class="sig-label">Gerante{f" - Signe le {signed_at_str}" if signed_at_str else ""}</div>
   </div>
   <div class="sig-box">
     <div class="sig-name">{point.get('admin_validated_by', '-')}</div>
     <div class="sig-line"></div>
-    <div class="sig-label">Validé par (Admin){f" - {validated_at_str}" if validated_at_str else ""}</div>
+    <div class="sig-label">Administrateur{f" - Valide le {validated_at_str}" if validated_at_str else ""}</div>
   </div>
 </div>
 
-{"<div style='text-align:center;margin-top:15px;'><strong>Signé par :</strong> " + (point.get('signed_by') or '-') + (" le " + signed_at_str if signed_at_str else '') + "</div>" if point.get('signed') else ""}
-
 <div class="footer">
-  Document généré automatiquement - Espace Maxo - Caisse Pro<br/>
+  Document genere automatiquement - Espace Maxo - Caisse Pro<br/>
   {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}
 </div>
 </body></html>"""
