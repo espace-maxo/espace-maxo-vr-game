@@ -7100,7 +7100,7 @@ _Gérante - Espace Maxo_
                 </TabsTrigger>
                 <TabsTrigger value="point-financier" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
                   <Banknote className="w-4 h-4 mr-2" />
-                  Point Financier
+                  Reversement
                 </TabsTrigger>
               </TabsList>
 

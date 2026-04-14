@@ -6583,9 +6583,10 @@ class FinancialPointCreate(BaseModel):
     cash_amount: float = 0  # Espèces
     mobile_amount: float = 0  # Mobile Money
     cheque_amount: float = 0  # Chèque
-    wallet_amount: float = 0  # Portefeuille/Crédit
+    wallet_amount: float = 0  # Crédit
     notes: str = ""
     created_by: str = ""
+    billettage: dict = {}
 
 @api_router.get("/financial-points")
 async def get_financial_points(date: str = None, status: str = None, period_type: str = None):
@@ -6660,7 +6661,7 @@ async def create_financial_point(data: FinancialPointCreate):
             "signed": False,
             "signed_by": None,
             "signed_at": None,
-            "signature_data": None
+            "billettage": data.billettage
         }
         
         await db.financial_points.insert_one(point)
@@ -6877,8 +6878,20 @@ async def generate_financial_point_pdf(point_id: str):
             ("Espèces", point.get("cash_amount", 0)),
             ("Mobile Money", point.get("mobile_amount", 0)),
             ("Chèque", point.get("cheque_amount", 0)),
-            ("Portefeuille / Crédit", point.get("wallet_amount", 0)),
+            ("Crédit", point.get("wallet_amount", 0)),
         ]
+        
+        # Billettage HTML
+        billettage_html = ""
+        bill_data = point.get("billettage", {})
+        if bill_data and any(int(v or 0) > 0 for v in bill_data.values()):
+            bill_rows = ""
+            for denom in [10000, 5000, 2000, 1000, 500, 200, 100, 50, 25, 10, 5]:
+                qty = int(bill_data.get(str(denom), 0))
+                if qty > 0:
+                    bill_rows += f'<tr><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;">{fmt_price(denom)} F</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:center;">{qty}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">{fmt_price(qty * denom)} F</td></tr>'
+            if bill_rows:
+                billettage_html = f'''<div style="margin:15px 0;"><h3 style="font-size:11pt;color:#059669;margin-bottom:8px;">Billettage des Espèces</h3><table style="width:60%;border-collapse:collapse;font-size:10pt;"><thead><tr style="background:#059669;color:white;"><th style="padding:6px 8px;text-align:left;">Coupure</th><th style="padding:6px 8px;text-align:center;">Quantité</th><th style="padding:6px 8px;text-align:right;">Sous-total</th></tr></thead><tbody>{bill_rows}</tbody></table></div>'''
         
         rows_html = ""
         for label, amt in amounts:
@@ -6937,6 +6950,8 @@ async def generate_financial_point_pdf(point_id: str):
     </tr>
   </tbody>
 </table>
+
+{billettage_html}
 
 {"<div class='notes'><strong>Notes :</strong> " + point.get('notes', '') + "</div>" if point.get('notes') else ""}
 
