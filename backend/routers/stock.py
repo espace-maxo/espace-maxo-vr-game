@@ -600,6 +600,43 @@ async def delete_users_bulk(ids: List[str] = Body(..., embed=True)):
     result = await db.stock_users.delete_many({"id": {"$in": ids}})
     return {"success": True, "deleted": result.deleted_count}
 
+@router.post("/products/reset-quantities")
+async def reset_product_quantities(ids: List[str] = Body(..., embed=True)):
+    """Reset stock quantities to 0 for given product IDs"""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    reset_count = 0
+    for pid in ids:
+        product = await db.stock_products.find_one({"id": pid})
+        if not product:
+            continue
+        old_qty = product.get("quantity", 0)
+        if old_qty == 0:
+            continue
+        # Create movement for traceability
+        mov = {
+            "id": str(uuid.uuid4()),
+            "product_id": pid,
+            "product_name": product.get("name", ""),
+            "product_code": product.get("code", ""),
+            "movement_type": "ajustement",
+            "quantity": old_qty,
+            "previous_quantity": old_qty,
+            "new_quantity": 0,
+            "unit": product.get("unit", ""),
+            "unit_price": product.get("purchase_price", 0),
+            "total_value": round(old_qty * product.get("purchase_price", 0), 2),
+            "reason": "Reinitialisation a zero",
+            "user_name": "Admin",
+            "created_at": now_iso
+        }
+        await db.stock_movements.insert_one(mov)
+        await db.stock_products.update_one(
+            {"id": pid},
+            {"$set": {"quantity": 0, "valeur_stock": 0, "statut": "rupture", "updated_at": now_iso}}
+        )
+        reset_count += 1
+    return {"success": True, "reset": reset_count}
+
 # ==================== INVENTAIRE PHYSIQUE ====================
 
 class InventoryItemInput(BaseModel):

@@ -473,6 +473,25 @@ export default function StockPage() {
     catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
   };
 
+  const resetQuantities = async (ids) => {
+    if (!window.confirm(`Remettre a zero le stock de ${ids.length} produit(s) ?`)) return;
+    try {
+      const r = await axios.post(`${API}/products/reset-quantities`, { ids });
+      toast.success(`${r.data.reset} produit(s) remis a zero`);
+      clearSelection();
+      fetchProducts(); fetchDashboard();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const resetSingleProduct = async (id) => {
+    if (!window.confirm("Remettre ce produit a zero ?")) return;
+    try {
+      const r = await axios.post(`${API}/products/reset-quantities`, { ids: [id] });
+      toast.success(`Produit remis a zero`);
+      fetchProducts(); fetchDashboard();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
   // Helper component for bulk delete bar
   const BulkBar = ({ count, label, endpoint, ids, refreshFn }) => count > 0 ? (
     <div className="flex items-center gap-3 bg-red-900/30 border border-red-700/50 rounded-lg px-4 py-2">
@@ -732,7 +751,21 @@ export default function StockPage() {
 
             <div className="text-slate-500 text-sm flex items-center gap-3">
               <span>{products.length} produit(s)</span>
-              {isAdmin && <BulkBar count={selectedItems.filter(id => products.some(p => p.id === id)).length} label="produit(s)" endpoint="products/delete-bulk" ids={selectedItems.filter(id => products.some(p => p.id === id))} refreshFn={() => { fetchProducts(); fetchDashboard(); }} />}
+              {isAdmin && (() => {
+                const sel = selectedItems.filter(id => products.some(p => p.id === id));
+                return sel.length > 0 ? (
+                  <div className="flex items-center gap-3 bg-slate-800/80 border border-slate-700/50 rounded-lg px-4 py-2">
+                    <span className="text-amber-400 text-sm font-medium">{sel.length} selectionne(s)</span>
+                    <Button size="sm" className="bg-orange-600 hover:bg-orange-700 h-7 text-xs" onClick={() => resetQuantities(sel)} data-testid="bulk-reset-btn">
+                      <RefreshCw className="w-3 h-3 mr-1" /> Remettre a zero
+                    </Button>
+                    <Button size="sm" className="bg-red-600 hover:bg-red-700 h-7 text-xs" onClick={() => bulkDelete("products/delete-bulk", sel, "produit(s)", () => { fetchProducts(); fetchDashboard(); })} data-testid="bulk-delete-btn">
+                      <Trash2 className="w-3 h-3 mr-1" /> Supprimer
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-400" onClick={clearSelection}>Annuler</Button>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Empty state with seed button */}
@@ -778,6 +811,7 @@ export default function StockPage() {
                             <td className="p-3">
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400" onClick={() => openEditProduct(p)}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400" onClick={() => resetSingleProduct(p.id)} title="Remettre a zero"><RefreshCw className="w-3.5 h-3.5" /></Button>}
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteProduct(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                               </div>
                             </td>
