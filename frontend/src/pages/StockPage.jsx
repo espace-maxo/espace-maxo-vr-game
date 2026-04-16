@@ -647,7 +647,12 @@ export default function StockPage() {
                   {purchases.map(p => (
                     <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                       <td className="p-3 text-slate-400">{p.purchase_date}</td>
-                      <td className="p-3 text-white">{p.supplier_name || "-"}</td>
+                      <td className="p-3 text-white">
+                        <div className="flex items-center gap-2">
+                          {p.supplier_name || "-"}
+                          {p.source === "caisse" && <Badge className="bg-amber-600/20 text-amber-400 text-xs border-amber-600/30">Caisse</Badge>}
+                        </div>
+                      </td>
                       <td className="p-3 text-slate-300">{p.items?.length || 0} article(s)</td>
                       <td className="p-3 text-right text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
                       <td className="p-3 text-slate-500">{p.user_name}</td>

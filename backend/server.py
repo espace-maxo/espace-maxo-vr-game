@@ -5264,6 +5264,9 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                     }]
                 
                 stock_synced = 0
+                purchase_items_for_stock = []
+                now_iso = datetime.now(timezone.utc).isoformat()
+                
                 for exp_item in expense_items:
                     item_desc = exp_item.get("description", "").strip()
                     item_qty = exp_item.get("quantity", 1) or 1
@@ -5311,7 +5314,7 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                             "reason": f"Achat Caisse - {updated_expense.get('supplier', 'N/A')}",
                             "user_name": updated_expense.get("requested_by", "Caisse"),
                             "expense_id": expense_id,
-                            "created_at": datetime.now(timezone.utc).isoformat()
+                            "created_at": now_iso
                         }
                         await db.stock_movements.insert_one(stock_mov)
                         
@@ -5322,9 +5325,16 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                                 "purchase_price": new_price,
                                 "valeur_stock": new_valeur,
                                 "statut": new_statut,
-                                "updated_at": datetime.now(timezone.utc).isoformat()
+                                "updated_at": now_iso
                             }}
                         )
+                        purchase_items_for_stock.append({
+                            "product_id": stock_product["id"],
+                            "product_name": stock_product["name"],
+                            "quantity": item_qty,
+                            "unit_price": new_price,
+                            "unit": stock_product.get("unit", "")
+                        })
                         stock_synced += 1
                         logger.info(f"Stock entree: {stock_product['name']} {old_qty} -> {new_qty} (expense {expense_id})")
                     else:
@@ -5343,11 +5353,37 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                             "reason": f"Achat Caisse (non lie au stock) - {updated_expense.get('supplier', 'N/A')}",
                             "user_name": updated_expense.get("requested_by", "Caisse"),
                             "expense_id": expense_id,
-                            "created_at": datetime.now(timezone.utc).isoformat()
+                            "created_at": now_iso
                         }
                         await db.stock_movements.insert_one(unlinked_mov)
+                        purchase_items_for_stock.append({
+                            "product_id": "",
+                            "product_name": item_desc,
+                            "quantity": item_qty,
+                            "unit_price": item_price,
+                            "unit": "unite"
+                        })
                 
-                logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
+                # Create a stock_purchases record so it shows in Stock > Achats
+                total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
+                stock_purchase = {
+                    "id": str(uuid.uuid4()),
+                    "supplier_id": "",
+                    "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
+                    "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "items": purchase_items_for_stock,
+                    "total_amount": total_amount,
+                    "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
+                    "user_name": updated_expense.get("requested_by", "Caisse"),
+                    "status": "validated",
+                    "source": "caisse",
+                    "expense_id": expense_id,
+                    "created_at": now_iso
+                }
+                await db.stock_purchases.insert_one(stock_purchase)
+                stock_purchase.pop("_id", None)
+                
+                logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched, purchase record created")
             except Exception as stock_err:
                 logger.error(f"Error syncing expense to stock: {stock_err}")
         
