@@ -982,10 +982,18 @@ export default function StockPage() {
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  <th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Articles</th><th className="p-3 text-right">Montant Total</th><th className="p-3">Utilisateur</th>
+                  <th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Articles</th><th className="p-3 text-right">Montant Total</th><th className="p-3">Statut</th><th className="p-3">Utilisateur</th>
                 </tr></thead>
                 <tbody>
-                  {purchases.map(p => (
+                  {purchases.map(p => {
+                    const statusBadge = p.source === "caisse" ? (
+                      p.caisse_status === "completed" || p.status === "validated" ? <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>
+                      : p.caisse_status === "approved" || p.status === "approuve" ? <Badge className="bg-blue-500/20 text-blue-400 text-xs">Approuve</Badge>
+                      : p.caisse_status === "revision_requested" || p.status === "en_revision" ? <Badge className="bg-orange-500/20 text-orange-400 text-xs">En revision</Badge>
+                      : p.caisse_status === "rejected" || p.status === "rejete" ? <Badge className="bg-red-500/20 text-red-400 text-xs">Rejete</Badge>
+                      : <Badge className="bg-slate-500/20 text-slate-400 text-xs">En attente</Badge>
+                    ) : <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>;
+                    return (
                     <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                       <td className="p-3 text-slate-400">{p.purchase_date}</td>
                       <td className="p-3 text-white">
@@ -996,9 +1004,11 @@ export default function StockPage() {
                       </td>
                       <td className="p-3 text-slate-300">{p.items?.length || 0} article(s)</td>
                       <td className="p-3 text-right text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
+                      <td className="p-3">{statusBadge}</td>
                       <td className="p-3 text-slate-500">{p.user_name}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div></CardContent></Card>

@@ -424,6 +424,49 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
         if date_to: dq["$lte"] = date_to + "T23:59:59"
         query["purchase_date"] = dq
     purchases = await db.stock_purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # Also include caisse expenses not yet synced to stock_purchases
+    synced_expense_ids = {p.get("expense_id") for p in purchases if p.get("expense_id")}
+    
+    expense_query = {}
+    if date_from or date_to:
+        eq = {}
+        if date_from: eq["$gte"] = date_from
+        if date_to: eq["$lte"] = date_to + "T23:59:59"
+        expense_query["created_at"] = eq
+    
+    caisse_expenses = await db.expenses.find(expense_query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    for exp in caisse_expenses:
+        if exp.get("id") in synced_expense_ids:
+            continue
+        
+        items = []
+        if exp.get("is_group") and exp.get("items"):
+            items = [{"product_name": i.get("description", ""), "quantity": i.get("quantity", 1), "unit_price": i.get("unit_price", 0)} for i in exp["items"]]
+        else:
+            items = [{"product_name": exp.get("description", ""), "quantity": exp.get("quantity", 1), "unit_price": exp.get("unit_price", 0) or exp.get("amount", 0)}]
+        
+        status_map = {"pending": "en_attente", "approved": "approuve", "revision_requested": "en_revision", "rejected": "rejete", "completed": "valide"}
+        
+        purchases.append({
+            "id": f"caisse-{exp['id']}",
+            "supplier_id": "",
+            "supplier_name": exp.get("supplier") or exp.get("description", "Caisse"),
+            "purchase_date": exp.get("created_at", "")[:10],
+            "items": items,
+            "total_amount": exp.get("amount", 0),
+            "notes": exp.get("description", ""),
+            "user_name": exp.get("requested_by", ""),
+            "status": status_map.get(exp.get("status", ""), exp.get("status", "")),
+            "source": "caisse",
+            "expense_id": exp.get("id"),
+            "caisse_status": exp.get("status", ""),
+            "created_at": exp.get("created_at", "")
+        })
+    
+    purchases.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    
     return {"purchases": purchases}
 
 @router.post("/purchases")
