@@ -408,6 +408,24 @@ export default function StockPage() {
                   ))}
                 </div>
 
+                {/* Caisse Sales Card */}
+                {(dashboard.ventes_caisse_today > 0 || dashboard.ventes_caisse_value > 0) && (
+                  <Card className="bg-gradient-to-r from-amber-900/20 to-orange-900/20 border-amber-500/30">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
+                          <ShoppingCart className="w-5 h-5 text-amber-400" />
+                        </div>
+                        <div>
+                          <p className="text-amber-400 font-bold text-sm">Ventes Caisse du jour</p>
+                          <p className="text-slate-400 text-xs">{dashboard.ventes_caisse_today} article(s) vendu(s) depuis la caisse</p>
+                        </div>
+                      </div>
+                      <p className="text-amber-400 font-bold text-xl">{formatPrice(dashboard.ventes_caisse_value)} F</p>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Alerts */}
                 <div className="grid md:grid-cols-2 gap-4">
                   {dashboard.rupture?.length > 0 && (

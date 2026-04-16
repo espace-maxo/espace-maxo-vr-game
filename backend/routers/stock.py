@@ -530,12 +530,21 @@ async def get_dashboard():
         {"$limit": 10}
     ]).to_list(10)
     
+    # Today's sales from Caisse
+    today_sales = await db.stock_movements.find(
+        {"created_at": {"$gte": today}, "invoice_id": {"$exists": True}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    ventes_caisse_today = len(today_sales)
+    ventes_caisse_value = sum(m.get("total_value", 0) for m in today_sales)
+    
     return {
         "total_products": total_products,
         "critical_products": critical,
         "total_value": total_value,
         "entrees_today": entrees_today,
         "sorties_today": sorties_today,
+        "ventes_caisse_today": ventes_caisse_today,
+        "ventes_caisse_value": ventes_caisse_value,
         "rupture": [{"id": p["id"], "name": p["name"], "code": p.get("code", ""), "unit": p.get("unit", "")} for p in rupture[:20]],
         "faible": [{"id": p["id"], "name": p["name"], "quantity": p["quantity"], "stock_min": p.get("stock_min", 5), "unit": p.get("unit", "")} for p in faible[:20]],
         "peremption_proche": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"]} for p in peremption_proche[:10]],
