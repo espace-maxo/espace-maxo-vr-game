@@ -6,14 +6,23 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (16/04/2026 - Session 3)
 
+### Fiches Techniques / Recettes (DONE)
+- **Nouvelle section** "Fiches Techniques" dans le module Stock (menu latéral)
+- CRUD complet : Créer, modifier, supprimer des fiches techniques
+- Chaque fiche lie un **plat de la Caisse** (par nom) à une liste d'**ingrédients du Stock** avec quantités
+- **Calcul automatique** du coût de revient, de la marge et du pourcentage de marge
+- **Déduction par recette** : Quand un plat avec fiche technique est vendu via la Caisse, les ingrédients sont déduits (pas le plat)
+- **Fallback** : Si pas de fiche technique, comportement existant (correspondance par nom)
+- **Fiche démo** : "Poulet braisé" avec 8 ingrédients, prix vente 3500 F, coût 1953 F, marge 44.2%
+- **Frontend** : Cartes avec prix/coût/marge, tableau ingrédients avec stock actuel, modale de création
+- Tous les rôles ont accès aux fiches techniques
+- Tests : 11/11 backend + 100% frontend PASSED (iteration_28)
+
 ### Liaison Bidirectionnelle Caisse <-> Stock (DONE)
-- **Ventes → Sorties Stock** : Quand une facture est validée dans la Caisse, les articles vendus créent automatiquement des mouvements de sortie dans le Stock
-- **Achats → Entrées Stock** : Quand un achat (expense) passe au statut 'completed' dans la Caisse, les articles achetés créent automatiquement des mouvements d'entrée dans le Stock
-- Matching des noms de produits par regex (exact → starts-with → contains, insensible à la casse)
-- Support des achats groupés (is_group=true avec items[]) et simples
-- Articles non liés au stock sont quand même enregistrés comme mouvements tracables
-- Protection contre la double synchronisation (idempotent)
-- Tests : 9/9 backend + 100% frontend PASSED (iteration_27)
+- **Ventes → Sorties Stock** : Via recettes (prioritaire) ou correspondance directe par nom
+- **Achats → Entrées Stock** : Quand un achat passe au statut 'completed', entrées automatiques + enregistrement stock_purchases
+- Badge "Caisse" dans Stock > Achats pour distinguer les achats venant de la Caisse
+- Tests : 9/9 + 15/15 backend PASSED
 
 ---
 ## Recent Updates (14/04/2026 - Session 2)
@@ -21,12 +30,10 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ### Reversement des Recettes - Complete (DONE)
 - Onglet sous Hebdo, 4 modes de paiement, Billettage FCFA, Numero Momo
 - Workflow : Gerante saisit + signe → Admin valide → PDF verrouille
-- Tests : 10/10 backend + 100% frontend PASSED
 
 ### Module Gestion de Stock - Phase 1 (DONE)
 - Route : /stock (page standalone), Backend : /app/backend/routers/stock.py
 - 441 produits, 25 categories, Authentification avec roles
-- Dashboard, Mouvements, Achats, Fournisseurs, Categories, Utilisateurs
 
 ---
 ## Architecture
@@ -34,45 +41,42 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ```
 /app/
 ├── backend/
-│   ├── server.py (~7200 lignes - contient POS + liaison stock)
+│   ├── server.py (~7300 lignes - POS + liaison stock avec recettes)
 │   └── routers/
-│       ├── stock.py (module stock standalone)
+│       ├── stock.py (module stock + fiches techniques)
 │       ├── stock_data.py (441 produits catalogue)
-│       ├── invoices.py, users.py, products.py, clients.py, tables.py
-│       ├── requests.py, service_reports.py, subscriptions.py
-│       └── export.py
+│       └── ... (autres routes)
 └── frontend/
-    └── src/
-        ├── pages/
-        │   ├── CaissePage.jsx (~8900 lignes - POS monolithique)
-        │   ├── StockPage.jsx (~955 lignes - module stock)
-        │   └── caisse/components/ (composants extraits)
-        └── components/ (Navbar, Footer avec liens caches)
+    └── src/pages/
+        ├── CaissePage.jsx (~8900 lignes - POS)
+        ├── StockPage.jsx (~1170 lignes - stock + fiches techniques)
+        └── caisse/components/ (composants extraits)
 ```
 
-## Key API Endpoints - Liaison Caisse <-> Stock
-- `PUT /api/expenses/{id}` (status='completed') → Crée des mouvements d'entrée dans stock_movements
-- `PUT /api/invoices/{id}` (validation_status='validated') → Crée des mouvements de sortie dans stock_movements
-- `GET /api/stock/dashboard` → Affiche entrées/sorties du jour
-- `GET /api/stock/movements` → Historique complet des mouvements
+## Key API Endpoints - Fiches Techniques
+- `GET /api/stock/recipes` → Liste des recettes avec coût/marge calculés
+- `POST /api/stock/recipes` → Créer une fiche technique
+- `PUT /api/stock/recipes/{id}` → Modifier une fiche technique
+- `DELETE /api/stock/recipes/{id}` → Supprimer une fiche technique
+- `POST /api/stock/recipes/seed-demo` → Charger la fiche démo "Poulet braisé"
+
+## Key DB Collections
+- `stock_recipes` : `{ id, name, caisse_product_name, selling_price, ingredients: [{product_id, product_name, quantity, unit}], notes, created_at, updated_at }`
 
 ## Prioritized Backlog
 
-### P0 (Next)
-- [ ] Fiches techniques / Recettes (lier plats Caisse aux ingrédients Stock)
-- [ ] Rapports Stock filtrables (Entrées, Sorties, Pertes) avec Export PDF/Excel
+### P0 (Completed)
+- [x] Fiches Techniques / Recettes (16/04/2026)
+- [x] Liaison Achats Caisse → Entrées Stock + stock_purchases (16/04/2026)
+- [x] Liaison Ventes Caisse → Sorties Stock via recettes (16/04/2026)
+- [x] Module Stock Phase 1 (14/04/2026)
+- [x] Reversement des Recettes (13/04/2026)
 
-### P1
+### P1 (Next)
+- [ ] Rapports Stock filtrables (Entrées, Sorties, Pertes) avec Export PDF/Excel
 - [ ] Module Inventaire physique (stock réel vs théorique)
-- [ ] Alertes de péremption sur le dashboard
 
 ### P2
+- [ ] Alertes de péremption sur le dashboard Stock
 - [ ] Mot de passe oublié via Email (Resend)
-- [ ] Refactoring CaissePage.jsx et server.py (architecture monolithique)
-
-### Completed
-- [x] Liaison Achats Caisse → Entrées Stock (16/04/2026)
-- [x] Liaison Ventes Caisse → Sorties Stock (14/04/2026)
-- [x] Module Stock complet Phase 1 (14/04/2026)
-- [x] Reversement des Recettes avec PDF (13/04/2026)
-- [x] Tout le POS Caisse Pro (Mars 2026)
+- [ ] Refactoring CaissePage.jsx et server.py
