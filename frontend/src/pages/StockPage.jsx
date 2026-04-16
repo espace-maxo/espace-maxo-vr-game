@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
@@ -96,6 +96,7 @@ export default function StockPage() {
   const [userForm, setUserForm] = useState({ username: "", password: "", full_name: "", role: "magasinier" });
   const [recipeForm, setRecipeForm] = useState({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" });
   const [recipeIngredient, setRecipeIngredient] = useState({ product_id: "", quantity: 0 });
+  const [expandedPurchase, setExpandedPurchase] = useState(null);
 
   // Role permissions
   const isAdmin = currentUser?.role === "administrateur";
@@ -982,7 +983,7 @@ export default function StockPage() {
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  <th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Articles</th><th className="p-3 text-right">Montant Total</th><th className="p-3">Statut</th><th className="p-3">Utilisateur</th>
+                  <th className="p-3 w-8"></th><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Articles</th><th className="p-3 text-right">Montant Total</th><th className="p-3">Statut</th><th className="p-3">Utilisateur</th>
                 </tr></thead>
                 <tbody>
                   {purchases.map(p => {
@@ -993,8 +994,11 @@ export default function StockPage() {
                       : p.caisse_status === "rejected" || p.status === "rejete" ? <Badge className="bg-red-500/20 text-red-400 text-xs">Rejete</Badge>
                       : <Badge className="bg-slate-500/20 text-slate-400 text-xs">En attente</Badge>
                     ) : <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>;
+                    const isExpanded = expandedPurchase === p.id;
                     return (
-                    <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <React.Fragment key={p.id}>
+                    <tr className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer ${isExpanded ? 'bg-slate-800/40' : ''}`} onClick={() => setExpandedPurchase(isExpanded ? null : p.id)} data-testid={`purchase-row-${p.id}`}>
+                      <td className="p-3 text-slate-500"><ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></td>
                       <td className="p-3 text-slate-400">{p.purchase_date}</td>
                       <td className="p-3 text-white">
                         <div className="flex items-center gap-2">
@@ -1007,6 +1011,36 @@ export default function StockPage() {
                       <td className="p-3">{statusBadge}</td>
                       <td className="p-3 text-slate-500">{p.user_name}</td>
                     </tr>
+                    {isExpanded && p.items && p.items.length > 0 && (
+                    <tr><td colSpan={7} className="p-0">
+                      <div className="bg-slate-800/30 border-y border-slate-700/30 px-6 py-3">
+                        <table className="w-full text-xs">
+                          <thead><tr className="text-slate-500">
+                            <th className="text-left pb-2">Designation</th>
+                            <th className="text-right pb-2">Quantite</th>
+                            <th className="text-right pb-2">Prix Unitaire</th>
+                            <th className="text-right pb-2">Montant</th>
+                          </tr></thead>
+                          <tbody>
+                            {p.items.map((item, idx) => (
+                              <tr key={idx} className="border-t border-slate-700/20">
+                                <td className="py-1.5 text-white">{item.product_name || item.description || "-"}</td>
+                                <td className="py-1.5 text-right text-slate-300">{item.quantity} {item.unit || ""}</td>
+                                <td className="py-1.5 text-right text-slate-400">{formatPrice(item.unit_price)} F</td>
+                                <td className="py-1.5 text-right text-emerald-400 font-medium">{formatPrice((item.quantity || 0) * (item.unit_price || 0))} F</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot><tr className="border-t border-slate-600/50">
+                            <td colSpan={3} className="pt-2 text-right text-slate-400 font-medium">Total</td>
+                            <td className="pt-2 text-right text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
+                          </tr></tfoot>
+                        </table>
+                        {p.notes && <p className="text-slate-500 text-xs mt-2 italic">{p.notes}</p>}
+                      </div>
+                    </td></tr>
+                    )}
+                    </React.Fragment>
                     );
                   })}
                 </tbody>
