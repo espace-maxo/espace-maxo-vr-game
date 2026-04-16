@@ -332,23 +332,6 @@ export default function StockPage() {
                   {loginLoading ? "Connexion..." : "Se connecter"}
                 </Button>
               </form>
-              <div className="mt-6 border-t border-slate-800 pt-4">
-                <p className="text-slate-500 text-xs text-center mb-2">Comptes par defaut</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    {u:"admin",p:"Admin2026",r:"Administrateur"},
-                    {u:"gerante",p:"Gerante2026",r:"Gerant"},
-                    {u:"magasinier",p:"Magasin2026",r:"Magasinier"},
-                    {u:"consultation",p:"Consult2026",r:"Consultation"},
-                  ].map(c => (
-                    <button key={c.u} type="button" className="bg-slate-800/50 border border-slate-700 rounded-lg p-2 text-left hover:border-emerald-500/50 transition-colors"
-                      onClick={() => setLoginForm({username: c.u, password: c.p})}>
-                      <p className="text-emerald-400 font-medium">{c.r}</p>
-                      <p className="text-slate-500">{c.u}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
               <div className="mt-4 text-center">
                 <a href="/" className="text-slate-500 hover:text-slate-300 text-xs">Retour a l'accueil</a>
               </div>

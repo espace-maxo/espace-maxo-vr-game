@@ -103,6 +103,14 @@ const Footer = () => {
             >
               •
             </Link>
+            {" "}
+            <Link 
+              to="/stock" 
+              className="text-gray-500 hover:text-gray-400 transition-colors"
+              data-testid="footer-stock-link"
+            >
+              •
+            </Link>
           </p>
         </div>
       </div>

@@ -15,7 +15,6 @@ const Navbar = () => {
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
     { label: "Admin", path: "/admin", icon: "lock" },
-    { label: "Stock", path: "/stock", icon: "warehouse" },
   ];
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + "/");
