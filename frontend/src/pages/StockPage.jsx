@@ -980,72 +980,63 @@ export default function StockPage() {
               <Button onClick={() => { setPurchaseForm({ supplier_id: "", supplier_name: "", purchase_date: new Date().toISOString().slice(0, 10), items: [], notes: "" }); setShowPurchaseModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-purchase-btn"><Plus className="w-4 h-4 mr-1" /> Nouvel Achat</Button>
             </div>
-            <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  <th className="p-3 w-8"></th><th className="p-3">Date</th><th className="p-3">Fournisseur</th><th className="p-3">Articles</th><th className="p-3 text-right">Montant Total</th><th className="p-3">Statut</th><th className="p-3">Utilisateur</th>
-                </tr></thead>
-                <tbody>
-                  {purchases.map(p => {
-                    const statusBadge = p.source === "caisse" ? (
-                      p.caisse_status === "completed" || p.status === "validated" ? <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>
-                      : p.caisse_status === "approved" || p.status === "approuve" ? <Badge className="bg-blue-500/20 text-blue-400 text-xs">Approuve</Badge>
-                      : p.caisse_status === "revision_requested" || p.status === "en_revision" ? <Badge className="bg-orange-500/20 text-orange-400 text-xs">En revision</Badge>
-                      : p.caisse_status === "rejected" || p.status === "rejete" ? <Badge className="bg-red-500/20 text-red-400 text-xs">Rejete</Badge>
-                      : <Badge className="bg-slate-500/20 text-slate-400 text-xs">En attente</Badge>
-                    ) : <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>;
-                    const isExpanded = expandedPurchase === p.id;
-                    return (
-                    <React.Fragment key={p.id}>
-                    <tr className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer ${isExpanded ? 'bg-slate-800/40' : ''}`} onClick={() => setExpandedPurchase(isExpanded ? null : p.id)} data-testid={`purchase-row-${p.id}`}>
-                      <td className="p-3 text-slate-500"><ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></td>
-                      <td className="p-3 text-slate-400">{p.purchase_date}</td>
-                      <td className="p-3 text-white">
-                        <div className="flex items-center gap-2">
-                          {p.supplier_name || "-"}
-                          {p.source === "caisse" && <Badge className="bg-amber-600/20 text-amber-400 text-xs border-amber-600/30">Caisse</Badge>}
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-300">{p.items?.length || 0} article(s)</td>
-                      <td className="p-3 text-right text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
-                      <td className="p-3">{statusBadge}</td>
-                      <td className="p-3 text-slate-500">{p.user_name}</td>
-                    </tr>
-                    {isExpanded && p.items && p.items.length > 0 && (
-                    <tr><td colSpan={7} className="p-0">
-                      <div className="bg-slate-800/30 border-y border-slate-700/30 px-6 py-3">
-                        <table className="w-full text-xs">
-                          <thead><tr className="text-slate-500">
-                            <th className="text-left pb-2">Designation</th>
-                            <th className="text-right pb-2">Quantite</th>
-                            <th className="text-right pb-2">Prix Unitaire</th>
-                            <th className="text-right pb-2">Montant</th>
-                          </tr></thead>
-                          <tbody>
-                            {p.items.map((item, idx) => (
-                              <tr key={idx} className="border-t border-slate-700/20">
-                                <td className="py-1.5 text-white">{item.product_name || item.description || "-"}</td>
-                                <td className="py-1.5 text-right text-slate-300">{item.quantity} {item.unit || ""}</td>
-                                <td className="py-1.5 text-right text-slate-400">{formatPrice(item.unit_price)} F</td>
-                                <td className="py-1.5 text-right text-emerald-400 font-medium">{formatPrice((item.quantity || 0) * (item.unit_price || 0))} F</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot><tr className="border-t border-slate-600/50">
-                            <td colSpan={3} className="pt-2 text-right text-slate-400 font-medium">Total</td>
-                            <td className="pt-2 text-right text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
-                          </tr></tfoot>
-                        </table>
-                        {p.notes && <p className="text-slate-500 text-xs mt-2 italic">{p.notes}</p>}
-                      </div>
-                    </td></tr>
-                    )}
-                    </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div></CardContent></Card>
+            {purchases.map(p => {
+              const statusBadge = p.source === "caisse" ? (
+                p.caisse_status === "completed" || p.status === "validated" ? <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>
+                : p.caisse_status === "approved" || p.status === "approuve" ? <Badge className="bg-blue-500/20 text-blue-400 text-xs">Approuve</Badge>
+                : p.caisse_status === "revision_requested" || p.status === "en_revision" ? <Badge className="bg-orange-500/20 text-orange-400 text-xs">En revision</Badge>
+                : p.caisse_status === "rejected" || p.status === "rejete" ? <Badge className="bg-red-500/20 text-red-400 text-xs">Rejete</Badge>
+                : <Badge className="bg-slate-500/20 text-slate-400 text-xs">En attente</Badge>
+              ) : <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>;
+              return (
+              <Card key={p.id} className="bg-slate-900/80 border-slate-800" data-testid={`purchase-card-${p.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-400 text-sm">{p.purchase_date}</span>
+                      <span className="text-white font-bold">{p.supplier_name || "-"}</span>
+                      {p.source === "caisse" && <Badge className="bg-amber-600/20 text-amber-400 text-xs border-amber-600/30">Caisse</Badge>}
+                      {statusBadge}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-emerald-400 font-bold text-lg">{formatPrice(p.total_amount)} F</span>
+                      <span className="text-slate-500 text-xs">{p.user_name}</span>
+                    </div>
+                  </div>
+                  {p.items && p.items.length > 0 && (
+                    <div className="bg-slate-800/30 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-slate-500 border-b border-slate-700/40">
+                          <th className="text-left p-2 pl-3">Designation</th>
+                          <th className="text-right p-2">Quantite</th>
+                          <th className="text-right p-2">Prix Unitaire</th>
+                          <th className="text-right p-2 pr-3">Montant</th>
+                        </tr></thead>
+                        <tbody>
+                          {p.items.map((item, idx) => (
+                            <tr key={idx} className="border-t border-slate-700/20">
+                              <td className="py-1.5 pl-3 text-white">{item.product_name || item.description || "-"}</td>
+                              <td className="py-1.5 text-right text-slate-300">{item.quantity} {item.unit || ""}</td>
+                              <td className="py-1.5 text-right text-slate-400">{formatPrice(item.unit_price)} F</td>
+                              <td className="py-1.5 text-right pr-3 text-emerald-400 font-medium">{formatPrice((item.quantity || 0) * (item.unit_price || 0))} F</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot><tr className="border-t border-slate-600/50">
+                          <td colSpan={3} className="pt-2 pb-1 pl-3 text-right text-slate-400 font-medium">Total</td>
+                          <td className="pt-2 pb-1 text-right pr-3 text-emerald-400 font-bold">{formatPrice(p.total_amount)} F</td>
+                        </tr></tfoot>
+                      </table>
+                    </div>
+                  )}
+                  {p.notes && <p className="text-slate-500 text-xs mt-2 italic">{p.notes}</p>}
+                </CardContent>
+              </Card>
+              );
+            })}
+            {purchases.length === 0 && (
+              <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-8 text-center text-slate-500">Aucun achat enregistre</CardContent></Card>
+            )}
           </div>
         )}
 
