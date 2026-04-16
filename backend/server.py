@@ -3375,78 +3375,126 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
             
             # === SYNC WITH STOCK MODULE ===
             # Record each sold item as a stock movement (sortie)
+            # Priority: Recipe (fiche technique) > Direct name match
             try:
                 items = current_invoice.get("items", [])
                 invoice_number = current_invoice.get("invoice_number", "")
+                now_iso = datetime.now(timezone.utc).isoformat()
+                
                 for item in items:
                     item_name = item.get("name", "")
                     item_qty = item.get("quantity", 1)
                     item_price = item.get("price", 0)
                     
-                    # Find matching stock product by name (case-insensitive partial match)
-                    stock_product = await db.stock_products.find_one({
-                        "name": {"$regex": f"^{item_name[:20]}", "$options": "i"},
-                        "is_active": True
+                    # Check if a recipe exists for this item
+                    recipe = await db.stock_recipes.find_one({
+                        "caisse_product_name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
                     })
                     
-                    if stock_product:
-                        old_qty = stock_product.get("quantity", 0)
-                        new_qty = max(0, old_qty - item_qty)
-                        new_valeur = new_qty * stock_product.get("purchase_price", 0)
-                        smin = stock_product.get("stock_min", 5)
-                        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-                        
-                        # Create stock movement
-                        stock_mov = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": stock_product["id"],
-                            "product_name": stock_product["name"],
-                            "product_code": stock_product.get("code", ""),
-                            "movement_type": "sortie",
-                            "quantity": item_qty,
-                            "previous_quantity": old_qty,
-                            "new_quantity": new_qty,
-                            "unit": stock_product.get("unit", ""),
-                            "unit_price": item_price,
-                            "total_value": item_qty * item_price,
-                            "reason": f"Vente - Facture {invoice_number}",
-                            "user_name": current_invoice.get("created_by", "Caisse"),
-                            "invoice_id": invoice_id,
-                            "created_at": datetime.now(timezone.utc).isoformat()
-                        }
-                        await db.stock_movements.insert_one(stock_mov)
-                        
-                        # Update stock product quantity
-                        await db.stock_products.update_one(
-                            {"id": stock_product["id"]},
-                            {"$set": {
-                                "quantity": new_qty,
-                                "valeur_stock": new_valeur,
-                                "statut": new_statut,
-                                "updated_at": datetime.now(timezone.utc).isoformat()
-                            }}
-                        )
-                        logger.info(f"Stock updated: {stock_product['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+                    if recipe:
+                        # Deduct each ingredient from stock
+                        for ing in recipe.get("ingredients", []):
+                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True})
+                            if ing_product:
+                                ing_qty = ing["quantity"] * item_qty
+                                old_qty = ing_product.get("quantity", 0)
+                                new_qty = max(0, old_qty - ing_qty)
+                                new_valeur = new_qty * ing_product.get("purchase_price", 0)
+                                smin = ing_product.get("stock_min", 5)
+                                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                                
+                                stock_mov = {
+                                    "id": str(uuid.uuid4()),
+                                    "product_id": ing_product["id"],
+                                    "product_name": ing_product["name"],
+                                    "product_code": ing_product.get("code", ""),
+                                    "movement_type": "sortie",
+                                    "quantity": round(ing_qty, 3),
+                                    "previous_quantity": old_qty,
+                                    "new_quantity": new_qty,
+                                    "unit": ing_product.get("unit", ""),
+                                    "unit_price": ing_product.get("purchase_price", 0),
+                                    "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
+                                    "reason": f"Vente (Recette: {recipe['name']}) - Facture {invoice_number}",
+                                    "user_name": current_invoice.get("created_by", "Caisse"),
+                                    "invoice_id": invoice_id,
+                                    "recipe_id": recipe["id"],
+                                    "created_at": now_iso
+                                }
+                                await db.stock_movements.insert_one(stock_mov)
+                                
+                                await db.stock_products.update_one(
+                                    {"id": ing_product["id"]},
+                                    {"$set": {
+                                        "quantity": round(new_qty, 3),
+                                        "valeur_stock": round(new_valeur, 2),
+                                        "statut": new_statut,
+                                        "updated_at": now_iso
+                                    }}
+                                )
+                                logger.info(f"Stock recipe deduction: {ing_product['name']} {old_qty} -> {round(new_qty, 3)} (recipe: {recipe['name']}, invoice {invoice_number})")
                     else:
-                        # Log sale even if no stock product matched - for tracking
-                        sale_record = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": "",
-                            "product_name": item_name,
-                            "product_code": "",
-                            "movement_type": "sortie",
-                            "quantity": item_qty,
-                            "previous_quantity": 0,
-                            "new_quantity": 0,
-                            "unit": item.get("unit", "portion"),
-                            "unit_price": item_price,
-                            "total_value": item_qty * item_price,
-                            "reason": f"Vente (non lie au stock) - Facture {invoice_number}",
-                            "user_name": current_invoice.get("created_by", "Caisse"),
-                            "invoice_id": invoice_id,
-                            "created_at": datetime.now(timezone.utc).isoformat()
-                        }
-                        await db.stock_movements.insert_one(sale_record)
+                        # Fallback: direct name match (existing behavior)
+                        stock_product = await db.stock_products.find_one({
+                            "name": {"$regex": f"^{re.escape(item_name[:20])}", "$options": "i"},
+                            "is_active": True
+                        })
+                        
+                        if stock_product:
+                            old_qty = stock_product.get("quantity", 0)
+                            new_qty = max(0, old_qty - item_qty)
+                            new_valeur = new_qty * stock_product.get("purchase_price", 0)
+                            smin = stock_product.get("stock_min", 5)
+                            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                            
+                            stock_mov = {
+                                "id": str(uuid.uuid4()),
+                                "product_id": stock_product["id"],
+                                "product_name": stock_product["name"],
+                                "product_code": stock_product.get("code", ""),
+                                "movement_type": "sortie",
+                                "quantity": item_qty,
+                                "previous_quantity": old_qty,
+                                "new_quantity": new_qty,
+                                "unit": stock_product.get("unit", ""),
+                                "unit_price": item_price,
+                                "total_value": item_qty * item_price,
+                                "reason": f"Vente - Facture {invoice_number}",
+                                "user_name": current_invoice.get("created_by", "Caisse"),
+                                "invoice_id": invoice_id,
+                                "created_at": now_iso
+                            }
+                            await db.stock_movements.insert_one(stock_mov)
+                            
+                            await db.stock_products.update_one(
+                                {"id": stock_product["id"]},
+                                {"$set": {
+                                    "quantity": new_qty,
+                                    "valeur_stock": new_valeur,
+                                    "statut": new_statut,
+                                    "updated_at": now_iso
+                                }}
+                            )
+                            logger.info(f"Stock updated: {stock_product['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+                        else:
+                            sale_record = {
+                                "id": str(uuid.uuid4()),
+                                "product_id": "",
+                                "product_name": item_name,
+                                "product_code": "",
+                                "movement_type": "sortie",
+                                "quantity": item_qty,
+                                "previous_quantity": 0,
+                                "new_quantity": 0,
+                                "unit": item.get("unit", "portion"),
+                                "unit_price": item_price,
+                                "total_value": item_qty * item_price,
+                                "reason": f"Vente (non lie au stock) - Facture {invoice_number}",
+                                "user_name": current_invoice.get("created_by", "Caisse"),
+                                "invoice_id": invoice_id,
+                                "created_at": now_iso
+                            }
+                            await db.stock_movements.insert_one(sale_record)
             except Exception as stock_err:
                 logger.error(f"Error syncing invoice to stock: {stock_err}")
                 # Don't fail the invoice validation if stock sync fails

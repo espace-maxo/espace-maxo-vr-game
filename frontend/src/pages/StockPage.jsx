@@ -4,7 +4,7 @@ import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
-  RefreshCw, X, Save, Eye, ChevronDown, Users
+  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ const MOVEMENT_TYPES = [
 const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
   { id: "products", label: "Produits", icon: Package },
+  { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
   { id: "purchases", label: "Achats", icon: ShoppingCart },
   { id: "suppliers", label: "Fournisseurs", icon: Truck },
@@ -62,6 +63,7 @@ export default function StockPage() {
   const [movements, setMovements] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [stockUsers, setStockUsers] = useState([]);
+  const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
@@ -77,6 +79,7 @@ export default function StockPage() {
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
   // Forms
@@ -87,6 +90,8 @@ export default function StockPage() {
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", address: "", product_types: "", notes: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", color: "#3b82f6" });
   const [userForm, setUserForm] = useState({ username: "", password: "", full_name: "", role: "magasinier" });
+  const [recipeForm, setRecipeForm] = useState({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" });
+  const [recipeIngredient, setRecipeIngredient] = useState({ product_id: "", quantity: 0 });
 
   // Role permissions
   const isAdmin = currentUser?.role === "administrateur";
@@ -158,9 +163,13 @@ export default function StockPage() {
     try { const r = await axios.get(`${API}/auth/users`); setStockUsers(r.data.users); } catch {}
   }, []);
 
+  const fetchRecipes = useCallback(async () => {
+    try { const r = await axios.get(`${API}/recipes`); setRecipes(r.data.recipes); } catch {}
+  }, []);
+
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers();
-  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers]);
+    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes();
+  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
@@ -289,6 +298,52 @@ export default function StockPage() {
     if (!window.confirm("Supprimer cet utilisateur ?")) return;
     try { await axios.delete(`${API}/auth/users/${id}`); toast.success("Utilisateur supprime"); fetchUsers(); }
     catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  // Recipe CRUD
+  const addRecipeIngredient = () => {
+    if (!recipeIngredient.product_id || recipeIngredient.quantity <= 0) return;
+    const p = products.find(x => x.id === recipeIngredient.product_id);
+    setRecipeForm(prev => ({
+      ...prev,
+      ingredients: [...prev.ingredients, { product_id: recipeIngredient.product_id, product_name: p?.name || "", quantity: recipeIngredient.quantity, unit: p?.unit || "" }]
+    }));
+    setRecipeIngredient({ product_id: "", quantity: 0 });
+  };
+
+  const saveRecipe = async () => {
+    if (!recipeForm.name || !recipeForm.caisse_product_name) { toast.error("Nom et nom Caisse requis"); return; }
+    if (recipeForm.ingredients.length === 0) { toast.error("Ajoutez au moins un ingredient"); return; }
+    try {
+      if (editingItem) {
+        await axios.put(`${API}/recipes/${editingItem.id}`, recipeForm);
+        toast.success("Fiche technique mise a jour");
+      } else {
+        await axios.post(`${API}/recipes`, recipeForm);
+        toast.success("Fiche technique creee");
+      }
+      setShowRecipeModal(false); setEditingItem(null); fetchRecipes();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const deleteRecipe = async (id) => {
+    if (!window.confirm("Supprimer cette fiche technique ?")) return;
+    try { await axios.delete(`${API}/recipes/${id}`); toast.success("Fiche supprimee"); fetchRecipes(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const openEditRecipe = (r) => {
+    setEditingItem(r);
+    setRecipeForm({ name: r.name, caisse_product_name: r.caisse_product_name, selling_price: r.selling_price || 0, ingredients: r.ingredients || [], notes: r.notes || "" });
+    setShowRecipeModal(true);
+  };
+
+  const seedDemoRecipes = async () => {
+    try {
+      const r = await axios.post(`${API}/recipes/seed-demo`);
+      toast.success(r.data.message);
+      fetchRecipes();
+    } catch (e) { toast.error("Erreur lors du chargement des fiches demo"); }
   };
 
   const catName = (id) => categories.find(c => c.id === id)?.name || "-";
@@ -630,6 +685,106 @@ export default function StockPage() {
           </div>
         )}
 
+
+        {/* RECIPES / FICHES TECHNIQUES */}
+        {activeSection === "recipes" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white">Fiches Techniques / Recettes</h2>
+              <div className="flex gap-2">
+                {recipes.length === 0 && (
+                  <Button variant="outline" className="border-slate-700 text-slate-300" onClick={seedDemoRecipes} data-testid="seed-recipes-btn">
+                    Charger demo (Poulet braise)
+                  </Button>
+                )}
+                <Button onClick={() => { setEditingItem(null); setRecipeForm({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" }); setRecipeIngredient({ product_id: "", quantity: 0 }); setShowRecipeModal(true); }}
+                  className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-recipe-btn"><Plus className="w-4 h-4 mr-1" /> Nouvelle Fiche</Button>
+              </div>
+            </div>
+
+            <p className="text-slate-400 text-sm">Definissez la composition de chaque plat vendu a la Caisse. Lors de la validation d'une facture, les ingredients seront automatiquement deduits du stock.</p>
+
+            {recipes.length === 0 ? (
+              <Card className="bg-slate-900/80 border-slate-800">
+                <CardContent className="p-12 text-center">
+                  <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400 text-lg mb-2">Aucune fiche technique</p>
+                  <p className="text-slate-500 text-sm mb-4">Creez votre premiere fiche pour lier un plat a ses ingredients</p>
+                  <Button variant="outline" className="border-slate-700 text-slate-300" onClick={seedDemoRecipes}>Charger la fiche demo "Poulet braise"</Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {recipes.map(r => {
+                  const marginColor = r.margin > 0 ? "text-emerald-400" : r.margin < 0 ? "text-red-400" : "text-slate-400";
+                  return (
+                    <Card key={r.id} className="bg-slate-900/80 border-slate-800" data-testid={`recipe-card-${r.id}`}>
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-white text-lg font-bold">{r.name}</h3>
+                            <p className="text-slate-400 text-sm">Nom Caisse : <span className="text-amber-400">{r.caisse_product_name}</span></p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400" onClick={() => openEditRecipe(r)} data-testid={`edit-recipe-${r.id}`}><Edit2 className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteRecipe(r.id)} data-testid={`delete-recipe-${r.id}`}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                            <p className="text-slate-500 text-xs mb-1">Prix de vente</p>
+                            <p className="text-white font-bold">{formatPrice(r.selling_price)} F</p>
+                          </div>
+                          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                            <p className="text-slate-500 text-xs mb-1">Cout de revient</p>
+                            <p className="text-orange-400 font-bold">{formatPrice(r.cost_price)} F</p>
+                          </div>
+                          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                            <p className="text-slate-500 text-xs mb-1">Marge</p>
+                            <p className={`font-bold ${marginColor}`}>{formatPrice(r.margin)} F ({r.margin_percent}%)</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-slate-400 text-xs font-medium mb-2">Ingredients ({r.ingredients?.length || 0})</p>
+                          <div className="bg-slate-800/30 rounded-lg overflow-hidden">
+                            <table className="w-full text-xs">
+                              <thead><tr className="text-slate-500 border-b border-slate-700/50">
+                                <th className="text-left p-2">Ingredient</th>
+                                <th className="text-right p-2">Quantite</th>
+                                <th className="text-right p-2">Prix unit.</th>
+                                <th className="text-right p-2">Sous-total</th>
+                                <th className="text-right p-2">Stock actuel</th>
+                              </tr></thead>
+                              <tbody>
+                                {(r.ingredients || []).map((ing, i) => (
+                                  <tr key={i} className="border-b border-slate-800/30">
+                                    <td className="p-2 text-white">{ing.product_name}</td>
+                                    <td className="p-2 text-right text-slate-300">{ing.quantity} {ing.unit}</td>
+                                    <td className="p-2 text-right text-slate-400">{formatPrice(ing.purchase_price || 0)} F</td>
+                                    <td className="p-2 text-right text-amber-400">{formatPrice((ing.quantity || 0) * (ing.purchase_price || 0))} F</td>
+                                    <td className="p-2 text-right">
+                                      <span className={ing.current_stock <= 0 ? "text-red-400" : ing.current_stock <= 5 ? "text-orange-400" : "text-emerald-400"}>
+                                        {ing.current_stock ?? "-"} {ing.unit}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        {r.notes && <p className="text-slate-500 text-xs mt-3 italic">{r.notes}</p>}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* PURCHASES */}
         {activeSection === "purchases" && (
           <div className="space-y-4">
@@ -952,6 +1107,72 @@ export default function StockPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Recipe Modal */}
+      <Dialog open={showRecipeModal} onOpenChange={setShowRecipeModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">{editingItem ? "Modifier la Fiche Technique" : "Nouvelle Fiche Technique"}</DialogTitle>
+            <DialogDescription className="text-slate-400">Definissez la composition du plat en ingredients du stock</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-slate-300 text-xs">Nom de la fiche *</Label>
+                <Input value={recipeForm.name} onChange={e => setRecipeForm(p => ({...p, name: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Ex: Poulet braise" /></div>
+              <div><Label className="text-slate-300 text-xs">Nom sur la Caisse *</Label>
+                <Input value={recipeForm.caisse_product_name} onChange={e => setRecipeForm(p => ({...p, caisse_product_name: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Nom exact du plat en Caisse" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-slate-300 text-xs">Prix de vente (FCFA)</Label>
+                <Input type="number" min="0" value={recipeForm.selling_price || ""} onChange={e => setRecipeForm(p => ({...p, selling_price: parseFloat(e.target.value) || 0}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Prix de vente en Caisse" /></div>
+              <div><Label className="text-slate-300 text-xs">Notes</Label>
+                <Input value={recipeForm.notes} onChange={e => setRecipeForm(p => ({...p, notes: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Remarques..." /></div>
+            </div>
+
+            {/* Ingredient selector */}
+            <Card className="bg-slate-800/50 border-slate-700"><CardContent className="p-3 space-y-2">
+              <p className="text-slate-400 text-xs font-medium">Ajouter un ingredient</p>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Select value={recipeIngredient.product_id || "none"} onValueChange={v => setRecipeIngredient(p => ({...p, product_id: v === "none" ? "" : v}))}>
+                    <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-8 text-xs"><SelectValue placeholder="Choisir un ingredient" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 max-h-[200px]">
+                      {products.filter(p => !recipeForm.ingredients.some(i => i.product_id === p.id)).map(p => (
+                        <SelectItem key={p.id} value={p.id} className="text-white text-xs">{p.name} ({p.unit})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input type="number" min="0" step="0.01" value={recipeIngredient.quantity || ""} onChange={e => setRecipeIngredient(p => ({...p, quantity: parseFloat(e.target.value) || 0}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Quantite" />
+                <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700" onClick={addRecipeIngredient}><Plus className="w-3 h-3" /></Button>
+              </div>
+              {recipeForm.ingredients.length > 0 && (
+                <div className="space-y-1 mt-2">
+                  {recipeForm.ingredients.map((ing, i) => {
+                    const prod = products.find(p => p.id === ing.product_id);
+                    return (
+                      <div key={i} className="flex justify-between items-center bg-slate-900/50 rounded px-2 py-1 text-xs">
+                        <span className="text-white">{ing.product_name || prod?.name || "?"}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-400">{ing.quantity} {ing.unit || prod?.unit || ""}</span>
+                          <button className="text-red-400 hover:text-red-300" onClick={() => setRecipeForm(p => ({...p, ingredients: p.ingredients.filter((_, j) => j !== i)}))}>
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent></Card>
+
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveRecipe} data-testid="save-recipe-btn">
+              <Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer la fiche"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       </div>
       )}

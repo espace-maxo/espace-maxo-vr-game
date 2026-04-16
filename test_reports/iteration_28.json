@@ -1,0 +1,93 @@
+{
+  "summary": "Tested NEW feature: Fiches Techniques / Recettes. All 11 backend tests passed (100%). Frontend UI verified - Recipe section accessible via sidebar, recipe cards display prix vente/cout revient/marge, modal for creating new recipes works. Recipe deduction on invoice validation working correctly (8 ingredients deducted for Poulet braise).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/stock/recipes - List recipes with cost_price, margin, margin_percent calculated",
+    "✅ Backend: POST /api/stock/recipes - Create new recipe with ingredients",
+    "✅ Backend: PUT /api/stock/recipes/{id} - Update recipe (selling_price, notes)",
+    "✅ Backend: DELETE /api/stock/recipes/{id} - Delete recipe",
+    "✅ Backend: POST /api/stock/recipes/seed-demo - Seed 'Poulet braise' demo recipe",
+    "✅ Backend: Poulet braise recipe exists with caisse_product_name='Poulet braise', selling_price=3500, 8 ingredients",
+    "✅ Backend: Cost calculation correct (cost_price=1953, margin=1547, margin_percent=44.2%)",
+    "✅ Backend: Recipe deduction on invoice validation - 2x Poulet braise → 8 stock movements created",
+    "✅ Backend: Stock movements contain 'Recette: Poulet braise' in reason field",
+    "✅ Backend: Fallback behavior - products without recipe use direct name match",
+    "✅ Backend: POST /api/stock/auth/login - admin/Admin2026 works",
+    "✅ Frontend: 'Fiches Techniques' nav item visible in sidebar",
+    "✅ Frontend: Recipe cards show Prix de vente, Cout de revient, Marge with correct values",
+    "✅ Frontend: Ingredients table shows all 8 ingredients with quantities and current stock",
+    "✅ Frontend: 'Nouvelle Fiche' button opens creation modal",
+    "✅ Frontend: Modal has ingredient selector dropdown and quantity field"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_recipes.py",
+    "/app/test_reports/pytest/recipes_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Recipe CRUD endpoints in /app/backend/routers/stock.py (lines 558-694) correctly implemented",
+    "Invoice validation with recipe deduction in /app/backend/server.py (lines 3389-3435) uses regex exact match on caisse_product_name",
+    "Cost calculation enriches recipes with current product prices on GET /recipes",
+    "Frontend StockPage.jsx has complete recipe section with cards, modal, and CRUD operations"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_recipes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 pytest tests passed)",
+    "frontend": "100% (All UI elements verified)"
+  },
+  "test_credentials": {
+    "stock_admin": "admin / Admin2026",
+    "caisse_admin": "Caisse2026"
+  },
+  "seed_data_creation": "Test recipes created with TEST_ prefix during testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fiches Techniques feature fully working. Recipe CRUD at /api/stock/recipes. Demo recipe 'Poulet braise' seeded with 8 ingredients. Invoice validation checks for recipe by caisse_product_name (regex exact match, case-insensitive). If recipe found, deducts all ingredients from stock with reason 'Vente (Recette: {name}) - Facture {number}'. If no recipe, falls back to direct product name match. Frontend has dedicated 'Fiches Techniques' section in Stock module sidebar.",
+  "features_verified": {
+    "recipe_crud": {
+      "status": "WORKING",
+      "notes": "GET/POST/PUT/DELETE /api/stock/recipes all functional"
+    },
+    "recipe_seed_demo": {
+      "status": "WORKING",
+      "notes": "POST /api/stock/recipes/seed-demo creates 'Poulet braise' with 8 ingredients"
+    },
+    "recipe_cost_calculation": {
+      "status": "WORKING",
+      "notes": "cost_price, margin, margin_percent calculated from current product prices"
+    },
+    "recipe_deduction_on_invoice": {
+      "status": "WORKING",
+      "notes": "Validating invoice with 'Poulet braise' deducts all 8 ingredients from stock"
+    },
+    "recipe_movement_tracking": {
+      "status": "WORKING",
+      "notes": "Stock movements include recipe_id and 'Recette: {name}' in reason"
+    },
+    "fallback_without_recipe": {
+      "status": "WORKING",
+      "notes": "Products without recipe use direct name match (existing behavior)"
+    },
+    "frontend_recipe_section": {
+      "status": "WORKING",
+      "notes": "Sidebar nav, recipe cards, creation modal all functional"
+    }
+  },
+  "backend_api_tests": {
+    "TestRecipeCRUD": "6/6 PASS",
+    "TestPouletBraiseRecipe": "2/2 PASS",
+    "TestRecipeDeductionOnInvoice": "1/1 PASS",
+    "TestFallbackBehavior": "1/1 PASS",
+    "TestStockAuth": "1/1 PASS"
+  }
+}

@@ -555,6 +555,144 @@ async def get_dashboard():
         "top_sorted": top_sorted
     }
 
+# ==================== RECIPES / FICHES TECHNIQUES ====================
+
+class RecipeIngredient(BaseModel):
+    product_id: str
+    product_name: str = ""
+    quantity: float
+    unit: str = ""
+
+class StockRecipeCreate(BaseModel):
+    name: str
+    caisse_product_name: str  # Name as it appears on Caisse invoices
+    selling_price: float = 0
+    ingredients: List[RecipeIngredient] = []
+    notes: str = ""
+
+class StockRecipeUpdate(BaseModel):
+    name: Optional[str] = None
+    caisse_product_name: Optional[str] = None
+    selling_price: Optional[float] = None
+    ingredients: Optional[List[RecipeIngredient]] = None
+    notes: Optional[str] = None
+
+@router.get("/recipes")
+async def get_recipes():
+    recipes = await db.stock_recipes.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    # Enrich with current cost prices from products
+    all_products = {p["id"]: p for p in await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)}
+    for r in recipes:
+        cost = 0
+        for ing in r.get("ingredients", []):
+            prod = all_products.get(ing.get("product_id"))
+            if prod:
+                ing["current_stock"] = prod.get("quantity", 0)
+                ing["purchase_price"] = prod.get("purchase_price", 0)
+                ing["unit"] = ing.get("unit") or prod.get("unit", "")
+                cost += ing["quantity"] * prod.get("purchase_price", 0)
+            else:
+                ing["current_stock"] = 0
+                ing["purchase_price"] = 0
+        r["cost_price"] = round(cost, 2)
+        r["margin"] = round(r.get("selling_price", 0) - cost, 2) if r.get("selling_price") else 0
+        r["margin_percent"] = round((r["margin"] / r["selling_price"]) * 100, 1) if r.get("selling_price") and r["selling_price"] > 0 else 0
+    return {"recipes": recipes}
+
+@router.post("/recipes")
+async def create_recipe(data: StockRecipeCreate):
+    existing = await db.stock_recipes.find_one({"caisse_product_name": {"$regex": f"^{data.caisse_product_name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(400, f"Une fiche technique existe deja pour '{data.caisse_product_name}'")
+    
+    recipe = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "caisse_product_name": data.caisse_product_name,
+        "selling_price": data.selling_price,
+        "ingredients": [ing.dict() for ing in data.ingredients],
+        "notes": data.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.stock_recipes.insert_one(recipe)
+    recipe.pop("_id", None)
+    return {"success": True, "recipe": recipe}
+
+@router.put("/recipes/{recipe_id}")
+async def update_recipe(recipe_id: str, data: StockRecipeUpdate):
+    recipe = await db.stock_recipes.find_one({"id": recipe_id})
+    if not recipe:
+        raise HTTPException(404, "Fiche technique non trouvee")
+    
+    update_data = {}
+    for k, v in data.dict().items():
+        if v is not None:
+            if k == "ingredients":
+                update_data[k] = [ing if isinstance(ing, dict) else ing.dict() for ing in v]
+            else:
+                update_data[k] = v
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.stock_recipes.update_one({"id": recipe_id}, {"$set": update_data})
+    updated = await db.stock_recipes.find_one({"id": recipe_id}, {"_id": 0})
+    return {"success": True, "recipe": updated}
+
+@router.delete("/recipes/{recipe_id}")
+async def delete_recipe(recipe_id: str):
+    result = await db.stock_recipes.delete_one({"id": recipe_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Fiche technique non trouvee")
+    return {"success": True}
+
+@router.post("/recipes/seed-demo")
+async def seed_demo_recipes():
+    """Seed demo recipes for Poulet braise"""
+    existing = await db.stock_recipes.count_documents({})
+    if existing > 0:
+        return {"success": True, "message": f"{existing} fiche(s) technique(s) deja presente(s)"}
+    
+    # Find product IDs for Poulet braisé ingredients
+    product_map = {}
+    needed = ["Cuisses de poulet", "Oignon local", "Piment frais", "Huile d'arachide", 
+              "Concentre de tomate", "Ail local", "Poivron vert", "Sel fin"]
+    for name in needed:
+        p = await db.stock_products.find_one({"name": name, "is_active": True})
+        if p:
+            product_map[name] = {"id": p["id"], "unit": p.get("unit", "")}
+    
+    recipes = []
+    if product_map.get("Cuisses de poulet"):
+        recipes.append({
+            "id": str(uuid.uuid4()),
+            "name": "Poulet braise",
+            "caisse_product_name": "Poulet braise",
+            "selling_price": 3500,
+            "ingredients": [
+                {"product_id": product_map["Cuisses de poulet"]["id"], "product_name": "Cuisses de poulet", "quantity": 0.5, "unit": "kg"},
+                {"product_id": product_map.get("Oignon local", {}).get("id", ""), "product_name": "Oignon local", "quantity": 0.15, "unit": "kg"},
+                {"product_id": product_map.get("Piment frais", {}).get("id", ""), "product_name": "Piment frais", "quantity": 0.05, "unit": "kg"},
+                {"product_id": product_map.get("Huile d'arachide", {}).get("id", ""), "product_name": "Huile d'arachide", "quantity": 0.1, "unit": "litre"},
+                {"product_id": product_map.get("Concentre de tomate", {}).get("id", ""), "product_name": "Concentre de tomate", "quantity": 0.05, "unit": "boite"},
+                {"product_id": product_map.get("Ail local", {}).get("id", ""), "product_name": "Ail local", "quantity": 0.02, "unit": "kg"},
+                {"product_id": product_map.get("Poivron vert", {}).get("id", ""), "product_name": "Poivron vert", "quantity": 0.1, "unit": "kg"},
+                {"product_id": product_map.get("Sel fin", {}).get("id", ""), "product_name": "Sel fin", "quantity": 0.01, "unit": "kg"},
+            ],
+            "notes": "Recette standard pour 1 portion de poulet braise avec accompagnement",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+        # Remove ingredients with empty product_id
+        recipes[0]["ingredients"] = [i for i in recipes[0]["ingredients"] if i["product_id"]]
+    
+    if recipes:
+        await db.stock_recipes.insert_many(recipes)
+        # Clean _id
+        for r in recipes:
+            r.pop("_id", None)
+    
+    return {"success": True, "message": f"{len(recipes)} fiche(s) technique(s) de demo creee(s)", "recipes": recipes}
+
 # ==================== SEED DATA ====================
 
 @router.post("/seed")
