@@ -97,6 +97,7 @@ export default function StockPage() {
   const [recipeForm, setRecipeForm] = useState({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" });
   const [recipeIngredient, setRecipeIngredient] = useState({ product_id: "", quantity: 0 });
   const [expandedPurchase, setExpandedPurchase] = useState(null);
+  const [selectedItems, setSelectedItems] = useState([]);
 
   // Role permissions
   const isAdmin = currentUser?.role === "administrateur";
@@ -378,6 +379,47 @@ export default function StockPage() {
   const catName = (id) => categories.find(c => c.id === id)?.name || "-";
   const supName = (id) => suppliers.find(s => s.id === id)?.name || "-";
 
+  // Selection & Bulk delete
+  const toggleSelect = (id) => setSelectedItems(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (ids) => {
+    const allSelected = ids.every(id => selectedItems.includes(id));
+    setSelectedItems(allSelected ? selectedItems.filter(x => !ids.includes(x)) : [...new Set([...selectedItems, ...ids])]);
+  };
+  const clearSelection = () => setSelectedItems([]);
+
+  const bulkDelete = async (endpoint, ids, label, refreshFn) => {
+    if (!window.confirm(`Supprimer ${ids.length} ${label} ?`)) return;
+    try {
+      await axios.post(`${API}/${endpoint}`, { ids });
+      toast.success(`${ids.length} ${label} supprime(s)`);
+      clearSelection();
+      refreshFn();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur suppression"); }
+  };
+
+  const deleteMovement = async (id) => {
+    if (!window.confirm("Supprimer ce mouvement ?")) return;
+    try { await axios.delete(`${API}/movements/${id}`); toast.success("Mouvement supprime"); fetchMovements(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const deletePurchase = async (id) => {
+    if (!window.confirm("Supprimer cet achat ?")) return;
+    try { await axios.delete(`${API}/purchases/${id}`); toast.success("Achat supprime"); fetchPurchases(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  // Helper component for bulk delete bar
+  const BulkBar = ({ count, label, endpoint, ids, refreshFn }) => count > 0 ? (
+    <div className="flex items-center gap-3 bg-red-900/30 border border-red-700/50 rounded-lg px-4 py-2">
+      <span className="text-red-400 text-sm font-medium">{count} selectionne(s)</span>
+      <Button size="sm" className="bg-red-600 hover:bg-red-700 h-7 text-xs" onClick={() => bulkDelete(endpoint, ids, label, refreshFn)} data-testid="bulk-delete-btn">
+        <Trash2 className="w-3 h-3 mr-1" /> Supprimer la selection
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-400" onClick={clearSelection}>Annuler</Button>
+    </div>
+  ) : null;
+
   const stockStatus = (p) => {
     if (p.quantity <= 0) return { label: "Rupture", color: "bg-red-500/20 text-red-400" };
     if (p.quantity <= p.stock_min) return { label: "Faible", color: "bg-orange-500/20 text-orange-400" };
@@ -442,7 +484,7 @@ export default function StockPage() {
             if (item.id === "users") return isAdmin;
             return true;
           }).map(item => (
-            <button key={item.id} onClick={() => setActiveSection(item.id)} data-testid={`nav-${item.id}`}
+            <button key={item.id} onClick={() => { setActiveSection(item.id); clearSelection(); }} data-testid={`nav-${item.id}`}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === item.id ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <item.icon className="w-4 h-4" /> {item.label}
             </button>
@@ -624,7 +666,10 @@ export default function StockPage() {
               </Select>
             </div>
 
-            <div className="text-slate-500 text-sm">{products.length} produit(s)</div>
+            <div className="text-slate-500 text-sm flex items-center gap-3">
+              <span>{products.length} produit(s)</span>
+              {isAdmin && <BulkBar count={selectedItems.filter(id => products.some(p => p.id === id)).length} label="produit(s)" endpoint="products/delete-bulk" ids={selectedItems.filter(id => products.some(p => p.id === id))} refreshFn={() => { fetchProducts(); fetchDashboard(); }} />}
+            </div>
 
             {/* Empty state with seed button */}
             {products.length === 0 && (
@@ -646,13 +691,15 @@ export default function StockPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
+                      {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={products.length > 0 && products.every(p => selectedItems.includes(p.id))} onChange={() => toggleSelectAll(products.map(p => p.id))} /></th>}
                       <th className="p-3">Code</th><th className="p-3">Produit</th><th className="p-3">Categorie</th><th className="p-3">Sous-cat.</th><th className="p-3">Stock</th><th className="p-3">Min</th><th className="p-3">Unite</th><th className="p-3 text-right">Prix Achat</th><th className="p-3 text-right">Valeur</th><th className="p-3">Statut</th><th className="p-3">Lieu</th><th className="p-3"></th>
                     </tr></thead>
                     <tbody>
                       {products.map(p => {
                         const status = stockStatus(p);
                         return (
-                          <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                          <tr key={p.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(p.id) ? 'bg-slate-800/50' : ''}`}>
+                            {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(p.id)} onChange={() => toggleSelect(p.id)} /></td>}
                             <td className="p-3 text-slate-500 font-mono text-xs">{p.code}</td>
                             <td className="p-3 text-white font-medium">{p.name}</td>
                             <td className="p-3 text-slate-400 text-xs">{catName(p.category_id)}</td>
@@ -690,14 +737,17 @@ export default function StockPage() {
               <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setShowMovementModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
             </div>
+            {isAdmin && <BulkBar count={selectedItems.filter(id => movements.some(m => m.id === id)).length} label="mouvement(s)" endpoint="movements/delete-bulk" ids={selectedItems.filter(id => movements.some(m => m.id === id))} refreshFn={fetchMovements} />}
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  <th className="p-3">Date</th><th className="p-3">Produit</th><th className="p-3">Type</th><th className="p-3 text-right">Quantite</th><th className="p-3 text-right">Avant</th><th className="p-3 text-right">Apres</th><th className="p-3">Motif</th><th className="p-3">Utilisateur</th>
+                  {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={movements.length > 0 && movements.every(m => selectedItems.includes(m.id))} onChange={() => toggleSelectAll(movements.map(m => m.id))} /></th>}
+                  <th className="p-3">Date</th><th className="p-3">Produit</th><th className="p-3">Type</th><th className="p-3 text-right">Quantite</th><th className="p-3 text-right">Avant</th><th className="p-3 text-right">Apres</th><th className="p-3">Motif</th><th className="p-3">Utilisateur</th>{isAdmin && <th className="p-3"></th>}
                 </tr></thead>
                 <tbody>
                   {movements.map(m => (
-                    <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <tr key={m.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(m.id) ? 'bg-slate-800/50' : ''}`}>
+                      {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>}
                       <td className="p-3 text-slate-400 text-xs">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-3 text-white">{m.product_name}</td>
                       <td className="p-3"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
@@ -706,6 +756,7 @@ export default function StockPage() {
                       <td className="p-3 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
                       <td className="p-3 text-slate-400 text-xs max-w-[200px] truncate">{m.reason}</td>
                       <td className="p-3 text-slate-500 text-xs">{m.user_name}</td>
+                      {isAdmin && <td className="p-3"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteMovement(m.id)}><Trash2 className="w-3.5 h-3.5" /></Button></td>}
                     </tr>
                   ))}
                 </tbody>
@@ -732,6 +783,7 @@ export default function StockPage() {
             </div>
 
             <p className="text-slate-400 text-sm">Definissez la composition de chaque plat vendu a la Caisse. Lors de la validation d'une facture, les ingredients seront automatiquement deduits du stock.</p>
+            {isAdmin && <BulkBar count={selectedItems.filter(id => recipes.some(r => r.id === id)).length} label="fiche(s)" endpoint="recipes/delete-bulk" ids={selectedItems.filter(id => recipes.some(r => r.id === id))} refreshFn={fetchRecipes} />}
 
             {recipes.length === 0 ? (
               <Card className="bg-slate-900/80 border-slate-800">
@@ -750,9 +802,12 @@ export default function StockPage() {
                     <Card key={r.id} className="bg-slate-900/80 border-slate-800" data-testid={`recipe-card-${r.id}`}>
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h3 className="text-white text-lg font-bold">{r.name}</h3>
-                            <p className="text-slate-400 text-sm">Nom Caisse : <span className="text-amber-400">{r.caisse_product_name}</span></p>
+                          <div className="flex items-start gap-3">
+                            {isAdmin && <input type="checkbox" className="rounded bg-slate-800 border-slate-600 mt-1.5" checked={selectedItems.includes(r.id)} onChange={() => toggleSelect(r.id)} />}
+                            <div>
+                              <h3 className="text-white text-lg font-bold">{r.name}</h3>
+                              <p className="text-slate-400 text-sm">Nom Caisse : <span className="text-amber-400">{r.caisse_product_name}</span></p>
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400" onClick={() => openEditRecipe(r)} data-testid={`edit-recipe-${r.id}`}><Edit2 className="w-4 h-4" /></Button>
@@ -980,6 +1035,7 @@ export default function StockPage() {
               <Button onClick={() => { setPurchaseForm({ supplier_id: "", supplier_name: "", purchase_date: new Date().toISOString().slice(0, 10), items: [], notes: "" }); setShowPurchaseModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-purchase-btn"><Plus className="w-4 h-4 mr-1" /> Nouvel Achat</Button>
             </div>
+            {isAdmin && <BulkBar count={selectedItems.filter(id => purchases.some(p => p.id === id && !id.startsWith('caisse-'))).length} label="achat(s)" endpoint="purchases/delete-bulk" ids={selectedItems.filter(id => purchases.some(p => p.id === id && !id.startsWith('caisse-')))} refreshFn={fetchPurchases} />}
             {purchases.map(p => {
               const statusBadge = p.source === "caisse" ? (
                 p.caisse_status === "completed" || p.status === "validated" ? <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>
@@ -988,11 +1044,13 @@ export default function StockPage() {
                 : p.caisse_status === "rejected" || p.status === "rejete" ? <Badge className="bg-red-500/20 text-red-400 text-xs">Rejete</Badge>
                 : <Badge className="bg-slate-500/20 text-slate-400 text-xs">En attente</Badge>
               ) : <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>;
+              const canDelete = isAdmin && !p.id.startsWith('caisse-');
               return (
-              <Card key={p.id} className="bg-slate-900/80 border-slate-800" data-testid={`purchase-card-${p.id}`}>
+              <Card key={p.id} className={`bg-slate-900/80 border-slate-800 ${selectedItems.includes(p.id) ? 'ring-1 ring-red-500/50' : ''}`} data-testid={`purchase-card-${p.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
+                      {canDelete && <input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(p.id)} onChange={() => toggleSelect(p.id)} />}
                       <span className="text-slate-400 text-sm">{p.purchase_date}</span>
                       <span className="text-white font-bold">{p.supplier_name || "-"}</span>
                       {p.source === "caisse" && <Badge className="bg-amber-600/20 text-amber-400 text-xs border-amber-600/30">Caisse</Badge>}
@@ -1001,6 +1059,7 @@ export default function StockPage() {
                     <div className="flex items-center gap-3">
                       <span className="text-emerald-400 font-bold text-lg">{formatPrice(p.total_amount)} F</span>
                       <span className="text-slate-500 text-xs">{p.user_name}</span>
+                      {canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deletePurchase(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
                     </div>
                   </div>
                   {p.items && p.items.length > 0 && (
@@ -1048,12 +1107,16 @@ export default function StockPage() {
               <Button onClick={() => { setEditingItem(null); setSupplierForm({ name: "", phone: "", email: "", address: "", product_types: "", notes: "" }); setShowSupplierModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Fournisseur</Button>
             </div>
+            {isAdmin && <BulkBar count={selectedItems.filter(id => suppliers.some(s => s.id === id)).length} label="fournisseur(s)" endpoint="suppliers/delete-bulk" ids={selectedItems.filter(id => suppliers.some(s => s.id === id))} refreshFn={fetchSuppliers} />}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {suppliers.map(s => (
-                <Card key={s.id} className="bg-slate-900/80 border-slate-800">
+                <Card key={s.id} className={`bg-slate-900/80 border-slate-800 ${selectedItems.includes(s.id) ? 'ring-1 ring-red-500/50' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-white font-bold">{s.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {isAdmin && <input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
+                        <h3 className="text-white font-bold">{s.name}</h3>
+                      </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400" onClick={() => { setEditingItem(s); setSupplierForm(s); setShowSupplierModal(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteSupplier(s.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
@@ -1077,14 +1140,16 @@ export default function StockPage() {
               <Button onClick={() => { setEditingItem(null); setCategoryForm({ name: "", description: "", color: "#3b82f6" }); setShowCategoryModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouvelle Categorie</Button>
             </div>
+            {isAdmin && <BulkBar count={selectedItems.filter(id => categories.some(c => c.id === id)).length} label="categorie(s)" endpoint="categories/delete-bulk" ids={selectedItems.filter(id => categories.some(c => c.id === id))} refreshFn={fetchCategories} />}
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
               {categories.map(c => {
                 const count = products.filter(p => p.category_id === c.id).length;
                 return (
-                  <Card key={c.id} className="bg-slate-900/80 border-slate-800">
+                  <Card key={c.id} className={`bg-slate-900/80 border-slate-800 ${selectedItems.includes(c.id) ? 'ring-1 ring-red-500/50' : ''}`}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
+                          {isAdmin && <input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(c.id)} onChange={() => toggleSelect(c.id)} />}
                           <div className="w-3 h-3 rounded-full" style={{ background: c.color }} />
                           <h3 className="text-white font-medium">{c.name}</h3>
                         </div>
@@ -1111,14 +1176,17 @@ export default function StockPage() {
               <Button onClick={() => { setEditingItem(null); setUserForm({ username: "", password: "", full_name: "", role: "magasinier" }); setShowUserModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouvel Utilisateur</Button>
             </div>
+            <BulkBar count={selectedItems.filter(id => stockUsers.some(u => u.id === id)).length} label="utilisateur(s)" endpoint="auth/users/delete-bulk" ids={selectedItems.filter(id => stockUsers.some(u => u.id === id))} refreshFn={fetchUsers} />
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
+                  <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={stockUsers.length > 0 && stockUsers.every(u => selectedItems.includes(u.id))} onChange={() => toggleSelectAll(stockUsers.map(u => u.id))} /></th>
                   <th className="p-3">Nom complet</th><th className="p-3">Identifiant</th><th className="p-3">Role</th><th className="p-3">Statut</th><th className="p-3">Derniere connexion</th><th className="p-3"></th>
                 </tr></thead>
                 <tbody>
                   {stockUsers.map(u => (
-                    <tr key={u.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <tr key={u.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(u.id) ? 'bg-slate-800/50' : ''}`}>
+                      <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(u.id)} onChange={() => toggleSelect(u.id)} /></td>
                       <td className="p-3 text-white font-medium">{u.full_name}</td>
                       <td className="p-3 text-slate-400">{u.username}</td>
                       <td className="p-3"><Badge className={`text-xs ${u.role === 'administrateur' ? 'bg-red-500/20 text-red-400' : u.role === 'gerant' ? 'bg-blue-500/20 text-blue-400' : u.role === 'magasinier' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>{u.role}</Badge></td>

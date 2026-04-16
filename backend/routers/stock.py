@@ -375,6 +375,18 @@ async def create_movement(data: StockMovementCreate):
     
     return {"success": True, "movement": movement}
 
+@router.delete("/movements/{movement_id}")
+async def delete_movement(movement_id: str):
+    result = await db.stock_movements.delete_one({"id": movement_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Mouvement non trouve")
+    return {"success": True}
+
+@router.post("/movements/delete-bulk")
+async def delete_movements_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_movements.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
 # ==================== SUPPLIERS ====================
 
 @router.get("/suppliers")
@@ -548,6 +560,45 @@ async def create_purchase(data: StockPurchaseCreate):
                 await db.stock_movements.insert_one(mov)
     
     return {"success": True, "purchase": purchase}
+
+@router.delete("/purchases/{purchase_id}")
+async def delete_purchase(purchase_id: str):
+    result = await db.stock_purchases.delete_one({"id": purchase_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Achat non trouve")
+    return {"success": True}
+
+@router.post("/purchases/delete-bulk")
+async def delete_purchases_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_purchases.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
+# ==================== BULK DELETE (ALL SECTIONS) ====================
+
+@router.post("/products/delete-bulk")
+async def delete_products_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_products.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
+@router.post("/suppliers/delete-bulk")
+async def delete_suppliers_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_suppliers.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
+@router.post("/categories/delete-bulk")
+async def delete_categories_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_categories.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
+@router.post("/recipes/delete-bulk")
+async def delete_recipes_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_recipes.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
+
+@router.post("/auth/users/delete-bulk")
+async def delete_users_bulk(ids: List[str] = Body(..., embed=True)):
+    result = await db.stock_users.delete_many({"id": {"$in": ids}})
+    return {"success": True, "deleted": result.deleted_count}
 
 # ==================== DASHBOARD ====================
 
