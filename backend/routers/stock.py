@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
 import random
+import bcrypt
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 db = None
@@ -11,6 +12,118 @@ db = None
 def set_db(database):
     global db
     db = database
+
+# ==================== AUTH MODELS ====================
+
+class StockUserCreate(BaseModel):
+    username: str
+    password: str
+    full_name: str = ""
+    role: str = "consultation"  # administrateur, gerant, magasinier, consultation
+
+class StockLoginRequest(BaseModel):
+    username: str
+    password: str
+
+# ==================== AUTH ENDPOINTS ====================
+
+@router.post("/auth/login")
+async def stock_login(data: StockLoginRequest):
+    user = await db.stock_users.find_one({"username": data.username, "is_active": True})
+    if not user:
+        raise HTTPException(401, "Identifiants incorrects")
+    
+    if not bcrypt.checkpw(data.password.encode('utf-8'), user["password_hash"].encode('utf-8')):
+        raise HTTPException(401, "Identifiants incorrects")
+    
+    # Update last login
+    await db.stock_users.update_one({"id": user["id"]}, {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}})
+    
+    return {
+        "success": True,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "full_name": user["full_name"],
+            "role": user["role"]
+        }
+    }
+
+@router.get("/auth/users")
+async def get_stock_users():
+    users = await db.stock_users.find({}, {"_id": 0, "password_hash": 0}).sort("full_name", 1).to_list(100)
+    return {"users": users}
+
+@router.post("/auth/users")
+async def create_stock_user(data: StockUserCreate):
+    existing = await db.stock_users.find_one({"username": data.username})
+    if existing:
+        raise HTTPException(400, f"Le nom d'utilisateur '{data.username}' existe deja")
+    
+    password_hash = bcrypt.hashpw(data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    user = {
+        "id": str(uuid.uuid4()),
+        "username": data.username,
+        "password_hash": password_hash,
+        "full_name": data.full_name or data.username,
+        "role": data.role,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_login": None
+    }
+    await db.stock_users.insert_one(user)
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    return {"success": True, "user": user}
+
+@router.put("/auth/users/{user_id}")
+async def update_stock_user(user_id: str, data: dict = Body(...)):
+    data.pop("_id", None)
+    data.pop("id", None)
+    data.pop("password_hash", None)
+    # If password is being changed
+    if "password" in data and data["password"]:
+        data["password_hash"] = bcrypt.hashpw(data.pop("password").encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    else:
+        data.pop("password", None)
+    await db.stock_users.update_one({"id": user_id}, {"$set": data})
+    updated = await db.stock_users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return {"success": True, "user": updated}
+
+@router.delete("/auth/users/{user_id}")
+async def delete_stock_user(user_id: str):
+    await db.stock_users.delete_one({"id": user_id})
+    return {"success": True}
+
+@router.post("/auth/seed-users")
+async def seed_stock_users():
+    """Create default stock users if none exist"""
+    existing = await db.stock_users.count_documents({})
+    if existing > 0:
+        return {"success": True, "message": f"{existing} utilisateurs deja presents"}
+    
+    default_users = [
+        {"username": "admin", "password": "Admin2026", "full_name": "Administrateur", "role": "administrateur"},
+        {"username": "gerante", "password": "Gerante2026", "full_name": "Gerante", "role": "gerant"},
+        {"username": "magasinier", "password": "Magasin2026", "full_name": "Magasinier", "role": "magasinier"},
+        {"username": "consultation", "password": "Consult2026", "full_name": "Consultation", "role": "consultation"},
+    ]
+    
+    for u in default_users:
+        pw_hash = bcrypt.hashpw(u["password"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        await db.stock_users.insert_one({
+            "id": str(uuid.uuid4()),
+            "username": u["username"],
+            "password_hash": pw_hash,
+            "full_name": u["full_name"],
+            "role": u["role"],
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": None
+        })
+    
+    return {"success": True, "message": f"{len(default_users)} utilisateurs crees"}
 
 # ==================== MODELS ====================
 

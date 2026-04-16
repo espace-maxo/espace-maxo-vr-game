@@ -37,9 +37,23 @@ const NAV_ITEMS = [
   { id: "purchases", label: "Achats", icon: ShoppingCart },
   { id: "suppliers", label: "Fournisseurs", icon: Truck },
   { id: "categories", label: "Categories", icon: ClipboardList },
+  { id: "users", label: "Utilisateurs", icon: Users },
+];
+
+const ROLES = [
+  { value: "administrateur", label: "Administrateur", desc: "Acces complet" },
+  { value: "gerant", label: "Gerant", desc: "Gestion stock, achats, mouvements" },
+  { value: "magasinier", label: "Magasinier", desc: "Entrees, sorties, inventaire" },
+  { value: "consultation", label: "Consultation", desc: "Lecture seule" },
 ];
 
 export default function StockPage() {
+  // Auth
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const [activeSection, setActiveSection] = useState("dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
@@ -47,6 +61,7 @@ export default function StockPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [stockUsers, setStockUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
@@ -61,6 +76,7 @@ export default function StockPage() {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
   // Forms
@@ -70,6 +86,31 @@ export default function StockPage() {
   const [purchaseItem, setPurchaseItem] = useState({ product_id: "", quantity: 0, unit_price: 0 });
   const [supplierForm, setSupplierForm] = useState({ name: "", phone: "", email: "", address: "", product_types: "", notes: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", color: "#3b82f6" });
+  const [userForm, setUserForm] = useState({ username: "", password: "", full_name: "", role: "magasinier" });
+
+  // Role permissions
+  const isAdmin = currentUser?.role === "administrateur";
+  const isGerant = currentUser?.role === "gerant";
+  const canWrite = isAdmin || isGerant || currentUser?.role === "magasinier";
+  const canManage = isAdmin || isGerant;
+
+  // Login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    setLoginLoading(true);
+    try {
+      // Seed users first (in case DB is empty)
+      await axios.post(`${API}/auth/seed-users`).catch(() => {});
+      const res = await axios.post(`${API}/auth/login`, loginForm);
+      setCurrentUser(res.data.user);
+      setLoginForm({ username: "", password: "" });
+    } catch (err) {
+      setLoginError(err.response?.data?.detail || "Identifiants incorrects");
+    } finally { setLoginLoading(false); }
+  };
+
+  const handleLogout = () => { setCurrentUser(null); setActiveSection("dashboard"); };
 
   const seed = async () => {
     setLoading(true);
@@ -113,9 +154,13 @@ export default function StockPage() {
     try { const r = await axios.get(`${API}/purchases`); setPurchases(r.data.purchases); } catch {}
   }, []);
 
+  const fetchUsers = useCallback(async () => {
+    try { const r = await axios.get(`${API}/auth/users`); setStockUsers(r.data.users); } catch {}
+  }, []);
+
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases();
-  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases]);
+    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers();
+  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
@@ -225,6 +270,27 @@ export default function StockPage() {
     catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
   };
 
+  // Users CRUD
+  const saveUser = async () => {
+    try {
+      if (editingItem) {
+        await axios.put(`${API}/auth/users/${editingItem.id}`, userForm);
+        toast.success("Utilisateur mis a jour");
+      } else {
+        if (!userForm.password) { toast.error("Le mot de passe est requis"); return; }
+        await axios.post(`${API}/auth/users`, userForm);
+        toast.success("Utilisateur cree");
+      }
+      setShowUserModal(false); setEditingItem(null); fetchUsers();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const deleteUser = async (id) => {
+    if (!window.confirm("Supprimer cet utilisateur ?")) return;
+    try { await axios.delete(`${API}/auth/users/${id}`); toast.success("Utilisateur supprime"); fetchUsers(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
   const catName = (id) => categories.find(c => c.id === id)?.name || "-";
   const supName = (id) => suppliers.find(s => s.id === id)?.name || "-";
 
@@ -235,23 +301,88 @@ export default function StockPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex" data-testid="stock-page">
+    <div className="min-h-screen bg-slate-950" data-testid="stock-page">
       <Toaster richColors position="top-right" />
+
+      {/* LOGIN SCREEN */}
+      {!currentUser && (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Card className="bg-slate-900 border-slate-800 w-full max-w-md">
+            <CardContent className="p-8">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Warehouse className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h1 className="text-2xl font-bold text-white">Gestion de Stock</h1>
+                <p className="text-slate-400 text-sm mt-1">Espace Maxo - Connexion</p>
+              </div>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <Label className="text-slate-300 text-sm">Nom d'utilisateur</Label>
+                  <Input data-testid="stock-login-username" value={loginForm.username} onChange={e => setLoginForm(p => ({...p, username: e.target.value}))}
+                    className="bg-slate-800 border-slate-700 text-white mt-1" placeholder="Entrez votre identifiant" autoFocus />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-sm">Mot de passe</Label>
+                  <Input data-testid="stock-login-password" type="password" value={loginForm.password} onChange={e => setLoginForm(p => ({...p, password: e.target.value}))}
+                    className="bg-slate-800 border-slate-700 text-white mt-1" placeholder="Entrez votre mot de passe" />
+                </div>
+                {loginError && <p className="text-red-400 text-sm" data-testid="stock-login-error">{loginError}</p>}
+                <Button data-testid="stock-login-submit" type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={loginLoading}>
+                  {loginLoading ? "Connexion..." : "Se connecter"}
+                </Button>
+              </form>
+              <div className="mt-6 border-t border-slate-800 pt-4">
+                <p className="text-slate-500 text-xs text-center mb-2">Comptes par defaut</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    {u:"admin",p:"Admin2026",r:"Administrateur"},
+                    {u:"gerante",p:"Gerante2026",r:"Gerant"},
+                    {u:"magasinier",p:"Magasin2026",r:"Magasinier"},
+                    {u:"consultation",p:"Consult2026",r:"Consultation"},
+                  ].map(c => (
+                    <button key={c.u} type="button" className="bg-slate-800/50 border border-slate-700 rounded-lg p-2 text-left hover:border-emerald-500/50 transition-colors"
+                      onClick={() => setLoginForm({username: c.u, password: c.p})}>
+                      <p className="text-emerald-400 font-medium">{c.r}</p>
+                      <p className="text-slate-500">{c.u}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 text-center">
+                <a href="/" className="text-slate-500 hover:text-slate-300 text-xs">Retour a l'accueil</a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* MAIN APP - Only shown when authenticated */}
+      {currentUser && (
+      <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 sticky top-0 h-screen">
         <div className="p-5 border-b border-slate-800">
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Warehouse className="w-6 h-6 text-emerald-400" /> Gestion Stock</h1>
           <p className="text-slate-500 text-xs mt-1">Espace Maxo</p>
         </div>
+        <div className="px-4 py-3 border-b border-slate-800">
+          <p className="text-white text-sm font-medium">{currentUser.full_name}</p>
+          <Badge className="bg-emerald-500/20 text-emerald-400 text-xs mt-1">{currentUser.role}</Badge>
+        </div>
         <nav className="flex-1 p-3 space-y-1">
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.filter(item => {
+            if (item.id === "users") return isAdmin;
+            return true;
+          }).map(item => (
             <button key={item.id} onClick={() => setActiveSection(item.id)} data-testid={`nav-${item.id}`}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === item.id ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <item.icon className="w-4 h-4" /> {item.label}
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-slate-800">
+        <div className="p-3 border-t border-slate-800 space-y-1">
+          <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-white text-sm px-3 py-2 w-full"><LogOut className="w-4 h-4" /> Deconnexion</button>
           <a href="/caisse" className="flex items-center gap-2 text-slate-500 hover:text-white text-sm px-3 py-2"><LogOut className="w-4 h-4" /> Retour Caisse</a>
         </div>
       </aside>
@@ -589,6 +720,39 @@ export default function StockPage() {
             </div>
           </div>
         )}
+
+        {/* USERS - Admin only */}
+        {activeSection === "users" && isAdmin && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white">Utilisateurs</h2>
+              <Button onClick={() => { setEditingItem(null); setUserForm({ username: "", password: "", full_name: "", role: "magasinier" }); setShowUserModal(true); }}
+                className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouvel Utilisateur</Button>
+            </div>
+            <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
+                  <th className="p-3">Nom complet</th><th className="p-3">Identifiant</th><th className="p-3">Role</th><th className="p-3">Statut</th><th className="p-3">Derniere connexion</th><th className="p-3"></th>
+                </tr></thead>
+                <tbody>
+                  {stockUsers.map(u => (
+                    <tr key={u.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                      <td className="p-3 text-white font-medium">{u.full_name}</td>
+                      <td className="p-3 text-slate-400">{u.username}</td>
+                      <td className="p-3"><Badge className={`text-xs ${u.role === 'administrateur' ? 'bg-red-500/20 text-red-400' : u.role === 'gerant' ? 'bg-blue-500/20 text-blue-400' : u.role === 'magasinier' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>{u.role}</Badge></td>
+                      <td className="p-3"><Badge className={u.is_active ? 'bg-emerald-500/20 text-emerald-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>{u.is_active ? 'Actif' : 'Inactif'}</Badge></td>
+                      <td className="p-3 text-slate-500 text-xs">{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : 'Jamais'}</td>
+                      <td className="p-3"><div className="flex gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400" onClick={() => { setEditingItem(u); setUserForm({ username: u.username, password: "", full_name: u.full_name, role: u.role }); setShowUserModal(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteUser(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      </div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div></CardContent></Card>
+          </div>
+        )}
       </main>
 
       {/* ===== MODALS ===== */}
@@ -763,6 +927,28 @@ export default function StockPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* User Modal */}
+      <Dialog open={showUserModal} onOpenChange={setShowUserModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
+          <DialogHeader><DialogTitle className="text-white">{editingItem ? "Modifier Utilisateur" : "Nouvel Utilisateur"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-slate-300 text-xs">Nom complet *</Label><Input value={userForm.full_name} onChange={e => setUserForm(p => ({...p, full_name: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+            <div><Label className="text-slate-300 text-xs">Identifiant *</Label><Input value={userForm.username} onChange={e => setUserForm(p => ({...p, username: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" disabled={!!editingItem} /></div>
+            <div><Label className="text-slate-300 text-xs">{editingItem ? "Nouveau mot de passe (laisser vide pour garder)" : "Mot de passe *"}</Label><Input type="password" value={userForm.password} onChange={e => setUserForm(p => ({...p, password: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+            <div><Label className="text-slate-300 text-xs">Role *</Label>
+              <Select value={userForm.role} onValueChange={v => setUserForm(p => ({...p, role: v}))}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">{ROLES.map(r => <SelectItem key={r.value} value={r.value} className="text-white">{r.label} - {r.desc}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveUser}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      </div>
+      )}
     </div>
   );
 }

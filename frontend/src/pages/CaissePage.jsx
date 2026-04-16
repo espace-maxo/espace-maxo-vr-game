@@ -719,8 +719,8 @@ const CaissePage = () => {
       fetchOpenTables();
       
       // Set default tab based on role
-      if (currentUser?.role === 'manager') {
-        setActiveTab("commande"); // Manager starts on Commande tab (can take orders)
+      if (currentUser?.role === 'manager' || currentUser?.role === 'admin') {
+        setActiveTab("commande"); // Manager & Admin start on Commande tab
       }
     }
   }, [filterDate, isAuthenticated]);
@@ -3723,8 +3723,8 @@ _Gérante - Espace Maxo_
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
-            {/* Commande tab - visible for servers and manager */}
-            {(currentUser?.role === 'server' || currentUser?.role === 'manager') && (
+            {/* Commande tab - visible for servers, manager and admin */}
+            {(currentUser?.role === 'server' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
                 <Calculator className="w-4 h-4 mr-2" />Commande
               </TabsTrigger>
