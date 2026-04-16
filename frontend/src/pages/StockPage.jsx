@@ -4,7 +4,7 @@ import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
-  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen
+  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ const NAV_ITEMS = [
   { id: "products", label: "Produits", icon: Package },
   { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
+  { id: "reports", label: "Rapports", icon: FileText },
   { id: "purchases", label: "Achats", icon: ShoppingCart },
   { id: "suppliers", label: "Fournisseurs", icon: Truck },
   { id: "categories", label: "Categories", icon: ClipboardList },
@@ -64,6 +65,9 @@ export default function StockPage() {
   const [purchases, setPurchases] = useState([]);
   const [stockUsers, setStockUsers] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [report, setReport] = useState(null);
+  const [reportFilters, setReportFilters] = useState({ type: "all", date_from: "", date_to: "", search: "" });
+  const [reportLoading, setReportLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
@@ -344,6 +348,30 @@ export default function StockPage() {
       toast.success(r.data.message);
       fetchRecipes();
     } catch (e) { toast.error("Erreur lors du chargement des fiches demo"); }
+  };
+
+  // Reports
+  const fetchReport = async (filters = reportFilters) => {
+    setReportLoading(true);
+    try {
+      const params = {};
+      if (filters.type && filters.type !== "all") params.type = filters.type;
+      if (filters.date_from) params.date_from = filters.date_from;
+      if (filters.date_to) params.date_to = filters.date_to;
+      if (filters.search) params.search = filters.search;
+      const r = await axios.get(`${API}/reports`, { params });
+      setReport(r.data);
+    } catch { toast.error("Erreur chargement rapport"); }
+    finally { setReportLoading(false); }
+  };
+
+  const exportReport = (format) => {
+    const params = new URLSearchParams();
+    if (reportFilters.type && reportFilters.type !== "all") params.set("type", reportFilters.type);
+    if (reportFilters.date_from) params.set("date_from", reportFilters.date_from);
+    if (reportFilters.date_to) params.set("date_to", reportFilters.date_to);
+    if (reportFilters.search) params.set("search", reportFilters.search);
+    window.open(`${API}/reports/export/${format}?${params.toString()}`, "_blank");
   };
 
   const catName = (id) => categories.find(c => c.id === id)?.name || "-";
@@ -673,8 +701,8 @@ export default function StockPage() {
                       <td className="p-3 text-white">{m.product_name}</td>
                       <td className="p-3"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
                       <td className="p-3 text-right text-white font-medium">{m.quantity} {m.unit}</td>
-                      <td className="p-3 text-right text-slate-500">{m.previous_quantity}</td>
-                      <td className="p-3 text-right text-slate-300">{m.new_quantity}</td>
+                      <td className="p-3 text-right text-slate-500">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
+                      <td className="p-3 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
                       <td className="p-3 text-slate-400 text-xs max-w-[200px] truncate">{m.reason}</td>
                       <td className="p-3 text-slate-500 text-xs">{m.user_name}</td>
                     </tr>
@@ -784,6 +812,164 @@ export default function StockPage() {
             )}
           </div>
         )}
+
+
+        {/* REPORTS / RAPPORTS */}
+        {activeSection === "reports" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white">Rapports de Stock</h2>
+              <div className="flex gap-2">
+                <Button variant="outline" className="border-red-700/50 text-red-400 hover:bg-red-900/20" onClick={() => exportReport("pdf")} data-testid="export-pdf-btn">
+                  <Download className="w-4 h-4 mr-1" /> PDF
+                </Button>
+                <Button variant="outline" className="border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/20" onClick={() => exportReport("excel")} data-testid="export-excel-btn">
+                  <Download className="w-4 h-4 mr-1" /> Excel
+                </Button>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <Card className="bg-slate-900/80 border-slate-800">
+              <CardContent className="p-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="w-40">
+                    <Label className="text-slate-400 text-xs mb-1 block">Type</Label>
+                    <Select value={reportFilters.type} onValueChange={v => setReportFilters(f => ({...f, type: v}))}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-9" data-testid="report-filter-type"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="all" className="text-white">Tous les types</SelectItem>
+                        <SelectItem value="entree" className="text-emerald-400">Entrees</SelectItem>
+                        <SelectItem value="sortie" className="text-red-400">Sorties</SelectItem>
+                        <SelectItem value="perte" className="text-orange-400">Pertes / Casses</SelectItem>
+                        <SelectItem value="ajustement" className="text-blue-400">Ajustements</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs mb-1 block">Du</Label>
+                    <Input type="date" value={reportFilters.date_from} onChange={e => setReportFilters(f => ({...f, date_from: e.target.value}))} className="bg-slate-800 border-slate-700 text-white h-9 w-40" data-testid="report-filter-from" />
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs mb-1 block">Au</Label>
+                    <Input type="date" value={reportFilters.date_to} onChange={e => setReportFilters(f => ({...f, date_to: e.target.value}))} className="bg-slate-800 border-slate-700 text-white h-9 w-40" data-testid="report-filter-to" />
+                  </div>
+                  <div className="flex-1 min-w-[150px]">
+                    <Label className="text-slate-400 text-xs mb-1 block">Produit</Label>
+                    <Input placeholder="Rechercher un produit..." value={reportFilters.search} onChange={e => setReportFilters(f => ({...f, search: e.target.value}))} className="bg-slate-800 border-slate-700 text-white h-9" data-testid="report-filter-search" />
+                  </div>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 h-9" onClick={() => fetchReport()} data-testid="report-filter-apply">
+                    <Filter className="w-4 h-4 mr-1" /> Filtrer
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Summary */}
+            {report && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-4 text-center">
+                    <p className="text-slate-500 text-xs">Total Mouvements</p>
+                    <p className="text-2xl font-bold text-white">{report.total_movements}</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-4 text-center">
+                    <p className="text-slate-500 text-xs">Quantite Totale</p>
+                    <p className="text-2xl font-bold text-blue-400">{report.total_quantity?.toFixed(1)}</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-4 text-center">
+                    <p className="text-slate-500 text-xs">Valeur Totale</p>
+                    <p className="text-2xl font-bold text-emerald-400">{formatPrice(report.total_value)} F</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-4 text-center">
+                    <p className="text-slate-500 text-xs">Par Type</p>
+                    <div className="flex flex-wrap gap-1 justify-center mt-1">
+                      {Object.entries(report.by_type || {}).map(([t, v]) => (
+                        <Badge key={t} className={`text-xs ${t === 'entree' ? 'bg-emerald-500/20 text-emerald-400' : t === 'sortie' ? 'bg-red-500/20 text-red-400' : t === 'perte' || t === 'casse' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                          {t}: {v.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent></Card>
+                </div>
+
+                {/* Top Products */}
+                {report.top_products?.length > 0 && (
+                  <Card className="bg-slate-900/80 border-slate-800">
+                    <CardContent className="p-4">
+                      <p className="text-slate-400 text-xs font-medium mb-3">Top Produits (par valeur)</p>
+                      <div className="grid md:grid-cols-2 gap-2">
+                        {report.top_products.slice(0, 10).map((tp, i) => (
+                          <div key={i} className="flex items-center justify-between bg-slate-800/40 rounded-lg px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-600 text-xs w-5">{i + 1}.</span>
+                              <span className="text-white text-sm">{tp.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-400 text-xs">{tp.count} mvt</span>
+                              <span className="text-emerald-400 text-sm font-bold">{formatPrice(tp.value)} F</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Movements Table */}
+                <Card className="bg-slate-900/80 border-slate-800">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" data-testid="report-table">
+                        <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50 text-xs">
+                          <th className="p-3">Date</th><th className="p-3">Produit</th><th className="p-3">Type</th>
+                          <th className="p-3 text-right">Quantite</th><th className="p-3 text-right">Avant</th>
+                          <th className="p-3 text-right">Apres</th><th className="p-3 text-right">Valeur</th><th className="p-3">Motif</th>
+                        </tr></thead>
+                        <tbody>
+                          {(report.movements || []).map(m => {
+                            const typeColor = m.movement_type === "entree" || m.movement_type === "retour_fournisseur" ? "bg-emerald-500/20 text-emerald-400" : m.movement_type === "sortie" ? "bg-red-500/20 text-red-400" : m.movement_type === "perte" || m.movement_type === "casse" ? "bg-orange-500/20 text-orange-400" : "bg-blue-500/20 text-blue-400";
+                            const typeLabel = {entree: "Entree", sortie: "Sortie", perte: "Perte", casse: "Casse", ajustement: "Ajust.", retour_fournisseur: "Retour", inventaire: "Inventaire"}[m.movement_type] || m.movement_type;
+                            return (
+                              <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 text-xs">
+                                <td className="p-2 text-slate-400">{(m.created_at || "").slice(0, 16).replace("T", " ")}</td>
+                                <td className="p-2 text-white">{m.product_name}</td>
+                                <td className="p-2"><Badge className={`${typeColor} text-xs`}>{typeLabel}</Badge></td>
+                                <td className="p-2 text-right text-slate-300">{m.quantity} {m.unit}</td>
+                                <td className="p-2 text-right text-slate-500">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
+                                <td className="p-2 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
+                                <td className="p-2 text-right text-amber-400">{formatPrice(m.total_value)} F</td>
+                                <td className="p-2 text-slate-500 max-w-[200px] truncate">{m.reason}</td>
+                              </tr>
+                            );
+                          })}
+                          {(!report.movements || report.movements.length === 0) && (
+                            <tr><td colSpan={8} className="p-8 text-center text-slate-500">Aucun mouvement pour les filtres selectionnes</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {!report && !reportLoading && (
+              <Card className="bg-slate-900/80 border-slate-800">
+                <CardContent className="p-12 text-center">
+                  <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400 text-lg mb-2">Generez un rapport</p>
+                  <p className="text-slate-500 text-sm">Selectionnez vos filtres et cliquez sur "Filtrer" pour afficher les mouvements</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {reportLoading && (
+              <div className="text-center py-12"><p className="text-slate-400">Chargement du rapport...</p></div>
+            )}
+          </div>
+        )}
+
 
         {/* PURCHASES */}
         {activeSection === "purchases" && (

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
 import random
 import bcrypt
+import io
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 db = None
@@ -692,6 +694,300 @@ async def seed_demo_recipes():
             r.pop("_id", None)
     
     return {"success": True, "message": f"{len(recipes)} fiche(s) technique(s) de demo creee(s)", "recipes": recipes}
+
+# ==================== REPORTS / RAPPORTS ====================
+
+@router.get("/reports")
+async def get_stock_report(
+    type: str = "all",  # all, entree, sortie, perte, casse, ajustement
+    date_from: str = None,
+    date_to: str = None,
+    product_id: str = None,
+    search: str = None
+):
+    """Get filtered stock movements report with aggregated stats"""
+    query = {}
+    
+    if type and type != "all":
+        if type == "entree":
+            query["movement_type"] = {"$in": ["entree", "retour_fournisseur"]}
+        elif type == "sortie":
+            query["movement_type"] = "sortie"
+        elif type == "perte":
+            query["movement_type"] = {"$in": ["perte", "casse"]}
+        else:
+            query["movement_type"] = type
+    
+    if date_from or date_to:
+        dq = {}
+        if date_from:
+            dq["$gte"] = date_from
+        if date_to:
+            dq["$lte"] = date_to + "T23:59:59"
+        query["created_at"] = dq
+    
+    if product_id:
+        query["product_id"] = product_id
+    
+    if search:
+        query["product_name"] = {"$regex": search, "$options": "i"}
+    
+    movements = await db.stock_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    
+    # Aggregated stats
+    total_qty = sum(m.get("quantity", 0) for m in movements)
+    total_value = sum(m.get("total_value", 0) for m in movements)
+    
+    # By type
+    by_type = {}
+    for m in movements:
+        mt = m.get("movement_type", "autre")
+        if mt not in by_type:
+            by_type[mt] = {"count": 0, "quantity": 0, "value": 0}
+        by_type[mt]["count"] += 1
+        by_type[mt]["quantity"] += m.get("quantity", 0)
+        by_type[mt]["value"] += m.get("total_value", 0)
+    
+    # By product (top 20)
+    by_product = {}
+    for m in movements:
+        pname = m.get("product_name", "Inconnu")
+        if pname not in by_product:
+            by_product[pname] = {"count": 0, "quantity": 0, "value": 0}
+        by_product[pname]["count"] += 1
+        by_product[pname]["quantity"] += m.get("quantity", 0)
+        by_product[pname]["value"] += m.get("total_value", 0)
+    top_products = sorted(by_product.items(), key=lambda x: x[1]["value"], reverse=True)[:20]
+    
+    return {
+        "movements": movements[:500],
+        "total_movements": len(movements),
+        "total_quantity": round(total_qty, 2),
+        "total_value": round(total_value, 2),
+        "by_type": by_type,
+        "top_products": [{"name": k, **v} for k, v in top_products],
+        "filters": {"type": type, "date_from": date_from, "date_to": date_to, "product_id": product_id, "search": search}
+    }
+
+@router.get("/reports/export/pdf")
+async def export_report_pdf(
+    type: str = "all",
+    date_from: str = None,
+    date_to: str = None,
+    product_id: str = None,
+    search: str = None
+):
+    """Export stock report as PDF"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    
+    # Fetch data
+    report = await get_stock_report(type=type, date_from=date_from, date_to=date_to, product_id=product_id, search=search)
+    movements = report["movements"]
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    # Title
+    title_style = ParagraphStyle('ReportTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1a1a2e'), alignment=1)
+    elements.append(Paragraph("Rapport de Stock - Espace Maxo", title_style))
+    elements.append(Spacer(1, 5*mm))
+    
+    # Filters info
+    type_labels = {"all": "Tous", "entree": "Entrees", "sortie": "Sorties", "perte": "Pertes/Casses", "ajustement": "Ajustements"}
+    filter_text = f"Type: {type_labels.get(type, type)}"
+    if date_from:
+        filter_text += f" | Du: {date_from}"
+    if date_to:
+        filter_text += f" | Au: {date_to}"
+    filter_text += f" | Total: {report['total_movements']} mouvement(s)"
+    
+    filter_style = ParagraphStyle('FilterInfo', parent=styles['Normal'], fontSize=9, textColor=colors.grey, alignment=1)
+    elements.append(Paragraph(filter_text, filter_style))
+    elements.append(Spacer(1, 5*mm))
+    
+    # Summary table
+    summary_data = [["Mouvements", "Quantite totale", "Valeur totale"]]
+    summary_data.append([
+        str(report["total_movements"]),
+        f"{report['total_quantity']:.1f}",
+        f"{report['total_value']:,.0f} F".replace(",", " ")
+    ])
+    summary_table = Table(summary_data, colWidths=[60*mm, 60*mm, 60*mm])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    # Movements table
+    header = ["Date", "Produit", "Type", "Quantite", "P.U.", "Valeur", "Motif"]
+    data = [header]
+    type_map = {"entree": "Entree", "sortie": "Sortie", "perte": "Perte", "casse": "Casse", "ajustement": "Ajust.", "retour_fournisseur": "Retour", "inventaire": "Inventaire"}
+    
+    for m in movements[:200]:
+        created = m.get("created_at", "")[:16].replace("T", " ")
+        data.append([
+            created,
+            (m.get("product_name", "")[:25]),
+            type_map.get(m.get("movement_type", ""), m.get("movement_type", "")),
+            f"{m.get('quantity', 0):.2f} {m.get('unit', '')}",
+            f"{m.get('unit_price', 0):,.0f}".replace(",", " "),
+            f"{m.get('total_value', 0):,.0f}".replace(",", " "),
+            (m.get("reason", "")[:30])
+        ])
+    
+    col_w = [30*mm, 40*mm, 18*mm, 25*mm, 20*mm, 22*mm, 35*mm]
+    table = Table(data, colWidths=col_w, repeatRows=1)
+    
+    type_colors = {"Entree": colors.HexColor('#48bb78'), "Sortie": colors.HexColor('#f56565'), "Perte": colors.HexColor('#ed8936'), "Casse": colors.HexColor('#e53e3e')}
+    style_commands = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a202c')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('FONTSIZE', (0, 1), (-1, -1), 6.5),
+        ('ALIGN', (3, 0), (5, -1), 'RIGHT'),
+        ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]
+    
+    for i, row in enumerate(data[1:], 1):
+        tc = type_colors.get(row[2])
+        if tc:
+            style_commands.append(('TEXTCOLOR', (2, i), (2, i), tc))
+    
+    table.setStyle(TableStyle(style_commands))
+    elements.append(table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    
+    filename = f"rapport_stock_{type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+@router.get("/reports/export/excel")
+async def export_report_excel(
+    type: str = "all",
+    date_from: str = None,
+    date_to: str = None,
+    product_id: str = None,
+    search: str = None
+):
+    """Export stock report as Excel"""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    
+    report = await get_stock_report(type=type, date_from=date_from, date_to=date_to, product_id=product_id, search=search)
+    movements = report["movements"]
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Mouvements"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="1a202c", end_color="1a202c", fill_type="solid")
+    green_font = Font(color="48bb78", bold=True)
+    red_font = Font(color="f56565", bold=True)
+    orange_font = Font(color="ed8936", bold=True)
+    border = Border(
+        left=Side(style='thin', color='e2e8f0'), right=Side(style='thin', color='e2e8f0'),
+        top=Side(style='thin', color='e2e8f0'), bottom=Side(style='thin', color='e2e8f0')
+    )
+    
+    # Summary row
+    type_labels = {"all": "Tous", "entree": "Entrees", "sortie": "Sorties", "perte": "Pertes/Casses", "ajustement": "Ajustements"}
+    ws.append(["Rapport de Stock - Espace Maxo"])
+    ws.merge_cells('A1:H1')
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.append([f"Type: {type_labels.get(type, type)}", f"Du: {date_from or 'Debut'}", f"Au: {date_to or 'Fin'}", f"Total: {report['total_movements']} mouvement(s)", f"Valeur: {report['total_value']:,.0f} F"])
+    ws.append([])
+    
+    # Headers
+    headers = ["Date", "Produit", "Code", "Type", "Quantite", "Unite", "Prix Unitaire", "Valeur", "Avant", "Apres", "Motif", "Utilisateur"]
+    ws.append(headers)
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = border
+    
+    type_map = {"entree": "Entree", "sortie": "Sortie", "perte": "Perte", "casse": "Casse", "ajustement": "Ajustement", "retour_fournisseur": "Retour", "inventaire": "Inventaire"}
+    
+    for m in movements:
+        created = m.get("created_at", "")[:16].replace("T", " ")
+        mt = type_map.get(m.get("movement_type", ""), m.get("movement_type", ""))
+        row = [
+            created,
+            m.get("product_name", ""),
+            m.get("product_code", ""),
+            mt,
+            m.get("quantity", 0),
+            m.get("unit", ""),
+            m.get("unit_price", 0),
+            m.get("total_value", 0),
+            m.get("previous_quantity", ""),
+            m.get("new_quantity", ""),
+            m.get("reason", ""),
+            m.get("user_name", "")
+        ]
+        ws.append(row)
+        row_num = ws.max_row
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_num, column=col).border = border
+        # Color the type column
+        type_cell = ws.cell(row=row_num, column=4)
+        if mt == "Entree":
+            type_cell.font = green_font
+        elif mt == "Sortie":
+            type_cell.font = red_font
+        elif mt in ["Perte", "Casse"]:
+            type_cell.font = orange_font
+    
+    # Auto-width columns
+    for col_idx, col in enumerate(ws.columns, 1):
+        max_len = 0
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        for cell in col:
+            try:
+                if cell.value and not isinstance(cell, openpyxl.cell.cell.MergedCell):
+                    if len(str(cell.value)) > max_len:
+                        max_len = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 3, 35)
+    
+    # Top products sheet
+    if report.get("top_products"):
+        ws2 = wb.create_sheet("Top Produits")
+        ws2.append(["Produit", "Nb mouvements", "Quantite", "Valeur"])
+        for col in range(1, 5):
+            cell = ws2.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+        for tp in report["top_products"]:
+            ws2.append([tp["name"], tp["count"], round(tp["quantity"], 2), round(tp["value"], 2)])
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"rapport_stock_{type}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 # ==================== SEED DATA ====================
 
