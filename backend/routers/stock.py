@@ -415,6 +415,7 @@ async def delete_supplier(supplier_id: str):
 
 @router.get("/purchases")
 async def get_purchases(supplier_id: str = None, date_from: str = None, date_to: str = None):
+    import re as _re
     query = {}
     if supplier_id:
         query["supplier_id"] = supplier_id
@@ -426,6 +427,7 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
     purchases = await db.stock_purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     # Also include caisse expenses not yet synced to stock_purchases
+    # BUT only items that match actual stock products
     synced_expense_ids = {p.get("expense_id") for p in purchases if p.get("expense_id")}
     
     expense_query = {}
@@ -437,16 +439,38 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
     
     caisse_expenses = await db.expenses.find(expense_query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
+    # Load all stock product names for matching
+    all_stock_names = [p["name"].lower() for p in await db.stock_products.find({"is_active": True}, {"name": 1, "_id": 0}).to_list(5000)]
+    
     for exp in caisse_expenses:
         if exp.get("id") in synced_expense_ids:
             continue
         
-        items = []
+        raw_items = []
         if exp.get("is_group") and exp.get("items"):
-            items = [{"product_name": i.get("description", ""), "quantity": i.get("quantity", 1), "unit_price": i.get("unit_price", 0)} for i in exp["items"]]
+            raw_items = exp["items"]
         else:
-            items = [{"product_name": exp.get("description", ""), "quantity": exp.get("quantity", 1), "unit_price": exp.get("unit_price", 0) or exp.get("amount", 0)}]
+            raw_items = [{"description": exp.get("description", ""), "quantity": exp.get("quantity", 1), "unit_price": exp.get("unit_price", 0) or exp.get("amount", 0)}]
         
+        # Filter: only keep items that match a stock product (exact or starts-with match)
+        matched_items = []
+        for item in raw_items:
+            desc = (item.get("description") or "").strip().lower()
+            if not desc or len(desc) < 2:
+                continue
+            # Exact match or stock product name starts with the description
+            found = any(desc == sn or sn.startswith(desc + " ") or sn.startswith(desc + "s") or desc.rstrip("s") == sn for sn in all_stock_names)
+            if found:
+                matched_items.append({
+                    "product_name": item.get("description", ""),
+                    "quantity": item.get("quantity", 1),
+                    "unit_price": item.get("unit_price", 0)
+                })
+        
+        if not matched_items:
+            continue
+        
+        matched_total = sum(i["quantity"] * i["unit_price"] for i in matched_items)
         status_map = {"pending": "en_attente", "approved": "approuve", "revision_requested": "en_revision", "rejected": "rejete", "completed": "valide"}
         
         purchases.append({
@@ -454,8 +478,8 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
             "supplier_id": "",
             "supplier_name": exp.get("supplier") or exp.get("description", "Caisse"),
             "purchase_date": exp.get("created_at", "")[:10],
-            "items": items,
-            "total_amount": exp.get("amount", 0),
+            "items": matched_items,
+            "total_amount": matched_total,
             "notes": exp.get("description", ""),
             "user_name": exp.get("requested_by", ""),
             "status": status_map.get(exp.get("status", ""), exp.get("status", "")),
