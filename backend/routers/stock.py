@@ -637,6 +637,23 @@ async def reset_product_quantities(ids: List[str] = Body(..., embed=True)):
         reset_count += 1
     return {"success": True, "reset": reset_count}
 
+@router.post("/products/reset-prices")
+async def reset_product_prices(ids: List[str] = Body(..., embed=True)):
+    """Reset purchase prices to 0 for given product IDs"""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    reset_count = 0
+    for pid in ids:
+        product = await db.stock_products.find_one({"id": pid})
+        if not product or product.get("purchase_price", 0) == 0:
+            continue
+        qty = product.get("quantity", 0)
+        await db.stock_products.update_one(
+            {"id": pid},
+            {"$set": {"purchase_price": 0, "valeur_stock": 0, "updated_at": now_iso}}
+        )
+        reset_count += 1
+    return {"success": True, "reset": reset_count}
+
 # ==================== INVENTAIRE PHYSIQUE ====================
 
 class InventoryItemInput(BaseModel):
