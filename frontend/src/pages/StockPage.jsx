@@ -4,7 +4,7 @@ import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
-  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download
+  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
   { id: "reports", label: "Rapports", icon: FileText },
+  { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
   { id: "purchases", label: "Achats", icon: ShoppingCart },
   { id: "suppliers", label: "Fournisseurs", icon: Truck },
   { id: "categories", label: "Categories", icon: ClipboardList },
@@ -68,6 +69,9 @@ export default function StockPage() {
   const [report, setReport] = useState(null);
   const [reportFilters, setReportFilters] = useState({ type: "all", date_from: "", date_to: "", search: "" });
   const [reportLoading, setReportLoading] = useState(false);
+  const [inventories, setInventories] = useState([]);
+  const [activeInventory, setActiveInventory] = useState(null);
+  const [inventorySearch, setInventorySearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
@@ -173,9 +177,13 @@ export default function StockPage() {
     try { const r = await axios.get(`${API}/recipes`); setRecipes(r.data.recipes); } catch {}
   }, []);
 
+  const fetchInventories = useCallback(async () => {
+    try { const r = await axios.get(`${API}/inventories`); setInventories(r.data.inventories); } catch {}
+  }, []);
+
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes();
-  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes]);
+    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories();
+  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
@@ -374,6 +382,62 @@ export default function StockPage() {
     if (reportFilters.date_to) params.set("date_to", reportFilters.date_to);
     if (reportFilters.search) params.set("search", reportFilters.search);
     window.open(`${API}/reports/export/${format}?${params.toString()}`, "_blank");
+  };
+
+  // Inventory
+  const createInventory = async (categoryId = "") => {
+    try {
+      const r = await axios.post(`${API}/inventories`, { category_id: categoryId, user_name: currentUser?.full_name || "Admin" });
+      toast.success("Inventaire cree");
+      setActiveInventory(r.data.inventory);
+      fetchInventories();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const openInventory = async (id) => {
+    try {
+      const r = await axios.get(`${API}/inventories/${id}`);
+      setActiveInventory(r.data.inventory);
+    } catch (e) { toast.error("Erreur chargement"); }
+  };
+
+  const updateCount = async (productId, physicalQty) => {
+    if (!activeInventory) return;
+    try {
+      await axios.put(`${API}/inventories/${activeInventory.id}/count`, { items: [{ product_id: productId, physical_quantity: parseFloat(physicalQty) || 0 }] });
+      // Update local state
+      setActiveInventory(prev => {
+        const items = prev.items.map(i => {
+          if (i.product_id === productId) {
+            const pq = parseFloat(physicalQty) || 0;
+            return { ...i, physical_quantity: pq, counted: true, ecart: parseFloat((pq - i.theoretical_quantity).toFixed(3)), ecart_value: parseFloat(((pq - i.theoretical_quantity) * i.purchase_price).toFixed(2)) };
+          }
+          return i;
+        });
+        return { ...prev, items, counted_products: items.filter(i => i.counted).length, total_ecart_value: items.filter(i => i.counted).reduce((s, i) => s + (i.ecart_value || 0), 0) };
+      });
+    } catch {}
+  };
+
+  const validateInventory = async () => {
+    if (!activeInventory) return;
+    if (!window.confirm("Valider cet inventaire ? Les stocks seront ajustes selon les quantites physiques saisies.")) return;
+    try {
+      const r = await axios.put(`${API}/inventories/${activeInventory.id}/validate`, { user_name: currentUser?.full_name || "Admin" });
+      toast.success(r.data.message);
+      setActiveInventory(prev => ({ ...prev, status: "valide" }));
+      fetchInventories(); fetchProducts(); fetchDashboard();
+    } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const deleteInventory = async (id) => {
+    if (!window.confirm("Supprimer cet inventaire ?")) return;
+    try {
+      await axios.delete(`${API}/inventories/${id}`);
+      toast.success("Inventaire supprime");
+      if (activeInventory?.id === id) setActiveInventory(null);
+      fetchInventories();
+    } catch (e) { toast.error("Erreur"); }
   };
 
   const catName = (id) => categories.find(c => c.id === id)?.name || "-";
@@ -1025,6 +1089,166 @@ export default function StockPage() {
             )}
           </div>
         )}
+
+
+        {/* INVENTAIRE PHYSIQUE */}
+        {activeSection === "inventory" && (
+          <div className="space-y-4">
+            {!activeInventory ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Inventaire Physique</h2>
+                  <Button onClick={() => createInventory()} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-inventory-btn">
+                    <Plus className="w-4 h-4 mr-1" /> Nouvel Inventaire
+                  </Button>
+                </div>
+                <p className="text-slate-400 text-sm">Comparez le stock theorique avec le stock physique reel. Saisissez les quantites comptees et validez pour ajuster le stock automatiquement.</p>
+
+                {inventories.length === 0 ? (
+                  <Card className="bg-slate-900/80 border-slate-800">
+                    <CardContent className="p-12 text-center">
+                      <ClipboardCheck className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-400 text-lg mb-2">Aucun inventaire</p>
+                      <p className="text-slate-500 text-sm mb-4">Lancez votre premier inventaire physique</p>
+                      <Button onClick={() => createInventory()} className="bg-emerald-600 hover:bg-emerald-700">Demarrer un inventaire</Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-3">
+                    {inventories.map(inv => (
+                      <Card key={inv.id} className="bg-slate-900/80 border-slate-800 hover:bg-slate-800/50 cursor-pointer" onClick={() => openInventory(inv.id)} data-testid={`inventory-card-${inv.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <ClipboardCheck className={`w-5 h-5 ${inv.status === 'valide' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                              <div>
+                                <h3 className="text-white font-bold">{inv.name}</h3>
+                                <p className="text-slate-500 text-xs">{new Date(inv.created_at).toLocaleString('fr-FR')} - par {inv.created_by}</p>
+                              </div>
+                              <Badge className={inv.status === 'valide' ? 'bg-emerald-500/20 text-emerald-400 text-xs' : 'bg-amber-500/20 text-amber-400 text-xs'}>
+                                {inv.status === 'valide' ? 'Valide' : 'En cours'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="text-white text-sm">{inv.counted_products}/{inv.total_products} comptes</p>
+                                <p className={`text-xs font-bold ${inv.total_ecart_value > 0 ? 'text-emerald-400' : inv.total_ecart_value < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                  Ecart: {formatPrice(inv.total_ecart_value)} F
+                                </p>
+                              </div>
+                              {isAdmin && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); deleteInventory(inv.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Button variant="ghost" className="text-slate-400 hover:text-white h-8 px-2" onClick={() => setActiveInventory(null)}>
+                      <ChevronDown className="w-4 h-4 rotate-90" /> Retour
+                    </Button>
+                    <h2 className="text-xl font-bold text-white">{activeInventory.name}</h2>
+                    <Badge className={activeInventory.status === 'valide' ? 'bg-emerald-500/20 text-emerald-400 text-xs' : 'bg-amber-500/20 text-amber-400 text-xs'}>
+                      {activeInventory.status === 'valide' ? 'Valide' : 'En cours'}
+                    </Badge>
+                  </div>
+                  {activeInventory.status === 'en_cours' && isAdmin && (
+                    <Button onClick={validateInventory} className="bg-emerald-600 hover:bg-emerald-700" data-testid="validate-inventory-btn">
+                      <Save className="w-4 h-4 mr-1" /> Valider l'inventaire
+                    </Button>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-3 text-center">
+                    <p className="text-slate-500 text-xs">Produits</p>
+                    <p className="text-xl font-bold text-white">{activeInventory.total_products}</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-3 text-center">
+                    <p className="text-slate-500 text-xs">Comptes</p>
+                    <p className="text-xl font-bold text-blue-400">{activeInventory.counted_products}</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-3 text-center">
+                    <p className="text-slate-500 text-xs">Restants</p>
+                    <p className="text-xl font-bold text-amber-400">{activeInventory.total_products - activeInventory.counted_products}</p>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-3 text-center">
+                    <p className="text-slate-500 text-xs">Ecart Total</p>
+                    <p className={`text-xl font-bold ${activeInventory.total_ecart_value > 0 ? 'text-emerald-400' : activeInventory.total_ecart_value < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                      {formatPrice(activeInventory.total_ecart_value)} F
+                    </p>
+                  </CardContent></Card>
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Input value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} placeholder="Rechercher un produit..."
+                    className="bg-slate-900 border-slate-700 text-white pl-9" />
+                </div>
+
+                {/* Table */}
+                <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="inventory-table">
+                    <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50 text-xs">
+                      <th className="p-2 pl-3">Produit</th>
+                      <th className="p-2">Unite</th>
+                      <th className="p-2 text-right">Stock Theorique</th>
+                      <th className="p-2 text-center w-32">Quantite Physique</th>
+                      <th className="p-2 text-right">Ecart</th>
+                      <th className="p-2 text-right">Valeur Ecart</th>
+                    </tr></thead>
+                    <tbody>
+                      {(activeInventory.items || [])
+                        .filter(i => !inventorySearch || i.product_name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                        .map(item => {
+                        const ecartColor = !item.counted ? 'text-slate-600' : item.ecart > 0 ? 'text-emerald-400' : item.ecart < 0 ? 'text-red-400' : 'text-slate-400';
+                        return (
+                          <tr key={item.product_id} className={`border-b border-slate-800/30 ${item.counted ? '' : 'opacity-70'}`}>
+                            <td className="p-2 pl-3">
+                              <div className="flex items-center gap-2">
+                                {item.counted && <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
+                                {!item.counted && <div className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />}
+                                <span className="text-white text-xs">{item.product_name}</span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-slate-500 text-xs">{item.unit}</td>
+                            <td className="p-2 text-right text-slate-300 text-xs">{typeof item.theoretical_quantity === 'number' ? parseFloat(item.theoretical_quantity.toFixed(2)) : item.theoretical_quantity}</td>
+                            <td className="p-2 text-center">
+                              {activeInventory.status === 'en_cours' ? (
+                                <Input type="number" min="0" step="0.01"
+                                  value={item.physical_quantity ?? ""}
+                                  onChange={e => updateCount(item.product_id, e.target.value)}
+                                  className="bg-slate-800 border-slate-700 text-white h-7 text-xs text-center w-24 mx-auto"
+                                  placeholder="---"
+                                  data-testid={`count-${item.product_id}`} />
+                              ) : (
+                                <span className="text-white text-xs">{item.physical_quantity ?? "-"}</span>
+                              )}
+                            </td>
+                            <td className={`p-2 text-right text-xs font-bold ${ecartColor}`}>
+                              {item.counted ? (item.ecart > 0 ? '+' : '') + parseFloat((item.ecart || 0).toFixed(2)) : '-'}
+                            </td>
+                            <td className={`p-2 text-right text-xs ${ecartColor}`}>
+                              {item.counted ? (item.ecart_value > 0 ? '+' : '') + formatPrice(item.ecart_value || 0) + ' F' : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div></CardContent></Card>
+              </>
+            )}
+          </div>
+        )}
+
 
 
         {/* PURCHASES */}

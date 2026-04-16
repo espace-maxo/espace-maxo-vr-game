@@ -600,6 +600,213 @@ async def delete_users_bulk(ids: List[str] = Body(..., embed=True)):
     result = await db.stock_users.delete_many({"id": {"$in": ids}})
     return {"success": True, "deleted": result.deleted_count}
 
+# ==================== INVENTAIRE PHYSIQUE ====================
+
+class InventoryItemInput(BaseModel):
+    product_id: str
+    physical_quantity: float
+
+class InventoryCreate(BaseModel):
+    name: str = ""
+    notes: str = ""
+    category_id: str = ""  # empty = all categories
+    user_name: str = ""
+
+@router.post("/inventories")
+async def create_inventory(data: InventoryCreate):
+    """Create a new inventory session with all active products (or filtered by category)"""
+    query = {"is_active": True}
+    if data.category_id:
+        query["category_id"] = data.category_id
+    
+    products = await db.stock_products.find(query, {"_id": 0}).sort("name", 1).to_list(5000)
+    
+    items = []
+    for p in products:
+        items.append({
+            "product_id": p["id"],
+            "product_name": p.get("name", ""),
+            "product_code": p.get("code", ""),
+            "category_id": p.get("category_id", ""),
+            "unit": p.get("unit", ""),
+            "theoretical_quantity": p.get("quantity", 0),
+            "physical_quantity": None,  # Not yet counted
+            "ecart": 0,
+            "ecart_value": 0,
+            "purchase_price": p.get("purchase_price", 0),
+            "counted": False
+        })
+    
+    inventory = {
+        "id": str(uuid.uuid4()),
+        "name": data.name or f"Inventaire du {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')}",
+        "status": "en_cours",  # en_cours, valide, annule
+        "category_id": data.category_id,
+        "items": items,
+        "total_products": len(items),
+        "counted_products": 0,
+        "total_ecart_value": 0,
+        "notes": data.notes,
+        "created_by": data.user_name,
+        "validated_by": "",
+        "validated_at": "",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.stock_inventories.insert_one(inventory)
+    inventory.pop("_id", None)
+    return {"success": True, "inventory": inventory}
+
+@router.get("/inventories")
+async def get_inventories():
+    inventories = await db.stock_inventories.find({}, {"_id": 0, "items": 0}).sort("created_at", -1).to_list(100)
+    return {"inventories": inventories}
+
+@router.get("/inventories/{inventory_id}")
+async def get_inventory(inventory_id: str):
+    inv = await db.stock_inventories.find_one({"id": inventory_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Inventaire non trouve")
+    
+    # Refresh theoretical quantities from current stock
+    if inv.get("status") == "en_cours":
+        for item in inv.get("items", []):
+            product = await db.stock_products.find_one({"id": item["product_id"]}, {"_id": 0})
+            if product:
+                item["theoretical_quantity"] = product.get("quantity", 0)
+                item["purchase_price"] = product.get("purchase_price", 0)
+                if item.get("counted") and item.get("physical_quantity") is not None:
+                    item["ecart"] = round(item["physical_quantity"] - item["theoretical_quantity"], 3)
+                    item["ecart_value"] = round(item["ecart"] * item["purchase_price"], 2)
+    
+    # Recalc stats
+    counted = sum(1 for i in inv.get("items", []) if i.get("counted"))
+    total_ecart = sum(i.get("ecart_value", 0) for i in inv.get("items", []) if i.get("counted"))
+    inv["counted_products"] = counted
+    inv["total_ecart_value"] = round(total_ecart, 2)
+    
+    return {"inventory": inv}
+
+@router.put("/inventories/{inventory_id}/count")
+async def update_inventory_count(inventory_id: str, items: List[InventoryItemInput] = Body(..., embed=True)):
+    """Update physical counts for products in an inventory"""
+    inv = await db.stock_inventories.find_one({"id": inventory_id})
+    if not inv:
+        raise HTTPException(404, "Inventaire non trouve")
+    if inv.get("status") != "en_cours":
+        raise HTTPException(400, "Cet inventaire est deja cloture")
+    
+    existing_items = inv.get("items", [])
+    item_map = {i["product_id"]: i for i in existing_items}
+    
+    for update in items:
+        if update.product_id in item_map:
+            item = item_map[update.product_id]
+            item["physical_quantity"] = update.physical_quantity
+            item["counted"] = True
+            item["ecart"] = round(update.physical_quantity - item["theoretical_quantity"], 3)
+            item["ecart_value"] = round(item["ecart"] * item.get("purchase_price", 0), 2)
+    
+    counted = sum(1 for i in existing_items if i.get("counted"))
+    total_ecart = sum(i.get("ecart_value", 0) for i in existing_items if i.get("counted"))
+    
+    await db.stock_inventories.update_one(
+        {"id": inventory_id},
+        {"$set": {
+            "items": existing_items,
+            "counted_products": counted,
+            "total_ecart_value": round(total_ecart, 2),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"success": True, "counted_products": counted, "total_ecart_value": round(total_ecart, 2)}
+
+@router.put("/inventories/{inventory_id}/validate")
+async def validate_inventory(inventory_id: str, user_name: str = Body("", embed=True)):
+    """Validate inventory and adjust stock quantities to match physical counts"""
+    inv = await db.stock_inventories.find_one({"id": inventory_id})
+    if not inv:
+        raise HTTPException(404, "Inventaire non trouve")
+    if inv.get("status") != "en_cours":
+        raise HTTPException(400, "Cet inventaire est deja cloture")
+    
+    now_iso = datetime.now(timezone.utc).isoformat()
+    adjustments = 0
+    
+    for item in inv.get("items", []):
+        if not item.get("counted") or item.get("physical_quantity") is None:
+            continue
+        
+        phys_qty = item["physical_quantity"]
+        theo_qty = item["theoretical_quantity"]
+        ecart = round(phys_qty - theo_qty, 3)
+        
+        if ecart == 0:
+            continue
+        
+        # Create adjustment movement
+        product = await db.stock_products.find_one({"id": item["product_id"]})
+        if not product:
+            continue
+        
+        current_qty = product.get("quantity", 0)
+        new_qty = phys_qty
+        price = product.get("purchase_price", 0)
+        new_valeur = round(new_qty * price, 2)
+        smin = product.get("stock_min", 5)
+        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+        
+        mov = {
+            "id": str(uuid.uuid4()),
+            "product_id": item["product_id"],
+            "product_name": item["product_name"],
+            "product_code": item.get("product_code", ""),
+            "movement_type": "inventaire",
+            "quantity": abs(ecart),
+            "previous_quantity": current_qty,
+            "new_quantity": new_qty,
+            "unit": item.get("unit", ""),
+            "unit_price": price,
+            "total_value": round(abs(ecart) * price, 2),
+            "reason": f"Ajustement inventaire - {inv.get('name', '')}",
+            "user_name": user_name or inv.get("created_by", ""),
+            "inventory_id": inventory_id,
+            "created_at": now_iso
+        }
+        await db.stock_movements.insert_one(mov)
+        
+        await db.stock_products.update_one(
+            {"id": item["product_id"]},
+            {"$set": {
+                "quantity": new_qty,
+                "valeur_stock": new_valeur,
+                "statut": new_statut,
+                "updated_at": now_iso
+            }}
+        )
+        adjustments += 1
+    
+    await db.stock_inventories.update_one(
+        {"id": inventory_id},
+        {"$set": {
+            "status": "valide",
+            "validated_by": user_name,
+            "validated_at": now_iso,
+            "updated_at": now_iso
+        }}
+    )
+    
+    return {"success": True, "adjustments": adjustments, "message": f"Inventaire valide. {adjustments} produit(s) ajuste(s)."}
+
+@router.delete("/inventories/{inventory_id}")
+async def delete_inventory(inventory_id: str):
+    result = await db.stock_inventories.delete_one({"id": inventory_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Inventaire non trouve")
+    return {"success": True}
+
 # ==================== DASHBOARD ====================
 
 @router.get("/dashboard")
