@@ -18,6 +18,7 @@ import jwt
 import csv
 import io
 import hashlib
+import re
 from twilio.rest import Client as TwilioClient
 
 # Import modular routers
@@ -5223,6 +5224,8 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         
+        was_completed_before = expense.get("status") == "completed"
+        
         update_data = {}
         for k, v in update.dict().items():
             if v is not None:
@@ -5242,6 +5245,111 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
             {"id": expense_id},
             {"$set": update_data}
         )
+        
+        # === SYNC WITH STOCK MODULE (Achats Caisse → Entrées Stock) ===
+        if update.status == "completed" and not was_completed_before:
+            try:
+                updated_expense = await db.expenses.find_one({"id": expense_id})
+                expense_items = []
+                
+                if updated_expense.get("is_group") and updated_expense.get("items"):
+                    expense_items = updated_expense["items"]
+                else:
+                    expense_items = [{
+                        "description": updated_expense.get("description", ""),
+                        "quantity": updated_expense.get("quantity", 1),
+                        "unit_price": updated_expense.get("unit_price") or updated_expense.get("amount", 0),
+                        "amount": updated_expense.get("amount", 0),
+                        "category": updated_expense.get("category", "")
+                    }]
+                
+                stock_synced = 0
+                for exp_item in expense_items:
+                    item_desc = exp_item.get("description", "").strip()
+                    item_qty = exp_item.get("quantity", 1) or 1
+                    item_price = exp_item.get("unit_price", 0) or 0
+                    
+                    if not item_desc:
+                        continue
+                    
+                    escaped = re.escape(item_desc)
+                    stock_product = await db.stock_products.find_one({
+                        "name": {"$regex": f"^{escaped}$", "$options": "i"},
+                        "is_active": True
+                    })
+                    if not stock_product:
+                        stock_product = await db.stock_products.find_one({
+                            "name": {"$regex": f"^{escaped}", "$options": "i"},
+                            "is_active": True
+                        })
+                    if not stock_product:
+                        stock_product = await db.stock_products.find_one({
+                            "name": {"$regex": escaped, "$options": "i"},
+                            "is_active": True
+                        })
+                    
+                    if stock_product:
+                        old_qty = stock_product.get("quantity", 0)
+                        new_qty = old_qty + item_qty
+                        new_price = item_price if item_price > 0 else stock_product.get("purchase_price", 0)
+                        new_valeur = new_qty * new_price
+                        smin = stock_product.get("stock_min", 5)
+                        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                        
+                        stock_mov = {
+                            "id": str(uuid.uuid4()),
+                            "product_id": stock_product["id"],
+                            "product_name": stock_product["name"],
+                            "product_code": stock_product.get("code", ""),
+                            "movement_type": "entree",
+                            "quantity": item_qty,
+                            "previous_quantity": old_qty,
+                            "new_quantity": new_qty,
+                            "unit": stock_product.get("unit", ""),
+                            "unit_price": new_price,
+                            "total_value": item_qty * new_price,
+                            "reason": f"Achat Caisse - {updated_expense.get('supplier', 'N/A')}",
+                            "user_name": updated_expense.get("requested_by", "Caisse"),
+                            "expense_id": expense_id,
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }
+                        await db.stock_movements.insert_one(stock_mov)
+                        
+                        await db.stock_products.update_one(
+                            {"id": stock_product["id"]},
+                            {"$set": {
+                                "quantity": new_qty,
+                                "purchase_price": new_price,
+                                "valeur_stock": new_valeur,
+                                "statut": new_statut,
+                                "updated_at": datetime.now(timezone.utc).isoformat()
+                            }}
+                        )
+                        stock_synced += 1
+                        logger.info(f"Stock entree: {stock_product['name']} {old_qty} -> {new_qty} (expense {expense_id})")
+                    else:
+                        unlinked_mov = {
+                            "id": str(uuid.uuid4()),
+                            "product_id": "",
+                            "product_name": item_desc,
+                            "product_code": "",
+                            "movement_type": "entree",
+                            "quantity": item_qty,
+                            "previous_quantity": 0,
+                            "new_quantity": item_qty,
+                            "unit": "unite",
+                            "unit_price": item_price,
+                            "total_value": item_qty * item_price,
+                            "reason": f"Achat Caisse (non lie au stock) - {updated_expense.get('supplier', 'N/A')}",
+                            "user_name": updated_expense.get("requested_by", "Caisse"),
+                            "expense_id": expense_id,
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }
+                        await db.stock_movements.insert_one(unlinked_mov)
+                
+                logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
+            except Exception as stock_err:
+                logger.error(f"Error syncing expense to stock: {stock_err}")
         
         updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
         return {"success": True, "expense": updated}

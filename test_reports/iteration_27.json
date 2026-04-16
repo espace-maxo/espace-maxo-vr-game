@@ -1,0 +1,98 @@
+{
+  "summary": "Tested NEW feature: Achats Caisse → Stock Entrées synchronization. All 9 backend tests passed (100%). Frontend UI verified - Dashboard shows Entrées/Sorties Aujourd'hui, Movements page displays 'Achat Caisse' and 'Vente' reasons correctly. Regression test for existing Ventes → Stock Sorties also passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Movements page", "issues": ["Minor: Console warning about HTML hydration (<tr> inside <span>) - cosmetic only, doesn't affect functionality"]}
+    ]
+  },
+  "passed_tests": [
+    "✅ Backend: POST /api/expenses - Create grouped expense (is_group=true with items[])",
+    "✅ Backend: PUT /api/expenses/{id} status='completed' - Creates 'entree' movements in stock_movements",
+    "✅ Backend: Stock quantity increases when expense is completed (Carotte: qty increased by 10)",
+    "✅ Backend: Simple expense (is_group=false) with description matching stock product creates entree",
+    "✅ Backend: Expense with unmatched items creates 'non lié au stock' movement",
+    "✅ Backend: No double sync if expense already 'completed' (idempotent)",
+    "✅ Backend: PUT /api/invoices/{id} validation_status='validated' → creates 'sortie' movements (regression)",
+    "✅ Backend: GET /api/stock/dashboard - returns entrees_today and sorties_today",
+    "✅ Backend: GET /api/stock/movements - returns movements with type, reason, expense_id/invoice_id",
+    "✅ Backend: POST /api/stock/auth/login - admin/Admin2026 works",
+    "✅ Frontend: /stock Dashboard shows 'Entrées Aujourd'hui: 11' and 'Sorties Aujourd'hui: 5'",
+    "✅ Frontend: /stock Dashboard shows 'Ventes Caisse du jour' card with sales count",
+    "✅ Frontend: Movements page shows 'Entree' badges (green) with 'Achat Caisse' reason",
+    "✅ Frontend: Movements page shows 'Sortie' badges (red) with 'Vente - Facture' reason",
+    "✅ Frontend: Movements page shows 'Achat Caisse (non lié au stock)' for unmatched items"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_expense_stock_sync.py",
+    "/app/test_reports/pytest/expense_stock_sync_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Stock sync logic in update_expense (line 5249-5352) correctly handles: grouped expenses with items[], simple expenses with description, unmatched items, and prevents double sync",
+    "Product matching uses 3-tier regex: exact match → starts-with → contains (case-insensitive)",
+    "Stock movements include expense_id for traceability"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_expense_stock_sync.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 pytest tests passed)",
+    "frontend": "100% (All UI elements verified)"
+  },
+  "test_credentials": {
+    "stock_admin": "admin / Admin2026",
+    "caisse_admin": "Caisse2026",
+    "gerante_pin": "2468"
+  },
+  "seed_data_creation": "Test expenses created during testing with TEST_ prefix, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Achats Caisse → Stock sync feature fully working. When expense status changes to 'completed', stock_movements are created with type='entree' and reason='Achat Caisse - {supplier}'. Product matching is by name (regex). Unmatched items create movements with product_id='' and reason contains 'non lié au stock'. Dashboard shows entrees_today/sorties_today counts. Existing Ventes → Stock sync (invoice validation) still works.",
+  "features_verified": {
+    "expense_to_stock_sync": {
+      "status": "WORKING",
+      "notes": "PUT /api/expenses/{id} with status='completed' creates stock entree movements"
+    },
+    "grouped_expense_items": {
+      "status": "WORKING", 
+      "notes": "is_group=true with items[] array - each item creates separate movement"
+    },
+    "simple_expense_sync": {
+      "status": "WORKING",
+      "notes": "is_group=false - uses description field for product matching"
+    },
+    "unmatched_items": {
+      "status": "WORKING",
+      "notes": "Items not matching stock products create 'non lié au stock' movements"
+    },
+    "double_sync_prevention": {
+      "status": "WORKING",
+      "notes": "Re-completing already completed expense doesn't create duplicate movements"
+    },
+    "invoice_to_stock_sync": {
+      "status": "WORKING (regression)",
+      "notes": "Invoice validation creates 'sortie' movements - existing feature still works"
+    },
+    "stock_dashboard": {
+      "status": "WORKING",
+      "notes": "Shows entrees_today=11, sorties_today=5 correctly"
+    },
+    "stock_movements_page": {
+      "status": "WORKING",
+      "notes": "Shows Entree/Sortie badges with Achat Caisse/Vente reasons"
+    }
+  },
+  "backend_api_tests": {
+    "TestExpenseStockSync": "5/5 PASS",
+    "TestInvoiceStockSync": "1/1 PASS",
+    "TestStockDashboard": "1/1 PASS",
+    "TestStockMovementsPage": "1/1 PASS",
+    "TestStockAuth": "1/1 PASS"
+  }
+}
