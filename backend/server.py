@@ -3663,6 +3663,175 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/analytics/dashboard")
+async def get_analytics_dashboard(year: int = Query(None), month: int = Query(None)):
+    """Aggregated analytics dashboard data for a given month (admin).
+    Returns current month stats + previous month stats + growth percentages.
+    Respects assigned_week: weeks assigned to another month are excluded from the native month.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        year = year or now.year
+        month = month or now.month
+
+        async def compute_month(y, m):
+            import calendar
+            date_prefix = f"{y}-{m:02d}"
+            # Invoices native to this month NOT transferred out
+            native = await db.invoices.find({
+                "created_at": {"$regex": f"^{date_prefix}"},
+                "$or": [
+                    {"assigned_week": {"$exists": False}},
+                    {"assigned_week": None},
+                    {"assigned_week": ""}
+                ]
+            }, {"_id": 0}).to_list(10000)
+
+            # Mondays inside this month → pull invoices assigned to them
+            last_day = calendar.monthrange(y, m)[1]
+            first = datetime(y, m, 1)
+            mondays = []
+            d = first
+            while d <= datetime(y, m, last_day):
+                if d.weekday() == 0:
+                    mondays.append(d.strftime("%Y-%m-%d"))
+                d += timedelta(days=1)
+            assigned_in = []
+            if mondays:
+                assigned_in = await db.invoices.find({
+                    "assigned_week": {"$in": mondays}
+                }, {"_id": 0}).to_list(10000)
+
+            seen = set()
+            invoices = []
+            for inv in native + assigned_in:
+                if inv.get("id") not in seen:
+                    seen.add(inv.get("id"))
+                    invoices.append(inv)
+
+            # Exclude natives that are assigned to a week outside this month
+            transferred_out_ids = {
+                inv["id"] for inv in await db.invoices.find({
+                    "created_at": {"$regex": f"^{date_prefix}"},
+                    "assigned_week": {"$exists": True, "$nin": [None, ""], "$not": {"$in": mondays + [""]}}
+                }, {"_id": 0, "id": 1}).to_list(10000)
+            }
+            invoices = [inv for inv in invoices if inv.get("id") not in transferred_out_ids]
+
+            # Only consider validated invoices for revenue analytics
+            validated = [inv for inv in invoices if inv.get("validation_status") == "validated"]
+
+            total_revenue = sum(inv.get("total", 0) for inv in validated)
+            invoice_count = len(validated)
+            avg_ticket = (total_revenue / invoice_count) if invoice_count else 0
+
+            # By server
+            by_server = {}
+            for inv in validated:
+                srv = inv.get("created_by") or "Inconnu"
+                if srv not in by_server:
+                    by_server[srv] = {"total": 0, "count": 0}
+                by_server[srv]["total"] += inv.get("total", 0)
+                by_server[srv]["count"] += 1
+
+            # By payment method (normalized)
+            by_payment = {"cash": 0, "mobile": 0, "cheque": 0, "wallet": 0, "other": 0}
+            for inv in validated:
+                pm = (inv.get("payment_method") or inv.get("payment_mode") or "cash").lower().strip()
+                if pm in ("mobile_money", "momo", "mobilemoney"):
+                    pm = "mobile"
+                elif pm in ("especes", "espèces", "espece", "espèce"):
+                    pm = "cash"
+                elif pm in ("cheque", "chèque", "check"):
+                    pm = "cheque"
+                elif pm in ("bon", "bon-client", "bon_client", "credit"):
+                    pm = "wallet"
+                if pm in by_payment:
+                    by_payment[pm] += inv.get("total", 0)
+                else:
+                    by_payment["other"] += inv.get("total", 0)
+
+            # By department
+            by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+            for inv in validated:
+                dept_totals = inv.get("totals_by_department", {})
+                by_department["salle_jardin"] += dept_totals.get("salle_jardin", 0) + dept_totals.get("jardin", 0)
+                by_department["jeux"] += dept_totals.get("jeux", 0)
+                by_department["bar"] += dept_totals.get("bar", 0)
+                by_department["location"] += dept_totals.get("location", 0)
+                by_department["autres"] += dept_totals.get("autres", 0)
+
+            # Daily stats
+            daily = {}
+            for inv in validated:
+                day = (inv.get("assigned_week") or "")[:10] if inv.get("assigned_week") else inv.get("created_at", "")[:10]
+                # Prefer created_at day when it falls in the month, to show the actual sale day
+                cday = inv.get("created_at", "")[:10]
+                if cday.startswith(date_prefix):
+                    day = cday
+                if not day:
+                    continue
+                if day not in daily:
+                    daily[day] = {"revenue": 0, "count": 0}
+                daily[day]["revenue"] += inv.get("total", 0)
+                daily[day]["count"] += 1
+
+            # Top products (sold most)
+            product_stats = {}
+            for inv in validated:
+                for item in inv.get("items", []) or []:
+                    name = item.get("name") or item.get("product_name") or "-"
+                    qty = item.get("quantity", 1) or 1
+                    subtotal = (item.get("price", 0) or 0) * qty
+                    if name not in product_stats:
+                        product_stats[name] = {"quantity": 0, "revenue": 0}
+                    product_stats[name]["quantity"] += qty
+                    product_stats[name]["revenue"] += subtotal
+
+            top_products = sorted(
+                [{"name": k, **v} for k, v in product_stats.items()],
+                key=lambda x: x["revenue"], reverse=True
+            )[:10]
+
+            return {
+                "year": y,
+                "month": m,
+                "total_revenue": total_revenue,
+                "invoice_count": invoice_count,
+                "avg_ticket": round(avg_ticket, 2),
+                "by_server": by_server,
+                "by_payment_method": by_payment,
+                "by_department": by_department,
+                "daily_stats": daily,
+                "top_products": top_products,
+            }
+
+        # Previous month
+        if month == 1:
+            prev_y, prev_m = year - 1, 12
+        else:
+            prev_y, prev_m = year, month - 1
+
+        current = await compute_month(year, month)
+        previous = await compute_month(prev_y, prev_m)
+
+        def growth_pct(cur, prev):
+            if not prev:
+                return None if cur == 0 else 100.0
+            return round(((cur - prev) / prev) * 100, 2)
+
+        growth = {
+            "revenue_pct": growth_pct(current["total_revenue"], previous["total_revenue"]),
+            "invoice_count_pct": growth_pct(current["invoice_count"], previous["invoice_count"]),
+            "avg_ticket_pct": growth_pct(current["avg_ticket"], previous["avg_ticket"]),
+        }
+
+        return {"current": current, "previous": previous, "growth": growth}
+    except Exception as e:
+        logger.error(f"Error building analytics dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============== CAISSE USERS ENDPOINTS ==============
 
 @api_router.post("/caisse/users")

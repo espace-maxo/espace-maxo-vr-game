@@ -38,6 +38,7 @@ import PointFinancierTab from "./caisse/components/PointFinancierTab";
 import ActiviteTab from "./caisse/components/ActiviteTab";
 import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
+import AnalyticsTab from "./caisse/components/AnalyticsTab";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -3772,6 +3773,12 @@ _Gérante - Espace Maxo_
                 <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
               </TabsTrigger>
             )}
+            {/* 8.5 ANALYTICS (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="analytics" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white" data-testid="tab-analytics">
+                <TrendingUp className="w-4 h-4 mr-2" />Analytics
+              </TabsTrigger>
+            )}
             {/* 9. HEBDO */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
@@ -6769,6 +6776,13 @@ _Gérante - Espace Maxo_
               setHistoryDate={setHistoryDate}
             />
           </TabsContent>
+
+          {/* ==================== ANALYTICS TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+          <TabsContent value="analytics">
+            <AnalyticsTab />
+          </TabsContent>
+          )}
         </Tabs>
         )}
       </div>
