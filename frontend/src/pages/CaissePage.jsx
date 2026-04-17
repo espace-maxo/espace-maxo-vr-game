@@ -3208,14 +3208,23 @@ _Gérante - Espace Maxo_
         modified_by_role: currentUser?.role || "unknown"
       };
       
+      // Auto-assign department based on category
+      const catToDept = {
+        "Plats": "salle_jardin", "Entrees": "salle_jardin", "Grillades": "salle_jardin",
+        "Sauces": "salle_jardin", "Desserts": "salle_jardin", "Petit-dejeuner": "salle_jardin",
+        "Snacks": "salle_jardin", "Accompagnements": "accompagnements",
+        "Boissons": "bar", "Cocktails": "bar"
+      };
+      const formData = { ...productForm, department: catToDept[productForm.category] || productForm.department || "salle_jardin" };
+      
       if (editProduct) {
         await axios.put(`${API}/caisse/products/${editProduct.id}`, {
-          ...productForm,
+          ...formData,
           ...modifierInfo
         });
         toast.success("Produit modifié");
       } else {
-        await axios.post(`${API}/caisse/products?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`, productForm);
+        await axios.post(`${API}/caisse/products?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`, formData);
         toast.success("Produit ajouté");
       }
       setShowProductModal(false);
@@ -7670,18 +7679,6 @@ _Gérante - Espace Maxo_
                 <Label>Unité</Label>
                 <Input value={productForm.unit} onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })} className="bg-slate-700 border-slate-600" />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Département</Label>
-              <Select value={productForm.department} onValueChange={(v) => setProductForm({ ...productForm, department: v })}>
-                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="salle_jardin">Salle & Jardin</SelectItem>
-                  <SelectItem value="jeux">Jeux</SelectItem>
-                  <SelectItem value="bar">Bar</SelectItem>
-                  <SelectItem value="location">Location</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label>Categorie (carte menu)</Label>
