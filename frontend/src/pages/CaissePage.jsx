@@ -7683,6 +7683,25 @@ _Gérante - Espace Maxo_
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Categorie (carte menu)</Label>
+              <Select value={productForm.category || "none"} onValueChange={(v) => setProductForm({ ...productForm, category: v === "none" ? "" : v })}>
+                <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue placeholder="Selectionner une categorie" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="none">-- Aucune --</SelectItem>
+                  <SelectItem value="Plats">Plats</SelectItem>
+                  <SelectItem value="Entrees">Entrees</SelectItem>
+                  <SelectItem value="Grillades">Grillades</SelectItem>
+                  <SelectItem value="Sauces">Sauces</SelectItem>
+                  <SelectItem value="Accompagnements">Accompagnements</SelectItem>
+                  <SelectItem value="Boissons">Boissons</SelectItem>
+                  <SelectItem value="Cocktails">Cocktails</SelectItem>
+                  <SelectItem value="Desserts">Desserts</SelectItem>
+                  <SelectItem value="Petit-dejeuner">Petit-dejeuner</SelectItem>
+                  <SelectItem value="Snacks">Snacks</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button onClick={saveProduct} className="w-full bg-purple-500 hover:bg-purple-600">Enregistrer</Button>
           </div>
         </DialogContent>
