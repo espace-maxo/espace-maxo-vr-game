@@ -6156,6 +6156,37 @@ async def get_weekly_report(week_start: Optional[str] = None):
                 daily_data[date]["expenses"]["total"]
             )
         
+        # ============== MANAGER GENERAL (Commandes & Achats) ==============
+        mg_orders = await db.monsieur_orders.find({
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
+        }, {"_id": 0}).to_list(500)
+        
+        mg_purchases = await db.monsieur_purchases.find({
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
+        }, {"_id": 0}).to_list(500)
+        
+        mg_orders_total = sum(o.get("total", 0) for o in mg_orders)
+        mg_orders_unpaid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "non_regle")
+        mg_orders_paid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "regle")
+        mg_purchases_total = sum(p.get("amount", 0) for p in mg_purchases)
+        mg_purchases_unpaid = sum(p.get("amount", 0) for p in mg_purchases if p.get("status") == "non_regle")
+        
+        # Add to daily data
+        for date in daily_data:
+            daily_data[date]["manager_general"] = {"orders_count": 0, "orders_total": 0, "purchases_count": 0, "purchases_total": 0}
+        
+        for o in mg_orders:
+            odate = (o.get("created_at") or "")[:10]
+            if odate in daily_data:
+                daily_data[odate]["manager_general"]["orders_count"] += 1
+                daily_data[odate]["manager_general"]["orders_total"] += o.get("total", 0)
+        
+        for p in mg_purchases:
+            pdate = (p.get("created_at") or "")[:10]
+            if pdate in daily_data:
+                daily_data[pdate]["manager_general"]["purchases_count"] += 1
+                daily_data[pdate]["manager_general"]["purchases_total"] += p.get("amount", 0)
+        
         # Recalculate total result including locations
         total_income = total_sales + total_locations_income
         result = total_income - total_expenses
@@ -6180,6 +6211,17 @@ async def get_weekly_report(week_start: Optional[str] = None):
                 "by_category": expenses_by_category,
                 "by_status": expenses_by_status,
                 "all_count": len(all_expenses)
+            },
+            "manager_general": {
+                "orders_total": mg_orders_total,
+                "orders_count": len(mg_orders),
+                "orders_unpaid": mg_orders_unpaid,
+                "orders_paid": mg_orders_paid,
+                "purchases_total": mg_purchases_total,
+                "purchases_count": len(mg_purchases),
+                "purchases_unpaid": mg_purchases_unpaid,
+                "orders": mg_orders,
+                "purchases": mg_purchases
             },
             "daily": daily_data,
             "service_quality": service_stats,

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
   Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2,
-  Link, Check, Trash2
+  Link, Check, Trash2, UserCircle
 } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -413,7 +413,7 @@ const HebdoReport = ({
           </div>
 
           {/* Résumé en cartes */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
               <CardContent className="p-4 text-center">
                 <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-1" />
@@ -451,6 +451,18 @@ const HebdoReport = ({
                 <p className="text-xs text-slate-400">Total Recettes</p>
               </CardContent>
             </Card>
+            {weeklyReport.manager_general && (weeklyReport.manager_general.orders_count > 0 || weeklyReport.manager_general.purchases_count > 0) && (
+            <Card className="bg-gradient-to-br from-violet-900/30 to-purple-900/20 border-violet-500/50">
+              <CardContent className="p-4 text-center">
+                <UserCircle className="w-6 h-6 text-violet-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-violet-400">{formatPrice((weeklyReport.manager_general?.orders_total || 0) + (weeklyReport.manager_general?.purchases_total || 0))} F</p>
+                <p className="text-xs text-slate-400">Manager General</p>
+                <div className="flex gap-1 justify-center mt-1">
+                  {weeklyReport.manager_general.orders_unpaid > 0 && <Badge className="bg-red-500/20 text-red-400 text-xs">{formatPrice(weeklyReport.manager_general.orders_unpaid)} F impaye</Badge>}
+                </div>
+              </CardContent>
+            </Card>
+            )}
           </div>
 
           {/* Tableau jour par jour */}
@@ -473,6 +485,7 @@ const HebdoReport = ({
                       <th className="p-3 text-right text-purple-400">Locations</th>
                       <th className="p-3 text-right text-red-400">Dépenses</th>
                       <th className="p-3 text-right">Résultat</th>
+                      <th className="p-3 text-right text-violet-400">Manager G.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -501,9 +514,13 @@ const HebdoReport = ({
                         <td className={`p-3 text-right font-bold ${data.result >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {data.result >= 0 ? '+' : ''}{formatPrice(data.result)} F
                         </td>
+                        <td className="p-3 text-right">
+                          <span className="text-violet-400 font-bold">{formatPrice((data.manager_general?.orders_total || 0) + (data.manager_general?.purchases_total || 0))} F</span>
+                          {(data.manager_general?.orders_count || 0) + (data.manager_general?.purchases_count || 0) > 0 && <span className="text-slate-500 text-xs ml-1">({(data.manager_general?.orders_count || 0) + (data.manager_general?.purchases_count || 0)})</span>}
+                        </td>
                       </tr>
                       {expandedDay === date && (
-                      <tr><td colSpan={6} className="p-0">
+                      <tr><td colSpan={8} className="p-0">
                         <div className="bg-slate-900/50 border-y border-slate-700/30 px-4 py-3 space-y-3">
                           {/* Transfer/Delete bar - Admin only */}
                           {isAdmin && transferItems.length > 0 && (
@@ -583,6 +600,23 @@ const HebdoReport = ({
                           {(!data.sales?.items?.length && !data.expenses?.items?.length && !data.locations?.items?.length) && (
                             <p className="text-slate-500 text-xs text-center py-2">Aucune donnee ce jour</p>
                           )}
+
+                          {/* Manager General detail */}
+                          {((data.manager_general?.orders_count || 0) > 0 || (data.manager_general?.purchases_count || 0) > 0) && (
+                            <div>
+                              <p className="text-violet-400 text-xs font-medium mb-1">Manager General</p>
+                              {data.manager_general?.orders_count > 0 && (
+                                <p className="text-slate-300 text-xs bg-violet-900/20 rounded px-3 py-1.5 mb-1">
+                                  Commandes repas : {data.manager_general.orders_count} - <span className="text-violet-400 font-bold">{formatPrice(data.manager_general.orders_total)} F</span>
+                                </p>
+                              )}
+                              {data.manager_general?.purchases_count > 0 && (
+                                <p className="text-slate-300 text-xs bg-violet-900/20 rounded px-3 py-1.5">
+                                  Achats : {data.manager_general.purchases_count} - <span className="text-violet-400 font-bold">{formatPrice(data.manager_general.purchases_total)} F</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td></tr>
                       )}
@@ -597,6 +631,9 @@ const HebdoReport = ({
                       <td className="p-3 text-right text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</td>
                       <td className={`p-3 text-right ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {weeklyReport.result >= 0 ? '+' : ''}{formatPrice(weeklyReport.result || 0)} F
+                      </td>
+                      <td className="p-3 text-right text-violet-400">
+                        {formatPrice((weeklyReport.manager_general?.orders_total || 0) + (weeklyReport.manager_general?.purchases_total || 0))} F
                       </td>
                     </tr>
                   </tfoot>
@@ -626,6 +663,87 @@ const HebdoReport = ({
               </CardContent>
             </Card>
           )}
+
+          {/* Manager General */}
+          {weeklyReport.manager_general && (weeklyReport.manager_general.orders_count > 0 || weeklyReport.manager_general.purchases_count > 0) && (
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-violet-400 flex items-center gap-2">
+                  <UserCircle className="w-5 h-5" />
+                  Situation Manager General
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg p-3 text-center">
+                    <p className="text-violet-400 text-sm">Commandes repas</p>
+                    <p className="text-violet-300 font-bold text-lg">{weeklyReport.manager_general.orders_count}</p>
+                    <p className="text-violet-400 font-bold">{formatPrice(weeklyReport.manager_general.orders_total)} F</p>
+                  </div>
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-center">
+                    <p className="text-red-400 text-sm">Impaye repas</p>
+                    <p className="text-red-300 font-bold text-lg">{formatPrice(weeklyReport.manager_general.orders_unpaid)} F</p>
+                  </div>
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
+                    <p className="text-blue-400 text-sm">Achats perso</p>
+                    <p className="text-blue-300 font-bold text-lg">{weeklyReport.manager_general.purchases_count}</p>
+                    <p className="text-blue-400 font-bold">{formatPrice(weeklyReport.manager_general.purchases_total)} F</p>
+                  </div>
+                  <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center">
+                    <p className="text-amber-400 text-sm">Total MG</p>
+                    <p className="text-amber-300 font-bold text-lg">{formatPrice((weeklyReport.manager_general.orders_total || 0) + (weeklyReport.manager_general.purchases_total || 0))} F</p>
+                  </div>
+                </div>
+
+                {/* Detail orders */}
+                {weeklyReport.manager_general.orders?.length > 0 && (
+                  <div>
+                    <p className="text-slate-400 text-sm mb-2">Detail des commandes :</p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {weeklyReport.manager_general.orders.map((o, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
+                          <div>
+                            <span className="text-white text-xs">{o.items?.map(i => i.name || i.product_name).join(', ') || 'Commande'}</span>
+                            <span className="text-slate-500 text-xs ml-2">{(o.created_at || '').slice(0, 10)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={o.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
+                              {o.status === 'regle' ? 'Regle' : 'Non regle'}
+                            </Badge>
+                            <span className="text-violet-400 font-bold text-xs">{formatPrice(o.total)} F</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Detail purchases */}
+                {weeklyReport.manager_general.purchases?.length > 0 && (
+                  <div>
+                    <p className="text-slate-400 text-sm mb-2">Detail des achats :</p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {weeklyReport.manager_general.purchases.map((p, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
+                          <div>
+                            <span className="text-white text-xs">{p.description}</span>
+                            <span className="text-slate-500 text-xs ml-2">{(p.created_at || '').slice(0, 10)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={p.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
+                              {p.status === 'regle' ? 'Regle' : 'Non regle'}
+                            </Badge>
+                            <span className="text-blue-400 font-bold text-xs">{formatPrice(p.amount)} F</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
 
           {/* Locations par Espace */}
           {weeklyReport.locations?.by_space && Object.keys(weeklyReport.locations.by_space).length > 0 && (
