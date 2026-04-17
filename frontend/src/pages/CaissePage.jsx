@@ -3754,7 +3754,7 @@ _Gérante - Espace Maxo_
             </TabsTrigger>
             {currentUser?.role !== 'manager' && (
             <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
-              <BarChart3 className="w-4 h-4 mr-2" />Statistiques
+              <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
             </TabsTrigger>
             )}
             <TabsTrigger value="products" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
@@ -3766,11 +3766,6 @@ _Gérante - Espace Maxo_
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="users" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
                 <Settings className="w-4 h-4 mr-2" />Utilisateurs
-              </TabsTrigger>
-            )}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-              <TabsTrigger value="rapport" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white">
-                <FileText className="w-4 h-4 mr-2" />Rapport
               </TabsTrigger>
             )}
             {currentUser?.role !== 'manager' && (
@@ -5285,6 +5280,130 @@ _Gérante - Espace Maxo_
                   <p className="text-slate-500">Chargement des statistiques...</p>
                 </div>
               )}
+
+              {/* ==================== RAPPORT JOURNALIER (ex-onglet Rapport) ==================== */}
+              <div className="border-t border-slate-700/50 pt-6 mt-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Rapport Journalier</h2>
+                    <p className="text-slate-400 text-sm">Point de caisse quotidien</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      type="date"
+                      value={rapportDate}
+                      onChange={(e) => setRapportDate(e.target.value)}
+                      className="bg-slate-800/50 border-slate-700 text-white"
+                    />
+                    <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300">
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Actualiser
+                    </Button>
+                  </div>
+                </div>
+
+                {rapportData ? (
+                  <div className="space-y-4 mt-4">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
+                        <CardContent className="p-4 text-center">
+                          <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
+                          <p className="text-slate-400 text-sm">Factures Total</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+                        <CardContent className="p-4 text-center">
+                          <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-green-400">{rapportData.validatedInvoices}</p>
+                          <p className="text-slate-400 text-sm">Validees</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30">
+                        <CardContent className="p-4 text-center">
+                          <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                          <p className="text-3xl font-bold text-yellow-400">{rapportData.pendingInvoices}</p>
+                          <p className="text-slate-400 text-sm">En attente</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+                        <CardContent className="p-4 text-center">
+                          <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                          <p className="text-2xl font-bold text-amber-500">{formatPrice(rapportData.validatedRevenue)} F</p>
+                          <p className="text-slate-400 text-sm">CA Valide</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* By Server */}
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          <Users className="w-5 h-5 text-blue-400" />
+                          Recapitulatif par Serveur
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-700">
+                              <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Validees</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
+                              <th className="text-right py-2 text-slate-400 text-sm">Total</th>
+                              <th className="text-center py-2 text-slate-400 text-sm">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(rapportData.byServer).map(([server, data]) => (
+                              <tr key={server} className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer" onClick={() => viewServerDetail(server)}>
+                                <td className="py-3 text-white font-medium">{server}</td>
+                                <td className="py-3 text-center text-slate-300">{data.count}</td>
+                                <td className="py-3 text-center text-green-400">{data.validated}</td>
+                                <td className="py-3 text-center text-yellow-400">{data.pending}</td>
+                                <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
+                                <td className="py-3 text-center">
+                                  <Button size="sm" variant="ghost" className="text-blue-400" onClick={(e) => { e.stopPropagation(); viewServerDetail(server); }}>
+                                    <Eye className="w-4 h-4 mr-1" />Detail
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+
+                    {/* Signature & PDF */}
+                    <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
+                      <CardHeader>
+                        <CardTitle className="text-amber-400">Generer le Rapport PDF</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-slate-300">Signature numerique (Gerante)</Label>
+                          <Input value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Tapez votre nom pour signer..." className="bg-slate-700/50 border-slate-600 text-white font-serif italic text-lg" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button onClick={generateRapportPDF} className="bg-amber-500 hover:bg-amber-600 text-white"><Printer className="w-4 h-4 mr-2" />Imprimer</Button>
+                          <Button onClick={generateRapportPDF} variant="outline" className="border-amber-500 text-amber-500"><Download className="w-4 h-4 mr-2" />PDF</Button>
+                        </div>
+                        <Button onClick={sendRapportWhatsApp} className="w-full bg-green-600 hover:bg-green-700 text-white">
+                          <MessageCircle className="w-5 h-5 mr-2" />Envoyer par WhatsApp
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardContent className="py-8 text-center">
+                      <p className="text-slate-500">Cliquez "Actualiser" pour charger le rapport</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
           </TabsContent>
 
@@ -5461,476 +5580,6 @@ _Gérante - Espace Maxo_
                     </Card>
                   ))}
                 </div>
-              </div>
-            </TabsContent>
-          )}
-
-          {/* ==================== RAPPORT JOURNALIER TAB ==================== */}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-            <TabsContent value="rapport">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Rapport Journalier</h2>
-                    <p className="text-slate-400 text-sm">Point de caisse quotidien</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      type="date"
-                      value={rapportDate}
-                      onChange={(e) => setRapportDate(e.target.value)}
-                      className="bg-slate-800/50 border-slate-700 text-white"
-                    />
-                    <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Actualiser
-                    </Button>
-                  </div>
-                </div>
-
-                {rapportData ? (
-                  <>
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-                        <CardContent className="p-4 text-center">
-                          <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
-                          <p className="text-slate-400 text-sm">Factures Total</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-                        <CardContent className="p-4 text-center">
-                          <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-green-400">{rapportData.validatedInvoices}</p>
-                          <p className="text-slate-400 text-sm">Validées</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30">
-                        <CardContent className="p-4 text-center">
-                          <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-yellow-400">{rapportData.pendingInvoices}</p>
-                          <p className="text-slate-400 text-sm">En attente</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
-                        <CardContent className="p-4 text-center">
-                          <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-                          <p className="text-2xl font-bold text-amber-500">{formatPrice(rapportData.validatedRevenue)} F</p>
-                          <p className="text-slate-400 text-sm">CA Validé</p>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* By Server */}
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <Users className="w-5 h-5 text-blue-400" />
-                          Récapitulatif par Serveur
-                          <span className="text-slate-500 text-sm font-normal ml-2">(Cliquez pour voir le détail)</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-slate-700">
-                              <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Validées</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
-                              <th className="text-right py-2 text-slate-400 text-sm">Total</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Object.entries(rapportData.byServer).map(([server, data]) => (
-                              <tr 
-                                key={server} 
-                                className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition-colors"
-                                onClick={() => viewServerDetail(server)}
-                              >
-                                <td className="py-3 text-white font-medium">{server}</td>
-                                <td className="py-3 text-center text-slate-300">{data.count}</td>
-                                <td className="py-3 text-center text-green-400">{data.validated}</td>
-                                <td className="py-3 text-center text-yellow-400">{data.pending}</td>
-                                <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
-                                <td className="py-3 text-center">
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="text-blue-400 hover:text-blue-300"
-                                    onClick={(e) => { e.stopPropagation(); viewServerDetail(server); }}
-                                  >
-                                    <Eye className="w-4 h-4 mr-1" />
-                                    Détail
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </CardContent>
-                    </Card>
-
-                    {/* Server Detail View */}
-                    {selectedServerDetail && (
-                      <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-500/30">
-                        <CardHeader className="flex flex-row items-center justify-between">
-                          <div>
-                            <CardTitle className="text-blue-400 flex items-center gap-2">
-                              <User className="w-5 h-5" />
-                              Détail des factures - {selectedServerDetail}
-                            </CardTitle>
-                            <p className="text-slate-400 text-sm mt-1">
-                              {serverInvoices.length} facture(s) • Total: {formatPrice(serverInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
-                            </p>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={closeServerDetail}
-                            className="text-slate-400 hover:text-white"
-                          >
-                            <X className="w-5 h-5" />
-                          </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {serverInvoices.length === 0 ? (
-                            <p className="text-slate-400 text-center py-4">Aucune facture pour ce serveur</p>
-                          ) : (
-                            serverInvoices.map(invoice => (
-                              <div 
-                                key={invoice.id} 
-                                className={`p-3 rounded-lg border ${invoice.validation_status === 'validated' ? 'bg-green-900/20 border-green-500/30' : 'bg-yellow-900/20 border-yellow-500/30'}`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="text-white font-bold">{invoice.invoice_number}</span>
-                                      {invoice.validation_status === 'validated' ? (
-                                        <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Validée</Badge>
-                                      ) : (
-                                        <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">⏳ En attente</Badge>
-                                      )}
-                                    </div>
-                                    <p className="text-slate-400 text-sm">
-                                      {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
-                                    </p>
-                                    <div className="flex gap-2 mt-1 flex-wrap">
-                                      {invoice.totals_by_department?.salle_jardin > 0 && (
-                                        <Badge className="bg-green-500/20 text-green-400 text-xs">S&J: {formatPrice(invoice.totals_by_department.salle_jardin)}</Badge>
-                                      )}
-                                      {invoice.totals_by_department?.jeux > 0 && (
-                                        <Badge className="bg-blue-500/20 text-blue-400 text-xs">Jeux: {formatPrice(invoice.totals_by_department.jeux)}</Badge>
-                                      )}
-                                      {invoice.totals_by_department?.bar > 0 && (
-                                        <Badge className="bg-orange-500/20 text-orange-400 text-xs">Bar: {formatPrice(invoice.totals_by_department.bar)}</Badge>
-                                      )}
-                                      {invoice.totals_by_department?.location > 0 && (
-                                        <Badge className="bg-purple-500/20 text-purple-400 text-xs">Loc: {formatPrice(invoice.totals_by_department.location)}</Badge>
-                                      )}
-                                      {invoice.totals_by_department?.autres > 0 && (
-                                        <Badge className="bg-slate-500/20 text-slate-400 text-xs">Autres: {formatPrice(invoice.totals_by_department.autres)}</Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xl font-bold text-amber-500">{formatPrice(invoice.total)} F</p>
-                                    <p className="text-slate-500 text-xs">
-                                      {PAYMENT_METHODS.find(p => p.value === invoice.payment_method)?.label || invoice.payment_method}
-                                    </p>
-                                    <div className="flex gap-1 mt-2 justify-end">
-                                      <Button 
-                                        size="sm" 
-                                        variant="ghost" 
-                                        onClick={() => setViewInvoice(invoice)}
-                                        className="text-slate-400 hover:text-white h-7 px-2"
-                                      >
-                                        <Eye className="w-3 h-3" />
-                                      </Button>
-                                      {/* Print button - Manager/Admin only */}
-                                      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                                        <Button 
-                                          size="sm" 
-                                          variant="ghost" 
-                                          onClick={() => printTicket(invoice)}
-                                          className="text-slate-400 hover:text-white h-7 px-2"
-                                        >
-                                          <Printer className="w-3 h-3" />
-                                        </Button>
-                                      )}
-                                      {invoice.validation_status !== 'validated' && (
-                                        <Button 
-                                          size="sm" 
-                                          onClick={() => validateInvoice(invoice.id)}
-                                          className="bg-green-600 hover:bg-green-700 h-7 px-2"
-                                        >
-                                          <CheckCircle className="w-3 h-3" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Charts Section - Admin Only */}
-                    {currentUser?.role === 'admin' && (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {/* Pie Chart - By Department */}
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader>
-                          <CardTitle className="text-white text-lg flex items-center gap-2">
-                            <PieChartIcon className="w-5 h-5 text-amber-400" />
-                            Répartition par Département
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {(() => {
-                            const DEPT_COLORS = {
-                              salle_jardin: '#22c55e',
-                              jeux: '#3b82f6', 
-                              bar: '#f97316',
-                              location: '#a855f7',
-                              autres: '#64748b'
-                            };
-                            const deptData = Object.entries(rapportData.byDepartment)
-                              .filter(([_, v]) => v > 0)
-                              .map(([dept, amount]) => ({
-                                name: DEPARTMENT_CONFIG[dept]?.label || dept,
-                                value: amount,
-                                color: DEPT_COLORS[dept] || '#64748b'
-                              }));
-                            
-                            if (deptData.length === 0) {
-                              return <p className="text-slate-400 text-center py-8">Aucune donnée</p>;
-                            }
-                            
-                            return (
-                              <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <PieChart>
-                                    <Pie
-                                      data={deptData}
-                                      cx="50%"
-                                      cy="50%"
-                                      innerRadius={50}
-                                      outerRadius={80}
-                                      paddingAngle={3}
-                                      dataKey="value"
-                                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                                      labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                                    >
-                                      {deptData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                      ))}
-                                    </Pie>
-                                    <Tooltip 
-                                      formatter={(value) => [`${formatPrice(value)} F`, 'Montant']}
-                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                                      labelStyle={{ color: '#f1f5f9' }}
-                                    />
-                                  </PieChart>
-                                </ResponsiveContainer>
-                              </div>
-                            );
-                          })()}
-                          <div className="grid grid-cols-2 gap-2 mt-4">
-                            {Object.entries(rapportData.byDepartment).filter(([_, v]) => v > 0).map(([dept, amount]) => (
-                              <div key={dept} className="flex items-center gap-2">
-                                <div className={`w-3 h-3 rounded-full ${dept === 'salle_jardin' ? 'bg-green-500' : dept === 'jeux' ? 'bg-blue-500' : dept === 'bar' ? 'bg-orange-500' : dept === 'location' ? 'bg-purple-500' : 'bg-slate-500'}`} />
-                                <span className="text-slate-300 text-sm truncate">{DEPARTMENT_CONFIG[dept]?.label}</span>
-                                <span className="text-amber-400 text-sm font-bold ml-auto">{formatPrice(amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Bar Chart - By Server Performance */}
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader>
-                          <CardTitle className="text-white text-lg flex items-center gap-2">
-                            <BarChart3 className="w-5 h-5 text-blue-400" />
-                            Performance par Serveur
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {(() => {
-                            const serverData = Object.entries(rapportData.byServer)
-                              .map(([server, data]) => ({
-                                name: server.length > 12 ? server.slice(0, 12) + '...' : server,
-                                fullName: server,
-                                total: data.total,
-                                validated: data.validated,
-                                pending: data.pending
-                              }))
-                              .sort((a, b) => b.total - a.total)
-                              .slice(0, 6);
-                            
-                            if (serverData.length === 0) {
-                              return <p className="text-slate-400 text-center py-8">Aucune donnée</p>;
-                            }
-                            
-                            return (
-                              <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <BarChart data={serverData} layout="vertical" margin={{ left: 10, right: 10 }}>
-                                    <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => formatPrice(v)} fontSize={10} />
-                                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={80} />
-                                    <Tooltip 
-                                      formatter={(value) => [`${formatPrice(value)} F`, 'CA Total']}
-                                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                                      labelStyle={{ color: '#f1f5f9' }}
-                                      labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label}
-                                    />
-                                    <Bar dataKey="total" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                                  </BarChart>
-                                </ResponsiveContainer>
-                              </div>
-                            );
-                          })()}
-                        </CardContent>
-                      </Card>
-                    </div>
-                    )}
-
-                    {/* Payment Methods Pie Chart - Admin Only */}
-                    {currentUser?.role === 'admin' && (
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader>
-                        <CardTitle className="text-white text-lg flex items-center gap-2">
-                          <CreditCard className="w-5 h-5 text-green-400" />
-                          Répartition par Mode de Paiement
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {(() => {
-                            const PAYMENT_COLORS = {
-                              cash: '#22c55e',
-                              card: '#3b82f6',
-                              mobile: '#f97316',
-                              wallet: '#a855f7',
-                              check: '#64748b'
-                            };
-                            const paymentData = Object.entries(rapportData.byPayment)
-                              .map(([method, data]) => ({
-                                name: PAYMENT_METHODS.find(p => p.value === method)?.label || method,
-                                value: data.total,
-                                count: data.count,
-                                color: PAYMENT_COLORS[method] || '#64748b'
-                              }));
-                            
-                            if (paymentData.length === 0) {
-                              return <p className="text-slate-400 text-center py-8 col-span-2">Aucun paiement validé</p>;
-                            }
-                            
-                            return (
-                              <>
-                                <div className="h-48">
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                      <Pie
-                                        data={paymentData}
-                                        cx="50%"
-                                        cy="50%"
-                                        outerRadius={70}
-                                        dataKey="value"
-                                        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-                                      >
-                                        {paymentData.map((entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                      </Pie>
-                                      <Tooltip 
-                                        formatter={(value, name, props) => [`${formatPrice(value)} F (${props.payload.count} factures)`, 'Montant']}
-                                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                                      />
-                                    </PieChart>
-                                  </ResponsiveContainer>
-                                </div>
-                                <div className="space-y-3">
-                                  {paymentData.map((payment, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-700/30">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: payment.color }} />
-                                        <span className="text-slate-300">{payment.name}</span>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-amber-400 font-bold">{formatPrice(payment.value)} F</p>
-                                        <p className="text-slate-500 text-xs">{payment.count} facture(s)</p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    )}
-
-                    {/* Signature & Generate PDF */}
-                    <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
-                      <CardHeader>
-                        <CardTitle className="text-amber-400">Générer le Rapport PDF</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-slate-300">Signature numérique (Gérante)</Label>
-                          <Input
-                            value={signature}
-                            onChange={(e) => setSignature(e.target.value)}
-                            placeholder="Tapez votre nom pour signer..."
-                            className="bg-slate-700/50 border-slate-600 text-white font-serif italic text-lg"
-                          />
-                          <p className="text-slate-500 text-xs">Cette signature apparaîtra sur le rapport PDF</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Button 
-                            onClick={generateRapportPDF}
-                            className="bg-amber-500 hover:bg-amber-600 text-white"
-                          >
-                            <Printer className="w-4 h-4 mr-2" />
-                            Imprimer le Rapport
-                          </Button>
-                          <Button 
-                            onClick={generateRapportPDF}
-                            variant="outline"
-                            className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
-                          >
-                            <Download className="w-4 h-4 mr-2" />
-                            Télécharger PDF
-                          </Button>
-                        </div>
-                        <Button 
-                          onClick={sendRapportWhatsApp}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <MessageCircle className="w-5 h-5 mr-2" />
-                          Envoyer par WhatsApp à Marcel HOUNHANOU
-                        </Button>
-                        <p className="text-slate-400 text-sm text-center">
-                          📱 +229 01 62 39 62 39
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : (
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="py-12 text-center">
-                      <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                      <p className="text-slate-400">Chargement du rapport...</p>
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             </TabsContent>
           )}
