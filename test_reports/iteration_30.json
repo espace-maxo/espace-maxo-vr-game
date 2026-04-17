@@ -1,0 +1,86 @@
+{
+  "summary": "Tested P0 bug fix (revenue-by-payment respecting assigned_week) and new feature (validated invoices + completed expenses tables in Activite tab). All 12 backend tests passed (100%). Frontend UI verified - both new tables with data-testid attributes working correctly with proper columns and totals matching summary cards.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/reports/revenue-by-payment returns 200 with total, count, by_method",
+    "✅ Backend: revenue-by-payment with week_start parameter works correctly",
+    "✅ Backend: revenue-by-payment with date parameter works correctly",
+    "✅ Backend: Payment method normalization (mobile_money->mobile, especes->cash, cheque, bon-client->wallet)",
+    "✅ Backend: GET /api/reports/weekly returns 200 with sales.total and daily data",
+    "✅ Backend: weekly report with week_start parameter works correctly",
+    "✅ Backend: CRITICAL - revenue-by-payment total MATCHES weekly report sales.total for current week (38000 F)",
+    "✅ Backend: CRITICAL - revenue-by-payment total MATCHES weekly report sales.total for previous week (13000 F)",
+    "✅ Backend: PUT /api/invoices/{id}/assign-week endpoint exists",
+    "✅ Backend: POST /api/invoices/unassign-week-bulk endpoint works with {ids: []}",
+    "✅ Backend: assigned_week behavior - invoice excluded from original week and included in target week after assignment",
+    "✅ Backend: Daily mode revenue-by-payment works correctly",
+    "✅ Frontend: Admin login with password 'Caisse2026' works",
+    "✅ Frontend: Activite & Historique tab accessible",
+    "✅ Frontend: data-testid='activity-validated-invoices' card present when validated invoices exist",
+    "✅ Frontend: Validated invoices table has all 6 columns: Facture, Client, Serveur, Mode, Total, Heure",
+    "✅ Frontend: data-testid='activity-completed-expenses' card present when completed expenses exist",
+    "✅ Frontend: Completed expenses table has all 5 columns: Description, Fournisseur, Categorie, Montant, Heure",
+    "✅ Frontend: Summary card CA VALIDE total matches validated invoices table title total",
+    "✅ Frontend: Summary card DEPENSES total matches completed expenses table title total"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_revenue_by_payment.py",
+    "/app/test_reports/pytest/revenue_by_payment_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "P0 Bug Fix VERIFIED: revenue-by-payment now uses same assigned_week logic as weekly report",
+    "Both endpoints return identical totals (38000 F for current week, 13000 F for previous week)",
+    "Payment method normalization working correctly (mobile_money->mobile, especes->cash, etc.)",
+    "Frontend tables only appear when data exists (todayInvs.length > 0 or completedExp.length > 0) - correct behavior",
+    "data-testid attributes properly added for testing automation"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_revenue_by_payment.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest tests passed)",
+    "frontend": "100% (All UI elements verified)"
+  },
+  "test_credentials": {
+    "caisse_admin": "Admin / Caisse2026"
+  },
+  "seed_data_creation": "Created temporary test invoice (EM-20260417-0001) and expense for frontend verification, then cleaned up",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "P0 bug fix verified: /api/reports/revenue-by-payment now respects assigned_week field and matches /api/reports/weekly totals. New feature verified: Activite & Historique tab shows validated invoices table (data-testid='activity-validated-invoices') and completed expenses table (data-testid='activity-completed-expenses') with proper columns and totals matching summary cards.",
+  "features_verified": {
+    "revenue_by_payment_assigned_week": {
+      "status": "WORKING",
+      "notes": "Totals match weekly report for both current and previous weeks"
+    },
+    "payment_method_normalization": {
+      "status": "WORKING",
+      "notes": "mobile_money->mobile, especes->cash, cheque, bon-client->wallet"
+    },
+    "assign_week_endpoint": {
+      "status": "WORKING",
+      "notes": "PUT /api/invoices/{id}/assign-week and POST /api/invoices/unassign-week-bulk both functional"
+    },
+    "activity_validated_invoices_table": {
+      "status": "WORKING",
+      "notes": "data-testid='activity-validated-invoices' with columns: Facture, Client, Serveur, Mode, Total, Heure"
+    },
+    "activity_completed_expenses_table": {
+      "status": "WORKING",
+      "notes": "data-testid='activity-completed-expenses' with columns: Description, Fournisseur, Categorie, Montant, Heure"
+    },
+    "summary_totals_consistency": {
+      "status": "WORKING",
+      "notes": "CA VALIDE and DEPENSES card totals match table title totals"
+    }
+  }
+}

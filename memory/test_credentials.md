@@ -1,22 +1,12 @@
-# Test Credentials - Caisse Pro
+# Test Credentials
 
-## Caisse Pro (/caisse)
-- **Admin** : Cliquer "Admin", mot de passe `Caisse2026`
-- **Gérante (Manager)** : Cliquer "Serveur (PIN)", PIN `2468` (Mères AHOUANDJINOU)
-- **Serveur 1** : Cliquer "Serveur (PIN)", PIN `4321` (Marie Dupont)
-- **Serveur 2** : Cliquer "Serveur (PIN)", PIN `1234` (Christian)
+## Caisse Pro (https://<preview>/caisse)
+- **Admin** : username `Admin` / password `Caisse2026`
+- **Gérante** : username `Mères AHOUANDJINOU` / PIN `2468`
 
-## Codes spéciaux
-- **PIN Suppression de point serveur** : `0631`
+## Stock (https://<preview>/stock)
+- **Admin** : username `admin` / password `Admin2026`
+- **Gérante** : username `gerante` / password `Gerante2026`
 
-## Admin Dashboard (/admin)
-- Mot de passe : `Caisse2026`
-
-## Gestion Stock (/stock)
-- **Admin** : `admin` / `Admin2026` (acces complet)
-- **Gerante** : `gerante` / `Gerante2026` (gestion stock, achats)
-- **Magasinier** : `magasinier` / `Magasin2026` (entrees, sorties)
-
-## API URL
-- Backend : `https://caisse-mon-point.preview.emergentagent.com/api`
-- **Consultation** : `consultation` / `Consult2026` (lecture seule)
+## Main Site Admin (https://<preview>/admin)
+Used for Espace Maxo booking admin (separate from Caisse Pro).

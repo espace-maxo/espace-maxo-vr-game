@@ -7185,34 +7185,84 @@ async def toggle_task(instruction_id: str, task_index: int, completed: bool = Bo
 
 @api_router.get("/reports/revenue-by-payment")
 async def get_revenue_by_payment_method(week_start: str = None, date: str = None):
-    """Get validated invoice revenue grouped by payment method for comparison with reversement"""
+    """Get validated invoice revenue grouped by payment method for comparison with reversement.
+    Respects assigned_week: includes invoices transferred into the period and excludes those transferred out.
+    """
     try:
+        is_weekly = False
         if week_start:
+            is_weekly = True
             start = datetime.fromisoformat(week_start)
             start = start.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
             start_str = start.strftime("%Y-%m-%d")
             end_str = end.strftime("%Y-%m-%d") + "T23:59:59Z"
+            week_monday_str = start_str
         elif date:
             start_str = date
             end_str = date + "T23:59:59Z"
+            # For a single day, the relevant week Monday
+            d = datetime.fromisoformat(date)
+            week_monday_str = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
         else:
+            is_weekly = True
             today = datetime.now(timezone.utc)
             start = today - timedelta(days=today.weekday())
             start = start.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
             start_str = start.strftime("%Y-%m-%d")
             end_str = end.strftime("%Y-%m-%d") + "T23:59:59Z"
+            week_monday_str = start_str
         
-        invoices = await db.invoices.find({
+        # 1. Invoices whose native created_at falls in the period AND not transferred elsewhere
+        native_invoices = await db.invoices.find({
             "validation_status": "validated",
-            "created_at": {"$gte": start_str, "$lte": end_str}
-        }, {"_id": 0, "total": 1, "payment_method": 1}).to_list(5000)
+            "created_at": {"$gte": start_str, "$lte": end_str},
+            "$or": [
+                {"assigned_week": {"$exists": False}},
+                {"assigned_week": None},
+                {"assigned_week": ""},
+                {"assigned_week": week_monday_str}
+            ]
+        }, {"_id": 0, "id": 1, "total": 1, "payment_method": 1, "payment_mode": 1, "created_at": 1, "assigned_week": 1}).to_list(5000)
+        
+        # 2. Invoices transferred INTO this week from elsewhere
+        # For weekly: any invoice with assigned_week == this week's Monday but created outside
+        # For daily: include invoices assigned to this week's Monday that fall outside this day
+        if is_weekly:
+            assigned_invoices = await db.invoices.find({
+                "validation_status": "validated",
+                "assigned_week": week_monday_str,
+                "$or": [
+                    {"created_at": {"$lt": start_str}},
+                    {"created_at": {"$gt": end_str}}
+                ]
+            }, {"_id": 0, "id": 1, "total": 1, "payment_method": 1, "payment_mode": 1, "created_at": 1, "assigned_week": 1}).to_list(5000)
+        else:
+            # Daily mode: don't pull invoices from other days assigned to this week — they belong to their own day
+            assigned_invoices = []
+        
+        # Merge and deduplicate
+        seen = set()
+        invoices = []
+        for inv in native_invoices + assigned_invoices:
+            if inv.get("id") not in seen:
+                seen.add(inv.get("id"))
+                invoices.append(inv)
         
         by_method = {"cash": 0, "mobile": 0, "card": 0, "cheque": 0, "wallet": 0, "credit": 0, "other": 0}
         total = 0
         for inv in invoices:
-            method = inv.get("payment_method", "cash")
+            method = (inv.get("payment_method") or inv.get("payment_mode") or "cash").lower().strip()
+            # Normalize common variants
+            if method in ("mobile_money", "momo", "mobilemoney"):
+                method = "mobile"
+            elif method in ("especes", "espèces", "espece", "espèce"):
+                method = "cash"
+            elif method in ("cheque", "chèque", "check"):
+                method = "cheque"
+            elif method in ("bon", "bon-client", "bon_client", "credit"):
+                method = "wallet"
             amt = inv.get("total", 0)
             total += amt
             if method in by_method:

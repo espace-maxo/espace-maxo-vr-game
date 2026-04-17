@@ -7023,17 +7023,74 @@ _Gérante - Espace Maxo_
                     </div>
                     )}
 
+                    {/* Factures validees du jour */}
+                    {todayInvs.length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700" data-testid="activity-validated-invoices">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-green-400 text-sm flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> Factures validees ({todayInvs.length}) - {formatPrice(totalRecettes)} F
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="max-h-[300px] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-slate-800">
+                              <tr className="text-left text-slate-400 border-b border-slate-700">
+                                <th className="p-2">Facture</th>
+                                <th className="p-2">Client</th>
+                                <th className="p-2">Serveur</th>
+                                <th className="p-2">Mode</th>
+                                <th className="p-2 text-right">Total</th>
+                                <th className="p-2">Heure</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {todayInvs.map(inv => (
+                                <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-700/30">
+                                  <td className="p-2 text-white font-medium">{inv.invoice_number}</td>
+                                  <td className="p-2 text-slate-300">{inv.client_name || inv.customer_name || "-"}</td>
+                                  <td className="p-2 text-slate-300">{inv.created_by}</td>
+                                  <td className="p-2 text-slate-400 text-xs">{inv.payment_mode || inv.payment_method || "-"}</td>
+                                  <td className="p-2 text-right text-green-400 font-bold">{formatPrice(inv.total)} F</td>
+                                  <td className="p-2 text-slate-500 text-xs">{(inv.created_at || '').slice(11, 16)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    )}
+
                     {/* Depenses completees */}
                     {completedExp.length > 0 && (
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="pb-2"><CardTitle className="text-red-400 text-sm flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Depenses completees</CardTitle></CardHeader>
-                      <CardContent className="space-y-1.5">
-                        {completedExp.map(exp => (
-                          <div key={exp.id} className="flex justify-between items-center bg-red-900/10 rounded px-3 py-1.5">
-                            <div><span className="text-white text-sm">{exp.description?.slice(0, 40)}</span> <span className="text-slate-500 text-xs ml-1">{exp.supplier}</span></div>
-                            <span className="text-red-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
-                          </div>
-                        ))}
+                    <Card className="bg-slate-800/50 border-slate-700" data-testid="activity-completed-expenses">
+                      <CardHeader className="pb-2"><CardTitle className="text-red-400 text-sm flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Depenses completees ({completedExp.length}) - {formatPrice(totalDepenses)} F</CardTitle></CardHeader>
+                      <CardContent className="p-0">
+                        <div className="max-h-[300px] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-slate-800">
+                              <tr className="text-left text-slate-400 border-b border-slate-700">
+                                <th className="p-2">Description</th>
+                                <th className="p-2">Fournisseur</th>
+                                <th className="p-2">Categorie</th>
+                                <th className="p-2 text-right">Montant</th>
+                                <th className="p-2">Heure</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {completedExp.map(exp => (
+                                <tr key={exp.id} className="border-b border-slate-700/30 hover:bg-slate-700/30">
+                                  <td className="p-2 text-white">{exp.description || '-'}</td>
+                                  <td className="p-2 text-slate-400">{exp.supplier || '-'}</td>
+                                  <td className="p-2 text-slate-400 text-xs">{exp.category || '-'}</td>
+                                  <td className="p-2 text-right text-red-400 font-bold">{formatPrice(exp.amount)} F</td>
+                                  <td className="p-2 text-slate-500 text-xs">{(exp.completed_at || exp.created_at || '').slice(11, 16)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </CardContent>
                     </Card>
                     )}
