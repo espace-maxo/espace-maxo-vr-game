@@ -6,6 +6,29 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Dashboard Analytics Admin (DONE)
+Nouveau module analytics visible UNIQUEMENT pour l'admin.
+
+**Frontend** — `AnalyticsTab.jsx` (~340 lignes) avec recharts :
+- 4 KPI cards : CA, Factures, Panier moyen, Serveurs actifs (+ badges croissance MoM)
+- BarChart revenus journaliers du mois
+- BarChart horizontal top 5 serveurs
+- PieChart modes de paiement normalisés
+- PieChart répartition par département
+- Tableau top 10 produits (quantité + CA)
+- Comparaison vs mois précédent (3 cellules)
+- Sélecteur de mois
+- data-testid : `tab-analytics`, `analytics-tab`, `analytics-kpis`, `analytics-daily-chart`, `analytics-top-servers`, `analytics-payment-pie`, `analytics-dept-pie`, `analytics-top-products`, `analytics-comparison`, `analytics-month-picker`
+
+**Backend** — Endpoint `GET /api/analytics/dashboard?year=&month=` :
+- Retourne `{current, previous, growth}` avec stats mois courant + mois précédent + % croissance
+- Respecte `assigned_week` (factures transférées inclues/exclues correctement)
+- Normalise modes de paiement (mobile_money→mobile, especes→cash, bon-client→wallet)
+- Gère la bordure année (month=1 → year-1, month=12 pour previous)
+- Uniquement factures validées comptées
+
+Tests : 16/16 backend + toute UI vérifiée (iteration_32).
+
 ### Refactoring Progressif - Phase 1 (DONE)
 Extraction de tabs et endpoints depuis les monolithes pour réduire le contexte et prévenir les régressions (problème récurrent x8).
 
@@ -81,6 +104,8 @@ Régression validée : 26/26 tests passés (iteration_31).
 ## Prioritized Backlog
 
 ### P0 (Completed)
+- [x] Dashboard Analytics Admin avec graphiques + MoM (17/04/2026)
+- [x] Refactoring Phase 1 : 3 tabs frontend + 1 router backend (17/04/2026)
 - [x] Bug Reversement/Hebdo concordance via assigned_week (17/04/2026)
 - [x] Détail factures/dépenses dans Activité & Historique (17/04/2026)
 - [x] Rapports Stock filtrables + Export PDF/Excel (16/04/2026)
