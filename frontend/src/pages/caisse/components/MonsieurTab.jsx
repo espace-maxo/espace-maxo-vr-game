@@ -136,7 +136,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         toast.success("Commande modifiée avec succès");
       } else {
         await axios.post(`${API}/monsieur-orders`, orderData);
-        toast.success("Commande Monsieur enregistrée");
+        toast.success("Commande Manager General enregistrée");
       }
       
       setShowModal(false);
@@ -164,7 +164,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const deleteOrder = async (orderId) => {
-    if (!confirm("Supprimer cette commande Monsieur ?")) return;
+    if (!confirm("Supprimer cette commande Manager General ?")) return;
     try {
       await axios.delete(`${API}/monsieur-orders/${orderId}`);
       toast.success("Commande supprimée");
@@ -186,7 +186,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-purple-300 flex items-center gap-2">
           <UserCircle className="w-6 h-6" />
-          Commandes Monsieur
+          Commandes Manager General
           <Badge className="bg-purple-500/30 text-purple-300 ml-2">
             Promoteur
           </Badge>
@@ -261,7 +261,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
           {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
               <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Aucune commande Monsieur</p>
+              <p>Aucune commande Manager General</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -370,7 +370,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-purple-400">
               <UtensilsCrossed className="w-5 h-5" />
-              {editingOrder ? "Modifier la commande" : "Nouvelle commande Monsieur"}
+              {editingOrder ? "Modifier la commande" : "Nouvelle commande Manager General"}
             </DialogTitle>
           </DialogHeader>
           

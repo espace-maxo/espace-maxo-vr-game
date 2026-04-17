@@ -3959,6 +3959,89 @@ _Gérante - Espace Maxo_
                   </Card>
                 )}
 
+                {/* ADMIN DASHBOARD: Everything pending from servers and manager */}
+                <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-amber-400 flex items-center gap-2">
+                      <Clock className="w-6 h-6" />
+                      EN ATTENTE
+                      <Badge className="bg-amber-500/30 text-amber-300 ml-2 text-lg px-3">
+                        {(invoices.filter(i => i.validation_status === 'pending').length) + 
+                         (expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length)}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Pending invoices from servers */}
+                    {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
+                      <div>
+                        <p className="text-orange-400 text-sm font-medium mb-2 flex items-center gap-1">
+                          <Printer className="w-4 h-4" /> Factures en attente de validation ({invoices.filter(i => i.validation_status === 'pending').length})
+                        </p>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {invoices.filter(i => i.validation_status === 'pending').map(inv => (
+                            <div key={inv.id} className="flex items-center justify-between bg-orange-900/20 rounded-lg px-3 py-2 border border-orange-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm font-bold">{inv.invoice_number}</span>
+                                <span className="text-slate-400 text-xs">par {inv.created_by}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-orange-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
+                                <span className="text-slate-500 text-xs">{inv.created_at?.slice(11, 16)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pending expenses */}
+                    {expenses.filter(e => e.status === 'pending').length > 0 && (
+                      <div>
+                        <p className="text-yellow-400 text-sm font-medium mb-2 flex items-center gap-1">
+                          <ShoppingCart className="w-4 h-4" /> Achats en attente d'approbation ({expenses.filter(e => e.status === 'pending').length})
+                        </p>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {expenses.filter(e => e.status === 'pending').map(exp => (
+                            <div key={exp.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg px-3 py-2 border border-yellow-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
+                                <span className="text-slate-400 text-xs">par {exp.requested_by}</span>
+                              </div>
+                              <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Revision requested expenses */}
+                    {expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+                      <div>
+                        <p className="text-red-400 text-sm font-medium mb-2 flex items-center gap-1">
+                          <AlertTriangle className="w-4 h-4" /> Achats a reviser ({expenses.filter(e => e.status === 'revision_requested').length})
+                        </p>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {expenses.filter(e => e.status === 'revision_requested').map(exp => (
+                            <div key={exp.id} className="flex items-center justify-between bg-red-900/20 rounded-lg px-3 py-2 border border-red-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
+                                <Badge className="bg-red-500/20 text-red-400 text-xs">A reviser</Badge>
+                              </div>
+                              <span className="text-red-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {invoices.filter(i => i.validation_status === 'pending').length === 0 && 
+                     expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length === 0 && (
+                      <p className="text-slate-500 text-center py-4">Aucun element en attente</p>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Priority Section: Invoices to Print */}
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
                   <CardHeader className="pb-2">
@@ -4685,7 +4768,7 @@ _Gérante - Espace Maxo_
                     className="data-[state=active]:bg-purple-500 data-[state=active]:text-white"
                   >
                     <UserCircle className="w-4 h-4 mr-2" />
-                    Monsieur
+                    MANAGER GENERAL
                   </TabsTrigger>
                 )}
               </TabsList>
