@@ -5498,11 +5498,116 @@ async def assign_invoices_bulk(ids: List[str] = Body(...), week_start: str = Bod
     result = await db.invoices.update_many({"id": {"$in": ids}}, {"$set": {"assigned_week": week_start}})
     return {"success": True, "modified": result.modified_count}
 
+@api_router.post("/invoices/unassign-week-bulk")
+async def unassign_invoices_bulk(ids: List[str] = Body(..., embed=True)):
+    """Remove week assignment from invoices (they return to their original date)"""
+    result = await db.invoices.update_many({"id": {"$in": ids}}, {"$unset": {"assigned_week": ""}})
+    return {"success": True, "modified": result.modified_count}
+
 @api_router.post("/expenses/assign-week-bulk")
 async def assign_expenses_bulk(ids: List[str] = Body(...), week_start: str = Body(...)):
     """Assign multiple expenses to a specific week"""
     result = await db.expenses.update_many({"id": {"$in": ids}}, {"$set": {"assigned_week": week_start}})
     return {"success": True, "modified": result.modified_count}
+
+@api_router.post("/expenses/unassign-week-bulk")
+async def unassign_expenses_bulk(ids: List[str] = Body(..., embed=True)):
+    """Remove week assignment from expenses"""
+    result = await db.expenses.update_many({"id": {"$in": ids}}, {"$unset": {"assigned_week": ""}})
+    return {"success": True, "modified": result.modified_count}
+
+@api_router.get("/reports/weekly/duplicates")
+async def detect_weekly_duplicates(week_start: str):
+    """Detect invoices/expenses appearing in multiple weeks"""
+    from datetime import timedelta as td
+    start = datetime.fromisoformat(week_start)
+    end = start + td(days=6, hours=23, minutes=59, seconds=59)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d") + "T23:59:59"
+    
+    # Get invoices for this week (by date OR assigned)
+    invoices = await db.invoices.find({
+        "$or": [
+            {"validation_status": "validated", "created_at": {"$gte": start_str, "$lte": end_str + "Z"}},
+            {"validation_status": "validated", "assigned_week": start_str}
+        ]
+    }, {"_id": 0, "id": 1, "invoice_number": 1, "total": 1, "created_at": 1, "assigned_week": 1}).to_list(2000)
+    
+    # Detect duplicates: invoices that appear in this week by date AND are assigned to another week
+    duplicates = []
+    for inv in invoices:
+        inv_date = (inv.get("created_at") or "")[:10]
+        assigned = inv.get("assigned_week")
+        in_range = inv_date >= start_str and inv_date <= end_str[:10]
+        
+        if assigned and assigned != start_str and in_range:
+            # This invoice's natural date is in this week but it's assigned to another week
+            duplicates.append({
+                "id": inv["id"],
+                "type": "invoice",
+                "invoice_number": inv.get("invoice_number", ""),
+                "total": inv.get("total", 0),
+                "created_at": inv.get("created_at", ""),
+                "assigned_week": assigned,
+                "issue": f"Date naturelle dans cette semaine mais assignee a la semaine du {assigned}"
+            })
+        elif assigned == start_str and not in_range:
+            # Assigned here but date is outside - this is normal (intentional transfer), not a duplicate
+            pass
+    
+    # Also check if any invoice appears assigned to 2+ weeks (data integrity)
+    assigned_invs = await db.invoices.find({"assigned_week": {"$exists": True, "$ne": None}}, {"_id": 0, "id": 1, "invoice_number": 1, "total": 1, "created_at": 1, "assigned_week": 1}).to_list(5000)
+    
+    # Check for invoices whose natural date falls in a different week than assigned
+    seen_ids = set()
+    for inv in invoices:
+        if inv["id"] in seen_ids:
+            duplicates.append({
+                "id": inv["id"],
+                "type": "invoice",
+                "invoice_number": inv.get("invoice_number", ""),
+                "total": inv.get("total", 0),
+                "created_at": inv.get("created_at", ""),
+                "assigned_week": inv.get("assigned_week"),
+                "issue": "Doublon detecte dans la meme semaine"
+            })
+        seen_ids.add(inv["id"])
+    
+    # Same for expenses
+    expenses = await db.expenses.find({
+        "$or": [
+            {"created_at": {"$gte": start_str, "$lte": end_str}},
+            {"assigned_week": start_str}
+        ]
+    }, {"_id": 0, "id": 1, "description": 1, "amount": 1, "created_at": 1, "assigned_week": 1}).to_list(1000)
+    
+    exp_seen = set()
+    for exp in expenses:
+        exp_date = (exp.get("created_at") or "")[:10]
+        assigned = exp.get("assigned_week")
+        in_range = exp_date >= start_str and exp_date <= end_str[:10]
+        
+        if assigned and assigned != start_str and in_range:
+            duplicates.append({
+                "id": exp["id"],
+                "type": "expense",
+                "description": exp.get("description", ""),
+                "amount": exp.get("amount", 0),
+                "created_at": exp.get("created_at", ""),
+                "assigned_week": assigned,
+                "issue": f"Date naturelle dans cette semaine mais assignee a la semaine du {assigned}"
+            })
+        if exp["id"] in exp_seen:
+            duplicates.append({
+                "id": exp["id"],
+                "type": "expense",
+                "description": exp.get("description", ""),
+                "amount": exp.get("amount", 0),
+                "issue": "Doublon detecte"
+            })
+        exp_seen.add(exp["id"])
+    
+    return {"duplicates": duplicates, "count": len(duplicates)}
 
 # ============== MONSIEUR ORDERS (Owner's meal orders) ==============
 

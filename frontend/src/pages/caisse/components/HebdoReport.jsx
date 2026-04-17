@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
   Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2,
-  Link, Check
+  Link, Check, Trash2
 } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -35,7 +35,9 @@ const HebdoReport = ({
   const [expandedDay, setExpandedDay] = useState(null);
   const [transferTarget, setTransferTarget] = useState("");
   const [transferItems, setTransferItems] = useState([]);
-  const [transferType, setTransferType] = useState("sales"); // sales or expenses
+  const [transferType, setTransferType] = useState("sales");
+  const [duplicates, setDuplicates] = useState([]);
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   const searchUnlinked = async () => {
     if (!attachDateFrom) { toast.error("Selectionnez une date de debut"); return; }
@@ -111,6 +113,50 @@ const HebdoReport = ({
     } catch (e) {
       toast.error("Erreur de transfert");
     }
+  };
+
+  const removeFromWeek = async () => {
+    if (transferItems.length === 0) { toast.error("Selectionnez des elements"); return; }
+    if (!window.confirm(`Retirer ${transferItems.length} element(s) de cette semaine ?`)) return;
+    try {
+      if (transferType === "sales") {
+        await axios.post(`${API}/invoices/unassign-week-bulk`, { ids: transferItems });
+      } else {
+        await axios.post(`${API}/expenses/unassign-week-bulk`, { ids: transferItems });
+      }
+      toast.success(`${transferItems.length} element(s) retire(s)`);
+      setTransferItems([]);
+      setExpandedDay(null);
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) {
+      toast.error("Erreur");
+    }
+  };
+
+  const detectDuplicates = async () => {
+    try {
+      const r = await axios.get(`${API}/reports/weekly/duplicates`, { params: { week_start: weekStartDate } });
+      setDuplicates(r.data.duplicates || []);
+      setShowDuplicates(true);
+      if (r.data.count === 0) {
+        toast.success("Aucun doublon detecte");
+      } else {
+        toast.warning(`${r.data.count} doublon(s) detecte(s)`);
+      }
+    } catch (e) { toast.error("Erreur detection doublons"); }
+  };
+
+  const fixDuplicate = async (dup) => {
+    try {
+      if (dup.type === "invoice") {
+        await axios.post(`${API}/invoices/unassign-week-bulk`, { ids: [dup.id] });
+      } else {
+        await axios.post(`${API}/expenses/unassign-week-bulk`, { ids: [dup.id] });
+      }
+      toast.success("Doublon corrige");
+      setDuplicates(prev => prev.filter(d => d.id !== dup.id));
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) { toast.error("Erreur"); }
   };
   // Generate list of last 12 weeks (Lundi-Dimanche)
   const weekOptions = useMemo(() => {
@@ -235,6 +281,15 @@ const HebdoReport = ({
                 <Link className="w-4 h-4 mr-1" />
                 Rattacher
               </Button>
+              <Button 
+                size="sm"
+                onClick={detectDuplicates}
+                className="bg-amber-600 hover:bg-amber-700"
+                data-testid="duplicates-btn"
+              >
+                <AlertCircle className="w-4 h-4 mr-1" />
+                Doublons
+              </Button>
             </>
           )}
         </div>
@@ -309,6 +364,38 @@ const HebdoReport = ({
             )}
 
             {loadingAttach && <p className="text-slate-400 text-sm">Recherche en cours...</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Duplicates panel */}
+      {showDuplicates && (
+        <Card className="bg-amber-900/20 border-amber-700/50">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-amber-400 font-bold flex items-center gap-2"><AlertCircle className="w-4 h-4" /> Detection des doublons</h3>
+              <Button size="sm" variant="ghost" className="text-slate-400 h-7 text-xs" onClick={() => setShowDuplicates(false)}>Fermer</Button>
+            </div>
+            {duplicates.length === 0 ? (
+              <p className="text-emerald-400 text-sm">Aucun doublon detecte pour cette semaine.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-amber-300 text-xs">{duplicates.length} doublon(s) detecte(s) :</p>
+                {duplicates.map((dup, idx) => (
+                  <div key={idx} className="flex items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2">
+                    <Badge className={dup.type === 'invoice' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
+                      {dup.type === 'invoice' ? 'Facture' : 'Charge'}
+                    </Badge>
+                    <span className="text-white text-xs flex-1">{dup.invoice_number || dup.description || dup.id.slice(0, 8)}</span>
+                    <span className="text-amber-400 text-xs font-bold">{formatPrice(dup.total || dup.amount || 0)} F</span>
+                    <span className="text-slate-500 text-xs max-w-[250px] truncate">{dup.issue}</span>
+                    <Button size="sm" className="bg-red-600 hover:bg-red-700 h-6 text-xs px-2" onClick={() => fixDuplicate(dup)}>
+                      Retirer l'assignation
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -413,10 +500,11 @@ const HebdoReport = ({
                       {expandedDay === date && (
                       <tr><td colSpan={6} className="p-0">
                         <div className="bg-slate-900/50 border-y border-slate-700/30 px-4 py-3 space-y-3">
-                          {/* Transfer bar */}
+                          {/* Transfer/Delete bar */}
                           {transferItems.length > 0 && (
-                            <div className="flex items-center gap-3 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2 bg-slate-800/80 border border-slate-700/50 rounded-lg px-3 py-2">
                               <span className="text-amber-400 text-xs font-medium">{transferItems.length} selectionne(s)</span>
+                              <span className="text-slate-500 text-xs">|</span>
                               <span className="text-slate-400 text-xs">Transferer vers :</span>
                               <Select value={transferTarget || "none"} onValueChange={v => setTransferTarget(v === "none" ? "" : v)}>
                                 <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-7 w-48 text-xs"><SelectValue placeholder="Choisir une semaine" /></SelectTrigger>
@@ -426,8 +514,12 @@ const HebdoReport = ({
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" onClick={transferSelected}>
+                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" onClick={transferSelected} disabled={!transferTarget}>
                                 <ChevronRight className="w-3 h-3 mr-1" /> Transferer
+                              </Button>
+                              <span className="text-slate-600 text-xs">|</span>
+                              <Button size="sm" className="bg-red-600 hover:bg-red-700 h-7 text-xs" onClick={removeFromWeek} data-testid="remove-from-week-btn">
+                                <Trash2 className="w-3 h-3 mr-1" /> Retirer de cette semaine
                               </Button>
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-400" onClick={() => setTransferItems([])}>Annuler</Button>
                             </div>
