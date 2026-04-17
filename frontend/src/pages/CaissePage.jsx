@@ -189,7 +189,7 @@ const CaissePage = () => {
   const [showForgotCodeModal, setShowForgotCodeModal] = useState(false);
   
   // Main state
-  const [activeTab, setActiveTab] = useState("commande");
+  const [activeTab, setActiveTab] = useState("tables");
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
   
@@ -3732,60 +3732,30 @@ _Gérante - Espace Maxo_
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1">
-            {/* Commande tab - visible for servers, manager and admin */}
-            {(currentUser?.role === 'server' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-                <Calculator className="w-4 h-4 mr-2" />Commande
+            {/* 1. TABLES */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="tables" className="data-[state=active]:bg-teal-500 data-[state=active]:text-white">
+                <LayoutGrid className="w-4 h-4 mr-2" />Tables
               </TabsTrigger>
             )}
+            {/* 2. BONS */}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Printer className="w-4 h-4 mr-2" />BONS
               {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
                 <Badge className="ml-1 bg-orange-600 text-white text-xs">{invoices.filter(i => i.validation_status === 'pending').length}</Badge>
               )}
             </TabsTrigger>
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="tables" className="data-[state=active]:bg-teal-500 data-[state=active]:text-white">
-                <LayoutGrid className="w-4 h-4 mr-2" />Tables
-              </TabsTrigger>
-            )}
+            {/* 3. FACTURES */}
             <TabsTrigger value="invoices" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
               <FileText className="w-4 h-4 mr-2" />Factures
             </TabsTrigger>
-            {currentUser?.role !== 'manager' && (
-            <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
-              <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
-            </TabsTrigger>
-            )}
-            <TabsTrigger value="products" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
-              <Package className="w-4 h-4 mr-2" />Produits
-            </TabsTrigger>
-            <TabsTrigger value="clients" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white">
-              <Users className="w-4 h-4 mr-2" />Clients
-            </TabsTrigger>
-            {currentUser?.role === 'admin' && (
-              <TabsTrigger value="users" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
-                <Settings className="w-4 h-4 mr-2" />Utilisateurs
+            {/* 4. LOCATIONS */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+                <Building2 className="w-4 h-4 mr-2" />Locations
               </TabsTrigger>
             )}
-            {currentUser?.role !== 'manager' && (
-            <TabsTrigger value="historique" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white">
-              <Calendar className="w-4 h-4 mr-2" />Historique
-            </TabsTrigger>
-            )}
-            {/* Server Daily Report - Only for servers */}
-            {currentUser?.role === 'server' && (
-              <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
-                <ClipboardList className="w-4 h-4 mr-2" />Mon Point
-              </TabsTrigger>
-            )}
-            {/* Points des Serveurs - Only for manager */}
-            {currentUser?.role === 'manager' && (
-              <TabsTrigger value="points_serveurs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
-                <ClipboardList className="w-4 h-4 mr-2" />Points Serveurs
-              </TabsTrigger>
-            )}
-            {/* Manager: Achats/Dépenses */}
+            {/* 5. ACHATS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                 <ShoppingCart className="w-4 h-4 mr-2" />Achats
@@ -3796,958 +3766,72 @@ _Gérante - Espace Maxo_
                 )}
               </TabsTrigger>
             )}
-            {/* Point Hebdomadaire */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
-                <BarChart3 className="w-4 h-4 mr-2" />Hebdo
-              </TabsTrigger>
-            )}
-            {/* Locations (Salle, Jardin, Jeux) - Manager & Admin */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-                <Building2 className="w-4 h-4 mr-2" />Locations
-              </TabsTrigger>
-            )}
-            {/* Factures Proforma - Manager & Admin */}
+            {/* 6. PROFORMA */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="proforma" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
                 <FileText className="w-4 h-4 mr-2" />Proforma
               </TabsTrigger>
             )}
-            {/* Instructions & Notes - Manager & Admin */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger 
-                value="instructions" 
-                className="data-[state=active]:bg-teal-600 data-[state=active]:text-white"
-                onClick={() => {
-                  // Mark all notes as read when opening the tab
-                  if (unreadNotesCount > 0) {
-                    markAllNotesRead();
-                  }
-                }}
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />Notes
-                {unreadNotesCount > 0 && (
-                  <Badge className="ml-1 bg-red-500 text-white text-xs animate-pulse">
-                    {unreadNotesCount > 9 ? '9+' : unreadNotesCount}
-                  </Badge>
-                )}
+            {/* 7. ACTIVITE & HISTORIQUE */}
+            {currentUser?.role !== 'manager' && (
+              <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <Activity className="w-4 h-4 mr-2" />Activite & Historique
               </TabsTrigger>
             )}
-            {/* Abonnements & Factures Récurrentes - Manager & Admin */}
+            {/* 8. STATISTIQUES & RAPPORT */}
+            {currentUser?.role !== 'manager' && (
+              <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
+                <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
+              </TabsTrigger>
+            )}
+            {/* 9. HEBDO */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+                <BarChart3 className="w-4 h-4 mr-2" />Hebdo
+              </TabsTrigger>
+            )}
+            {/* 10. PRODUITS */}
+            <TabsTrigger value="products" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
+              <Package className="w-4 h-4 mr-2" />Produits
+            </TabsTrigger>
+            {/* 11. CLIENTS */}
+            <TabsTrigger value="clients" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white">
+              <Users className="w-4 h-4 mr-2" />Clients
+            </TabsTrigger>
+            {/* 12. ABONNEMENTS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="subscriptions" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
                 <RefreshCw className="w-4 h-4 mr-2" />Abonnements
               </TabsTrigger>
             )}
-            {/* Admin only: Suivi Activité */}
+            {/* 13. NOTES */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white"
+                onClick={() => { if (unreadNotesCount > 0) markAllNotesRead(); }}>
+                <MessageSquare className="w-4 h-4 mr-2" />Notes
+                {unreadNotesCount > 0 && (<Badge className="ml-1 bg-red-500 text-white text-xs animate-pulse">{unreadNotesCount > 9 ? '9+' : unreadNotesCount}</Badge>)}
+              </TabsTrigger>
+            )}
+            {/* 14. UTILISATEURS */}
             {currentUser?.role === 'admin' && (
-              <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
-                <Activity className="w-4 h-4 mr-2" />Activité
+              <TabsTrigger value="users" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
+                <Settings className="w-4 h-4 mr-2" />Utilisateurs
+              </TabsTrigger>
+            )}
+            {/* Server-specific tabs */}
+            {currentUser?.role === 'server' && (
+              <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+                <ClipboardList className="w-4 h-4 mr-2" />Mon Point
+              </TabsTrigger>
+            )}
+            {currentUser?.role === 'manager' && (
+              <TabsTrigger value="points_serveurs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+                <ClipboardList className="w-4 h-4 mr-2" />Points Serveurs
               </TabsTrigger>
             )}
           </TabsList>
 
           {/* ==================== COMMANDE TAB (Creation only) ==================== */}
-          <TabsContent value="commande">
-            {/* ============== ADMIN VIEW: Priority on validations ============== */}
-            {currentUser?.role === 'admin' ? (
-              <div className="space-y-4">
-                {/* ADMIN ONLY: Cancellation Requests */}
-                {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
-                  <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-red-400 flex items-center gap-2">
-                        <MessageCircle className="w-6 h-6" />
-                        DEMANDES D'ANNULATION
-                        <Badge className="bg-red-500/30 text-red-300 ml-2 text-lg px-3 animate-pulse">
-                          {cancellationRequests.length}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {cancellationRequests.map(request => (
-                        <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-red-900/30 rounded-lg p-3 border border-red-500/30">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold">{request.invoice_number}</span>
-                              <Badge className="bg-orange-500/20 text-orange-400 text-xs">Demande d'annulation</Badge>
-                            </div>
-                            <p className="text-slate-400 text-sm mt-1">
-                              <strong>Demandé par:</strong> {request.requested_by}
-                            </p>
-                            <p className="text-red-300 text-sm">
-                              <strong>Motif:</strong> {request.reason}
-                            </p>
-                            <p className="text-slate-500 text-xs mt-1">
-                              {request.created_at && format(new Date(request.created_at), "dd/MM/yyyy HH:mm")}
-                            </p>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <Button 
-                              size="sm"
-                              onClick={() => approveCancellationRequest(request.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Approuver
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => rejectCancellationRequest(request.id)}
-                              className="text-red-400 hover:bg-red-500/20"
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Rejeter
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* MANAGER: Modification Requests from Servers */}
-                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && modificationRequests.length > 0 && (
-                  <Card className="bg-gradient-to-br from-blue-900/30 to-cyan-900/20 border-blue-500/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-blue-400 flex items-center gap-2">
-                        <Edit2 className="w-6 h-6" />
-                        DEMANDES DE MODIFICATION
-                        <Badge className="bg-blue-500/30 text-blue-300 ml-2 text-lg px-3 animate-pulse">
-                          {modificationRequests.length}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {modificationRequests.map(request => (
-                        <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-900/30 rounded-lg p-3 border border-blue-500/30">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold">{request.invoice_number}</span>
-                              <Badge className="bg-blue-500/20 text-blue-400 text-xs">Demande de modification</Badge>
-                            </div>
-                            <p className="text-slate-400 text-sm mt-1">
-                              <strong>Demandé par:</strong> {request.requested_by}
-                            </p>
-                            <p className="text-blue-300 text-sm">
-                              <strong>Motif:</strong> {request.reason}
-                            </p>
-                            <p className="text-slate-500 text-xs mt-1">
-                              {request.created_at && format(new Date(request.created_at), "dd/MM/yyyy HH:mm")}
-                            </p>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <Button 
-                              size="sm"
-                              onClick={() => approveModificationRequest(request.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Autoriser
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => rejectModificationRequest(request.id)}
-                              className="text-red-400 hover:bg-red-500/20"
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Refuser
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* ADMIN DASHBOARD: Everything pending from servers and manager */}
-                <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-amber-400 flex items-center gap-2">
-                      <Clock className="w-6 h-6" />
-                      EN ATTENTE
-                      <Badge className="bg-amber-500/30 text-amber-300 ml-2 text-lg px-3">
-                        {(invoices.filter(i => i.validation_status === 'pending').length) + 
-                         (expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length)}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {/* Pending invoices from servers */}
-                    {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
-                      <div>
-                        <p className="text-orange-400 text-sm font-medium mb-2 flex items-center gap-1">
-                          <Printer className="w-4 h-4" /> Factures en attente de validation ({invoices.filter(i => i.validation_status === 'pending').length})
-                        </p>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                          {invoices.filter(i => i.validation_status === 'pending').map(inv => (
-                            <div key={inv.id} className="flex items-center justify-between bg-orange-900/20 rounded-lg px-3 py-2 border border-orange-500/20">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white text-sm font-bold">{inv.invoice_number}</span>
-                                <span className="text-slate-400 text-xs">par {inv.created_by}</span>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-orange-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
-                                <span className="text-slate-500 text-xs">{inv.created_at?.slice(11, 16)}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Pending expenses */}
-                    {expenses.filter(e => e.status === 'pending').length > 0 && (
-                      <div>
-                        <p className="text-yellow-400 text-sm font-medium mb-2 flex items-center gap-1">
-                          <ShoppingCart className="w-4 h-4" /> Achats en attente d'approbation ({expenses.filter(e => e.status === 'pending').length})
-                        </p>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                          {expenses.filter(e => e.status === 'pending').map(exp => (
-                            <div key={exp.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg px-3 py-2 border border-yellow-500/20">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
-                                <span className="text-slate-400 text-xs">par {exp.requested_by}</span>
-                              </div>
-                              <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Revision requested expenses */}
-                    {expenses.filter(e => e.status === 'revision_requested').length > 0 && (
-                      <div>
-                        <p className="text-red-400 text-sm font-medium mb-2 flex items-center gap-1">
-                          <AlertTriangle className="w-4 h-4" /> Achats a reviser ({expenses.filter(e => e.status === 'revision_requested').length})
-                        </p>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                          {expenses.filter(e => e.status === 'revision_requested').map(exp => (
-                            <div key={exp.id} className="flex items-center justify-between bg-red-900/20 rounded-lg px-3 py-2 border border-red-500/20">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
-                                <Badge className="bg-red-500/20 text-red-400 text-xs">A reviser</Badge>
-                              </div>
-                              <span className="text-red-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {invoices.filter(i => i.validation_status === 'pending').length === 0 && 
-                     expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length === 0 && (
-                      <p className="text-slate-500 text-center py-4">Aucun element en attente</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Priority Section: Invoices to Print */}
-                <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-green-400 flex items-center gap-2">
-                      <Printer className="w-6 h-6" />
-                      FACTURES À IMPRIMER
-                      <Badge className="bg-green-500/30 text-green-300 ml-2 text-lg px-3">
-                        {invoices.filter(i => i.validation_status === 'validated').length}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {invoices.filter(i => i.validation_status === 'validated').length === 0 ? (
-                      <p className="text-slate-400 text-center py-4">Aucune facture validé à imprimer</p>
-                    ) : (
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {invoices.filter(i => i.validation_status === 'validated').map(invoice => (
-                          <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/30 rounded-lg p-3 border border-green-500/30">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-white font-bold">{invoice.invoice_number}</span>
-                                <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Validée</Badge>
-                              </div>
-                              <p className="text-slate-400 text-sm">
-                                {invoice.customer_name} • <span className="text-green-400 font-bold">{formatPrice(invoice.total)} F</span>
-                              </p>
-                              <p className="text-slate-500 text-xs">
-                                Par: {invoice.created_by} • Validée par: {invoice.validated_by}
-                              </p>
-                            </div>
-                            <div className="flex gap-2 shrink-0">
-                              {/* Print button - Manager/Admin only */}
-                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                                <Button 
-                                  onClick={() => printTicket(invoice)} 
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                  size="sm"
-                                >
-                                  <Printer className="w-4 h-4 mr-2" />
-                                  IMPRIMER
-                                </Button>
-                              )}
-                              {/* Admin can cancel directly, Manager can request cancellation */}
-                              {currentUser?.role === 'admin' ? (
-                                <Button 
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => cancelValidatedInvoice(invoice.id)}
-                                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                                  title="Annuler cette facture"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              ) : currentUser?.role === 'manager' && (
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => requestCancellation(invoice)}
-                                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
-                                  title="Demander l'annulation à l'admin"
-                                  disabled={cancellationRequests.some(r => r.invoice_id === invoice.id)}
-                                >
-                                  {cancellationRequests.some(r => r.invoice_id === invoice.id) ? (
-                                    <span className="text-xs">Demande envoyée</span>
-                                  ) : (
-                                    <>
-                                      <MessageCircle className="w-4 h-4 mr-1" />
-                                      <span className="text-xs">Demander</span>
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Collapsible: Create Invoice (Secondary for managers) */}
-                <details className="bg-slate-800/30 rounded-lg border border-slate-700">
-                  <summary className="p-4 cursor-pointer text-slate-400 hover:text-white flex items-center gap-2">
-                    <Plus className="w-5 h-5" />
-                    <span>Créer une facture (optionnel)</span>
-                  </summary>
-                  <div className="p-4 pt-0">
-                    {/* Multi-Table Bar */}
-                    <div className="mb-4 bg-slate-800/70 rounded-lg border border-slate-700 p-2">
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                        <span className="text-slate-400 text-sm font-medium px-2 whitespace-nowrap">Tables:</span>
-                        
-                        {openTables.map(table => (
-                          <div
-                            key={table.id}
-                            className={`flex items-center gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                              activeTableId === table.id
-                                ? 'bg-amber-500 text-white shadow-lg'
-                                : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                            }`}
-                            onClick={() => selectTable(table)}
-                          >
-                            <span className="font-bold">T{table.table_number}</span>
-                            {table.items?.length > 0 && (
-                              <Badge className={`ml-1 ${activeTableId === table.id ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-400'}`}>
-                                {table.items.length}
-                              </Badge>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (table.items?.length > 0) {
-                                  if (confirm(`Fermer la Table ${table.table_number} ?`)) {
-                                    closeTable(table.id);
-                                  }
-                                } else {
-                                  closeTable(table.id);
-                                }
-                              }}
-                              className={`ml-1 p-0.5 rounded hover:bg-red-500/30 ${activeTableId === table.id ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-red-400'}`}
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowNewTableModal(true)}
-                          className="border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-amber-500 whitespace-nowrap"
-                          disabled={availableTableNumbers.length === 0}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Nouvelle Table
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Compact product grid for managers */}
-                    {activeTableId && (
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <div className="lg:col-span-2">
-                          <div className="flex gap-2 flex-wrap mb-2">
-                            {Object.entries(DEPARTMENT_CONFIG).map(([key, config]) => {
-                              const Icon = config.icon;
-                              return (
-                                <Button
-                                  key={key}
-                                  variant={activeDepartment === key ? "default" : "ghost"}
-                                  size="sm"
-                                  onClick={() => setActiveDepartment(key)}
-                                  className={activeDepartment === key ? "bg-amber-500 text-white" : "text-slate-400"}
-                                >
-                                  <Icon className="w-4 h-4 mr-1" />
-                                  {config.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
-                            {(catalog[activeDepartment] || []).slice(0, 8).map((item) => (
-                              <button
-                                key={`${activeDepartment}-${item.id}`}
-                                onClick={() => addToBill(item, activeDepartment)}
-                                className="p-2 rounded bg-slate-700/50 hover:bg-slate-600/50 text-left text-xs"
-                              >
-                                <p className="text-slate-300 truncate">{item.name}</p>
-                                <p className="text-amber-400 font-bold">{formatPrice(item.price)} F</p>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <Card className="bg-slate-800/50 border-amber-500/30">
-                            <CardHeader className="py-2">
-                              <CardTitle className="text-amber-500 text-sm">Table {activeTable?.table_number}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="py-2">
-                              {currentBill.length === 0 ? (
-                                <p className="text-slate-500 text-xs">Aucun article</p>
-                              ) : (
-                                <>
-                                  {currentBill.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-xs py-1">
-                                      <span className="text-slate-300">{item.quantity}x {item.name}</span>
-                                      <span className="text-amber-400">{formatPrice(item.price * item.quantity)}</span>
-                                    </div>
-                                  ))}
-                                  <div className="border-t border-slate-700 mt-2 pt-2 flex justify-between font-bold">
-                                    <span className="text-white">TOTAL</span>
-                                    <span className="text-amber-500">{formatPrice(total)} F</span>
-                                  </div>
-                                  <Button onClick={saveInvoice} className="w-full mt-2 bg-amber-500 hover:bg-amber-600" size="sm">
-                                    CRÉER FACTURE
-                                  </Button>
-                                </>
-                              )}
-                            </CardContent>
-                          </Card>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </details>
-              </div>
-            ) : (
-              /* ============== SERVER VIEW: Focus on creating invoices ============== */
-              <>
-            {/* Multi-Table Bar */}
-            <div className="mb-4 bg-slate-800/70 rounded-lg border border-slate-700 p-2">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                <span className="text-slate-400 text-sm font-medium px-2 whitespace-nowrap">Tables:</span>
-                
-                {openTables.map(table => (
-                  <div
-                    key={table.id}
-                    className={`flex items-center gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                      activeTableId === table.id
-                        ? 'bg-amber-500 text-white shadow-lg'
-                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                    }`}
-                    onClick={() => selectTable(table)}
-                  >
-                    <span className="font-bold">T{table.table_number}</span>
-                    {table.items?.length > 0 && (
-                      <Badge className={`ml-1 ${activeTableId === table.id ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-400'}`}>
-                        {table.items.length}
-                      </Badge>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (table.items?.length > 0) {
-                          if (confirm(`Fermer la Table ${table.table_number} ? Les articles non facturés seront perdus.`)) {
-                            closeTable(table.id);
-                          }
-                        } else {
-                          closeTable(table.id);
-                        }
-                      }}
-                      className={`ml-1 p-0.5 rounded hover:bg-red-500/30 ${activeTableId === table.id ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-red-400'}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-                
-                {/* New Table Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowNewTableModal(true)}
-                  className="border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-amber-500 whitespace-nowrap"
-                  disabled={availableTableNumbers.length === 0}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Nouvelle Table
-                </Button>
-                
-                {openTables.length === 0 && (
-                  <span className="text-slate-500 text-sm italic">Aucune table ouverte - Cliquez sur "Nouvelle Table" pour commencer</span>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Left: Products */}
-              <div className="lg:col-span-2 space-y-4">
-                {/* Search bar */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <Input
-                    type="text"
-                    placeholder="Rechercher un produit... (ex: poulet, pizza, bière)"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className="pl-10 bg-slate-800/50 border-slate-700 text-white h-12 text-lg"
-                    disabled={!activeTableId}
-                  />
-                  {productSearch && (
-                    <button 
-                      onClick={() => setProductSearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Search Results */}
-                {productSearch.length >= 2 && activeTableId && (
-                  <Card className="bg-amber-500/10 border-amber-500/30">
-                    <CardHeader className="py-2 px-4">
-                      <CardTitle className="text-amber-400 text-sm flex items-center gap-2">
-                        <Search className="w-4 h-4" />
-                        Résultats pour "{productSearch}"
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-2">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto">
-                        {(() => {
-                          const searchLower = productSearch.toLowerCase();
-                          const results = [];
-                          Object.entries(catalog).forEach(([dept, items]) => {
-                            (items || []).forEach(item => {
-                              if (item.name.toLowerCase().includes(searchLower) || 
-                                  (item.category && item.category.toLowerCase().includes(searchLower))) {
-                                results.push({ ...item, department: dept });
-                              }
-                            });
-                          });
-                          if (results.length === 0) {
-                            return <p className="col-span-full text-slate-400 text-center py-4">Aucun résultat</p>;
-                          }
-                          return results.slice(0, 12).map((item, idx) => {
-                            const config = DEPARTMENT_CONFIG[item.department] || DEPARTMENT_CONFIG.autres;
-                            return (
-                              <button
-                                key={`search-${idx}`}
-                                onClick={() => {
-                                  addToBill(item, item.department);
-                                  setProductSearch("");
-                                }}
-                                className={`p-2 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
-                              >
-                                <p className={`font-semibold text-xs ${config.color}`}>{item.name}</p>
-                                <p className="text-white font-bold text-sm">{formatPrice(item.price)} F</p>
-                                <p className="text-slate-500 text-xs">{config.label}</p>
-                              </button>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Department tabs */}
-                <div className="flex gap-2 flex-wrap bg-slate-800/50 p-2 rounded-lg border border-slate-700">
-                  {Object.entries(DEPARTMENT_CONFIG).map(([key, config]) => {
-                    const Icon = config.icon;
-                    return (
-                      <Button
-                        key={key}
-                        variant={activeDepartment === key ? "default" : "ghost"}
-                        onClick={() => { setActiveDepartment(key); setProductSearch(""); }}
-                        className={activeDepartment === key 
-                          ? `bg-gradient-to-r ${key === 'jeux' ? 'from-blue-500 to-blue-600' : key === 'bar' ? 'from-orange-500 to-orange-600' : key === 'accompagnements' ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'} text-white` 
-                          : "text-slate-300 hover:text-white"
-                        }
-                        disabled={!activeTableId}
-                      >
-                        <Icon className="w-4 h-4 mr-2" />
-                        {config.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                {/* Products grid */}
-                {activeTableId ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {(catalog[activeDepartment] || []).map((item) => {
-                      const config = DEPARTMENT_CONFIG[activeDepartment];
-                      return (
-                        <button
-                          key={`${activeDepartment}-${item.id}`}
-                          onClick={() => addToBill(item, activeDepartment)}
-                          className={`p-3 rounded-lg ${config.bgColor} border ${config.borderColor} hover:scale-[1.02] transition-all text-left`}
-                        >
-                          <p className={`font-semibold text-sm ${config.color}`}>{item.name}</p>
-                          <p className="text-white font-bold">{formatPrice(item.price)} F</p>
-                          <p className="text-slate-500 text-xs">/{item.unit}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <Card className="bg-slate-800/30 border-slate-700 border-dashed">
-                    <CardContent className="py-12 text-center">
-                      <Calculator className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                      <p className="text-slate-400 mb-4">Sélectionnez ou créez une table pour commencer</p>
-                      <Button onClick={() => setShowNewTableModal(true)} className="bg-amber-500 hover:bg-amber-600">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Ouvrir une Table
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-                
-                {/* Custom item form for "Autres" department - Manager/Admin only */}
-                {activeDepartment === "autres" && activeTableId && (currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                  <Card className="mt-4 bg-slate-700/30 border-slate-600">
-                    <CardContent className="p-4">
-                      <h4 className="text-slate-300 font-semibold mb-3">Saisie manuelle</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-slate-400 text-xs">Nom du produit</Label>
-                          <Input
-                            value={customItem.name}
-                            onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
-                            placeholder="Ex: Service spécial"
-                            className="bg-slate-800 border-slate-600 text-white mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-slate-400 text-xs">Prix (FCFA)</Label>
-                          <Input
-                            type="number"
-                            value={customItem.price || ""}
-                            onChange={(e) => setCustomItem({ ...customItem, price: parseInt(e.target.value) || 0 })}
-                            placeholder="0"
-                            className="bg-slate-800 border-slate-600 text-white mt-1"
-                          />
-                        </div>
-                      </div>
-                      <Button 
-                        onClick={addCustomItem} 
-                        className="w-full mt-3 bg-slate-600 hover:bg-slate-500"
-                        disabled={!customItem.name || customItem.price <= 0}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Ajouter à la facture
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* Right: Current Bill - Fixed on desktop */}
-              <div className="lg:col-span-1">
-                <div className="lg:sticky lg:top-20 space-y-4">
-                  <Card className="bg-slate-800/50 border-amber-500/30">
-                    <CardHeader className="border-b border-slate-700 py-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-amber-500 flex items-center gap-2 text-lg">
-                          <Receipt className="w-5 h-5" />
-                          {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
-                        </CardTitle>
-                        {currentBill.length > 0 && (
-                          <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {/* Client selector */}
-                      <Select 
-                        value={selectedClient?.id || "anonymous"} 
-                        onValueChange={(v) => setSelectedClient(v === "anonymous" ? null : clients.find(c => c.id === v) || null)}
-                        disabled={!activeTableId}
-                      >
-                        <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white mt-2">
-                          <SelectValue placeholder="Sélectionner un client (optionnel)" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700">
-                          <SelectItem value="anonymous" className="text-white">Client anonyme</SelectItem>
-                          {clients.map(client => (
-                            <SelectItem key={client.id} value={client.id} className="text-white">
-                              {client.name} {client.phone && `(${client.phone})`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </CardHeader>
-                  
-                  <CardContent className="p-3">
-                    {!activeTableId ? (
-                      <p className="text-slate-500 text-center py-8">Ouvrez une table pour commencer</p>
-                    ) : currentBill.length === 0 ? (
-                      <p className="text-slate-500 text-center py-8">Aucun article</p>
-                    ) : (
-                      <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                        {currentBill.map((item, index) => {
-                          const config = DEPARTMENT_CONFIG[item.department];
-                          return (
-                            <div key={index} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white text-sm font-medium truncate">{item.name}</p>
-                                <p className={`text-xs ${config.color}`}>{config.label}</p>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button size="icon" variant="ghost" onClick={() => updateQuantity(index, -1)} className="w-6 h-6 text-slate-400">
-                                  <Minus className="w-3 h-3" />
-                                </Button>
-                                <span className="text-white w-6 text-center text-sm">{item.quantity}</span>
-                                <Button size="icon" variant="ghost" onClick={() => updateQuantity(index, 1)} className="w-6 h-6 text-slate-400">
-                                  <Plus className="w-3 h-3" />
-                                </Button>
-                                <span className="text-amber-400 font-bold text-sm w-14 text-right">
-                                  {formatPrice(item.price * item.quantity)}
-                                </span>
-                                <Button size="icon" variant="ghost" onClick={() => removeItem(index)} className="w-6 h-6 text-red-400">
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {currentBill.length > 0 && (
-                      <>
-                        {/* Free Accompaniment Button */}
-                        <Button
-                          onClick={() => setShowFreeAccompModal(true)}
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Accomp. Gratuit
-                        </Button>
-                        
-                        {/* Totals by department */}
-                        <div className="mt-3 pt-3 border-t border-slate-700 space-y-1">
-                          {Object.entries(totalByDepartment).map(([dept, amount]) => {
-                            if (amount === 0) return null;
-                            const config = DEPARTMENT_CONFIG[dept];
-                            return (
-                              <div key={dept} className="flex justify-between text-xs">
-                                <span className={config.color}>{config.label}</span>
-                                <span className="text-white">{formatPrice(amount)} F</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Discount & Payment */}
-                        <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-slate-400 text-xs">Remise %</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={discount}
-                              onChange={(e) => setDiscount(parseInt(e.target.value) || 0)}
-                              className="w-16 bg-slate-700/50 border-slate-600 text-white text-sm h-8"
-                            />
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-slate-400">Sous-total</span>
-                              <span className="text-white">{formatPrice(subtotal)} F</span>
-                            </div>
-                            {discount > 0 && (
-                              <div className="flex justify-between text-sm">
-                                <span className="text-slate-400">Remise ({discount}%)</span>
-                                <span className="text-green-400">-{formatPrice(discountAmount)} F</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
-                              <span className="text-white">TOTAL</span>
-                              <span className="text-amber-500">{formatPrice(total)} FCFA</span>
-                            </div>
-                          </div>
-
-                          {/* Payment method */}
-                          <div className="grid grid-cols-2 gap-1">
-                            {PAYMENT_METHODS.map(method => {
-                              const Icon = method.icon;
-                              return (
-                                <Button
-                                  key={method.value}
-                                  variant={paymentMethod === method.value ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => setPaymentMethod(method.value)}
-                                  className={paymentMethod === method.value ? "bg-amber-500 text-white" : "border-slate-600 text-slate-300"}
-                                >
-                                  <Icon className="w-3 h-3 mr-1" />
-                                  {method.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Instructions spéciales client */}
-                          <div className="pt-2 border-t border-slate-700">
-                            <Label className="text-slate-400 text-sm flex items-center gap-2 mb-2">
-                              <MessageCircle className="w-4 h-4" />
-                              Instructions particulières du client
-                            </Label>
-                            <Textarea
-                              value={notes}
-                              onChange={(e) => setNotes(e.target.value)}
-                              placeholder="Ex: Sans oignon, bien cuit, allergie aux arachides..."
-                              className="bg-slate-800 border-slate-600 text-white text-sm"
-                              rows={2}
-                            />
-                          </div>
-
-                          {/* Actions */}
-                          <div className="pt-2">
-                            <Button onClick={saveInvoice} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold py-6 text-lg">
-                              <Send className="w-5 h-5 mr-2" />
-                              ENVOYER LA COMMANDE
-                            </Button>
-                            <p className="text-slate-500 text-xs text-center mt-2">
-                              La commande sera envoyée à la gérante pour validation
-                            </p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* ============== FACTURES À IMPRIMER (Validated invoices) - Admin/Manager only ============== */}
-                {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && 
-                  invoices.filter(i => i.validation_status === 'validated').length > 0 && (
-                  <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/50 mt-4">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-green-400 flex items-center gap-2 text-base">
-                        <Printer className="w-5 h-5" />
-                        FACTURES À IMPRIMER
-                        <Badge className="bg-green-500/30 text-green-300 ml-2">
-                          {invoices.filter(i => i.validation_status === 'validated').length}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
-                      {invoices.filter(i => i.validation_status === 'validated').slice(0, 5).map(invoice => (
-                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-green-900/30 rounded-lg p-3 border border-green-500/30">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold text-sm">{invoice.invoice_number}</span>
-                              <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Validée</Badge>
-                            </div>
-                            <p className="text-slate-400 text-xs mt-1 truncate">
-                              {invoice.customer_name} • {formatPrice(invoice.total)} FCFA
-                            </p>
-                          </div>
-                          <Button 
-                            onClick={() => printTicket(invoice)} 
-                            className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto shrink-0"
-                            size="sm"
-                          >
-                            <Printer className="w-4 h-4 mr-2" />
-                            IMPRIMER
-                          </Button>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* ============== FACTURES DÉFINITIVES DU JOUR (Server view - read only) ============== */}
-                {currentUser?.role === 'server' && 
-                  invoices.filter(i => i.validation_status === 'validated').length > 0 && (
-                  <Card className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/50 mt-4">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-slate-300 flex items-center gap-2 text-base">
-                        <FileText className="w-5 h-5" />
-                        FACTURES DÉFINITIVES DU JOUR
-                        <Badge className="bg-slate-600/50 text-slate-300 ml-2">
-                          {invoices.filter(i => i.validation_status === 'validated').length}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {invoices.filter(i => i.validation_status === 'validated').map(invoice => (
-                        <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-700/30 rounded-lg p-3 border border-slate-600/30">
-                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewInvoice(invoice)}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold text-sm">{invoice.invoice_number}</span>
-                              <Badge className="bg-green-500/30 text-green-300 text-xs">✓ Définitive</Badge>
-                              {invoice.table_number && (
-                                <Badge className="bg-amber-500/20 text-amber-400 text-xs">Table {invoice.table_number}</Badge>
-                              )}
-                            </div>
-                            <p className="text-slate-400 text-xs mt-1">
-                              {invoice.customer_name} • <span className="text-amber-400 font-semibold">{formatPrice(invoice.total)} F</span>
-                            </p>
-                            <p className="text-slate-500 text-xs">
-                              Serveur: {invoice.created_by} • Validé par: {invoice.validated_by}
-                            </p>
-                          </div>
-                          <Button 
-                            variant="outline"
-                            onClick={() => setViewInvoice(invoice)} 
-                            className="border-slate-600 text-slate-300 hover:bg-slate-700 w-full sm:w-auto shrink-0"
-                            size="sm"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Voir
-                          </Button>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                </div>
-              </div>
-            </div>
-              </>
-            )}
-          </TabsContent>
 
           {/* ==================== BONS DE COMMANDE TAB ==================== */}
           <TabsContent value="bons">
@@ -5029,8 +4113,55 @@ _Gérante - Espace Maxo_
           </TabsContent>
 
           {/* ==================== INVOICES TAB ==================== */}
+          {/* ==================== FACTURES TAB (fusionné avec Commande) ==================== */}
           <TabsContent value="invoices">
             <div className="space-y-4">
+              {/* Admin: EN ATTENTE section */}
+              {currentUser?.role === 'admin' && (invoices.filter(i => i.validation_status === 'pending').length > 0 || expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length > 0) && (
+                <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-amber-400 flex items-center gap-2">
+                      <Clock className="w-6 h-6" /> EN ATTENTE
+                      <Badge className="bg-amber-500/30 text-amber-300 ml-2 text-lg px-3">
+                        {invoices.filter(i => i.validation_status === 'pending').length + expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
+                      <div>
+                        <p className="text-orange-400 text-sm font-medium mb-2"><Printer className="w-4 h-4 inline mr-1" />Factures en attente ({invoices.filter(i => i.validation_status === 'pending').length})</p>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {invoices.filter(i => i.validation_status === 'pending').map(inv => (
+                            <div key={inv.id} className="flex items-center justify-between bg-orange-900/20 rounded-lg px-3 py-2 border border-orange-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm font-bold">{inv.invoice_number}</span>
+                                <span className="text-slate-400 text-xs">par {inv.created_by}</span>
+                              </div>
+                              <span className="text-orange-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length > 0 && (
+                      <div>
+                        <p className="text-yellow-400 text-sm font-medium mb-2"><ShoppingCart className="w-4 h-4 inline mr-1" />Achats en attente ({expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length})</p>
+                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                          {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').map(exp => (
+                            <div key={exp.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg px-3 py-2 border border-yellow-500/20">
+                              <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
+                              <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Filter bar */}
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-slate-400" />
@@ -5585,105 +4716,6 @@ _Gérante - Espace Maxo_
           )}
 
           {/* ==================== HISTORIQUE TAB ==================== */}
-          <TabsContent value="historique">
-            <div className="space-y-4">
-              {/* Header avec sélecteur de date */}
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <h2 className="text-xl font-bold text-slate-300 flex items-center gap-2">
-                  <Calendar className="w-6 h-6" />
-                  Historique des Factures
-                </h2>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="date"
-                    value={historyDate}
-                    onChange={(e) => setHistoryDate(e.target.value)}
-                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
-                  />
-                  <Badge className="bg-slate-600/50 text-slate-300">
-                    {historyInvoices.length} facture(s)
-                  </Badge>
-                  {historyInvoices.length > 0 && (
-                    <Badge className="bg-green-500/20 text-green-400">
-                      Total: {formatPrice(historyInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0))} F
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Liste des bons archivés */}
-              {historyInvoices.length === 0 ? (
-                <Card className="bg-slate-800/30 border-slate-700">
-                  <CardContent className="py-12 text-center">
-                    <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Aucune facture validé pour cette date</p>
-                    <p className="text-slate-600 text-sm mt-2">Sélectionnez une autre date dans le calendrier</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-3">
-                  {historyInvoices.map((invoice) => (
-                    <Card key={invoice.id} className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border-slate-600/50">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold">{invoice.invoice_number}</span>
-                              <Badge className="bg-green-500/20 text-green-400">Validée</Badge>
-                              <Badge className="bg-amber-500/20 text-amber-400">{formatPrice(invoice.total)} F</Badge>
-                              {invoice.table_number && (
-                                <Badge className="bg-slate-500/30 text-slate-300">Table {invoice.table_number}</Badge>
-                              )}
-                            </div>
-                            <p className="text-slate-400 text-sm mt-1">
-                              Client: {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
-                            </p>
-                            <p className="text-slate-500 text-xs">
-                              Serveur: {invoice.created_by} • Validé par: {invoice.validated_by}
-                            </p>
-                            {/* Résumé des articles */}
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {invoice.items?.slice(0, 3).map((item, idx) => (
-                                <span key={idx} className="text-xs bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded">
-                                  {item.quantity}x {item.name}
-                                </span>
-                              ))}
-                              {invoice.items?.length > 3 && (
-                                <span className="text-xs text-slate-500">+{invoice.items.length - 3} autres</span>
-                              )}
-                            </div>
-                            {/* Totaux par département */}
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {invoice.totals_by_department?.salle_jardin > 0 && (
-                                <span className="text-xs text-green-400">Cuisine: {formatPrice(invoice.totals_by_department.salle_jardin)}F</span>
-                              )}
-                              {invoice.totals_by_department?.bar > 0 && (
-                                <span className="text-xs text-orange-400">Bar: {formatPrice(invoice.totals_by_department.bar)}F</span>
-                              )}
-                              {invoice.totals_by_department?.jeux > 0 && (
-                                <span className="text-xs text-blue-400">Jeux: {formatPrice(invoice.totals_by_department.jeux)}F</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <Button 
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setViewInvoice(invoice)}
-                              className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              Voir
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          </TabsContent>
 
           {/* ==================== POINTS DES SERVEURS TAB (MANAGER ONLY) ==================== */}
           {currentUser?.role === 'manager' && (
@@ -7254,6 +6286,50 @@ _Gérante - Espace Maxo_
                   </CardContent>
                 </Card>
               )}
+
+              {/* ==================== HISTORIQUE DES FACTURES ==================== */}
+              <div className="border-t border-slate-700/50 pt-6 mt-6">
+                <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+                  <h2 className="text-xl font-bold text-slate-300 flex items-center gap-2">
+                    <Calendar className="w-6 h-6" />
+                    Historique des Factures
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    <Input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white w-auto" />
+                  </div>
+                </div>
+                {historyInvoices.length > 0 ? (
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardContent className="p-0">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-slate-400 border-b border-slate-700">
+                            <th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Serveur</th>
+                            <th className="p-3 text-right">Total</th><th className="p-3">Mode</th><th className="p-3">Statut</th><th className="p-3">Heure</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyInvoices.map(inv => (
+                            <tr key={inv.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                              <td className="p-3 text-white font-medium">{inv.invoice_number}</td>
+                              <td className="p-3 text-slate-300">{inv.client_name || "-"}</td>
+                              <td className="p-3 text-slate-300">{inv.created_by}</td>
+                              <td className="p-3 text-right text-amber-400 font-bold">{formatPrice(inv.total)} F</td>
+                              <td className="p-3 text-slate-400">{inv.payment_mode || inv.payment_method || "-"}</td>
+                              <td className="p-3"><Badge className={inv.validation_status === 'validated' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-yellow-500/20 text-yellow-400 text-xs'}>{inv.validation_status === 'validated' ? 'Validee' : 'En attente'}</Badge></td>
+                              <td className="p-3 text-slate-500 text-xs">{(inv.created_at || '').slice(11, 16)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardContent className="py-8 text-center text-slate-500">Aucune facture pour cette date</CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
           </TabsContent>
           )}
