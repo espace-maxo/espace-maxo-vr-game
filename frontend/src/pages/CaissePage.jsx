@@ -4162,34 +4162,41 @@ _Gérante - Espace Maxo_
               )}
 
               {/* Filter bar */}
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-slate-400" />
-                  <Input
-                    type="date"
-                    value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
-                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
-                  />
-                </div>
-                <Select value={filterValidation} onValueChange={setFilterValidation}>
-                  <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="all" className="text-white">Toutes</SelectItem>
-                    <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
-                    <SelectItem value="validated" className="text-green-400">Validées</SelectItem>
-                    <SelectItem value="cancelled" className="text-red-400">Annulées</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Badge className="bg-blue-500/20 text-blue-400">
-                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} facture(s)
-                </Badge>
-                {stats && (
-                  <Badge className="bg-amber-500/20 text-amber-400">
-                    CA: {formatPrice(stats.total_revenue)} F
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-slate-400" />
+                    <Input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                    />
+                  </div>
+                  <Select value={filterValidation} onValueChange={setFilterValidation}>
+                    <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="all" className="text-white">Toutes</SelectItem>
+                      <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
+                      <SelectItem value="validated" className="text-green-400">Validees</SelectItem>
+                      <SelectItem value="cancelled" className="text-red-400">Annulees</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge className="bg-blue-500/20 text-blue-400">
+                    {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} facture(s)
                   </Badge>
+                  {stats && (
+                    <Badge className="bg-amber-500/20 text-amber-400">
+                      CA: {formatPrice(stats.total_revenue)} F
+                    </Badge>
+                  )}
+                </div>
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                  <Button onClick={() => { setEditingInvoice(null); setActiveTab('bons'); }} className="bg-blue-600 hover:bg-blue-700" data-testid="new-invoice-btn">
+                    <Plus className="w-4 h-4 mr-2" />Nouvelle Facture
+                  </Button>
                 )}
               </div>
 

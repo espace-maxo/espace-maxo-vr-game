@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   UserCircle, Plus, Check, X, Edit2, Trash2, 
   UtensilsCrossed, Calendar, AlertCircle, CheckCircle, Receipt,
-  Search, Minus
+  Search, Minus, FileText, Printer
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -175,6 +175,64 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
     }
   };
 
+  const convertToInvoice = async (order) => {
+    if (!confirm(`Passer cette commande (${formatPrice(order.total)} F) en facture ?`)) return;
+    try {
+      const invoiceData = {
+        server_name: "Manager General",
+        created_by: currentUser?.full_name || currentUser?.name || "Manager General",
+        items: (order.items || []).map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          department: "salle_jardin"
+        })),
+        department: "salle_jardin",
+        subtotal: order.total,
+        total: order.total,
+        discount: 0,
+        discount_amount: 0,
+        client_name: "Manager General",
+        notes: order.notes || ""
+      };
+      const resp = await axios.post(`${API}/invoices`, invoiceData);
+      const inv = resp.data?.invoice;
+      toast.success(`Facture ${inv?.invoice_number || ''} creee a partir de la commande MG`);
+      // Mark order as paid
+      await axios.put(`${API}/monsieur-orders/${order.id}`, { status: "regle", paid_by: "Facture" });
+      fetchOrders();
+    } catch (error) {
+      console.error("Error converting to invoice:", error);
+      toast.error("Erreur lors de la conversion en facture");
+    }
+  };
+
+  const printOrder = (order) => {
+    const w = window.open('', '_blank', 'width=350,height=500');
+    const itemsHtml = (order.items || []).map(i => 
+      `<tr><td>${i.quantity}x ${i.name}</td><td style="text-align:right">${formatPrice(i.price * i.quantity)} F</td></tr>`
+    ).join('');
+    w.document.write(`
+      <html><head><title>Bon Manager General</title>
+      <style>body{font-family:monospace;font-size:12px;padding:10px}table{width:100%;border-collapse:collapse}td{padding:3px 0}hr{border:none;border-top:1px dashed #000}.total{font-size:16px;font-weight:bold;text-align:center;margin:10px 0}</style>
+      </head><body>
+      <div style="text-align:center"><strong>ESPACE MAXO</strong><br>Manager General</div>
+      <hr>
+      <p>Date: ${format(new Date(order.created_at), "dd/MM/yyyy HH:mm", { locale: fr })}</p>
+      <p>Statut: ${order.status === 'regle' ? 'REGLE' : 'NON REGLE'}</p>
+      <hr>
+      <table>${itemsHtml}</table>
+      <hr>
+      <div class="total">TOTAL: ${formatPrice(order.total)} F</div>
+      ${order.notes ? `<p>Notes: ${order.notes}</p>` : ''}
+      <hr>
+      <div style="text-align:center;font-size:10px;margin-top:10px">Espace Maxo - Cotonou</div>
+      </body></html>
+    `);
+    w.document.close();
+    w.print();
+  };
+
   const filteredOrders = orders.filter(o => {
     if (filter === "all") return true;
     return o.status === filter;
@@ -321,7 +379,22 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
                       )}
                     </div>
                     
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        onClick={() => convertToInvoice(order)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                        data-testid={`convert-invoice-${order.id}`}
+                      >
+                        <FileText className="w-4 h-4 mr-1" /> Facture
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => printOrder(order)}
+                        className="bg-slate-600 hover:bg-slate-700"
+                      >
+                        <Printer className="w-4 h-4 mr-1" /> Imprimer
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => toggleStatus(order)}
