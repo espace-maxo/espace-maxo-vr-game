@@ -1,0 +1,75 @@
+{
+  "summary": "Refactoring Phase 2 regression testing complete. All 14 backend tests passed. Route collision fix verified - /api/invoices/stats now correctly returns stats instead of 'Facture non trouvée'. Frontend ProductsTab and all other extracted tabs working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "AnalyticsTab & HebdoReport",
+        "issues": ["React hydration warning: <tr> inside <span> in tables - cosmetic issue, doesn't affect functionality (pre-existing from iteration_32)"]
+      }
+    ]
+  },
+  "passed_tests": [
+    "✅ Backend: GET /api/invoices/stats?date=2026-04-16 returns 200 with total_revenue, invoice_count, by_department (NOT 'Facture non trouvée')",
+    "✅ Backend: GET /api/invoices/stats/monthly?year=2026&month=4 returns 200 with total_revenue, invoice_count, by_department, daily_stats",
+    "✅ Backend: GET /api/analytics/dashboard?year=2026&month=4 returns {current, previous, growth}",
+    "✅ Backend: GET /api/reports/revenue-by-payment?week_start=2026-04-13 returns total, by_method, period_start",
+    "✅ Backend: GET /api/caisse/users returns users list",
+    "✅ Backend: POST /api/caisse/login with password=Caisse2026 returns admin token",
+    "✅ Backend: POST /api/caisse/login with pin=2468 returns gérante token",
+    "✅ Backend: POST /api/caisse/login with invalid PIN returns 401",
+    "✅ Backend: GET /api/invoices/{valid_id} returns invoice (route collision fix verified)",
+    "✅ Backend: GET /api/invoices/{invalid_id} returns 404 (not confused with /invoices/stats)",
+    "✅ Backend: GET /api/financial-points works (router not broken by include_router reordering)",
+    "✅ Backend: GET /api/stock/products works",
+    "✅ Backend: GET /api/subscriptions works",
+    "✅ Backend: GET /api/invoices list works",
+    "✅ Frontend: Admin login with Caisse2026 works",
+    "✅ Frontend: ProductsTab (data-testid='products-tab') renders correctly",
+    "✅ Frontend: Add product button (data-testid='add-product-btn') visible for admin",
+    "✅ Frontend: Products displayed by department (Plats, Accomp., Jeux, Bar, Location, Autres)",
+    "✅ Frontend: ActiviteTab (data-testid='activite-tab') renders correctly",
+    "✅ Frontend: UsersTab (data-testid='users-tab') renders correctly",
+    "✅ Frontend: ClientsTab (data-testid='clients-tab') renders correctly",
+    "✅ Frontend: AnalyticsTab (data-testid='analytics-tab') renders correctly",
+    "✅ Frontend: Hebdo tab renders weekly report correctly"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_refactoring_regression.py",
+    "/app/test_reports/pytest/refactoring_regression_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Route collision fix correctly implemented: include_router for reports.py placed BEFORE inline /invoices/{invoice_id} route in server.py (line 84)",
+    "caisse_users.py router correctly extracted with all 5 endpoints (create, login, list, update, delete)",
+    "reports.py router correctly extracted with 4 endpoints (invoice stats, monthly stats, analytics dashboard, revenue by payment)",
+    "ProductsTab.jsx correctly implements data-testid attributes for testing",
+    "All other routers (financial_points, stock, subscriptions, service_reports) continue to work after include_router reordering"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_refactoring_regression.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (All tabs verified, ProductsTab working)"
+  },
+  "test_credentials": {
+    "caisse_admin": "Admin tab / password: Caisse2026",
+    "caisse_gerante": "Serveur (PIN) tab / PIN: 2468"
+  },
+  "seed_data_creation": "No test data created - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Refactoring Phase 2 complete. Route collision between /invoices/stats and /invoices/{invoice_id} fixed by placing include_router calls before inline routes. All extracted components (ProductsTab, reports.py, caisse_users.py) working correctly. React hydration warning in AnalyticsTab/HebdoReport tables is cosmetic only.",
+  "route_collision_fix_verification": {
+    "issue": "Before fix: /api/invoices/stats was matched by /invoices/{invoice_id} returning 'Facture non trouvée'",
+    "fix": "include_router for reports_router placed BEFORE inline /invoices/{invoice_id} route definition",
+    "location": "/app/backend/server.py line 84",
+    "status": "VERIFIED WORKING"
+  }
+}
