@@ -1,0 +1,91 @@
+{
+  "summary": "Phase 4 Refactoring testing complete. All 10 invoice endpoints extracted to /app/backend/routers/invoices.py work correctly. 26/26 backend tests passed. Route collision fix verified (/invoices/stats not intercepted by /invoices/{id}). Frontend BonsTab and Factures components render correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ CRITICAL: Route collision test - /api/invoices/stats NOT intercepted by /api/invoices/{id}",
+    "✅ CRITICAL: Route collision test - /api/invoices/stats/monthly works correctly",
+    "✅ POST /api/invoices creates invoice with EM-YYYYMMDD-XXXX format",
+    "✅ GET /api/invoices returns list of invoices",
+    "✅ GET /api/invoices?date=YYYY-MM-DD filters by date",
+    "✅ GET /api/invoices?date_from=X&date_to=Y filters by date range",
+    "✅ GET /api/invoices with role=server returns validated + own pending",
+    "✅ GET /api/invoices/{id} returns single invoice",
+    "✅ GET /api/invoices/{id} returns 404 for invalid ID",
+    "✅ PUT /api/invoices/{id} updates invoice fields",
+    "✅ PUT /api/invoices/{id} returns 404 for invalid ID",
+    "✅ DELETE /api/invoices/{id} deletes invoice",
+    "✅ DELETE /api/invoices/{id} returns 404 for invalid ID",
+    "✅ PUT /api/invoices/{id}/update-items requires modification_allowed=true (returns 403)",
+    "✅ GET /api/invoices/{id}/pdf generates PDF with application/pdf content-type",
+    "✅ GET /api/invoices/{id}/pdf returns 404 for invalid ID",
+    "✅ PUT /api/invoices/{id}/assign-week assigns invoice to week",
+    "✅ PUT /api/invoices/{id}/assign-week returns 404 for invalid ID",
+    "✅ POST /api/invoices/assign-week-bulk assigns multiple invoices",
+    "✅ POST /api/invoices/unassign-week-bulk removes week assignment",
+    "✅ GET /api/analytics/dashboard still works (regression)",
+    "✅ GET /api/reports/revenue-by-payment still works (regression)",
+    "✅ GET /api/financial-points still works (regression)",
+    "✅ GET /api/caisse/users still works (regression)",
+    "✅ POST /api/caisse/login with admin password works (regression)",
+    "✅ POST /api/caisse/login with manager PIN works (regression)",
+    "✅ Frontend: BonsTab component renders (data-testid='bons-tab')",
+    "✅ Frontend: Factures sub-tab visible and clickable",
+    "✅ Frontend: MANAGER GENERAL sub-tab visible and clickable",
+    "✅ Frontend: MANAGER GENERAL shows orders with Facture/Imprimer/Réglé buttons"
+  ],
+  "failed_tests": [],
+  "test_report_links": [
+    "/app/backend/tests/test_invoices_refactoring.py",
+    "/app/test_reports/pytest/invoices_refactoring_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "invoices.py correctly extracted with 568 lines, 10 endpoints",
+    "server.py reduced from 6889 to 6340 lines (-549 lines)",
+    "Router inclusion order correct: reports_router before invoices_router ensures /invoices/stats takes precedence",
+    "Invoice models (InvoiceItemCreate, InvoiceCreate, Invoice) moved to routers/invoices.py",
+    "Stock sync logic on validation preserved (recipe-based and direct name match)",
+    "Table auto-stop on validation preserved with service_stats recording",
+    "PDF generation with reportlab working correctly"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_invoices_refactoring.py"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 tests passed)",
+    "frontend": "100% (BonsTab, Factures, MANAGER GENERAL all working)"
+  },
+  "test_credentials": {
+    "caisse_admin": "Admin tab / password: Caisse2026",
+    "caisse_gerante": "Serveur (PIN) tab / PIN: 2468"
+  },
+  "seed_data_creation": "Created and cleaned up 5 test invoices (TEST_* prefix)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 4 refactoring (invoices router extraction) successful. All 10 invoice endpoints work correctly. Route collision fix verified. No bugs found. server.py now at 6340 lines.",
+  "refactoring_verification": {
+    "endpoints_extracted": [
+      "POST /api/invoices",
+      "GET /api/invoices",
+      "GET /api/invoices/{id}",
+      "PUT /api/invoices/{id}",
+      "DELETE /api/invoices/{id}",
+      "PUT /api/invoices/{id}/update-items",
+      "GET /api/invoices/{id}/pdf",
+      "PUT /api/invoices/{id}/assign-week",
+      "POST /api/invoices/assign-week-bulk",
+      "POST /api/invoices/unassign-week-bulk"
+    ],
+    "route_collision_fix": "reports_router included BEFORE invoices_router at line 86-87 in server.py",
+    "stock_sync_verified": "PUT /api/invoices/{id} with validation_status=validated triggers stock deduction via recipe or direct name match",
+    "pdf_generation_verified": "GET /api/invoices/{id}/pdf returns application/pdf with correct filename header"
+  }
+}
