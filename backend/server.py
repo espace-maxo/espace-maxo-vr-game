@@ -5877,32 +5877,66 @@ async def get_weekly_report(week_start: Optional[str] = None):
         end_str = end_date.strftime("%Y-%m-%d") + "T23:59:59"
         
         # Get validated invoices (sales) for the week
-        invoices = await db.invoices.find({
+        # Strategy: 2 queries then merge
+        # 1. Invoices in date range that are NOT assigned to another week
+        invoices_by_date = await db.invoices.find({
+            "validation_status": "validated",
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"},
             "$or": [
-                {"validation_status": "validated", "created_at": {"$gte": start_str, "$lte": end_str + "Z"}},
-                {"validation_status": "validated", "assigned_week": start_str}
+                {"assigned_week": {"$exists": False}},
+                {"assigned_week": None},
+                {"assigned_week": ""},
+                {"assigned_week": start_str}
             ]
         }, {"_id": 0}).to_list(1000)
-        # Deduplicate (an invoice assigned to this week AND created this week)
-        seen_ids = set()
-        unique_invoices = []
-        for inv in invoices:
-            iid = inv.get("id", inv.get("invoice_number", ""))
-            if iid not in seen_ids:
-                seen_ids.add(iid)
-                unique_invoices.append(inv)
-        invoices = unique_invoices
         
-        # Get ALL expenses for the week (completed, approved, or assigned to this week)
-        all_expenses = await db.expenses.find({
+        # 2. Invoices explicitly assigned to this week (from any date)
+        invoices_assigned = await db.invoices.find({
+            "validation_status": "validated",
+            "assigned_week": start_str
+        }, {"_id": 0}).to_list(1000)
+        
+        # Merge and deduplicate
+        seen_ids = set()
+        invoices = []
+        for inv in invoices_by_date + invoices_assigned:
+            iid = inv.get("id", "")
+            if iid and iid not in seen_ids:
+                seen_ids.add(iid)
+                invoices.append(inv)
+        
+        # Get ALL expenses for the week (same strategy)
+        # 1. Expenses in date range NOT assigned to another week
+        expenses_by_date = await db.expenses.find({
             "$or": [
                 {"status": "completed", "completed_at": {"$gte": start_str, "$lte": end_str}},
                 {"status": "approved", "approved_at": {"$gte": start_str, "$lte": end_str}},
                 {"status": "pending", "created_at": {"$gte": start_str, "$lte": end_str}},
-                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}},
-                {"assigned_week": start_str}  # Expenses explicitly assigned to this week
+                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}}
+            ],
+            "$and": [
+                {"$or": [
+                    {"assigned_week": {"$exists": False}},
+                    {"assigned_week": None},
+                    {"assigned_week": ""},
+                    {"assigned_week": start_str}
+                ]}
             ]
         }, {"_id": 0}).to_list(500)
+        
+        # 2. Expenses explicitly assigned to this week
+        expenses_assigned = await db.expenses.find({
+            "assigned_week": start_str
+        }, {"_id": 0}).to_list(500)
+        
+        # Merge and deduplicate
+        seen_exp = set()
+        all_expenses = []
+        for exp in expenses_by_date + expenses_assigned:
+            eid = exp.get("id", "")
+            if eid and eid not in seen_exp:
+                seen_exp.add(eid)
+                all_expenses.append(exp)
         
         # Initialize daily data for each day of the week
         daily_data = {}
