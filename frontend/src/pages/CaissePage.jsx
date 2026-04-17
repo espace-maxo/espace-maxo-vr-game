@@ -1719,29 +1719,25 @@ const CaissePage = () => {
       setWeeklyReport(res.data);
       
       // Check expense ratio for admin alert (> 40%)
+      // Backend /reports/weekly already aggregates ALL expenses of the week
+      // (pending + approved + completed + revision_requested), respecting assigned_week.
+      // We must NOT add client-side filtered expenses on top (it double-counts the current
+      // week and mixes expenses from other weeks against this week's CA).
       if (currentUser?.role === 'admin' && res.data) {
         const weeklyCA = res.data.sales?.total || 0;
         const weeklyExpenses = res.data.expenses?.total || 0;
-        const totalPendingExpenses = expenses.filter(e => e.status === 'pending' || e.status === 'approved').reduce((sum, e) => sum + e.amount, 0);
-        const totalExpenses = weeklyExpenses + totalPendingExpenses;
         
         if (weeklyCA > 0) {
-          const ratio = (totalExpenses / weeklyCA) * 100;
-          if (ratio > 40) {
-            setExpenseRatioAlert({
-              ratio: ratio.toFixed(1),
-              expenses: totalExpenses,
-              ca: weeklyCA,
-              isOverLimit: true
-            });
-          } else {
-            setExpenseRatioAlert({
-              ratio: ratio.toFixed(1),
-              expenses: totalExpenses,
-              ca: weeklyCA,
-              isOverLimit: false
-            });
-          }
+          const ratio = (weeklyExpenses / weeklyCA) * 100;
+          setExpenseRatioAlert({
+            ratio: ratio.toFixed(1),
+            expenses: weeklyExpenses,
+            ca: weeklyCA,
+            isOverLimit: ratio > 40
+          });
+        } else {
+          // No sales yet → clear the alert
+          setExpenseRatioAlert(null);
         }
       }
     } catch (error) {
@@ -5467,19 +5463,19 @@ _Gérante - Espace Maxo_
 
               {/* ALERT: Expense ratio > 40% */}
               {currentUser?.role === 'admin' && expenseRatioAlert?.isOverLimit && (
-                <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/30 border-red-500/70 animate-pulse">
+                <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/30 border-red-500/70 animate-pulse" data-testid="expense-ratio-alert">
                   <CardContent className="py-4">
                     <div className="flex items-center gap-3">
                       <div className="bg-red-500 rounded-full p-2">
                         <AlertCircle className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-red-400 font-bold text-lg">⚠️ ALERTE : Ratio Dépenses/CA élevé</p>
+                        <p className="text-red-400 font-bold text-lg">Alerte : Ratio Dépenses/CA élevé</p>
                         <p className="text-red-300">
-                          Les demandes d'achats représentent <span className="font-bold text-xl">{expenseRatioAlert.ratio}%</span> du CA de la semaine
+                          Les dépenses de la semaine représentent <span className="font-bold text-xl">{expenseRatioAlert.ratio}%</span> du CA validé de la semaine
                         </p>
                         <p className="text-slate-400 text-sm mt-1">
-                          Dépenses: {formatPrice(expenseRatioAlert.expenses)} F | CA semaine: {formatPrice(expenseRatioAlert.ca)} F | Seuil: 40%
+                          Dépenses semaine: {formatPrice(expenseRatioAlert.expenses)} F • CA semaine: {formatPrice(expenseRatioAlert.ca)} F • Seuil: 40%
                         </p>
                       </div>
                     </div>
@@ -5489,9 +5485,9 @@ _Gérante - Espace Maxo_
 
               {/* Ratio indicator (non-alert) */}
               {currentUser?.role === 'admin' && expenseRatioAlert && !expenseRatioAlert.isOverLimit && (
-                <div className="flex items-center gap-2 text-sm bg-slate-800/30 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-sm bg-slate-800/30 rounded-lg p-2" data-testid="expense-ratio-ok">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-slate-400">Ratio Dépenses/CA: </span>
+                  <span className="text-slate-400">Ratio Dépenses/CA (semaine): </span>
                   <span className="text-green-400 font-bold">{expenseRatioAlert.ratio}%</span>
                   <span className="text-slate-500">(seuil: 40%)</span>
                 </div>

@@ -6,6 +6,13 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Bug Fix : Alerte Ratio Dépenses/CA (DONE)
+Le calcul du ratio dans l'onglet Achats (Caisse Pro) était incorrect :
+- **Avant** : `weeklyExpenses + totalPendingExpenses` où `totalPendingExpenses` filtrait TOUTES les dépenses (pending + approved) sans filtre de semaine → double-comptage de la semaine courante + pollution par les dépenses d'autres semaines.
+- **Après** : utilise uniquement `res.data.expenses.total` du backend, qui agrège déjà correctement les dépenses de la semaine (tous statuts, respecte `assigned_week`).
+- Libellé clarifié : "Ratio Dépenses/CA (semaine)" et "Dépenses semaine" pour éviter toute confusion.
+- data-testid ajoutés : `expense-ratio-alert`, `expense-ratio-ok`.
+
 ### Refactoring Phase 4 — Invoices Router (DONE)
 Le plus gros refactoring backend de la session.
 
