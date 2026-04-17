@@ -3224,36 +3224,62 @@ async def create_invoice(invoice_data: InvoiceCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/invoices")
-async def get_invoices(date: str = Query(None), user_id: str = Query(None), role: str = Query(None), created_by: str = Query(None)):
+async def get_invoices(date: str = Query(None), user_id: str = Query(None), role: str = Query(None), created_by: str = Query(None), date_from: str = Query(None), date_to: str = Query(None)):
     """Get invoices, optionally filtered by date and user
+    Respects assigned_week: excludes invoices transferred to another week
     For servers: shows their own pending invoices + ALL validated invoices
     For admin/manager: shows ALL invoices
     """
     try:
         if role == "server" and created_by:
-            # For servers: fetch their own pending + ALL validated invoices
             base_query = {}
             if date:
                 base_query["created_at"] = {"$regex": f"^{date}"}
             
-            # Query 1: Server's own pending invoices
             pending_query = {**base_query, "created_by": created_by, "validation_status": {"$ne": "validated"}}
             pending_invoices = await db.invoices.find(pending_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
             
-            # Query 2: ALL validated invoices (from all servers)
             validated_query = {**base_query, "validation_status": "validated"}
             validated_invoices = await db.invoices.find(validated_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
             
-            # Combine and deduplicate (validated ones may include server's own)
             all_invoices = validated_invoices + pending_invoices
             return {"invoices": all_invoices}
         else:
-            # For admin/manager: return ALL invoices
-            query = {}
-            if date:
-                query["created_at"] = {"$regex": f"^{date}"}
+            # For admin/manager
+            if date_from and date_to:
+                # Date range query for Hebdo attachment feature
+                invoices = await db.invoices.find({
+                    "created_at": {"$gte": date_from, "$lte": date_to + "T23:59:59Z"}
+                }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            elif date:
+                # Single date: exclude invoices assigned to another week
+                invoices_by_date = await db.invoices.find({
+                    "created_at": {"$regex": f"^{date}"},
+                    "$or": [
+                        {"assigned_week": {"$exists": False}},
+                        {"assigned_week": None},
+                        {"assigned_week": ""}
+                    ]
+                }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+                
+                # Include invoices assigned to the week of this date
+                d = datetime.fromisoformat(date)
+                week_monday = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+                invoices_assigned_here = await db.invoices.find({
+                    "assigned_week": week_monday,
+                    "created_at": {"$not": {"$regex": f"^{date}"}}
+                }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+                
+                # Merge
+                seen = set()
+                invoices = []
+                for inv in invoices_by_date + invoices_assigned_here:
+                    if inv.get("id") not in seen:
+                        seen.add(inv.get("id"))
+                        invoices.append(inv)
+            else:
+                invoices = await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
             
-            invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
             return {"invoices": invoices}
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}")
@@ -3261,13 +3287,38 @@ async def get_invoices(date: str = Query(None), user_id: str = Query(None), role
 
 @api_router.get("/invoices/stats")
 async def get_invoice_stats(date: str = Query(None)):
-    """Get invoice statistics by date"""
+    """Get invoice statistics by date, respecting assigned_week transfers"""
     try:
-        query = {}
         if date:
-            query["created_at"] = {"$regex": f"^{date}"}
-        
-        invoices = await db.invoices.find(query, {"_id": 0}).to_list(1000)
+            # Get invoices for this date that are NOT assigned to another week
+            invoices_by_date = await db.invoices.find({
+                "created_at": {"$regex": f"^{date}"},
+                "$or": [
+                    {"assigned_week": {"$exists": False}},
+                    {"assigned_week": None},
+                    {"assigned_week": ""}
+                ]
+            }, {"_id": 0}).to_list(1000)
+            
+            # Also get invoices assigned to the week containing this date
+            # Calculate week start (Monday) for this date
+            from datetime import date as date_cls
+            d = datetime.fromisoformat(date)
+            week_monday = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+            invoices_assigned = await db.invoices.find({
+                "assigned_week": week_monday,
+                "created_at": {"$regex": f"^{date}"}
+            }, {"_id": 0}).to_list(1000)
+            
+            # Merge and deduplicate
+            seen = set()
+            invoices = []
+            for inv in invoices_by_date + invoices_assigned:
+                if inv.get("id") not in seen:
+                    seen.add(inv.get("id"))
+                    invoices.append(inv)
+        else:
+            invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
         
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
         total_discounts = sum(inv.get("discount_amount", 0) for inv in invoices)
@@ -3522,17 +3573,60 @@ async def delete_invoice(invoice_id: str):
 
 @api_router.get("/invoices/stats/monthly")
 async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
-    """Get monthly statistics"""
+    """Get monthly statistics, respecting assigned_week transfers"""
     try:
         now = datetime.now(timezone.utc)
         year = year or now.year
         month = month or now.month
         
         date_prefix = f"{year}-{month:02d}"
-        invoices = await db.invoices.find(
-            {"created_at": {"$regex": f"^{date_prefix}"}},
-            {"_id": 0}
-        ).to_list(10000)
+        
+        # Get invoices for this month that are NOT assigned to another week
+        invoices_native = await db.invoices.find({
+            "created_at": {"$regex": f"^{date_prefix}"},
+            "$or": [
+                {"assigned_week": {"$exists": False}},
+                {"assigned_week": None},
+                {"assigned_week": ""}
+            ]
+        }, {"_id": 0}).to_list(10000)
+        
+        # Also include invoices assigned to weeks within this month
+        # Get all Mondays in this month
+        import calendar
+        first_day = datetime(year, month, 1)
+        last_day_num = calendar.monthrange(year, month)[1]
+        last_day = datetime(year, month, last_day_num)
+        
+        # Find all Monday dates that fall in this month
+        mondays = []
+        d = first_day
+        while d <= last_day:
+            if d.weekday() == 0:  # Monday
+                mondays.append(d.strftime("%Y-%m-%d"))
+            d += timedelta(days=1)
+        
+        invoices_assigned = []
+        if mondays:
+            invoices_assigned = await db.invoices.find({
+                "assigned_week": {"$in": mondays}
+            }, {"_id": 0}).to_list(10000)
+        
+        # Merge and deduplicate
+        seen = set()
+        invoices = []
+        for inv in invoices_native + invoices_assigned:
+            if inv.get("id") not in seen:
+                seen.add(inv.get("id"))
+                invoices.append(inv)
+        
+        # Also EXCLUDE invoices from this month that are assigned to a week in another month
+        invoices_transferred_out = await db.invoices.find({
+            "created_at": {"$regex": f"^{date_prefix}"},
+            "assigned_week": {"$exists": True, "$ne": None, "$ne": "", "$not": {"$in": mondays + [""]}}
+        }, {"_id": 0, "id": 1}).to_list(10000)
+        transferred_ids = {inv["id"] for inv in invoices_transferred_out}
+        invoices = [inv for inv in invoices if inv.get("id") not in transferred_ids]
         
         # Group by day
         daily_stats = {}
@@ -5206,9 +5300,10 @@ async def get_expenses(
     status: Optional[str] = None,
     category: Optional[str] = None,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    respect_assigned_week: Optional[bool] = None
 ):
-    """Get all expenses with optional filters"""
+    """Get all expenses with optional filters. If respect_assigned_week=true, excludes expenses transferred to another week."""
     try:
         query = {}
         if status:
@@ -5224,6 +5319,23 @@ async def get_expenses(
                 query["created_at"] = {"$lte": end_date + "T23:59:59"}
         
         expenses = await db.expenses.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+        
+        # If filtering by date and respect_assigned_week, exclude transferred expenses
+        if respect_assigned_week and (start_date or end_date):
+            filtered = []
+            for exp in expenses:
+                aw = exp.get("assigned_week")
+                if aw and aw != "" and aw is not None:
+                    # Check if assigned_week falls within the requested date range
+                    if start_date and end_date:
+                        if aw < start_date or aw > end_date:
+                            continue  # Transferred out of this range
+                    elif start_date:
+                        if aw < start_date:
+                            continue
+                filtered.append(exp)
+            expenses = filtered
+        
         return {"expenses": expenses}
     except Exception as e:
         logger.error(f"Error fetching expenses: {e}")
