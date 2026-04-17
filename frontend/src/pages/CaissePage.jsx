@@ -40,6 +40,8 @@ import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
 import AnalyticsTab from "./caisse/components/AnalyticsTab";
 import ProductsTab from "./caisse/components/ProductsTab";
+import BonsTab from "./caisse/components/BonsTab";
+import StatsTab from "./caisse/components/StatsTab";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -3831,281 +3833,27 @@ _Gérante - Espace Maxo_
 
           {/* ==================== BONS DE COMMANDE TAB ==================== */}
           <TabsContent value="bons">
-            {/* Sub-tabs for Factures and Monsieur */}
-            <Tabs defaultValue="bons-factures" className="w-full">
-              <TabsList className="bg-slate-800/50 border-b border-slate-700 w-full justify-start mb-4">
-                <TabsTrigger 
-                  value="bons-factures" 
-                  className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-                >
-                  <Printer className="w-4 h-4 mr-2" />
-                  Factures
-                  {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
-                    <Badge className="ml-1 bg-orange-600 text-white text-xs">
-                      {invoices.filter(i => i.validation_status === 'pending').length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                  <TabsTrigger 
-                    value="bons-monsieur" 
-                    className="data-[state=active]:bg-purple-500 data-[state=active]:text-white"
-                  >
-                    <UserCircle className="w-4 h-4 mr-2" />
-                    MANAGER GENERAL
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              {/* Factures Sub-tab */}
-              <TabsContent value="bons-factures">
-            <div className="space-y-4">
-              {/* Header with date filter */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h2 className="text-xl font-bold text-orange-400 flex items-center gap-2">
-                  <Printer className="w-6 h-6" />
-                  Factures
-                  <Badge className="bg-orange-500/20 text-orange-300 text-lg px-3">
-                    {invoices.filter(i => i.validation_status === 'pending').length}
-                  </Badge>
-                </h2>
-                <Input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="bg-slate-800/50 border-slate-700 text-white w-auto"
-                />
-              </div>
-
-              {/* ADMIN: Cancellation Requests */}
-              {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
-                <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-red-400 flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5" />
-                      DEMANDES D'ANNULATION
-                      <Badge className="bg-red-500/30 text-red-300 ml-2">{cancellationRequests.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {cancellationRequests.map(req => (
-                      <div key={req.id} className="flex items-center justify-between gap-2 bg-red-900/20 rounded-lg p-3 border border-red-500/30">
-                        <div className="flex-1">
-                          <p className="text-white font-medium">{req.invoice_number}</p>
-                          <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => approveCancellationRequest(req.id)} className="bg-red-600 hover:bg-red-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />Annuler Facture
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => rejectCancellationRequest(req.id)} className="border-slate-600 text-slate-400">
-                            Refuser
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* MANAGER/ADMIN: Modification Requests */}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && modificationRequests.length > 0 && (
-                <Card className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 border-blue-500/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-blue-400 flex items-center gap-2">
-                      <Edit2 className="w-5 h-5" />
-                      DEMANDES DE MODIFICATION
-                      <Badge className="bg-blue-500/30 text-blue-300 ml-2">{modificationRequests.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {modificationRequests.map(req => (
-                      <div key={req.id} className="flex items-center justify-between gap-2 bg-blue-900/20 rounded-lg p-3 border border-blue-500/30">
-                        <div className="flex-1">
-                          <p className="text-white font-medium">{req.invoice_number}</p>
-                          <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => approveModificationRequest(req.id)} className="bg-blue-600 hover:bg-blue-700">
-                            <CheckCircle className="w-4 h-4 mr-1" />Autoriser
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => rejectModificationRequest(req.id)} className="border-slate-600 text-slate-400">
-                            Refuser
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* All pending invoices */}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-                <div className="mb-4 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
-                  <p className="text-orange-300 text-sm flex items-center gap-2">
-                    <Printer className="w-4 h-4" />
-                    <span><strong>Workflow:</strong> 1. Imprimer les bons (Cuisine/Bar/Jeux) → 2. Cliquer sur "Bon-Client" pour transformer le bon en facture définitive</span>
-                  </p>
-                </div>
-              )}
-              {invoices.filter(i => i.validation_status === 'pending' && 
-                (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-              ).length === 0 ? (
-                <Card className="bg-slate-800/30 border-slate-700">
-                  <CardContent className="py-12 text-center">
-                    <Printer className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Aucun facture en attente</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-3">
-                  {invoices.filter(i => i.validation_status === 'pending' && 
-                    (currentUser?.role !== 'server' || i.created_by === (currentUser?.full_name || currentUser?.username))
-                  ).map(invoice => (
-                    <Card key={invoice.id} className="bg-gradient-to-br from-orange-900/20 to-amber-800/10 border-orange-500/30">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex-1 cursor-pointer min-w-0" onClick={() => setViewInvoice(invoice)}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-white font-bold text-lg">{invoice.invoice_number}</span>
-                              {invoice.table_number && (
-                                <Badge className="bg-amber-500/30 text-amber-300">Table {invoice.table_number}</Badge>
-                              )}
-                              {invoice.modification_allowed && (
-                                <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Modif. autorisée</Badge>
-                              )}
-                            </div>
-                            <p className="text-slate-400 text-sm">
-                              {invoice.customer_name} • <span className="text-amber-400 font-bold">{formatPrice(invoice.total)} F</span>
-                            </p>
-                            <p className="text-slate-500 text-xs">
-                              Par: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
-                            </p>
-                            {/* Show items preview */}
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {invoice.items?.slice(0, 4).map((item, idx) => (
-                                <span key={idx} className="text-xs bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded">
-                                  {item.quantity}x {item.name}
-                                </span>
-                              ))}
-                              {invoice.items?.length > 4 && (
-                                <span className="text-xs text-slate-500">+{invoice.items.length - 4} autres</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-1 shrink-0 flex-wrap">
-                            {/* Print buttons - Manager/Admin only */}
-                            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                              <>
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => printKitchenOrder(invoice)}
-                                  className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                                  title="Cuisine"
-                                >
-                                  <Printer className="w-4 h-4 mr-1" />
-                                  <span className="hidden sm:inline">Cuisine</span>
-                                </Button>
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => printBarOrder(invoice)}
-                                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
-                                  title="Bar"
-                                >
-                                  <Wine className="w-4 h-4 mr-1" />
-                                  <span className="hidden sm:inline">Bar</span>
-                                </Button>
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => printGamesOrder(invoice)}
-                                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                                  title="Jeux"
-                                >
-                                  <Gamepad2 className="w-4 h-4 mr-1" />
-                                  <span className="hidden sm:inline">Jeux</span>
-                                </Button>
-                              </>
-                            )}
-                            <Button 
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setViewInvoice(invoice)}
-                              className="text-slate-400 hover:text-white"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            {/* Server: request or edit */}
-                            {currentUser?.role === 'server' && invoice.created_by === (currentUser?.full_name || currentUser?.username) && (
-                              invoice.modification_allowed ? (
-                                <Button 
-                                  size="sm"
-                                  onClick={() => startEditingInvoice(invoice)}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                                >
-                                  <Edit2 className="w-4 h-4 mr-1" />
-                                  Modifier
-                                </Button>
-                              ) : (
-                                <Button 
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => requestModification(invoice)}
-                                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                                  disabled={modificationRequests.some(r => r.invoice_id === invoice.id)}
-                                >
-                                  {modificationRequests.some(r => r.invoice_id === invoice.id) ? (
-                                    <span className="text-xs">Envoyé</span>
-                                  ) : (
-                                    <span className="text-xs">Demander modif.</span>
-                                  )}
-                                </Button>
-                              )
-                            )}
-                            {/* Manager/Admin: Transform to Invoice */}
-                            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-                              <>
-                                <Button 
-                                  size="sm"
-                                  onClick={() => validateInvoice(invoice.id)}
-                                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
-                                >
-                                  <FileText className="w-4 h-4 mr-1" />
-                                  Bon-Client
-                                </Button>
-                                <Button 
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => deleteInvoice(invoice.id)}
-                                  className="text-red-400 hover:text-red-300"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-              </TabsContent>
-
-              {/* Monsieur Sub-tab - Manager and Admin */}
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                <TabsContent value="bons-monsieur">
-                  <MonsieurTab 
-                    currentUser={currentUser}
-                    formatPrice={formatPrice}
-                    products={products}
-                  />
-                </TabsContent>
-              )}
-            </Tabs>
+            <BonsTab
+              currentUser={currentUser}
+              invoices={invoices}
+              products={products}
+              cancellationRequests={cancellationRequests}
+              modificationRequests={modificationRequests}
+              filterDate={filterDate}
+              setFilterDate={setFilterDate}
+              approveCancellationRequest={approveCancellationRequest}
+              rejectCancellationRequest={rejectCancellationRequest}
+              approveModificationRequest={approveModificationRequest}
+              rejectModificationRequest={rejectModificationRequest}
+              printKitchenOrder={printKitchenOrder}
+              printBarOrder={printBarOrder}
+              printGamesOrder={printGamesOrder}
+              setViewInvoice={setViewInvoice}
+              startEditingInvoice={startEditingInvoice}
+              requestModification={requestModification}
+              validateInvoice={validateInvoice}
+              deleteInvoice={deleteInvoice}
+            />
           </TabsContent>
 
           {/* ==================== INVOICES TAB ==================== */}
@@ -5194,252 +4942,20 @@ _Gérante - Espace Maxo_
 
           {/* ==================== STATS TAB ==================== */}
           <TabsContent value="stats">
-            <div className="space-y-4">
-              {/* Month selector - full width on mobile */}
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
-                <Input
-                  type="month"
-                  value={filterMonth}
-                  onChange={(e) => setFilterMonth(e.target.value)}
-                  className="bg-slate-800/50 border-slate-700 text-white w-full sm:w-auto"
-                />
-              </div>
-
-              {monthlyStats && (
-                <>
-                  {/* Main revenue card - prominent on mobile */}
-                  <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
-                    <CardContent className="p-4 sm:p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-slate-400 text-sm">Chiffre d'affaires du mois</p>
-                          <p className="text-2xl sm:text-3xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
-                        </div>
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500/20 rounded-full flex items-center justify-center">
-                          <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500" />
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-amber-500/20">
-                        <p className="text-slate-400 text-xs">
-                          {monthlyStats.validated_invoices} factures validées sur {monthlyStats.total_invoices} total
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Department breakdown - 2 columns on mobile, 5 on desktop */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-                    <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <TreePine className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                          <p className="text-slate-400 text-xs">Salle & Jardin</p>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                          <p className="text-slate-400 text-xs">Jeux</p>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Wine className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
-                          <p className="text-slate-400 text-xs">Bar</p>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                          <p className="text-slate-400 text-xs">Location</p>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30 col-span-2 sm:col-span-1">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-                          <p className="text-slate-400 text-xs">Autres</p>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Daily breakdown - mobile optimized */}
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardHeader className="pb-2 px-3 sm:px-6">
-                      <CardTitle className="text-white text-base sm:text-lg flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-                        Détail par jour
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-2 sm:px-6">
-                      <div className="space-y-1.5 sm:space-y-2 max-h-[350px] sm:max-h-[400px] overflow-y-auto">
-                        {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => (
-                          <div key={date} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-white font-medium text-sm sm:text-base truncate">
-                                {format(new Date(date), "EEE d MMM", { locale: fr })}
-                              </p>
-                              <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}</p>
-                            </div>
-                            <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
-                              {formatPrice(data.revenue)} F
-                            </p>
-                          </div>
-                        ))}
-                        {Object.keys(monthlyStats.daily_stats || {}).length === 0 && (
-                          <p className="text-slate-500 text-center py-8 text-sm">Aucune donnée pour ce mois</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </>
-              )}
-
-              {!monthlyStats && (
-                <div className="text-center py-12">
-                  <BarChart3 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-500">Chargement des statistiques...</p>
-                </div>
-              )}
-
-              {/* ==================== RAPPORT JOURNALIER (ex-onglet Rapport) ==================== */}
-              <div className="border-t border-slate-700/50 pt-6 mt-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Rapport Journalier</h2>
-                    <p className="text-slate-400 text-sm">Point de caisse quotidien</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      type="date"
-                      value={rapportDate}
-                      onChange={(e) => setRapportDate(e.target.value)}
-                      className="bg-slate-800/50 border-slate-700 text-white"
-                    />
-                    <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Actualiser
-                    </Button>
-                  </div>
-                </div>
-
-                {rapportData ? (
-                  <div className="space-y-4 mt-4">
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-                        <CardContent className="p-4 text-center">
-                          <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
-                          <p className="text-slate-400 text-sm">Factures Total</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-                        <CardContent className="p-4 text-center">
-                          <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-green-400">{rapportData.validatedInvoices}</p>
-                          <p className="text-slate-400 text-sm">Validees</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30">
-                        <CardContent className="p-4 text-center">
-                          <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
-                          <p className="text-3xl font-bold text-yellow-400">{rapportData.pendingInvoices}</p>
-                          <p className="text-slate-400 text-sm">En attente</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
-                        <CardContent className="p-4 text-center">
-                          <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-                          <p className="text-2xl font-bold text-amber-500">{formatPrice(rapportData.validatedRevenue)} F</p>
-                          <p className="text-slate-400 text-sm">CA Valide</p>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* By Server */}
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <Users className="w-5 h-5 text-blue-400" />
-                          Recapitulatif par Serveur
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-slate-700">
-                              <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Validees</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
-                              <th className="text-right py-2 text-slate-400 text-sm">Total</th>
-                              <th className="text-center py-2 text-slate-400 text-sm">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Object.entries(rapportData.byServer).map(([server, data]) => (
-                              <tr key={server} className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer" onClick={() => viewServerDetail(server)}>
-                                <td className="py-3 text-white font-medium">{server}</td>
-                                <td className="py-3 text-center text-slate-300">{data.count}</td>
-                                <td className="py-3 text-center text-green-400">{data.validated}</td>
-                                <td className="py-3 text-center text-yellow-400">{data.pending}</td>
-                                <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
-                                <td className="py-3 text-center">
-                                  <Button size="sm" variant="ghost" className="text-blue-400" onClick={(e) => { e.stopPropagation(); viewServerDetail(server); }}>
-                                    <Eye className="w-4 h-4 mr-1" />Detail
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </CardContent>
-                    </Card>
-
-                    {/* Signature & PDF */}
-                    <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
-                      <CardHeader>
-                        <CardTitle className="text-amber-400">Generer le Rapport PDF</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-slate-300">Signature numerique (Gerante)</Label>
-                          <Input value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Tapez votre nom pour signer..." className="bg-slate-700/50 border-slate-600 text-white font-serif italic text-lg" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Button onClick={generateRapportPDF} className="bg-amber-500 hover:bg-amber-600 text-white"><Printer className="w-4 h-4 mr-2" />Imprimer</Button>
-                          <Button onClick={generateRapportPDF} variant="outline" className="border-amber-500 text-amber-500"><Download className="w-4 h-4 mr-2" />PDF</Button>
-                        </div>
-                        <Button onClick={sendRapportWhatsApp} className="w-full bg-green-600 hover:bg-green-700 text-white">
-                          <MessageCircle className="w-5 h-5 mr-2" />Envoyer par WhatsApp
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                ) : (
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="py-8 text-center">
-                      <p className="text-slate-500">Cliquez "Actualiser" pour charger le rapport</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
+            <StatsTab
+              filterMonth={filterMonth}
+              setFilterMonth={setFilterMonth}
+              monthlyStats={monthlyStats}
+              rapportDate={rapportDate}
+              setRapportDate={setRapportDate}
+              rapportData={rapportData}
+              fetchRapportData={fetchRapportData}
+              signature={signature}
+              setSignature={setSignature}
+              generateRapportPDF={generateRapportPDF}
+              sendRapportWhatsApp={sendRapportWhatsApp}
+              viewServerDetail={viewServerDetail}
+            />
           </TabsContent>
 
           {/* ==================== PRODUCTS TAB ==================== */}

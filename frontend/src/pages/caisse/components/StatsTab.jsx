@@ -1,0 +1,285 @@
+/**
+ * StatsTab - Statistiques & Rapport journalier
+ * Affiche le CA du mois par département + le rapport journalier signable.
+ * Toute la data vient en props depuis CaissePage.jsx.
+ */
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Calendar, TrendingUp, TreePine, Gamepad2, Wine, Package,
+  BarChart3, FileText, CheckCircle, Clock, Users, Eye, Printer,
+  Download, MessageCircle, RefreshCw
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
+const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
+
+const StatsTab = ({
+  filterMonth,
+  setFilterMonth,
+  monthlyStats,
+  rapportDate,
+  setRapportDate,
+  rapportData,
+  fetchRapportData,
+  signature,
+  setSignature,
+  generateRapportPDF,
+  sendRapportWhatsApp,
+  viewServerDetail,
+}) => (
+  <div className="space-y-4" data-testid="stats-tab">
+    {/* Month selector */}
+    <div className="flex items-center gap-2">
+      <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
+      <Input
+        type="month"
+        value={filterMonth}
+        onChange={(e) => setFilterMonth(e.target.value)}
+        className="bg-slate-800/50 border-slate-700 text-white w-full sm:w-auto"
+        data-testid="stats-month-picker"
+      />
+    </div>
+
+    {monthlyStats && (
+      <>
+        <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">Chiffre d'affaires du mois</p>
+                <p className="text-2xl sm:text-3xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
+              </div>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500/20 rounded-full flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500" />
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-amber-500/20">
+              <p className="text-slate-400 text-xs">
+                {monthlyStats.validated_invoices} factures validées sur {monthlyStats.total_invoices} total
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+          <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <TreePine className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                <p className="text-slate-400 text-xs">Salle & Jardin</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                <p className="text-slate-400 text-xs">Jeux</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Wine className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+                <p className="text-slate-400 text-xs">Bar</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                <p className="text-slate-400 text-xs">Location</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30 col-span-2 sm:col-span-1">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+                <p className="text-slate-400 text-xs">Autres</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle className="text-white text-base sm:text-lg flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+              Détail par jour
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 sm:px-6">
+            <div className="space-y-1.5 sm:space-y-2 max-h-[350px] sm:max-h-[400px] overflow-y-auto">
+              {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => (
+                <div key={date} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white font-medium text-sm sm:text-base truncate">
+                      {format(new Date(date), "EEE d MMM", { locale: fr })}
+                    </p>
+                    <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}</p>
+                  </div>
+                  <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
+                    {formatPrice(data.revenue)} F
+                  </p>
+                </div>
+              ))}
+              {Object.keys(monthlyStats.daily_stats || {}).length === 0 && (
+                <p className="text-slate-500 text-center py-8 text-sm">Aucune donnée pour ce mois</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    )}
+
+    {!monthlyStats && (
+      <div className="text-center py-12">
+        <BarChart3 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+        <p className="text-slate-500">Chargement des statistiques...</p>
+      </div>
+    )}
+
+    {/* ==================== RAPPORT JOURNALIER ==================== */}
+    <div className="border-t border-slate-700/50 pt-6 mt-6" data-testid="stats-rapport-section">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Rapport Journalier</h2>
+          <p className="text-slate-400 text-sm">Point de caisse quotidien</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Input
+            type="date"
+            value={rapportDate}
+            onChange={(e) => setRapportDate(e.target.value)}
+            className="bg-slate-800/50 border-slate-700 text-white"
+            data-testid="stats-rapport-date"
+          />
+          <Button onClick={() => fetchRapportData()} variant="outline" className="border-slate-600 text-slate-300" data-testid="stats-rapport-refresh">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Actualiser
+          </Button>
+        </div>
+      </div>
+
+      {rapportData ? (
+        <div className="space-y-4 mt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
+              <CardContent className="p-4 text-center">
+                <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-blue-400">{rapportData.totalInvoices}</p>
+                <p className="text-slate-400 text-sm">Factures Total</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
+              <CardContent className="p-4 text-center">
+                <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-green-400">{rapportData.validatedInvoices}</p>
+                <p className="text-slate-400 text-sm">Validees</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30">
+              <CardContent className="p-4 text-center">
+                <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-yellow-400">{rapportData.pendingInvoices}</p>
+                <p className="text-slate-400 text-sm">En attente</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
+              <CardContent className="p-4 text-center">
+                <TrendingUp className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-amber-500">{formatPrice(rapportData.validatedRevenue)} F</p>
+                <p className="text-slate-400 text-sm">CA Valide</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-400" />
+                Recapitulatif par Serveur
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
+                    <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
+                    <th className="text-center py-2 text-slate-400 text-sm">Validees</th>
+                    <th className="text-center py-2 text-slate-400 text-sm">En attente</th>
+                    <th className="text-right py-2 text-slate-400 text-sm">Total</th>
+                    <th className="text-center py-2 text-slate-400 text-sm">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(rapportData.byServer).map(([server, data]) => (
+                    <tr key={server} className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer" onClick={() => viewServerDetail(server)}>
+                      <td className="py-3 text-white font-medium">{server}</td>
+                      <td className="py-3 text-center text-slate-300">{data.count}</td>
+                      <td className="py-3 text-center text-green-400">{data.validated}</td>
+                      <td className="py-3 text-center text-yellow-400">{data.pending}</td>
+                      <td className="py-3 text-right text-amber-400 font-bold">{formatPrice(data.total)} F</td>
+                      <td className="py-3 text-center">
+                        <Button size="sm" variant="ghost" className="text-blue-400" onClick={(e) => { e.stopPropagation(); viewServerDetail(server); }}>
+                          <Eye className="w-4 h-4 mr-1" />Detail
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 border-amber-500/30">
+            <CardHeader>
+              <CardTitle className="text-amber-400">Generer le Rapport PDF</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Signature numerique (Gerante)</Label>
+                <Input
+                  value={signature}
+                  onChange={(e) => setSignature(e.target.value)}
+                  placeholder="Tapez votre nom pour signer..."
+                  className="bg-slate-700/50 border-slate-600 text-white font-serif italic text-lg"
+                  data-testid="stats-signature-input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Button onClick={generateRapportPDF} className="bg-amber-500 hover:bg-amber-600 text-white"><Printer className="w-4 h-4 mr-2" />Imprimer</Button>
+                <Button onClick={generateRapportPDF} variant="outline" className="border-amber-500 text-amber-500"><Download className="w-4 h-4 mr-2" />PDF</Button>
+              </div>
+              <Button onClick={sendRapportWhatsApp} className="w-full bg-green-600 hover:bg-green-700 text-white">
+                <MessageCircle className="w-5 h-5 mr-2" />Envoyer par WhatsApp
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="py-8 text-center">
+            <p className="text-slate-500">Cliquez "Actualiser" pour charger le rapport</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  </div>
+);
+
+export default StatsTab;
