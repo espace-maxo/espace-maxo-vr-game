@@ -7112,6 +7112,8 @@ _Gérante - Espace Maxo_
                   generateWeeklyPDF={generateWeeklyPDF}
                   sendWeeklyWhatsApp={sendWeeklyWhatsApp}
                   formatPrice={formatPrice}
+                  API={API}
+                  refreshWeekly={fetchWeeklyReport}
                 />
               </TabsContent>
 

@@ -1,14 +1,18 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
-  Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2
+  Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2,
+  Link, Check
 } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
+import axios from "axios";
+import { toast } from "sonner";
 
 const HebdoReport = ({ 
   weeklyReport, 
@@ -16,8 +20,72 @@ const HebdoReport = ({
   setWeekStartDate, 
   generateWeeklyPDF, 
   sendWeeklyWhatsApp, 
-  formatPrice 
+  formatPrice,
+  API,
+  refreshWeekly
 }) => {
+  const [showAttach, setShowAttach] = useState(false);
+  const [unlinkedInvoices, setUnlinkedInvoices] = useState([]);
+  const [unlinkedExpenses, setUnlinkedExpenses] = useState([]);
+  const [selectedInvoices, setSelectedInvoices] = useState([]);
+  const [selectedExpenses, setSelectedExpenses] = useState([]);
+  const [attachDateFrom, setAttachDateFrom] = useState("");
+  const [attachDateTo, setAttachDateTo] = useState("");
+  const [loadingAttach, setLoadingAttach] = useState(false);
+
+  const searchUnlinked = async () => {
+    if (!attachDateFrom) { toast.error("Selectionnez une date de debut"); return; }
+    setLoadingAttach(true);
+    try {
+      const from = attachDateFrom;
+      const to = attachDateTo || attachDateFrom;
+      // Fetch invoices and expenses for the date range
+      const [invRes, expRes] = await Promise.all([
+        axios.get(`${API}/invoices`, { params: { date_from: from, date_to: to } }),
+        axios.get(`${API}/expenses`)
+      ]);
+      const allInv = (invRes.data.invoices || []).filter(i => i.validation_status === "validated");
+      const allExp = (expRes.data.expenses || []);
+      
+      // Filter by date range
+      const filteredExp = allExp.filter(e => {
+        const d = (e.created_at || "").slice(0, 10);
+        return d >= from && d <= to;
+      });
+      
+      setUnlinkedInvoices(allInv);
+      setUnlinkedExpenses(filteredExp);
+      setSelectedInvoices([]);
+      setSelectedExpenses([]);
+    } catch (e) {
+      toast.error("Erreur de recherche");
+    }
+    setLoadingAttach(false);
+  };
+
+  const attachSelected = async () => {
+    if (selectedInvoices.length === 0 && selectedExpenses.length === 0) {
+      toast.error("Selectionnez au moins un element");
+      return;
+    }
+    try {
+      const promises = [];
+      if (selectedInvoices.length > 0) {
+        promises.push(axios.post(`${API}/invoices/assign-week-bulk`, { ids: selectedInvoices, week_start: weekStartDate }));
+      }
+      if (selectedExpenses.length > 0) {
+        promises.push(axios.post(`${API}/expenses/assign-week-bulk`, { ids: selectedExpenses, week_start: weekStartDate }));
+      }
+      await Promise.all(promises);
+      toast.success(`${selectedInvoices.length + selectedExpenses.length} element(s) rattache(s) a cette semaine`);
+      setShowAttach(false);
+      setSelectedInvoices([]);
+      setSelectedExpenses([]);
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) {
+      toast.error("Erreur de rattachement");
+    }
+  };
   // Generate list of last 12 weeks (Lundi-Dimanche)
   const weekOptions = useMemo(() => {
     const weeks = [];
@@ -132,10 +200,92 @@ const HebdoReport = ({
                 <MessageCircle className="w-4 h-4 mr-1" />
                 WhatsApp
               </Button>
+              <Button 
+                size="sm"
+                onClick={() => setShowAttach(!showAttach)}
+                className={showAttach ? "bg-cyan-700 hover:bg-cyan-800" : "bg-cyan-600 hover:bg-cyan-700"}
+                data-testid="attach-btn"
+              >
+                <Link className="w-4 h-4 mr-1" />
+                Rattacher
+              </Button>
             </>
           )}
         </div>
       </div>
+
+      {/* Attach panel */}
+      {showAttach && (
+        <Card className="bg-cyan-900/20 border-cyan-700/50">
+          <CardContent className="p-4 space-y-3">
+            <h3 className="text-cyan-400 font-bold flex items-center gap-2"><Link className="w-4 h-4" /> Rattacher des produits/charges a cette semaine</h3>
+            <p className="text-slate-400 text-xs">Recherchez par date les factures validees et charges a rattacher au Point Hebdo de la semaine selectionnee.</p>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Date debut</label>
+                <Input type="date" value={attachDateFrom} onChange={e => setAttachDateFrom(e.target.value)} className="bg-slate-800 border-slate-700 text-white h-8 w-40" data-testid="attach-date-from" />
+              </div>
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Date fin</label>
+                <Input type="date" value={attachDateTo} onChange={e => setAttachDateTo(e.target.value)} className="bg-slate-800 border-slate-700 text-white h-8 w-40" data-testid="attach-date-to" />
+              </div>
+              <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 h-8" onClick={searchUnlinked} disabled={loadingAttach} data-testid="attach-search-btn">
+                Rechercher
+              </Button>
+            </div>
+
+            {/* Results */}
+            {(unlinkedInvoices.length > 0 || unlinkedExpenses.length > 0) && (
+              <div className="space-y-3">
+                {/* Invoices (Produits / Ventes) */}
+                {unlinkedInvoices.length > 0 && (
+                  <div>
+                    <p className="text-green-400 text-sm font-medium mb-1">Ventes / Factures ({unlinkedInvoices.length})</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {unlinkedInvoices.map(inv => (
+                        <label key={inv.id} className={`flex items-center gap-2 bg-slate-800/50 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/70 ${selectedInvoices.includes(inv.id) ? 'ring-1 ring-cyan-500/50' : ''}`}>
+                          <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={selectedInvoices.includes(inv.id)} onChange={() => setSelectedInvoices(p => p.includes(inv.id) ? p.filter(x => x !== inv.id) : [...p, inv.id])} />
+                          <span className="text-white text-xs flex-1">{inv.invoice_number || inv.id.slice(0, 8)}</span>
+                          <span className="text-slate-400 text-xs">{(inv.created_at || "").slice(0, 10)}</span>
+                          <span className="text-green-400 text-xs font-bold">{formatPrice(inv.total)} F</span>
+                          {inv.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{inv.assigned_week.slice(5)}</Badge>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expenses (Charges) */}
+                {unlinkedExpenses.length > 0 && (
+                  <div>
+                    <p className="text-red-400 text-sm font-medium mb-1">Charges / Depenses ({unlinkedExpenses.length})</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {unlinkedExpenses.map(exp => (
+                        <label key={exp.id} className={`flex items-center gap-2 bg-slate-800/50 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/70 ${selectedExpenses.includes(exp.id) ? 'ring-1 ring-cyan-500/50' : ''}`}>
+                          <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={selectedExpenses.includes(exp.id)} onChange={() => setSelectedExpenses(p => p.includes(exp.id) ? p.filter(x => x !== exp.id) : [...p, exp.id])} />
+                          <span className="text-white text-xs flex-1">{exp.description}</span>
+                          <span className="text-slate-400 text-xs">{(exp.created_at || "").slice(0, 10)}</span>
+                          <span className="text-red-400 text-xs font-bold">{formatPrice(exp.amount)} F</span>
+                          {exp.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{exp.assigned_week.slice(5)}</Badge>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={attachSelected} data-testid="attach-confirm-btn">
+                    <Check className="w-3 h-3 mr-1" /> Rattacher {selectedInvoices.length + selectedExpenses.length} element(s) a cette semaine
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-slate-400" onClick={() => { setShowAttach(false); setUnlinkedInvoices([]); setUnlinkedExpenses([]); }}>Fermer</Button>
+                </div>
+              </div>
+            )}
+
+            {loadingAttach && <p className="text-slate-400 text-sm">Recherche en cours...</p>}
+          </CardContent>
+        </Card>
+      )}
 
       {weeklyReport ? (
         <div className="space-y-4">

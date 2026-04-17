@@ -5478,6 +5478,32 @@ async def assign_expense_to_week(expense_id: str, week_start: str = Body(..., em
         logger.error(f"Error assigning expense to week: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.put("/invoices/{invoice_id}/assign-week")
+async def assign_invoice_to_week(invoice_id: str, week_start: str = Body(..., embed=True)):
+    """Assign an invoice to a specific week"""
+    try:
+        invoice = await db.invoices.find_one({"id": invoice_id})
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {"assigned_week": week_start}})
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/invoices/assign-week-bulk")
+async def assign_invoices_bulk(ids: List[str] = Body(...), week_start: str = Body(...)):
+    """Assign multiple invoices to a specific week"""
+    result = await db.invoices.update_many({"id": {"$in": ids}}, {"$set": {"assigned_week": week_start}})
+    return {"success": True, "modified": result.modified_count}
+
+@api_router.post("/expenses/assign-week-bulk")
+async def assign_expenses_bulk(ids: List[str] = Body(...), week_start: str = Body(...)):
+    """Assign multiple expenses to a specific week"""
+    result = await db.expenses.update_many({"id": {"$in": ids}}, {"$set": {"assigned_week": week_start}})
+    return {"success": True, "modified": result.modified_count}
+
 # ============== MONSIEUR ORDERS (Owner's meal orders) ==============
 
 @api_router.get("/monsieur-orders")
@@ -5747,9 +5773,20 @@ async def get_weekly_report(week_start: Optional[str] = None):
         
         # Get validated invoices (sales) for the week
         invoices = await db.invoices.find({
-            "validation_status": "validated",
-            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
+            "$or": [
+                {"validation_status": "validated", "created_at": {"$gte": start_str, "$lte": end_str + "Z"}},
+                {"validation_status": "validated", "assigned_week": start_str}
+            ]
         }, {"_id": 0}).to_list(1000)
+        # Deduplicate (an invoice assigned to this week AND created this week)
+        seen_ids = set()
+        unique_invoices = []
+        for inv in invoices:
+            iid = inv.get("id", inv.get("invoice_number", ""))
+            if iid not in seen_ids:
+                seen_ids.add(iid)
+                unique_invoices.append(inv)
+        invoices = unique_invoices
         
         # Get ALL expenses for the week (completed, approved, or assigned to this week)
         all_expenses = await db.expenses.find({
@@ -5781,14 +5818,23 @@ async def get_weekly_report(week_start: Optional[str] = None):
         # Aggregate sales by day
         total_sales = 0
         for invoice in invoices:
-            date = invoice.get("created_at", "")[:10]
-            if date in daily_data:
-                daily_data[date]["sales"]["count"] += 1
-                daily_data[date]["sales"]["total"] += invoice.get("total", 0)
-                daily_data[date]["sales"]["items"].append({
-                    "invoice_id": invoice.get("invoice_id"),
+            # Determine date: assigned_week takes priority
+            if invoice.get("assigned_week") == start_str:
+                inv_date = invoice.get("created_at", "")[:10]
+                if inv_date < start_str or inv_date > end_str[:10]:
+                    inv_date = start_str  # Assign to Monday if outside week
+            else:
+                inv_date = invoice.get("created_at", "")[:10]
+            
+            if inv_date in daily_data:
+                daily_data[inv_date]["sales"]["count"] += 1
+                daily_data[inv_date]["sales"]["total"] += invoice.get("total", 0)
+                daily_data[inv_date]["sales"]["items"].append({
+                    "id": invoice.get("id"),
+                    "invoice_number": invoice.get("invoice_number"),
                     "total": invoice.get("total", 0),
-                    "items_count": len(invoice.get("items", []))
+                    "items_count": len(invoice.get("items", [])),
+                    "assigned_week": invoice.get("assigned_week")
                 })
             total_sales += invoice.get("total", 0)
         
