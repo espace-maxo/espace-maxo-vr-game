@@ -4,6 +4,20 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (17/04/2026 - Session 4)
+
+### Bug Fix P0 - Reversement/Hebdo Concordance (DONE)
+- **Bug**: `/api/reports/revenue-by-payment` ignorait `assigned_week`, contrairement à `/api/reports/weekly`. Les totaux du Reversement ne concordaient donc plus avec Hebdo quand des factures étaient rattachées à une autre semaine.
+- **Fix**: L'endpoint respecte désormais `assigned_week` en excluant les factures transférées vers d'autres semaines et en incluant celles rattachées à la semaine courante (mode weekly) ou au jour considéré (mode daily).
+- **Normalisation ajoutée**: `mobile_money→mobile`, `especes/espèces→cash`, `cheque/chèque→cheque`, `bon-client/credit→wallet`.
+- Tests : 12/12 backend + UI PASSED (iteration_30)
+
+### Détail dans "Activité & Historique" (DONE)
+- Ajout d'un tableau détaillé des **factures validées** du jour (data-testid=`activity-validated-invoices`) : Facture, Client, Serveur, Mode, Total, Heure.
+- Ajout d'un tableau détaillé des **dépenses complétées** du jour (data-testid=`activity-completed-expenses`) : Description, Fournisseur, Catégorie, Montant, Heure.
+- Les totaux affichés dans les titres concordent avec les cartes résumés (CA VALIDÉ / DÉPENSES).
+
+---
 ## Recent Updates (16/04/2026 - Session 3)
 
 ### Rapports Stock Filtrables avec Export PDF/Excel (DONE)
@@ -52,14 +66,16 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ## Prioritized Backlog
 
 ### P0 (Completed)
+- [x] Bug Reversement/Hebdo concordance via assigned_week (17/04/2026)
+- [x] Détail factures/dépenses dans Activité & Historique (17/04/2026)
 - [x] Rapports Stock filtrables + Export PDF/Excel (16/04/2026)
 - [x] Fiches Techniques / Recettes (16/04/2026)
 - [x] Liaison Achats/Ventes Caisse <-> Stock (16/04/2026)
 
 ### P1 (Next)
-- [ ] Module Inventaire physique (stock reel vs theorique, calcul ecarts)
+- [x] Module Inventaire physique (DONE session précédente)
+- [ ] Alertes de péremption sur le dashboard Stock (produits proches de la DLC)
 
 ### P2
-- [ ] Alertes de peremption sur le dashboard Stock
 - [ ] Mot de passe oublie via Email (Resend)
-- [ ] Refactoring CaissePage.jsx et server.py
+- [ ] Refactoring CaissePage.jsx (~8900 lignes) et server.py (~7700 lignes)
