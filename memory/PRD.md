@@ -6,6 +6,19 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Refactoring Phase 2 (DONE)
+Continuation du refactoring pour réduire les monolithes.
+
+**Frontend** (`CaissePage.jsx`: 8348 → 8318 lignes) :
+- `ProductsTab.jsx` (102 lignes) - Gestion des produits par département avec data-testid `products-tab`, `add-product-btn`, `edit-product-{id}`, `delete-product-{id}`
+
+**Backend** (`server.py`: 7311 → 6889 lignes, -422) :
+- `routers/caisse_users.py` (203 lignes) - 5 endpoints + models CaisseUser/CaisseUserCreate
+- `routers/reports.py` (416 lignes) - 4 endpoints : `/invoices/stats`, `/invoices/stats/monthly`, `/analytics/dashboard`, `/reports/revenue-by-payment`
+- **Fix critique** : `api_router.include_router()` déplacés en haut du fichier pour garantir que les paths statiques (ex: `/invoices/stats`) prennent la priorité sur les dynamiques (`/invoices/{invoice_id}`).
+
+Régression validée : 14/14 tests backend + toute UI (iteration_33).
+
 ### Dashboard Analytics Admin (DONE)
 Nouveau module analytics visible UNIQUEMENT pour l'admin.
 
