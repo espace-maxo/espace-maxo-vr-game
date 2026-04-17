@@ -6,6 +6,21 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Refactoring Progressif - Phase 1 (DONE)
+Extraction de tabs et endpoints depuis les monolithes pour réduire le contexte et prévenir les régressions (problème récurrent x8).
+
+**Frontend** (`CaissePage.jsx`: 8657 → 8348 lignes, -309) :
+- `ActiviteTab.jsx` (301 lignes) - data-testid `activite-tab`
+- `UsersTab.jsx` (92 lignes) - data-testid `users-tab`, `add-user-btn`, `edit-user-{id}`, `delete-user-{id}`
+- `ClientsTab.jsx` (83 lignes) - data-testid `clients-tab`, `add-client-btn`, `edit-client-{id}`, `delete-client-{id}`
+
+**Backend** (`server.py`: 7747 → 7311 lignes, -436) :
+- `routers/financial_points.py` (460 lignes) - 9 endpoints migrés vers un router dédié :
+  `GET/POST /financial-points`, `GET/PUT/DELETE /financial-points/{id}`,
+  `POST /financial-points/{id}/sign`, `/admin-validate`, `/unlock`, `GET /financial-points/{id}/pdf`
+
+Régression validée : 26/26 tests passés (iteration_31).
+
 ### Bug Fix P0 - Reversement/Hebdo Concordance (DONE)
 - **Bug**: `/api/reports/revenue-by-payment` ignorait `assigned_week`, contrairement à `/api/reports/weekly`. Les totaux du Reversement ne concordaient donc plus avec Hebdo quand des factures étaient rattachées à une autre semaine.
 - **Fix**: L'endpoint respecte désormais `assigned_week` en excluant les factures transférées vers d'autres semaines et en incluant celles rattachées à la semaine courante (mode weekly) ou au jour considéré (mode daily).
