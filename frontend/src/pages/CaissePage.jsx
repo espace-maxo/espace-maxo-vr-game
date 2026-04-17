@@ -4762,7 +4762,7 @@ _Gérante - Espace Maxo_
                     </Badge>
                   )}
                 </TabsTrigger>
-                {currentUser?.role === 'manager' && (
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                   <TabsTrigger 
                     value="bons-monsieur" 
                     className="data-[state=active]:bg-purple-500 data-[state=active]:text-white"
@@ -5011,8 +5011,8 @@ _Gérante - Espace Maxo_
             </div>
               </TabsContent>
 
-              {/* Monsieur Sub-tab - Manager only */}
-              {currentUser?.role === 'manager' && (
+              {/* Monsieur Sub-tab - Manager and Admin */}
+              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                 <TabsContent value="bons-monsieur">
                   <MonsieurTab 
                     currentUser={currentUser}
