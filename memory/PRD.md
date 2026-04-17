@@ -6,6 +6,17 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Refactoring Phase 3 (DONE)
+Extraction des deux plus gros onglets restants.
+
+**Frontend** (`CaissePage.jsx`: 8318 → 7834 lignes, -484) :
+- `BonsTab.jsx` (284 lignes) - Bons de commande avec sous-onglets Factures/MANAGER GENERAL. data-testid: `bons-tab`, `bons-filter-date`
+- `StatsTab.jsx` (285 lignes) - Statistiques & Rapport avec rapport journalier signable. data-testid: `stats-tab`, `stats-month-picker`, `stats-rapport-date`, `stats-rapport-refresh`, `stats-signature-input`, `stats-rapport-section`
+
+**Bug corrigé en cours** : l'onglet Statistiques & Rapport était visible aux serveurs alors qu'il doit être admin-only. Condition corrigée ligne 3774.
+
+Régression validée : 15/15 tests backend + 25+ UI (iteration_34).
+
 ### Refactoring Phase 2 (DONE)
 Continuation du refactoring pour réduire les monolithes.
 

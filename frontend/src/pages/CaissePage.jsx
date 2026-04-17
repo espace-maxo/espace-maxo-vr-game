@@ -3770,8 +3770,8 @@ _Gérante - Espace Maxo_
                 <Activity className="w-4 h-4 mr-2" />Activite & Historique
               </TabsTrigger>
             )}
-            {/* 8. STATISTIQUES & RAPPORT */}
-            {currentUser?.role !== 'manager' && (
+            {/* 8. STATISTIQUES & RAPPORT (admin only) */}
+            {currentUser?.role === 'admin' && (
               <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
                 <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
               </TabsTrigger>
