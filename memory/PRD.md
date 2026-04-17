@@ -6,6 +6,22 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Refactoring Phase 4 — Invoices Router (DONE)
+Le plus gros refactoring backend de la session.
+
+**Backend** (`server.py`: 6889 → 6340 lignes, **-549**) :
+- `routers/invoices.py` (568 lignes) - **10 endpoints extraits** :
+  - `POST /invoices` (création)
+  - `GET /invoices` (liste avec filtres date, date_from/date_to, role=server)
+  - `GET /invoices/{id}`, `PUT /invoices/{id}`, `DELETE /invoices/{id}`
+  - `PUT /invoices/{id}/update-items` (modification items)
+  - `GET /invoices/{id}/pdf` (export PDF reportlab)
+  - `PUT /invoices/{id}/assign-week`, `POST /invoices/assign-week-bulk`, `POST /invoices/unassign-week-bulk`
+- **Logique critique préservée** : PUT avec `validation_status=validated` auto-stop la table + sync avec Stock (via recettes OU direct name match)
+- Modèles `Invoice`, `InvoiceCreate`, `InvoiceItemCreate` déplacés dans le router
+
+Régression validée : **26/26 tests backend** passés (iteration_35), 0 bug, incluant le test critique de non-collision de routes.
+
 ### Refactoring Phase 3 (DONE)
 Extraction des deux plus gros onglets restants.
 
