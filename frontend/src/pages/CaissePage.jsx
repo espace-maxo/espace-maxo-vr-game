@@ -7206,6 +7206,7 @@ _Gérante - Espace Maxo_
                   formatPrice={formatPrice}
                   API={API}
                   refreshWeekly={fetchWeeklyReport}
+                  isAdmin={currentUser?.role === 'admin'}
                 />
               </TabsContent>
 

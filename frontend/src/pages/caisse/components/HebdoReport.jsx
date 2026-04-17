@@ -22,7 +22,8 @@ const HebdoReport = ({
   sendWeeklyWhatsApp, 
   formatPrice,
   API,
-  refreshWeekly
+  refreshWeekly,
+  isAdmin
 }) => {
   const [showAttach, setShowAttach] = useState(false);
   const [unlinkedInvoices, setUnlinkedInvoices] = useState([]);
@@ -272,6 +273,8 @@ const HebdoReport = ({
                 <MessageCircle className="w-4 h-4 mr-1" />
                 WhatsApp
               </Button>
+              {isAdmin && (
+              <>
               <Button 
                 size="sm"
                 onClick={() => setShowAttach(!showAttach)}
@@ -290,6 +293,8 @@ const HebdoReport = ({
                 <AlertCircle className="w-4 h-4 mr-1" />
                 Doublons
               </Button>
+              </>
+              )}
             </>
           )}
         </div>
@@ -500,8 +505,8 @@ const HebdoReport = ({
                       {expandedDay === date && (
                       <tr><td colSpan={6} className="p-0">
                         <div className="bg-slate-900/50 border-y border-slate-700/30 px-4 py-3 space-y-3">
-                          {/* Transfer/Delete bar */}
-                          {transferItems.length > 0 && (
+                          {/* Transfer/Delete bar - Admin only */}
+                          {isAdmin && transferItems.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 bg-slate-800/80 border border-slate-700/50 rounded-lg px-3 py-2">
                               <span className="text-amber-400 text-xs font-medium">{transferItems.length} selectionne(s)</span>
                               <span className="text-slate-500 text-xs">|</span>
@@ -531,8 +536,8 @@ const HebdoReport = ({
                               <p className="text-green-400 text-xs font-medium mb-1">Ventes ({data.sales.items.length})</p>
                               <div className="space-y-1">
                                 {data.sales.items.map((item, idx) => (
-                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/60 ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
-                                    <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("sales"); toggleTransferItem(item.id); }} />
+                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 ${isAdmin ? 'cursor-pointer hover:bg-slate-800/60' : ''} ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
+                                    {isAdmin && <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("sales"); toggleTransferItem(item.id); }} />}
                                     <span className="text-white text-xs flex-1">{item.invoice_number || `Facture`}</span>
                                     <span className="text-green-400 text-xs font-bold">{formatPrice(item.total)} F</span>
                                     {item.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{item.assigned_week.slice(5)}</Badge>}
@@ -548,8 +553,8 @@ const HebdoReport = ({
                               <p className="text-red-400 text-xs font-medium mb-1">Charges ({data.expenses.items.length})</p>
                               <div className="space-y-1">
                                 {data.expenses.items.map((item, idx) => (
-                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/60 ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
-                                    <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("expenses"); toggleTransferItem(item.id); }} />
+                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 ${isAdmin ? 'cursor-pointer hover:bg-slate-800/60' : ''} ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
+                                    {isAdmin && <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("expenses"); toggleTransferItem(item.id); }} />}
                                     <span className="text-white text-xs flex-1">{item.description}</span>
                                     <Badge className={`text-xs ${item.status === 'completed' ? 'bg-green-500/20 text-green-400' : item.status === 'approved' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-500/20 text-slate-400'}`}>{item.status}</Badge>
                                     <span className="text-red-400 text-xs font-bold">{formatPrice(item.amount)} F</span>
