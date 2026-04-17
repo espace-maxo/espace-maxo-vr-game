@@ -6851,402 +6851,232 @@ _Gérante - Espace Maxo_
           </TabsContent>
           )}
 
-          {/* ==================== ACTIVITÉ TAB (Admin only) ==================== */}
-          {currentUser?.role === 'admin' && (
+          {/* ==================== ACTIVITE & HISTORIQUE TAB ==================== */}
           <TabsContent value="activite">
             <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <h2 className="text-xl font-bold text-emerald-300 flex items-center gap-2">
-                  <Activity className="w-6 h-6" />
-                  Suivi d'Activité
-                </h2>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Select value={activityPeriod} onValueChange={setActivityPeriod}>
-                    <SelectTrigger className="w-[120px] bg-slate-800/50 border-slate-700 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="day">Jour</SelectItem>
-                      <SelectItem value="week">Semaine</SelectItem>
-                      <SelectItem value="month">Mois</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="date"
-                    value={activityDate}
-                    onChange={(e) => setActivityDate(e.target.value)}
-                    className="bg-slate-800/50 border-slate-700 text-white w-auto"
-                  />
-                  <Button onClick={fetchActivityReport} variant="outline" className="border-slate-600 text-slate-300">
-                    <RefreshCw className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
+              <h2 className="text-xl font-bold text-emerald-300 flex items-center gap-2">
+                <Activity className="w-6 h-6" />
+                Activite & Historique du jour
+              </h2>
 
-              {activityReport ? (
-                <div className="space-y-4">
-                  {/* Period label */}
-                  <div className="text-center">
-                    <Badge className="bg-emerald-500/20 text-emerald-300 text-lg px-4 py-1">
-                      {activityReport.period_label}
-                    </Badge>
-                  </div>
+              {/* Summary cards - calculated from live data */}
+              {(() => {
+                const todayInvs = invoices.filter(i => i.validation_status === 'validated');
+                const todayPending = invoices.filter(i => i.validation_status === 'pending');
+                const totalRecettes = todayInvs.reduce((s, i) => s + (i.total || 0), 0);
+                const totalPending = todayPending.reduce((s, i) => s + (i.total || 0), 0);
+                const completedExp = expenses.filter(e => e.status === 'completed');
+                const pendingExp = expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested');
+                const totalDepenses = completedExp.reduce((s, e) => s + (e.amount || 0), 0);
+                const totalPendingExp = pendingExp.reduce((s, e) => s + (e.amount || 0), 0);
+                const resultat = totalRecettes - totalDepenses;
 
-                  {/* Summary cards */}
-                  <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-                    {/* Total Recettes */}
-                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-green-400 text-sm">TOTAL RECETTES</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold text-green-400">{formatPrice(activityReport.income?.total || 0)} F</p>
-                      </CardContent>
-                    </Card>
+                const byServer = {};
+                todayInvs.forEach(inv => {
+                  const srv = inv.created_by || 'Inconnu';
+                  if (!byServer[srv]) byServer[srv] = { count: 0, total: 0, validated: 0, pending: 0 };
+                  byServer[srv].count++;
+                  byServer[srv].total += inv.total || 0;
+                  byServer[srv].validated++;
+                });
+                todayPending.forEach(inv => {
+                  const srv = inv.created_by || 'Inconnu';
+                  if (!byServer[srv]) byServer[srv] = { count: 0, total: 0, validated: 0, pending: 0 };
+                  byServer[srv].count++;
+                  byServer[srv].total += inv.total || 0;
+                  byServer[srv].pending++;
+                });
 
-                    {/* Total Dépenses */}
-                    <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-red-400 text-sm">TOTAL DEPENSES</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold text-red-400">{formatPrice(activityReport.expenses?.total || 0)} F</p>
-                      </CardContent>
-                    </Card>
+                const byDept = {};
+                todayInvs.forEach(inv => {
+                  const depts = inv.totals_by_department || {};
+                  Object.entries(depts).forEach(([d, v]) => { byDept[d] = (byDept[d] || 0) + v; });
+                });
 
-                    {/* Résultat Net */}
-                    <Card className={`bg-gradient-to-br ${activityReport.result?.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
-                      <CardHeader className="pb-2">
-                        <CardTitle className={`text-sm ${activityReport.result?.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
-                          RESULTAT NET
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className={`text-3xl font-bold ${activityReport.result?.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {activityReport.result?.net >= 0 ? '+' : ''}{formatPrice(activityReport.result?.net || 0)} F
-                        </p>
-                        <p className="text-slate-400 text-sm">Marge: {activityReport.result?.margin_percent || 0}%</p>
-                      </CardContent>
-                    </Card>
+                const byPayment = {};
+                todayInvs.forEach(inv => {
+                  const pm = inv.payment_mode || inv.payment_method || 'autre';
+                  byPayment[pm] = (byPayment[pm] || 0) + (inv.total || 0);
+                });
 
-                    {/* En attente */}
-                    <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-amber-400 text-sm">EN ATTENTE</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold text-amber-400">{formatPrice(activityReport.pending?.total || 0)} F</p>
-                        <p className="text-slate-400 text-xs">{(activityReport.pending?.invoices_count || 0) + (activityReport.pending?.expenses_count || 0)} operation(s)</p>
-                      </CardContent>
-                    </Card>
+                return (
+                  <>
+                    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                      <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-xs text-slate-400">CA VALIDE</p>
+                          <p className="text-2xl font-bold text-green-400">{formatPrice(totalRecettes)} F</p>
+                          <p className="text-slate-500 text-xs">{todayInvs.length} facture(s)</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-xs text-slate-400">DEPENSES</p>
+                          <p className="text-2xl font-bold text-red-400">{formatPrice(totalDepenses)} F</p>
+                          <p className="text-slate-500 text-xs">{completedExp.length} achat(s)</p>
+                        </CardContent>
+                      </Card>
+                      <Card className={`bg-gradient-to-br ${resultat >= 0 ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
+                        <CardContent className="p-4 text-center">
+                          <p className="text-xs text-slate-400">RESULTAT</p>
+                          <p className={`text-2xl font-bold ${resultat >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{resultat >= 0 ? '+' : ''}{formatPrice(resultat)} F</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-xs text-slate-400">EN ATTENTE</p>
+                          <p className="text-2xl font-bold text-amber-400">{formatPrice(totalPending + totalPendingExp)} F</p>
+                          <p className="text-slate-500 text-xs">{todayPending.length} fact. + {pendingExp.length} ach.</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-blue-900/20 to-blue-900/10 border-blue-500/40">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-xs text-slate-400">TOTAL FACTURES</p>
+                          <p className="text-2xl font-bold text-blue-400">{invoices.length}</p>
+                          <p className="text-slate-500 text-xs">{todayInvs.length} val. / {todayPending.length} att.</p>
+                        </CardContent>
+                      </Card>
+                    </div>
 
-                    {/* Manager General */}
-                    <Card className="bg-gradient-to-br from-violet-900/20 to-purple-900/10 border-violet-500/40">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-violet-400 text-sm">MANAGER GENERAL</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold text-violet-400">{formatPrice((activityReport.manager_general?.orders_total || 0) + (activityReport.manager_general?.purchases_total || 0))} F</p>
-                        {activityReport.manager_general?.orders_unpaid > 0 && <p className="text-red-400 text-xs">{formatPrice(activityReport.manager_general.orders_unpaid)} F impaye</p>}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Detailed breakdown */}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {/* Recettes détaillées */}
+                    {/* Detail par serveur */}
+                    {Object.keys(byServer).length > 0 && (
                     <Card className="bg-slate-800/50 border-slate-700">
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-green-400 flex items-center gap-2">
-                          <TrendingUp className="w-5 h-5" />
-                          Détail Recettes
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {/* Caisse */}
-                        <div className="bg-green-900/20 rounded-lg p-3 border border-green-500/30">
-                          <div className="flex justify-between items-center">
-                            <span className="text-white font-medium">Caisse (Bons)</span>
-                            <span className="text-green-400 font-bold">{formatPrice(activityReport.income?.caisse?.total || 0)} F</span>
-                          </div>
-                          <p className="text-slate-400 text-sm">{activityReport.income?.caisse?.count || 0} factures</p>
-                          {/* By department */}
-                          <div className="mt-2 space-y-1">
-                            {Object.entries(activityReport.income?.caisse?.by_department || {}).map(([dept, amount]) => (
-                              <div key={dept} className="flex justify-between text-xs">
-                                <span className="text-slate-500 capitalize">{dept.replace('_', ' ')}</span>
-                                <span className="text-green-300">{formatPrice(amount)} F</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Réservations */}
-                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
-                          <span className="text-slate-300">Réservations Jeux</span>
-                          <span className="text-green-300">{formatPrice(activityReport.income?.reservations_jeux?.total || 0)} F</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
-                          <span className="text-slate-300">Réservations Tables</span>
-                          <span className="text-green-300">{formatPrice(activityReport.income?.reservations_tables?.total || 0)} F</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-slate-700/30 rounded p-2">
-                          <span className="text-slate-300">Combos</span>
-                          <span className="text-green-300">{formatPrice(activityReport.income?.combos?.total || 0)} F</span>
-                        </div>
-
-                        {/* By payment method */}
-                        {Object.keys(activityReport.income?.caisse?.by_payment_method || {}).length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-slate-700">
-                            <p className="text-slate-400 text-sm mb-2">Par mode de paiement:</p>
-                            {Object.entries(activityReport.income?.caisse?.by_payment_method || {}).map(([method, amount]) => (
-                              <div key={method} className="flex justify-between text-sm">
-                                <span className="text-slate-500">{method}</span>
-                                <span className="text-slate-300">{formatPrice(amount)} F</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Dépenses détaillées */}
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-red-400 flex items-center gap-2">
-                          <ShoppingCart className="w-5 h-5" />
-                          Détail Dépenses
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {Object.entries(activityReport.expenses?.by_category || {}).length > 0 ? (
-                          Object.entries(activityReport.expenses?.by_category || {}).map(([cat, data]) => (
-                            <div key={cat} className="bg-red-900/20 rounded-lg p-3 border border-red-500/30">
-                              <div className="flex justify-between items-center">
-                                <span className="text-white font-medium capitalize">{cat}</span>
-                                <span className="text-red-400 font-bold">{formatPrice(data.total)} F</span>
-                              </div>
-                              <p className="text-slate-400 text-sm">{data.count} achat(s)</p>
-                              {/* Items */}
-                              <div className="mt-2 space-y-1">
-                                {data.items?.slice(0, 5).map((item, idx) => (
-                                  <div key={idx} className="flex justify-between text-xs">
-                                    <span className="text-slate-500">{item.description}</span>
-                                    <span className="text-red-300">{formatPrice(item.amount)} F</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-4 text-slate-500">
-                            Aucune dépense enregistrée
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Performance by server */}
-                  {Object.keys(activityReport.income?.caisse?.by_server || {}).length > 0 && (
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-slate-300 flex items-center gap-2">
-                          <Users className="w-5 h-5" />
-                          Performance par Serveur
-                        </CardTitle>
+                        <CardTitle className="text-slate-300 flex items-center gap-2"><Users className="w-5 h-5" /> Performance par Serveur</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                          {Object.entries(activityReport.income?.caisse?.by_server || {}).map(([server, data]) => (
+                          {Object.entries(byServer).map(([server, data]) => (
                             <div key={server} className="bg-slate-700/30 rounded-lg p-3">
                               <p className="text-white font-medium">{server}</p>
                               <p className="text-green-400 font-bold">{formatPrice(data.total)} F</p>
-                              <p className="text-slate-500 text-sm">{data.count} factures</p>
+                              <div className="flex gap-2 mt-1">
+                                <span className="text-green-400 text-xs">{data.validated} val.</span>
+                                {data.pending > 0 && <span className="text-yellow-400 text-xs">{data.pending} att.</span>}
+                              </div>
                             </div>
                           ))}
                         </div>
                       </CardContent>
                     </Card>
-                  )}
-
-                  {/* Opérations en attente */}
-                  {(activityReport.pending?.invoices_count > 0 || activityReport.pending?.expenses_count > 0) && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {activityReport.pending?.invoices_count > 0 && (
-                    <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-amber-400 flex items-center gap-2">
-                          <Clock className="w-5 h-5" />
-                          Factures en attente
-                          <Badge className="bg-amber-500/30 text-amber-300">{activityReport.pending.invoices_count}</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-1.5">
-                        <p className="text-amber-300 font-bold text-lg">{formatPrice(activityReport.pending.invoices_total)} F</p>
-                        {activityReport.pending.invoices?.map((inv, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-amber-900/20 rounded px-3 py-1.5">
-                            <div>
-                              <span className="text-white text-sm font-medium">{inv.invoice_number}</span>
-                              <span className="text-slate-400 text-xs ml-2">par {inv.created_by}</span>
-                            </div>
-                            <span className="text-amber-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
                     )}
 
-                    {activityReport.pending?.expenses_count > 0 && (
-                    <Card className="bg-gradient-to-br from-yellow-900/20 to-amber-900/10 border-yellow-500/40">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-yellow-400 flex items-center gap-2">
-                          <ShoppingCart className="w-5 h-5" />
-                          Achats en attente
-                          <Badge className="bg-yellow-500/30 text-yellow-300">{activityReport.pending.expenses_count}</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-1.5">
-                        <p className="text-yellow-300 font-bold text-lg">{formatPrice(activityReport.pending.expenses_total)} F</p>
-                        {activityReport.pending.expenses?.map((exp, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-yellow-900/20 rounded px-3 py-1.5">
-                            <div>
+                    {/* Detail par departement et paiement */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {Object.keys(byDept).length > 0 && (
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="pb-2"><CardTitle className="text-green-400 text-sm">Par Departement</CardTitle></CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.entries(byDept).filter(([,v]) => v > 0).map(([dept, amount]) => (
+                            <div key={dept} className="flex justify-between bg-slate-700/30 rounded px-3 py-2">
+                              <span className="text-slate-300 capitalize text-sm">{dept.replace('_', ' ')}</span>
+                              <span className="text-green-400 font-bold text-sm">{formatPrice(amount)} F</span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                      )}
+                      {Object.keys(byPayment).length > 0 && (
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="pb-2"><CardTitle className="text-blue-400 text-sm">Par Mode de Paiement</CardTitle></CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.entries(byPayment).map(([method, amount]) => (
+                            <div key={method} className="flex justify-between bg-slate-700/30 rounded px-3 py-2">
+                              <span className="text-slate-300 text-sm">{method}</span>
+                              <span className="text-blue-400 font-bold text-sm">{formatPrice(amount)} F</span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                      )}
+                    </div>
+
+                    {/* En attente detail */}
+                    {(todayPending.length > 0 || pendingExp.length > 0) && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {todayPending.length > 0 && (
+                      <Card className="bg-amber-900/10 border-amber-500/30">
+                        <CardHeader className="pb-2"><CardTitle className="text-amber-400 text-sm">Factures en attente ({todayPending.length})</CardTitle></CardHeader>
+                        <CardContent className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {todayPending.map(inv => (
+                            <div key={inv.id} className="flex justify-between items-center bg-amber-900/20 rounded px-3 py-1.5">
+                              <div><span className="text-white text-sm font-bold">{inv.invoice_number}</span> <span className="text-slate-400 text-xs ml-1">par {inv.created_by}</span></div>
+                              <span className="text-amber-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                      )}
+                      {pendingExp.length > 0 && (
+                      <Card className="bg-yellow-900/10 border-yellow-500/30">
+                        <CardHeader className="pb-2"><CardTitle className="text-yellow-400 text-sm">Achats en attente ({pendingExp.length})</CardTitle></CardHeader>
+                        <CardContent className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {pendingExp.map(exp => (
+                            <div key={exp.id} className="flex justify-between items-center bg-yellow-900/20 rounded px-3 py-1.5">
                               <span className="text-white text-sm">{exp.description?.slice(0, 35)}</span>
-                              <Badge className={`ml-2 text-xs ${exp.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : exp.status === 'approved' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
-                                {exp.status === 'pending' ? 'En attente' : exp.status === 'approved' ? 'Approuve' : 'A reviser'}
-                              </Badge>
+                              <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
                             </div>
-                            <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                          ))}
+                        </CardContent>
+                      </Card>
+                      )}
+                    </div>
+                    )}
+
+                    {/* Depenses completees */}
+                    {completedExp.length > 0 && (
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="pb-2"><CardTitle className="text-red-400 text-sm flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Depenses completees</CardTitle></CardHeader>
+                      <CardContent className="space-y-1.5">
+                        {completedExp.map(exp => (
+                          <div key={exp.id} className="flex justify-between items-center bg-red-900/10 rounded px-3 py-1.5">
+                            <div><span className="text-white text-sm">{exp.description?.slice(0, 40)}</span> <span className="text-slate-500 text-xs ml-1">{exp.supplier}</span></div>
+                            <span className="text-red-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
                           </div>
                         ))}
                       </CardContent>
                     </Card>
                     )}
-                  </div>
-                  )}
-
-                  {/* Manager General */}
-                  {(activityReport.manager_general?.orders_count > 0 || activityReport.manager_general?.purchases_count > 0) && (
-                  <Card className="bg-gradient-to-br from-violet-900/20 to-purple-900/10 border-violet-500/40">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-violet-400 flex items-center gap-2">
-                        <UserCircle className="w-5 h-5" />
-                        Manager General
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                        <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg p-3 text-center">
-                          <p className="text-slate-400 text-xs">Commandes</p>
-                          <p className="text-violet-400 font-bold">{formatPrice(activityReport.manager_general.orders_total)} F</p>
-                          <p className="text-slate-500 text-xs">{activityReport.manager_general.orders_count} cmd</p>
-                        </div>
-                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-center">
-                          <p className="text-slate-400 text-xs">Impaye</p>
-                          <p className="text-red-400 font-bold">{formatPrice(activityReport.manager_general.orders_unpaid)} F</p>
-                        </div>
-                        <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
-                          <p className="text-slate-400 text-xs">Achats perso</p>
-                          <p className="text-blue-400 font-bold">{formatPrice(activityReport.manager_general.purchases_total)} F</p>
-                          <p className="text-slate-500 text-xs">{activityReport.manager_general.purchases_count} achats</p>
-                        </div>
-                        <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center">
-                          <p className="text-slate-400 text-xs">Total MG</p>
-                          <p className="text-amber-400 font-bold">{formatPrice((activityReport.manager_general.orders_total || 0) + (activityReport.manager_general.purchases_total || 0))} F</p>
-                        </div>
-                      </div>
-                      {activityReport.manager_general.orders?.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-slate-400 text-xs mb-1">Commandes :</p>
-                          {activityReport.manager_general.orders.map((o, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
-                              <span className="text-white text-xs">{o.items?.map(i => i.name || i.product_name).join(', ') || 'Commande'}</span>
-                              <div className="flex items-center gap-2">
-                                <Badge className={o.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
-                                  {o.status === 'regle' ? 'Regle' : 'Non regle'}
-                                </Badge>
-                                <span className="text-violet-400 font-bold text-xs">{formatPrice(o.total)} F</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {activityReport.manager_general.purchases?.length > 0 && (
-                        <div className="space-y-1 mt-2">
-                          <p className="text-slate-400 text-xs mb-1">Achats :</p>
-                          {activityReport.manager_general.purchases.map((p, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
-                              <span className="text-white text-xs">{p.description}</span>
-                              <div className="flex items-center gap-2">
-                                <Badge className={p.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
-                                  {p.status === 'regle' ? 'Regle' : 'Non regle'}
-                                </Badge>
-                                <span className="text-blue-400 font-bold text-xs">{formatPrice(p.amount)} F</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  )}
-                </div>
-              ) : (
-                <Card className="bg-slate-800/30 border-slate-700">
-                  <CardContent className="py-12 text-center">
-                    <Activity className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Chargement des données...</p>
-                  </CardContent>
-                </Card>
-              )}
+                  </>
+                );
+              })()}
 
               {/* ==================== HISTORIQUE DES FACTURES ==================== */}
               <div className="border-t border-slate-700/50 pt-6 mt-6">
                 <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
                   <h2 className="text-xl font-bold text-slate-300 flex items-center gap-2">
-                    <Calendar className="w-6 h-6" />
-                    Historique des Factures
+                    <Calendar className="w-6 h-6" /> Historique des Factures
                   </h2>
-                  <div className="flex items-center gap-3">
-                    <Input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white w-auto" />
-                  </div>
+                  <Input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white w-auto" />
                 </div>
                 {historyInvoices.length > 0 ? (
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-0">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-slate-400 border-b border-slate-700">
-                            <th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Serveur</th>
-                            <th className="p-3 text-right">Total</th><th className="p-3">Mode</th><th className="p-3">Statut</th><th className="p-3">Heure</th>
+                  <Card className="bg-slate-800/50 border-slate-700"><CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead><tr className="text-left text-slate-400 border-b border-slate-700">
+                        <th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Serveur</th>
+                        <th className="p-3 text-right">Total</th><th className="p-3">Mode</th><th className="p-3">Statut</th><th className="p-3">Heure</th>
+                      </tr></thead>
+                      <tbody>
+                        {historyInvoices.map(inv => (
+                          <tr key={inv.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                            <td className="p-3 text-white font-medium">{inv.invoice_number}</td>
+                            <td className="p-3 text-slate-300">{inv.client_name || "-"}</td>
+                            <td className="p-3 text-slate-300">{inv.created_by}</td>
+                            <td className="p-3 text-right text-amber-400 font-bold">{formatPrice(inv.total)} F</td>
+                            <td className="p-3 text-slate-400">{inv.payment_mode || inv.payment_method || "-"}</td>
+                            <td className="p-3"><Badge className={inv.validation_status === 'validated' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-yellow-500/20 text-yellow-400 text-xs'}>{inv.validation_status === 'validated' ? 'Validee' : 'En attente'}</Badge></td>
+                            <td className="p-3 text-slate-500 text-xs">{(inv.created_at || '').slice(11, 16)}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {historyInvoices.map(inv => (
-                            <tr key={inv.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                              <td className="p-3 text-white font-medium">{inv.invoice_number}</td>
-                              <td className="p-3 text-slate-300">{inv.client_name || "-"}</td>
-                              <td className="p-3 text-slate-300">{inv.created_by}</td>
-                              <td className="p-3 text-right text-amber-400 font-bold">{formatPrice(inv.total)} F</td>
-                              <td className="p-3 text-slate-400">{inv.payment_mode || inv.payment_method || "-"}</td>
-                              <td className="p-3"><Badge className={inv.validation_status === 'validated' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-yellow-500/20 text-yellow-400 text-xs'}>{inv.validation_status === 'validated' ? 'Validee' : 'En attente'}</Badge></td>
-                              <td className="p-3 text-slate-500 text-xs">{(inv.created_at || '').slice(11, 16)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  </Card>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent></Card>
                 ) : (
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="py-8 text-center text-slate-500">Aucune facture pour cette date</CardContent>
-                  </Card>
+                  <Card className="bg-slate-800/50 border-slate-700"><CardContent className="py-8 text-center text-slate-500">Aucune facture pour cette date</CardContent></Card>
                 )}
               </div>
             </div>
           </TabsContent>
-          )}
         </Tabs>
         )}
       </div>
