@@ -32,6 +32,10 @@ const HebdoReport = ({
   const [attachDateFrom, setAttachDateFrom] = useState("");
   const [attachDateTo, setAttachDateTo] = useState("");
   const [loadingAttach, setLoadingAttach] = useState(false);
+  const [expandedDay, setExpandedDay] = useState(null);
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferItems, setTransferItems] = useState([]);
+  const [transferType, setTransferType] = useState("sales"); // sales or expenses
 
   const searchUnlinked = async () => {
     if (!attachDateFrom) { toast.error("Selectionnez une date de debut"); return; }
@@ -84,6 +88,28 @@ const HebdoReport = ({
       if (refreshWeekly) refreshWeekly();
     } catch (e) {
       toast.error("Erreur de rattachement");
+    }
+  };
+
+  const toggleTransferItem = (id) => setTransferItems(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const transferSelected = async () => {
+    if (transferItems.length === 0 || !transferTarget) {
+      toast.error("Selectionnez des elements et une semaine de destination");
+      return;
+    }
+    try {
+      if (transferType === "sales") {
+        await axios.post(`${API}/invoices/assign-week-bulk`, { ids: transferItems, week_start: transferTarget });
+      } else {
+        await axios.post(`${API}/expenses/assign-week-bulk`, { ids: transferItems, week_start: transferTarget });
+      }
+      toast.success(`${transferItems.length} element(s) transfere(s)`);
+      setTransferItems([]);
+      setExpandedDay(null);
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) {
+      toast.error("Erreur de transfert");
     }
   };
   // Generate list of last 12 weeks (Lundi-Dimanche)
@@ -341,6 +367,7 @@ const HebdoReport = ({
               <CardTitle className="text-cyan-400 flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
                 Détail Jour par Jour
+                <span className="text-slate-500 text-xs font-normal ml-2">(cliquez sur un jour pour voir le detail et transferer)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -358,8 +385,14 @@ const HebdoReport = ({
                   </thead>
                   <tbody>
                     {Object.entries(weeklyReport.daily || {}).map(([date, data]) => (
-                      <tr key={date} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                        <td className="p-3 font-semibold text-white">{data.day_name}</td>
+                      <React.Fragment key={date}>
+                      <tr className={`border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer ${expandedDay === date ? 'bg-slate-700/40' : ''}`} onClick={() => { setExpandedDay(expandedDay === date ? null : date); setTransferItems([]); }}>
+                        <td className="p-3 font-semibold text-white">
+                          <div className="flex items-center gap-1">
+                            <ChevronRight className={`w-3 h-3 transition-transform ${expandedDay === date ? 'rotate-90' : ''}`} />
+                            {data.day_name}
+                          </div>
+                        </td>
                         <td className="p-3 text-slate-400">{data.date_formatted}</td>
                         <td className="p-3 text-right">
                           <span className="text-green-400 font-bold">{formatPrice(data.sales?.total || 0)} F</span>
@@ -377,6 +410,86 @@ const HebdoReport = ({
                           {data.result >= 0 ? '+' : ''}{formatPrice(data.result)} F
                         </td>
                       </tr>
+                      {expandedDay === date && (
+                      <tr><td colSpan={6} className="p-0">
+                        <div className="bg-slate-900/50 border-y border-slate-700/30 px-4 py-3 space-y-3">
+                          {/* Transfer bar */}
+                          {transferItems.length > 0 && (
+                            <div className="flex items-center gap-3 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2">
+                              <span className="text-amber-400 text-xs font-medium">{transferItems.length} selectionne(s)</span>
+                              <span className="text-slate-400 text-xs">Transferer vers :</span>
+                              <Select value={transferTarget || "none"} onValueChange={v => setTransferTarget(v === "none" ? "" : v)}>
+                                <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-7 w-48 text-xs"><SelectValue placeholder="Choisir une semaine" /></SelectTrigger>
+                                <SelectContent className="bg-slate-800 border-slate-700">
+                                  {weekOptions.map(w => (
+                                    <SelectItem key={w.value} value={w.value} className="text-white text-xs">{w.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" onClick={transferSelected}>
+                                <ChevronRight className="w-3 h-3 mr-1" /> Transferer
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-400" onClick={() => setTransferItems([])}>Annuler</Button>
+                            </div>
+                          )}
+
+                          {/* Sales detail */}
+                          {data.sales?.items?.length > 0 && (
+                            <div>
+                              <p className="text-green-400 text-xs font-medium mb-1">Ventes ({data.sales.items.length})</p>
+                              <div className="space-y-1">
+                                {data.sales.items.map((item, idx) => (
+                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/60 ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
+                                    <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("sales"); toggleTransferItem(item.id); }} />
+                                    <span className="text-white text-xs flex-1">{item.invoice_number || `Facture`}</span>
+                                    <span className="text-green-400 text-xs font-bold">{formatPrice(item.total)} F</span>
+                                    {item.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{item.assigned_week.slice(5)}</Badge>}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Expenses detail */}
+                          {data.expenses?.items?.length > 0 && (
+                            <div>
+                              <p className="text-red-400 text-xs font-medium mb-1">Charges ({data.expenses.items.length})</p>
+                              <div className="space-y-1">
+                                {data.expenses.items.map((item, idx) => (
+                                  <label key={idx} className={`flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5 cursor-pointer hover:bg-slate-800/60 ${transferItems.includes(item.id) ? 'ring-1 ring-amber-500/50' : ''}`} onClick={e => e.stopPropagation()}>
+                                    <input type="checkbox" className="rounded bg-slate-700 border-slate-600" checked={transferItems.includes(item.id)} onChange={() => { setTransferType("expenses"); toggleTransferItem(item.id); }} />
+                                    <span className="text-white text-xs flex-1">{item.description}</span>
+                                    <Badge className={`text-xs ${item.status === 'completed' ? 'bg-green-500/20 text-green-400' : item.status === 'approved' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-500/20 text-slate-400'}`}>{item.status}</Badge>
+                                    <span className="text-red-400 text-xs font-bold">{formatPrice(item.amount)} F</span>
+                                    {item.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{item.assigned_week.slice(5)}</Badge>}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Locations detail */}
+                          {data.locations?.items?.length > 0 && (
+                            <div>
+                              <p className="text-purple-400 text-xs font-medium mb-1">Locations ({data.locations.items.length})</p>
+                              <div className="space-y-1">
+                                {data.locations.items.map((item, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 bg-slate-800/40 rounded px-3 py-1.5">
+                                    <span className="text-white text-xs flex-1">{item.customer_name} ({item.space_type})</span>
+                                    <span className="text-purple-400 text-xs font-bold">{formatPrice(item.rental_amount)} F</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {(!data.sales?.items?.length && !data.expenses?.items?.length && !data.locations?.items?.length) && (
+                            <p className="text-slate-500 text-xs text-center py-2">Aucune donnee ce jour</p>
+                          )}
+                        </div>
+                      </td></tr>
+                      )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                   <tfoot>
