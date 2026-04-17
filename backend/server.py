@@ -6444,7 +6444,7 @@ async def get_activity_report(
         
         # ============== EXPENSES (Dépenses) ==============
         
-        # Query expenses by both completed_at and created_at
+        # Completed expenses
         expenses = await db.expenses.find({
             "status": "completed",
             "$or": [
@@ -6468,6 +6468,38 @@ async def get_activity_report(
                 "supplier": exp.get("supplier"),
                 "date": exp.get("completed_at", "")[:10]
             })
+        
+        # ============== PENDING OPERATIONS (En attente) ==============
+        
+        # Pending invoices (not yet validated)
+        pending_invoices = await db.invoices.find({
+            "validation_status": "pending",
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0, "id": 1, "invoice_number": 1, "total": 1, "created_by": 1, "created_at": 1}).to_list(500)
+        
+        # Pending expenses (not yet completed)
+        pending_expenses = await db.expenses.find({
+            "status": {"$in": ["pending", "approved", "revision_requested"]},
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0, "id": 1, "description": 1, "amount": 1, "status": 1, "requested_by": 1, "created_at": 1}).to_list(500)
+        
+        pending_invoices_total = sum(i.get("total", 0) for i in pending_invoices)
+        pending_expenses_total = sum(e.get("amount", 0) for e in pending_expenses)
+        
+        # ============== MANAGER GENERAL ==============
+        
+        mg_orders = await db.monsieur_orders.find({
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        mg_purchases = await db.monsieur_purchases.find({
+            "created_at": {"$gte": start_str, "$lte": end_str}
+        }, {"_id": 0}).to_list(500)
+        
+        mg_orders_total = sum(o.get("total", 0) for o in mg_orders)
+        mg_orders_unpaid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "non_regle")
+        mg_purchases_total = sum(p.get("amount", 0) for p in mg_purchases)
+        mg_purchases_unpaid = sum(p.get("amount", 0) for p in mg_purchases if p.get("status") == "non_regle")
         
         # ============== RESULT ==============
         
@@ -6505,6 +6537,25 @@ async def get_activity_report(
                 "total": total_expenses,
                 "count": len(expenses),
                 "by_category": expenses_by_category
+            },
+            "pending": {
+                "invoices_count": len(pending_invoices),
+                "invoices_total": pending_invoices_total,
+                "invoices": pending_invoices,
+                "expenses_count": len(pending_expenses),
+                "expenses_total": pending_expenses_total,
+                "expenses": pending_expenses,
+                "total": pending_invoices_total + pending_expenses_total
+            },
+            "manager_general": {
+                "orders_total": mg_orders_total,
+                "orders_count": len(mg_orders),
+                "orders_unpaid": mg_orders_unpaid,
+                "purchases_total": mg_purchases_total,
+                "purchases_count": len(mg_purchases),
+                "purchases_unpaid": mg_purchases_unpaid,
+                "orders": mg_orders,
+                "purchases": mg_purchases
             },
             "result": {
                 "net": result,

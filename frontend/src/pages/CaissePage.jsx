@@ -7299,7 +7299,7 @@ _Gérante - Espace Maxo_
                   </div>
 
                   {/* Summary cards */}
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
                     {/* Total Recettes */}
                     <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
                       <CardHeader className="pb-2">
@@ -7313,7 +7313,7 @@ _Gérante - Espace Maxo_
                     {/* Total Dépenses */}
                     <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-red-400 text-sm">TOTAL DÉPENSES</CardTitle>
+                        <CardTitle className="text-red-400 text-sm">TOTAL DEPENSES</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-3xl font-bold text-red-400">{formatPrice(activityReport.expenses?.total || 0)} F</p>
@@ -7324,7 +7324,7 @@ _Gérante - Espace Maxo_
                     <Card className={`bg-gradient-to-br ${activityReport.result?.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-red-900/30 to-rose-900/20 border-red-500/50'}`}>
                       <CardHeader className="pb-2">
                         <CardTitle className={`text-sm ${activityReport.result?.is_profitable ? 'text-emerald-400' : 'text-red-400'}`}>
-                          RÉSULTAT NET
+                          RESULTAT NET
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -7332,6 +7332,28 @@ _Gérante - Espace Maxo_
                           {activityReport.result?.net >= 0 ? '+' : ''}{formatPrice(activityReport.result?.net || 0)} F
                         </p>
                         <p className="text-slate-400 text-sm">Marge: {activityReport.result?.margin_percent || 0}%</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* En attente */}
+                    <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-amber-400 text-sm">EN ATTENTE</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold text-amber-400">{formatPrice(activityReport.pending?.total || 0)} F</p>
+                        <p className="text-slate-400 text-xs">{(activityReport.pending?.invoices_count || 0) + (activityReport.pending?.expenses_count || 0)} operation(s)</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Manager General */}
+                    <Card className="bg-gradient-to-br from-violet-900/20 to-purple-900/10 border-violet-500/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-violet-400 text-sm">MANAGER GENERAL</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold text-violet-400">{formatPrice((activityReport.manager_general?.orders_total || 0) + (activityReport.manager_general?.purchases_total || 0))} F</p>
+                        {activityReport.manager_general?.orders_unpaid > 0 && <p className="text-red-400 text-xs">{formatPrice(activityReport.manager_general.orders_unpaid)} F impaye</p>}
                       </CardContent>
                     </Card>
                   </div>
@@ -7452,6 +7474,127 @@ _Gérante - Espace Maxo_
                         </div>
                       </CardContent>
                     </Card>
+                  )}
+
+                  {/* Opérations en attente */}
+                  {(activityReport.pending?.invoices_count > 0 || activityReport.pending?.expenses_count > 0) && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {activityReport.pending?.invoices_count > 0 && (
+                    <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-amber-400 flex items-center gap-2">
+                          <Clock className="w-5 h-5" />
+                          Factures en attente
+                          <Badge className="bg-amber-500/30 text-amber-300">{activityReport.pending.invoices_count}</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5">
+                        <p className="text-amber-300 font-bold text-lg">{formatPrice(activityReport.pending.invoices_total)} F</p>
+                        {activityReport.pending.invoices?.map((inv, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-amber-900/20 rounded px-3 py-1.5">
+                            <div>
+                              <span className="text-white text-sm font-medium">{inv.invoice_number}</span>
+                              <span className="text-slate-400 text-xs ml-2">par {inv.created_by}</span>
+                            </div>
+                            <span className="text-amber-400 text-sm font-bold">{formatPrice(inv.total)} F</span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                    )}
+
+                    {activityReport.pending?.expenses_count > 0 && (
+                    <Card className="bg-gradient-to-br from-yellow-900/20 to-amber-900/10 border-yellow-500/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-yellow-400 flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5" />
+                          Achats en attente
+                          <Badge className="bg-yellow-500/30 text-yellow-300">{activityReport.pending.expenses_count}</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5">
+                        <p className="text-yellow-300 font-bold text-lg">{formatPrice(activityReport.pending.expenses_total)} F</p>
+                        {activityReport.pending.expenses?.map((exp, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-yellow-900/20 rounded px-3 py-1.5">
+                            <div>
+                              <span className="text-white text-sm">{exp.description?.slice(0, 35)}</span>
+                              <Badge className={`ml-2 text-xs ${exp.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : exp.status === 'approved' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {exp.status === 'pending' ? 'En attente' : exp.status === 'approved' ? 'Approuve' : 'A reviser'}
+                              </Badge>
+                            </div>
+                            <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                    )}
+                  </div>
+                  )}
+
+                  {/* Manager General */}
+                  {(activityReport.manager_general?.orders_count > 0 || activityReport.manager_general?.purchases_count > 0) && (
+                  <Card className="bg-gradient-to-br from-violet-900/20 to-purple-900/10 border-violet-500/40">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-violet-400 flex items-center gap-2">
+                        <UserCircle className="w-5 h-5" />
+                        Manager General
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                        <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg p-3 text-center">
+                          <p className="text-slate-400 text-xs">Commandes</p>
+                          <p className="text-violet-400 font-bold">{formatPrice(activityReport.manager_general.orders_total)} F</p>
+                          <p className="text-slate-500 text-xs">{activityReport.manager_general.orders_count} cmd</p>
+                        </div>
+                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-center">
+                          <p className="text-slate-400 text-xs">Impaye</p>
+                          <p className="text-red-400 font-bold">{formatPrice(activityReport.manager_general.orders_unpaid)} F</p>
+                        </div>
+                        <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
+                          <p className="text-slate-400 text-xs">Achats perso</p>
+                          <p className="text-blue-400 font-bold">{formatPrice(activityReport.manager_general.purchases_total)} F</p>
+                          <p className="text-slate-500 text-xs">{activityReport.manager_general.purchases_count} achats</p>
+                        </div>
+                        <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center">
+                          <p className="text-slate-400 text-xs">Total MG</p>
+                          <p className="text-amber-400 font-bold">{formatPrice((activityReport.manager_general.orders_total || 0) + (activityReport.manager_general.purchases_total || 0))} F</p>
+                        </div>
+                      </div>
+                      {activityReport.manager_general.orders?.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-slate-400 text-xs mb-1">Commandes :</p>
+                          {activityReport.manager_general.orders.map((o, idx) => (
+                            <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
+                              <span className="text-white text-xs">{o.items?.map(i => i.name || i.product_name).join(', ') || 'Commande'}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge className={o.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
+                                  {o.status === 'regle' ? 'Regle' : 'Non regle'}
+                                </Badge>
+                                <span className="text-violet-400 font-bold text-xs">{formatPrice(o.total)} F</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {activityReport.manager_general.purchases?.length > 0 && (
+                        <div className="space-y-1 mt-2">
+                          <p className="text-slate-400 text-xs mb-1">Achats :</p>
+                          {activityReport.manager_general.purchases.map((p, idx) => (
+                            <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded px-3 py-1.5">
+                              <span className="text-white text-xs">{p.description}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge className={p.status === 'regle' ? 'bg-green-500/20 text-green-400 text-xs' : 'bg-red-500/20 text-red-400 text-xs'}>
+                                  {p.status === 'regle' ? 'Regle' : 'Non regle'}
+                                </Badge>
+                                <span className="text-blue-400 font-bold text-xs">{formatPrice(p.amount)} F</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                   )}
                 </div>
               ) : (
