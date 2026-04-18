@@ -5869,6 +5869,12 @@ _Gérante - Espace Maxo_
                               </p>
                               {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
                               {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
+                              {/* Badges d'analyse admin (doublons, stock, trésorerie) */}
+                              {currentUser?.role === 'admin' && expenseAnalyses[expense.id] && (
+                                <div className="mt-2">
+                                  <ExpenseAnalysisBadges analysis={expenseAnalyses[expense.id]} />
+                                </div>
+                              )}
                               {expense.receipt_image && (
                                 <div className="mt-2">
                                   <img 
@@ -6053,6 +6059,12 @@ _Gérante - Espace Maxo_
                               {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
                               {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
                               <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
+                              {/* Badges d'analyse admin (doublons, stock, trésorerie) */}
+                              {currentUser?.role === 'admin' && expenseAnalyses[expense.id] && (
+                                <div className="mt-2">
+                                  <ExpenseAnalysisBadges analysis={expenseAnalyses[expense.id]} />
+                                </div>
+                              )}
                             </div>
                             <div className="flex gap-2 flex-wrap shrink-0">
                               {/* Week assignment button */}

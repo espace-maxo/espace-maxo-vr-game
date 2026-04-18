@@ -4,7 +4,13 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
-## Recent Updates (17/04/2026 - Session 4)
+## Recent Updates (17-18/04/2026 - Session 4)
+
+### Fix : Badges d'analyse visibles sur l'onglet Achats (DONE)
+L'utilisateur a signalé que les badges d'analyse n'apparaissaient pas dans l'onglet Achats (seulement sur la page d'accueil admin invisible). Corrections :
+- **Frontend** : intégration de `<ExpenseAnalysisBadges>` directement dans les cartes des demandes "À valider" et "Approuvées" de l'onglet Achats.
+- **Backend** : les items de dépenses groupées utilisent `description` (pas `name`). L'analyse a été corrigée pour lire `description OU name`, ce qui permet maintenant la détection correcte des doublons et des correspondances stock pour les **listes groupées** (ex: "Liste 21 articles").
+- Résultat : les badges "📦 15 en stock" + "💰 567% trésorerie" + "⚠ 3 warnings stock suffisant" s'affichent sur chaque demande.
 
 ### Refactoring Phase 5 — Expenses Router (DONE)
 Extraction du CRUD dépenses dans un router dédié.

@@ -399,8 +399,10 @@ async def expenses_analysis():
                     reasons.append("même fournisseur")
 
                 if items and other_items:
-                    names_a = {re.sub(r'\s+', ' ', (i.get("name") or "").strip().lower()) for i in items}
-                    names_b = {re.sub(r'\s+', ' ', (i.get("name") or "").strip().lower()) for i in other_items}
+                    names_a = {re.sub(r'\s+', ' ', ((i.get("name") or i.get("description")) or "").strip().lower()) for i in items}
+                    names_a.discard("")
+                    names_b = {re.sub(r'\s+', ' ', ((i.get("name") or i.get("description")) or "").strip().lower()) for i in other_items}
+                    names_b.discard("")
                     if names_a and names_b:
                         common = names_a & names_b
                         overlap = len(common) / max(1, min(len(names_a), len(names_b)))
@@ -428,34 +430,39 @@ async def expenses_analysis():
                     })
 
             # ---- STOCK MATCHES ----
+            # ---- STOCK MATCHES ----
             stock_matches = []
-            if items:
-                for item in items:
-                    iname = (item.get("name") or "").strip().lower()
-                    if len(iname) < 3:
+            # For non-group expenses, also try to match the main description
+            items_to_check = list(items)
+            if not items_to_check and desc:
+                items_to_check = [{"name": desc, "quantity": e.get("quantity", 1)}]
+
+            for item in items_to_check:
+                # Items in grouped expenses use 'description'; in forecasts-side we use 'name'
+                iname = ((item.get("name") or item.get("description")) or "").strip().lower()
+                if len(iname) < 3:
+                    continue
+                for sp in stock_products:
+                    sp_name = (sp.get("name") or "").strip().lower()
+                    if not sp_name:
                         continue
-                    for sp in stock_products:
-                        sp_name = (sp.get("name") or "").strip().lower()
-                        if not sp_name:
-                            continue
-                        if iname == sp_name or iname in sp_name or sp_name in iname:
-                            # Last entry movement
-                            last_entry = await db.stock_movements.find_one({
-                                "product_id": sp.get("id"),
-                                "movement_type": "entree"
-                            }, {"_id": 0}, sort=[("created_at", -1)])
-                            stock_matches.append({
-                                "product_name": sp.get("name"),
-                                "current_quantity": sp.get("quantity", 0),
-                                "unit": sp.get("unit", ""),
-                                "stock_min": sp.get("stock_min", 0),
-                                "statut": sp.get("statut", "normal"),
-                                "last_entry_date": (last_entry or {}).get("created_at", ""),
-                                "last_entry_qty": (last_entry or {}).get("quantity", 0),
-                                "warning": (sp.get("quantity", 0) > (sp.get("stock_min", 0) * 1.5)),
-                                "requested_item": item.get("name"),
-                            })
-                            break
+                    if iname == sp_name or iname in sp_name or sp_name in iname:
+                        last_entry = await db.stock_movements.find_one({
+                            "product_id": sp.get("id"),
+                            "movement_type": "entree"
+                        }, {"_id": 0}, sort=[("created_at", -1)])
+                        stock_matches.append({
+                            "product_name": sp.get("name"),
+                            "current_quantity": sp.get("quantity", 0),
+                            "unit": sp.get("unit", ""),
+                            "stock_min": sp.get("stock_min", 0),
+                            "statut": sp.get("statut", "normal"),
+                            "last_entry_date": (last_entry or {}).get("created_at", ""),
+                            "last_entry_qty": (last_entry or {}).get("quantity", 0),
+                            "warning": (sp.get("quantity", 0) > (sp.get("stock_min", 0) * 1.5)),
+                            "requested_item": item.get("name") or item.get("description"),
+                        })
+                        break
 
             # ---- TREASURY IMPACT ----
             amount = e.get("amount", 0)
