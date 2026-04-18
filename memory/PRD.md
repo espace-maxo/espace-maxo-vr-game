@@ -6,6 +6,26 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Module PRÉVISIONS + Analyse Demandes d'achat (DONE)
+Deux features majeures pour la **gestion financière prévisionnelle**.
+
+**Backend** — `routers/forecasts.py` (nouveau, 6 endpoints) :
+- CRUD `/forecasts` avec catégories (salaires/loyer/fournisseur/charges/impots/maintenance/autre), statuts (prevu/paye/annule/reporte), récurrence (none/weekly/monthly).
+- `GET /forecasts/dashboard?horizon_days=` — Retourne `{treasury, available_now, per_day, totals, missing_amount, min_running_balance}`.
+- `GET /expenses/analysis` — Pour chaque demande pending/approved, retourne :
+  * **Doublons** (score basé sur description + fournisseur + produits communs + jour) sur les 7 derniers jours
+  * **Correspondances stock** (quantité actuelle, dernière entrée, warning si qty > min×1.5)
+  * **Impact trésorerie** (ratio %, niveau low/moderate/warning/critical)
+- Calcul trésorerie : **CA validé semaine − dépenses approuvées/terminées** (respecte `assigned_week`).
+
+**Frontend** :
+- `ForecastsTab.jsx` (~430 lignes) — 4 KPI cards + alerte trésorerie + LineChart solde + agenda jour par jour + liste CRUD + répartition par catégorie + modal création/édition.
+- `ExpenseAnalysisBadges.jsx` — 3 badges contextuels (doublons, stock, impact) avec **tooltips détaillés** au survol.
+- Onglet Prévisions visible **admin uniquement**.
+- Badges intégrés automatiquement dans la page d'accueil admin sur les sections "Achats en attente" et "Achats à réviser".
+
+Régression validée : **20/20 backend** + UI 100% (iteration_36). Bugfix timezone appliqué par testing agent sur `_expand_recurrence`.
+
 ### Bug Fix : Alerte Ratio Dépenses/CA (DONE)
 Le calcul du ratio dans l'onglet Achats (Caisse Pro) était incorrect :
 - **Avant** : `weeklyExpenses + totalPendingExpenses` où `totalPendingExpenses` filtrait TOUTES les dépenses (pending + approved) sans filtre de semaine → double-comptage de la semaine courante + pollution par les dépenses d'autres semaines.
