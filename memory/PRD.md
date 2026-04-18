@@ -6,6 +6,19 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (17/04/2026 - Session 4)
 
+### Refactoring Phase 5 — Expenses Router (DONE)
+Extraction du CRUD dépenses dans un router dédié.
+
+**Backend** (`server.py`: 6344 → 6002 lignes, **-342**) :
+- `routers/expenses.py` (369 lignes) - **7 endpoints** extraits :
+  - `GET /expenses` (filtres status/category/dates/respect_assigned_week)
+  - `POST /expenses`, `PUT /expenses/{id}`, `DELETE /expenses/{id}`
+  - `PUT /expenses/{id}/assign-week`, `POST /expenses/assign-week-bulk`, `POST /expenses/unassign-week-bulk`
+- **Logique critique préservée** : PUT status='completed' synchronise avec Stock (stock_movements entree + stock_purchases + update produit)
+- Modèles `ExpenseItem`, `ExpenseCreate`, `ExpenseUpdate` déplacés
+
+Régression validée : **30/30 tests** passés (iteration_37), aucun bug, sync stock vérifié.
+
 ### Module PRÉVISIONS + Analyse Demandes d'achat (DONE)
 Deux features majeures pour la **gestion financière prévisionnelle**.
 
