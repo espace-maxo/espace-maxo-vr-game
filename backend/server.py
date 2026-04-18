@@ -30,6 +30,7 @@ from routers.caisse_users import router as caisse_users_router, set_db as set_ca
 from routers.reports import router as reports_router, set_db as set_reports_db
 from routers.invoices import router as invoices_router, set_db as set_invoices_db
 from routers.forecasts import router as forecasts_router, set_db as set_forecasts_db
+from routers.expenses import router as expenses_router, set_db as set_expenses_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -48,6 +49,7 @@ set_caisse_users_db(db)
 set_reports_db(db)
 set_invoices_db(db)
 set_forecasts_db(db)
+set_expenses_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -88,6 +90,7 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(reports_router)
 api_router.include_router(invoices_router)
 api_router.include_router(forecasts_router)
+api_router.include_router(expenses_router)
 api_router.include_router(caisse_users_router)
 api_router.include_router(financial_points_router)
 api_router.include_router(service_reports_router)
@@ -4294,42 +4297,7 @@ async def generate_rapport_pdf(date: str = Query(...), signature: str = Query(""
 
 # Include the router in the main app
 
-# ============== EXPENSE/PURCHASE MODELS ==============
-
-class ExpenseItem(BaseModel):
-    category: str
-    description: str
-    quantity: int = 1
-    unit_price: float
-    amount: float
-
-class ExpenseCreate(BaseModel):
-    category: str  # cuisine, bar, jeux, autres
-    description: str
-    quantity: Optional[int] = 1
-    unit_price: Optional[float] = None
-    amount: float
-    supplier: Optional[str] = None
-    planned_date: Optional[str] = None
-    receipt_image: Optional[str] = None  # Base64 or URL
-    requested_by: str
-    is_group: Optional[bool] = False
-    group_id: Optional[str] = None
-    items: Optional[List[ExpenseItem]] = None
-
-class ExpenseUpdate(BaseModel):
-    category: Optional[str] = None
-    description: Optional[str] = None
-    quantity: Optional[int] = None
-    unit_price: Optional[float] = None
-    amount: Optional[float] = None
-    supplier: Optional[str] = None
-    planned_date: Optional[str] = None
-    receipt_image: Optional[str] = None
-    admin_notes: Optional[str] = None
-    status: Optional[str] = None  # pending, approved, rejected, revision_requested, completed
-    is_group: Optional[bool] = None
-    items: Optional[List[ExpenseItem]] = None
+# Expense models moved to routers/expenses.py
 
 # ============== LOCATION MODELS (Salle, Jardin, Jeux) ==============
 
@@ -4461,315 +4429,6 @@ class ServerEndOfServiceReport(BaseModel):
     actual_sales: Optional[float] = None
     discrepancy_invoices: Optional[int] = None
     discrepancy_sales: Optional[float] = None
-
-# ============== EXPENSE ENDPOINTS ==============
-
-@api_router.get("/expenses")
-async def get_expenses(
-    status: Optional[str] = None,
-    category: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    respect_assigned_week: Optional[bool] = None
-):
-    """Get all expenses with optional filters. If respect_assigned_week=true, excludes expenses transferred to another week."""
-    try:
-        query = {}
-        if status:
-            query["status"] = status
-        if category:
-            query["category"] = category
-        if start_date:
-            query["created_at"] = {"$gte": start_date}
-        if end_date:
-            if "created_at" in query:
-                query["created_at"]["$lte"] = end_date + "T23:59:59"
-            else:
-                query["created_at"] = {"$lte": end_date + "T23:59:59"}
-        
-        expenses = await db.expenses.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-        
-        # If filtering by date and respect_assigned_week, exclude transferred expenses
-        if respect_assigned_week and (start_date or end_date):
-            filtered = []
-            for exp in expenses:
-                aw = exp.get("assigned_week")
-                if aw and aw != "" and aw is not None:
-                    # Check if assigned_week falls within the requested date range
-                    if start_date and end_date:
-                        if aw < start_date or aw > end_date:
-                            continue  # Transferred out of this range
-                    elif start_date:
-                        if aw < start_date:
-                            continue
-                filtered.append(exp)
-            expenses = filtered
-        
-        return {"expenses": expenses}
-    except Exception as e:
-        logger.error(f"Error fetching expenses: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/expenses")
-async def create_expense(expense: ExpenseCreate):
-    """Create a new expense request (by manager)"""
-    try:
-        expense_doc = {
-            "id": str(uuid.uuid4()),
-            "category": expense.category,
-            "description": expense.description,
-            "quantity": expense.quantity or 1,
-            "unit_price": expense.unit_price or expense.amount,
-            "amount": expense.amount,
-            "supplier": expense.supplier,
-            "planned_date": expense.planned_date,
-            "receipt_image": expense.receipt_image,
-            "requested_by": expense.requested_by,
-            "is_group": expense.is_group or False,
-            "group_id": expense.group_id,
-            "items": [item.dict() for item in expense.items] if expense.items else None,
-            "status": "pending",  # pending, approved, rejected, revision_requested, completed
-            "admin_notes": None,
-            "approved_by": None,
-            "approved_at": None,
-            "completed_at": None,
-            "assigned_week": expense.assigned_week if hasattr(expense, 'assigned_week') else None,  # Week assignment (YYYY-MM-DD of Monday)
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        await db.expenses.insert_one(expense_doc)
-        if "_id" in expense_doc:
-            del expense_doc["_id"]
-        return {"success": True, "expense": expense_doc}
-    except Exception as e:
-        logger.error(f"Error creating expense: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.put("/expenses/{expense_id}")
-async def update_expense(expense_id: str, update: ExpenseUpdate):
-    """Update an expense (admin can modify and request revision)"""
-    try:
-        expense = await db.expenses.find_one({"id": expense_id})
-        if not expense:
-            raise HTTPException(status_code=404, detail="Expense not found")
-        
-        was_completed_before = expense.get("status") == "completed"
-        
-        update_data = {}
-        for k, v in update.dict().items():
-            if v is not None:
-                if k == "items" and v:
-                    update_data[k] = [item if isinstance(item, dict) else item.dict() for item in v]
-                else:
-                    update_data[k] = v
-        
-        if update.status == "approved":
-            update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
-        elif update.status == "completed":
-            update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
-        
-        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        
-        await db.expenses.update_one(
-            {"id": expense_id},
-            {"$set": update_data}
-        )
-        
-        # === SYNC WITH STOCK MODULE (Achats Caisse → Entrées Stock) ===
-        if update.status == "completed" and not was_completed_before:
-            try:
-                updated_expense = await db.expenses.find_one({"id": expense_id})
-                expense_items = []
-                
-                if updated_expense.get("is_group") and updated_expense.get("items"):
-                    expense_items = updated_expense["items"]
-                else:
-                    expense_items = [{
-                        "description": updated_expense.get("description", ""),
-                        "quantity": updated_expense.get("quantity", 1),
-                        "unit_price": updated_expense.get("unit_price") or updated_expense.get("amount", 0),
-                        "amount": updated_expense.get("amount", 0),
-                        "category": updated_expense.get("category", "")
-                    }]
-                
-                stock_synced = 0
-                purchase_items_for_stock = []
-                now_iso = datetime.now(timezone.utc).isoformat()
-                
-                for exp_item in expense_items:
-                    item_desc = exp_item.get("description", "").strip()
-                    item_qty = exp_item.get("quantity", 1) or 1
-                    item_price = exp_item.get("unit_price", 0) or 0
-                    
-                    if not item_desc:
-                        continue
-                    
-                    escaped = re.escape(item_desc)
-                    stock_product = await db.stock_products.find_one({
-                        "name": {"$regex": f"^{escaped}$", "$options": "i"},
-                        "is_active": True
-                    })
-                    if not stock_product:
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": f"^{escaped}", "$options": "i"},
-                            "is_active": True
-                        })
-                    if not stock_product:
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": escaped, "$options": "i"},
-                            "is_active": True
-                        })
-                    
-                    if stock_product:
-                        old_qty = stock_product.get("quantity", 0)
-                        new_qty = old_qty + item_qty
-                        new_price = item_price if item_price > 0 else stock_product.get("purchase_price", 0)
-                        new_valeur = new_qty * new_price
-                        smin = stock_product.get("stock_min", 5)
-                        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-                        
-                        stock_mov = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": stock_product["id"],
-                            "product_name": stock_product["name"],
-                            "product_code": stock_product.get("code", ""),
-                            "movement_type": "entree",
-                            "quantity": item_qty,
-                            "previous_quantity": old_qty,
-                            "new_quantity": new_qty,
-                            "unit": stock_product.get("unit", ""),
-                            "unit_price": new_price,
-                            "total_value": item_qty * new_price,
-                            "reason": f"Achat Caisse - {updated_expense.get('supplier', 'N/A')}",
-                            "user_name": updated_expense.get("requested_by", "Caisse"),
-                            "expense_id": expense_id,
-                            "created_at": now_iso
-                        }
-                        await db.stock_movements.insert_one(stock_mov)
-                        
-                        await db.stock_products.update_one(
-                            {"id": stock_product["id"]},
-                            {"$set": {
-                                "quantity": new_qty,
-                                "purchase_price": new_price,
-                                "valeur_stock": new_valeur,
-                                "statut": new_statut,
-                                "updated_at": now_iso
-                            }}
-                        )
-                        purchase_items_for_stock.append({
-                            "product_id": stock_product["id"],
-                            "product_name": stock_product["name"],
-                            "quantity": item_qty,
-                            "unit_price": new_price,
-                            "unit": stock_product.get("unit", "")
-                        })
-                        stock_synced += 1
-                        logger.info(f"Stock entree: {stock_product['name']} {old_qty} -> {new_qty} (expense {expense_id})")
-                    else:
-                        unlinked_mov = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": "",
-                            "product_name": item_desc,
-                            "product_code": "",
-                            "movement_type": "entree",
-                            "quantity": item_qty,
-                            "previous_quantity": 0,
-                            "new_quantity": item_qty,
-                            "unit": "unite",
-                            "unit_price": item_price,
-                            "total_value": item_qty * item_price,
-                            "reason": f"Achat Caisse (non lie au stock) - {updated_expense.get('supplier', 'N/A')}",
-                            "user_name": updated_expense.get("requested_by", "Caisse"),
-                            "expense_id": expense_id,
-                            "created_at": now_iso
-                        }
-                        await db.stock_movements.insert_one(unlinked_mov)
-                        purchase_items_for_stock.append({
-                            "product_id": "",
-                            "product_name": item_desc,
-                            "quantity": item_qty,
-                            "unit_price": item_price,
-                            "unit": "unite"
-                        })
-                
-                # Create a stock_purchases record so it shows in Stock > Achats
-                total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
-                stock_purchase = {
-                    "id": str(uuid.uuid4()),
-                    "supplier_id": "",
-                    "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
-                    "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                    "items": purchase_items_for_stock,
-                    "total_amount": total_amount,
-                    "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
-                    "user_name": updated_expense.get("requested_by", "Caisse"),
-                    "status": "validated",
-                    "source": "caisse",
-                    "expense_id": expense_id,
-                    "created_at": now_iso
-                }
-                await db.stock_purchases.insert_one(stock_purchase)
-                stock_purchase.pop("_id", None)
-                
-                logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched, purchase record created")
-            except Exception as stock_err:
-                logger.error(f"Error syncing expense to stock: {stock_err}")
-        
-        updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
-        return {"success": True, "expense": updated}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating expense: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.delete("/expenses/{expense_id}")
-async def delete_expense(expense_id: str):
-    """Delete an expense"""
-    try:
-        result = await db.expenses.delete_one({"id": expense_id})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Expense not found")
-        return {"success": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting expense: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.put("/expenses/{expense_id}/assign-week")
-async def assign_expense_to_week(expense_id: str, week_start: str = Body(..., embed=True)):
-    """Assign an expense to a specific week (week_start should be Monday's date YYYY-MM-DD)"""
-    try:
-        expense = await db.expenses.find_one({"id": expense_id})
-        if not expense:
-            raise HTTPException(status_code=404, detail="Expense not found")
-        
-        await db.expenses.update_one(
-            {"id": expense_id},
-            {"$set": {"assigned_week": week_start}}
-        )
-        
-        updated = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
-        return {"success": True, "expense": updated}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error assigning expense to week: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/expenses/assign-week-bulk")
-async def assign_expenses_bulk(ids: List[str] = Body(...), week_start: str = Body(...)):
-    """Assign multiple expenses to a specific week"""
-    result = await db.expenses.update_many({"id": {"$in": ids}}, {"$set": {"assigned_week": week_start}})
-    return {"success": True, "modified": result.modified_count}
-
-@api_router.post("/expenses/unassign-week-bulk")
-async def unassign_expenses_bulk(ids: List[str] = Body(..., embed=True)):
-    """Remove week assignment from expenses"""
-    result = await db.expenses.update_many({"id": {"$in": ids}}, {"$unset": {"assigned_week": ""}})
-    return {"success": True, "modified": result.modified_count}
 
 @api_router.get("/reports/weekly/duplicates")
 async def detect_weekly_duplicates(week_start: str):

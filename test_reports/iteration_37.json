@@ -1,0 +1,88 @@
+{
+  "summary": "Expenses Router Refactoring (Phase 5) - All tests passed. 7 endpoints extracted from server.py to /app/backend/routers/expenses.py. server.py reduced from 6344 to 6002 lines (-342). Critical stock sync on status=completed working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ GET /api/expenses - Returns list of expenses",
+    "✅ GET /api/expenses?status=pending - Filters by status",
+    "✅ GET /api/expenses?category=Alimentation - Filters by category",
+    "✅ GET /api/expenses with start_date/end_date - Date range filter works",
+    "✅ GET /api/expenses?respect_assigned_week=true - Excludes transferred expenses",
+    "✅ POST /api/expenses - Creates expense with status='pending' by default",
+    "✅ POST /api/expenses with is_group=true and items[] - Group expense creation works",
+    "✅ PUT /api/expenses/{id} status=approved - Sets approved_at timestamp",
+    "✅ PUT /api/expenses/{id} - Returns 404 for non-existent expense",
+    "✅ DELETE /api/expenses/{id} - Removes expense",
+    "✅ DELETE /api/expenses/{id} - Returns 404 for non-existent expense",
+    "✅ PUT /api/expenses/{id}/assign-week - Assigns expense to specific week",
+    "✅ POST /api/expenses/assign-week-bulk - Bulk assigns multiple expenses",
+    "✅ POST /api/expenses/unassign-week-bulk - Removes week assignment",
+    "✅ CRITICAL: PUT status=completed creates stock_movements entree for each item",
+    "✅ CRITICAL: PUT status=completed creates stock_purchases with source='caisse'",
+    "✅ CRITICAL: PUT status=completed updates matching stock product quantity",
+    "✅ Unmatched items create movements with product_id='' (non lié au stock)",
+    "✅ No double sync on re-completing already completed expense",
+    "✅ Product matching uses multiple levels (exact, prefix, contains)",
+    "✅ REGRESSION: GET /api/forecasts/dashboard works (uses db.expenses.find)",
+    "✅ REGRESSION: GET /api/expenses/analysis works (in forecasts router)",
+    "✅ REGRESSION: GET /api/reports/weekly works (uses db.expenses aggregation)",
+    "✅ Simple expense (is_group=false) sync uses description as item",
+    "✅ Frontend: Achats tab loads correctly with category filters",
+    "✅ Frontend: Expense list displays with items, amounts, status",
+    "✅ Frontend: Approve button works - status changes to 'approved'",
+    "✅ Frontend: Toast notification shows 'Dépense mise à jour!'",
+    "✅ Frontend: Status summary updates (en attente → approuvées)",
+    "✅ Frontend: Analysis badges visible (250% trésorerie, 567.6% trésorerie)"
+  ],
+  "failed_tests": [],
+  "test_report_links": [
+    "/app/backend/tests/test_expenses_refactoring.py",
+    "/app/test_reports/pytest/expenses_refactoring_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Refactoring is clean - 7 endpoints moved to dedicated router with all models (ExpenseItem, ExpenseCreate, ExpenseUpdate)",
+    "Stock sync logic preserved correctly: status=completed triggers entree movements + stock_purchases + product qty update",
+    "Product matching uses 3 levels: exact match → prefix match → contains match (case insensitive)",
+    "Double sync prevention: checks was_completed_before flag before syncing",
+    "Router included at line 93 in server.py with other routers for proper routing priority"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_expenses_refactoring.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "100% (all flows working)"
+  },
+  "test_credentials": {
+    "caisse_admin": "Admin tab / password: Caisse2026",
+    "caisse_gerante": "Serveur (PIN) tab / PIN: 2468"
+  },
+  "seed_data_creation": "Test expenses created with TEST_ prefix and cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Expenses router refactoring (Phase 5) fully tested. All 7 endpoints working. Critical stock sync on complete verified. Frontend Achats tab working with approve/complete flows. server.py now 6002 lines.",
+  "refactoring_verification": {
+    "file_extracted": "/app/backend/routers/expenses.py (369 lines)",
+    "server_py_before": "6344 lines",
+    "server_py_after": "6002 lines",
+    "lines_reduced": 342,
+    "endpoints_moved": [
+      "GET /api/expenses",
+      "POST /api/expenses",
+      "PUT /api/expenses/{id}",
+      "DELETE /api/expenses/{id}",
+      "PUT /api/expenses/{id}/assign-week",
+      "POST /api/expenses/assign-week-bulk",
+      "POST /api/expenses/unassign-week-bulk"
+    ],
+    "models_moved": ["ExpenseItem", "ExpenseCreate", "ExpenseUpdate"]
+  }
+}
