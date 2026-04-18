@@ -448,17 +448,50 @@ async def expenses_analysis():
             supplier = (e.get("supplier") or "").strip().lower()
             items = e.get("items") or []
 
-            # Pre-normalize items of current expense
+            # Pre-normalize items of current expense (keep index to compute amounts)
             cur_items_norm = []
-            for it in items:
+            for idx, it in enumerate(items):
                 raw = it.get("name") or it.get("description") or ""
                 norm = _normalize_item_name(raw)
                 if norm:
                     cur_items_norm.append({
+                        "index": idx,
                         "raw": raw,
                         "norm": norm,
                         "quantity": it.get("quantity", 1) or 1,
                         "unit_price": it.get("unit_price", 0) or 0,
+                        "amount": it.get("amount", 0) or 0,
+                    })
+
+            # ---- INTRA-LIST DUPLICATES (same article listed twice in this expense) ----
+            intra_duplicates = []
+            intra_seen_indices = set()
+            for i in range(len(cur_items_norm)):
+                if cur_items_norm[i]["index"] in intra_seen_indices:
+                    continue
+                group = [cur_items_norm[i]]
+                for j in range(i + 1, len(cur_items_norm)):
+                    if cur_items_norm[j]["index"] in intra_seen_indices:
+                        continue
+                    if _items_match(cur_items_norm[i]["norm"], cur_items_norm[j]["norm"]):
+                        group.append(cur_items_norm[j])
+                        intra_seen_indices.add(cur_items_norm[j]["index"])
+                if len(group) >= 2:
+                    intra_seen_indices.add(cur_items_norm[i]["index"])
+                    total_qty = sum(g["quantity"] for g in group)
+                    total_amount = sum(g["amount"] or (g["quantity"] * g["unit_price"]) for g in group)
+                    intra_duplicates.append({
+                        "items": [
+                            {
+                                "name": g["raw"],
+                                "quantity": g["quantity"],
+                                "unit_price": g["unit_price"],
+                                "amount": g["amount"] or (g["quantity"] * g["unit_price"]),
+                            } for g in group
+                        ],
+                        "count": len(group),
+                        "total_quantity": total_qty,
+                        "total_amount": total_amount,
                     })
 
             # ---- DUPLICATE ITEMS (item-level fuzzy match vs other recent requests) ----
@@ -707,6 +740,8 @@ async def expenses_analysis():
                 "duplicates": duplicates[:8],
                 "duplicate_items_count": len(duplicate_items),
                 "duplicate_items": duplicate_items[:30],
+                "intra_duplicates_count": len(intra_duplicates),
+                "intra_duplicates": intra_duplicates,
                 "stock_matches_count": len(stock_matches),
                 "stock_matches": stock_matches[:20],
                 "redundant_items_count": len(redundant_items),

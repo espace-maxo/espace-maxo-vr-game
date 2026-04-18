@@ -36,6 +36,7 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
   const {
     duplicates = [], duplicates_count = 0,
     duplicate_items = [], duplicate_items_count = 0,
+    intra_duplicates = [], intra_duplicates_count = 0,
     stock_matches = [], stock_matches_count = 0,
     redundant_items = [], redundant_items_count = 0, redundant_estimated_waste = 0,
     recent_purchases = [], recent_purchases_count = 0,
@@ -43,7 +44,7 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
   } = analysis;
   const level = treasury_impact.level || "low";
 
-  const hasCritical = duplicates_count > 0 || duplicate_items_count > 0 || redundant_items_count > 0 || level === "critical" || level === "warning";
+  const hasCritical = duplicates_count > 0 || duplicate_items_count > 0 || intra_duplicates_count > 0 || redundant_items_count > 0 || level === "critical" || level === "warning";
 
   // Group duplicate items by current_item for compact display
   const groupedDupItems = duplicate_items.reduce((acc, d) => {
@@ -63,6 +64,13 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
             ? `${duplicate_items_count} article${duplicate_items_count > 1 ? "s" : ""} en doublon`
             : `${duplicates_count} doublon${duplicates_count > 1 ? "s" : ""}`}
         </Badge>
+
+        {intra_duplicates_count > 0 && (
+          <Badge className="bg-fuchsia-500/20 text-fuchsia-300" data-testid="intra-dup-badge">
+            <Copy className="w-3 h-3 mr-1" />
+            {intra_duplicates_count} doublon{intra_duplicates_count > 1 ? "s" : ""} dans la liste
+          </Badge>
+        )}
 
         <Badge className={stock_matches_count > 0 ? (redundant_items_count > 0 ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400") : "bg-slate-700/50 text-slate-400"}>
           <Package className="w-3 h-3 mr-1" />
@@ -98,6 +106,12 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
       {/* Quick summary chips */}
       {!expanded && hasCritical && (
         <div className="flex flex-wrap gap-2 text-xs">
+          {intra_duplicates_count > 0 && (
+            <span className="text-fuchsia-300 flex items-center gap-1" data-testid="intra-dup-chip">
+              <Copy className="w-3 h-3" />
+              {intra_duplicates_count} article{intra_duplicates_count > 1 ? "s" : ""} listé{intra_duplicates_count > 1 ? "s" : ""} plusieurs fois
+            </span>
+          )}
           {duplicate_items_count > 0 && (
             <span className="text-rose-300 flex items-center gap-1" data-testid="dup-items-chip">
               <Copy className="w-3 h-3" />
@@ -145,6 +159,52 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
               </div>
             </div>
           </div>
+
+          {/* Intra-list duplicates (same article listed multiple times) */}
+          {intra_duplicates.length > 0 && (
+            <div data-testid="intra-duplicates-section">
+              <div className="flex items-center gap-2 mb-1">
+                <Copy className="w-4 h-4 text-fuchsia-300" />
+                <span className="text-slate-200 font-medium text-sm">
+                  Doublons dans cette liste ({intra_duplicates.length})
+                </span>
+                <span className="text-fuchsia-300 text-xs ml-auto">
+                  article{intra_duplicates.length > 1 ? "s" : ""} listé{intra_duplicates.length > 1 ? "s" : ""} plusieurs fois
+                </span>
+              </div>
+              <div className="space-y-1">
+                {intra_duplicates.map((grp, gi) => (
+                  <div key={gi} className="bg-slate-800/40 rounded px-2 py-1.5 border-l-2 border-fuchsia-400/60 text-xs">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="text-white font-medium flex items-center gap-2">
+                        <Badge className="bg-fuchsia-500/20 text-fuchsia-300 text-[10px] px-1.5 py-0">
+                          × {grp.count}
+                        </Badge>
+                        <span>{grp.items[0]?.name}</span>
+                      </div>
+                      <div className="text-fuchsia-200 font-bold">
+                        {formatPrice(grp.total_amount)} F
+                      </div>
+                    </div>
+                    <ul className="mt-1 space-y-0.5 ml-2">
+                      {grp.items.map((it, i) => (
+                        <li key={i} className="text-slate-300 flex items-center gap-2">
+                          <span className="text-slate-500">•</span>
+                          <span className="flex-1">
+                            <span className="text-slate-200">{it.name}</span>
+                            <span className="text-slate-400 ml-2">
+                              {it.quantity} × {formatPrice(it.unit_price)} F
+                            </span>
+                          </span>
+                          <span className="text-slate-300">= {formatPrice(it.amount)} F</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Duplicate items (item-level detection) */}
           {duplicate_items.length > 0 && (

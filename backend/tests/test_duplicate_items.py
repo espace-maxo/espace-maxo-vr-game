@@ -57,3 +57,45 @@ def test_empty_strings():
     assert not _items_match("", "nappe")
     assert not _items_match("nappe", "")
     assert not _items_match("", "")
+
+
+def test_intra_list_duplicate_detection():
+    """Simulate the intra-list grouping logic as used in expenses_analysis."""
+    items = [
+        {"name": "Tomate", "quantity": 2, "unit_price": 1000, "amount": 2000},
+        {"name": "Oignon", "quantity": 1, "unit_price": 500, "amount": 500},
+        {"name": "Tomates", "quantity": 3, "unit_price": 1200, "amount": 3600},
+        {"name": "Nappe", "quantity": 5, "unit_price": 500, "amount": 2500},
+        {"name": "Location nappe", "quantity": 8, "unit_price": 500, "amount": 4000},
+        {"name": "Poulet", "quantity": 2, "unit_price": 2500, "amount": 5000},
+    ]
+    cur_items_norm = [
+        {"index": i, "raw": it["name"], "norm": _normalize_item_name(it["name"]),
+         "quantity": it["quantity"], "unit_price": it["unit_price"], "amount": it["amount"]}
+        for i, it in enumerate(items) if _normalize_item_name(it["name"])
+    ]
+    intra = []
+    seen = set()
+    for i in range(len(cur_items_norm)):
+        if cur_items_norm[i]["index"] in seen:
+            continue
+        group = [cur_items_norm[i]]
+        for j in range(i + 1, len(cur_items_norm)):
+            if cur_items_norm[j]["index"] in seen:
+                continue
+            if _items_match(cur_items_norm[i]["norm"], cur_items_norm[j]["norm"]):
+                group.append(cur_items_norm[j])
+                seen.add(cur_items_norm[j]["index"])
+        if len(group) >= 2:
+            seen.add(cur_items_norm[i]["index"])
+            intra.append([g["raw"] for g in group])
+
+    # Expected: Tomate/Tomates grouped, Nappe/Location nappe grouped
+    assert len(intra) == 2
+    groups_flat = {tuple(sorted(g)) for g in intra}
+    assert ("Tomate", "Tomates") in groups_flat
+    assert ("Location nappe", "Nappe") in groups_flat
+    # Oignon and Poulet should NOT be in any group (alone)
+    all_items = [x for g in intra for x in g]
+    assert "Oignon" not in all_items
+    assert "Poulet" not in all_items
