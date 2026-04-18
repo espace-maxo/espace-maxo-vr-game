@@ -4,6 +4,33 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (18/04/2026 - Session fix doublons)
+
+### Fix P0 : Détection des doublons item-par-item (DONE)
+Les demandes d'achat ne remontaient aucun doublon alors que des items évidents étaient dupliqués.
+
+**Cause racine** :
+- Set-intersection sur noms bruts : `{"Nappe"}` ≠ `{"Location nappe"}` → aucun match
+- Seuil à 30 trop élevé, score max atteignable sur items était 20
+
+**Correctif backend** (`/app/backend/routers/forecasts.py`) :
+- Nouveaux helpers : `_strip_accents`, `_normalize_item_name` (minuscules, accents, mots vides `location/achat/liste/de/du…`, pluriel final `s`)
+- `_items_match` : exact token-intersection + prefix (≥ 4 chars) + `SequenceMatcher` ≥ 0.9 par token
+- **Pas de substring-anywhere** pour éviter `oeuf`↔`boeuf`, `table`↔`jetables`
+- Nouveau champ `duplicate_items` (max 30) : pour chaque article demandé, liste des correspondances (source = `request` ou `purchase`, date, label, qty, unit_price, amount)
+- `stock_matches` et `recent_purchases` utilisent aussi le normalisateur (plus précis)
+- Détection niveau demande : seuil abaissé à 20, items fuzzy comptés via `_items_match`
+
+**Frontend** (`ExpenseAnalysisBadges.jsx`) :
+- Badge doublon affiche désormais le nb d'**articles en doublon** (prioritaire sur nb de demandes)
+- Chip rouge en résumé : « N articles déjà demandés/achetés (14j) »
+- Section détaillée « Articles en doublon » groupée par item, avec tag `Acheté` (bleu) ou `Demandé` (ambre), date, label et quantités
+
+**Tests** : 9/9 pytest `backend/tests/test_duplicate_items.py` (plurals, accents, stopwords, pas de faux positifs).
+
+**Validation réelle** : sur les 2 demandes actuelles, l'endpoint remonte `Nappe ↔ Location nappe`, `Tomate ↔ Tomates`, `Oignon ↔ Oignons`, `Citron ↔ Citron`, etc. — plus aucun faux positif détecté.
+
+---
 ## Recent Updates (18/04/2026)
 
 ### Analyse des demandes d'achats - Enrichissement complet (DONE)

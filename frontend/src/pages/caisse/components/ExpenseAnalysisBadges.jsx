@@ -35,6 +35,7 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
   if (!analysis) return null;
   const {
     duplicates = [], duplicates_count = 0,
+    duplicate_items = [], duplicate_items_count = 0,
     stock_matches = [], stock_matches_count = 0,
     redundant_items = [], redundant_items_count = 0, redundant_estimated_waste = 0,
     recent_purchases = [], recent_purchases_count = 0,
@@ -42,15 +43,25 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
   } = analysis;
   const level = treasury_impact.level || "low";
 
-  const hasCritical = duplicates_count > 0 || redundant_items_count > 0 || level === "critical" || level === "warning";
+  const hasCritical = duplicates_count > 0 || duplicate_items_count > 0 || redundant_items_count > 0 || level === "critical" || level === "warning";
+
+  // Group duplicate items by current_item for compact display
+  const groupedDupItems = duplicate_items.reduce((acc, d) => {
+    const key = d.current_item || "-";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(d);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-2" data-testid="expense-analysis-badges">
       {/* Compact badge row */}
       <div className="flex flex-wrap gap-1 items-center">
-        <Badge className={duplicates_count > 0 ? "bg-rose-500/20 text-rose-400" : "bg-slate-700/50 text-slate-400"}>
+        <Badge className={(duplicates_count > 0 || duplicate_items_count > 0) ? "bg-rose-500/20 text-rose-400" : "bg-slate-700/50 text-slate-400"} data-testid="dup-badge">
           <Copy className="w-3 h-3 mr-1" />
-          {duplicates_count} doublon{duplicates_count > 1 ? "s" : ""}
+          {duplicate_items_count > 0
+            ? `${duplicate_items_count} article${duplicate_items_count > 1 ? "s" : ""} en doublon`
+            : `${duplicates_count} doublon${duplicates_count > 1 ? "s" : ""}`}
         </Badge>
 
         <Badge className={stock_matches_count > 0 ? (redundant_items_count > 0 ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400") : "bg-slate-700/50 text-slate-400"}>
@@ -87,6 +98,12 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
       {/* Quick summary chips */}
       {!expanded && hasCritical && (
         <div className="flex flex-wrap gap-2 text-xs">
+          {duplicate_items_count > 0 && (
+            <span className="text-rose-300 flex items-center gap-1" data-testid="dup-items-chip">
+              <Copy className="w-3 h-3" />
+              {duplicate_items_count} article{duplicate_items_count > 1 ? "s" : ""} déjà demandé{duplicate_items_count > 1 ? "s" : ""}/acheté{duplicate_items_count > 1 ? "s" : ""} (14j)
+            </span>
+          )}
           {redundant_estimated_waste > 0 && (
             <span className="text-amber-300 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
@@ -128,6 +145,59 @@ const ExpenseAnalysisBadges = ({ analysis }) => {
               </div>
             </div>
           </div>
+
+          {/* Duplicate items (item-level detection) */}
+          {duplicate_items.length > 0 && (
+            <div data-testid="duplicate-items-section">
+              <div className="flex items-center gap-2 mb-1">
+                <Copy className="w-4 h-4 text-rose-400" />
+                <span className="text-slate-200 font-medium text-sm">
+                  Articles en doublon ({duplicate_items.length})
+                </span>
+                <span className="text-rose-300 text-xs ml-auto">
+                  déjà demandés ou achetés (14j)
+                </span>
+              </div>
+              <div className="space-y-1">
+                {Object.entries(groupedDupItems).map(([currentItem, matches]) => (
+                  <div key={currentItem} className="bg-slate-800/40 rounded px-2 py-1.5 border-l-2 border-rose-500/60 text-xs">
+                    <div className="text-white font-medium flex items-center gap-2">
+                      <span>{currentItem}</span>
+                      <Badge className="bg-rose-500/20 text-rose-300 text-[10px] px-1.5 py-0">
+                        {matches.length} correspondance{matches.length > 1 ? "s" : ""}
+                      </Badge>
+                    </div>
+                    <ul className="mt-1 space-y-0.5">
+                      {matches.slice(0, 4).map((m, i) => (
+                        <li key={i} className="text-slate-300 flex items-start gap-2">
+                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${
+                            m.source === "purchase" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"
+                          }`}>
+                            {m.source === "purchase" ? "Acheté" : "Demandé"}
+                          </span>
+                          <span className="flex-1">
+                            <span className="text-slate-200">« {m.matched_item} »</span>
+                            <span className="text-slate-500"> — {m.source_date}</span>
+                            {m.source_label && (
+                              <span className="text-slate-500"> • {String(m.source_label).slice(0, 40)}</span>
+                            )}
+                            {(m.source_quantity || m.source_unit_price) ? (
+                              <span className="text-slate-400 ml-1">
+                                ({m.source_quantity || "?"} × {formatPrice(m.source_unit_price)} F)
+                              </span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                      {matches.length > 4 && (
+                        <li className="text-slate-500 italic">+ {matches.length - 4} autre(s)</li>
+                      )}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Duplicates */}
           {duplicates.length > 0 && (
