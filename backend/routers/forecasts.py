@@ -346,33 +346,36 @@ async def forecasts_dashboard(horizon_days: int = Query(30, ge=7, le=90)):
 
 @router.get("/expenses/analysis")
 async def expenses_analysis():
-    """Return analysis for every pending/approved expense:
-      - duplicates: other expenses with same description or same supplier within last 7 days
-      - stock_matches: for each item, current stock + last entry
-      - treasury_impact: available_now vs amount
+    """Deep analysis for every pending/approved/revision_requested expense.
+    Returns duplicates (14d), stock_matches, redundant_items (overstock waste),
+    recent_purchases (same products 14d), treasury_impact.
     """
     try:
         today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        week_ago = today - timedelta(days=7)
-        week_ago_str = week_ago.strftime("%Y-%m-%d")
+        lookback = today - timedelta(days=14)
+        lookback_str = lookback.strftime("%Y-%m-%d")
 
         treasury = await _compute_treasury(today)
         available = treasury["available"]
 
-        # Load pending & approved expenses (admin attention required)
         exp = await db.expenses.find({
             "status": {"$in": ["pending", "revision_requested", "approved"]}
         }, {"_id": 0}).to_list(500)
 
-        analyses = []
-
-        # Pre-load all recent expenses for dup detection
         recent = await db.expenses.find({
-            "created_at": {"$gte": week_ago_str}
+            "created_at": {"$gte": lookback_str}
         }, {"_id": 0}).to_list(1000)
 
-        # Pre-load stock products for matching
         stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(2000)
+
+        recent_purchases = await db.stock_purchases.find({
+            "created_at": {"$gte": lookback_str}
+        }, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+        analyses = []
+
+        def _get_item_name(it):
+            return ((it.get("name") or it.get("description")) or "").strip().lower()
 
         for e in exp:
             eid = e.get("id")
@@ -380,7 +383,7 @@ async def expenses_analysis():
             supplier = (e.get("supplier") or "").strip().lower()
             items = e.get("items") or []
 
-            # ---- DUPLICATES ----
+            # ---- DUPLICATES (threshold lowered to 30+) ----
             duplicates = []
             for other in recent:
                 if other.get("id") == eid or other.get("status") == "cancelled":
@@ -391,33 +394,39 @@ async def expenses_analysis():
                 other_sup = (other.get("supplier") or "").strip().lower()
                 other_items = other.get("items") or []
 
-                if desc and other_desc and (desc == other_desc or desc in other_desc or other_desc in desc):
-                    score += 40
-                    reasons.append("description similaire")
+                if desc and other_desc:
+                    if desc == other_desc:
+                        score += 50
+                        reasons.append("description identique")
+                    elif desc in other_desc or other_desc in desc:
+                        score += 30
+                        reasons.append("description similaire")
                 if supplier and other_sup and supplier == other_sup:
-                    score += 30
-                    reasons.append("même fournisseur")
+                    score += 25
+                    reasons.append("meme fournisseur")
 
-                if items and other_items:
-                    names_a = {re.sub(r'\s+', ' ', ((i.get("name") or i.get("description")) or "").strip().lower()) for i in items}
-                    names_a.discard("")
-                    names_b = {re.sub(r'\s+', ' ', ((i.get("name") or i.get("description")) or "").strip().lower()) for i in other_items}
-                    names_b.discard("")
-                    if names_a and names_b:
-                        common = names_a & names_b
+                names_a = {_get_item_name(i) for i in items}
+                names_a.discard("")
+                names_b = {_get_item_name(i) for i in other_items}
+                names_b.discard("")
+                if names_a and names_b:
+                    common = names_a & names_b
+                    if common:
                         overlap = len(common) / max(1, min(len(names_a), len(names_b)))
-                        if overlap >= 0.7:
-                            score += 30
+                        if overlap >= 0.5:
+                            score += 35
+                            reasons.append(f"{len(common)} produit(s) en commun sur {min(len(names_a), len(names_b))}")
+                        elif len(common) >= 2:
+                            score += 20
                             reasons.append(f"{len(common)} produit(s) en commun")
 
-                # Same day → bonus
                 e_day = (e.get("created_at") or "")[:10]
                 o_day = (other.get("created_at") or "")[:10]
                 if e_day and o_day and e_day == o_day:
                     score += 10
-                    reasons.append("même jour")
+                    reasons.append("meme jour")
 
-                if score >= 50:
+                if score >= 30:
                     duplicates.append({
                         "id": other.get("id"),
                         "description": other.get("description"),
@@ -425,23 +434,25 @@ async def expenses_analysis():
                         "amount": other.get("amount"),
                         "status": other.get("status"),
                         "created_at": other.get("created_at"),
+                        "requested_by": other.get("requested_by"),
                         "score": min(100, score),
                         "reasons": reasons,
+                        "level": "certain" if score >= 70 else ("probable" if score >= 50 else "possible"),
                     })
+            duplicates.sort(key=lambda d: -d["score"])
 
-            # ---- STOCK MATCHES ----
-            # ---- STOCK MATCHES ----
+            # ---- STOCK MATCHES & REDUNDANT ITEMS ----
             stock_matches = []
-            # For non-group expenses, also try to match the main description
+            redundant_items = []
             items_to_check = list(items)
             if not items_to_check and desc:
-                items_to_check = [{"name": desc, "quantity": e.get("quantity", 1)}]
+                items_to_check = [{"name": desc, "quantity": e.get("quantity", 1), "unit_price": e.get("unit_price", 0)}]
 
             for item in items_to_check:
-                # Items in grouped expenses use 'description'; in forecasts-side we use 'name'
-                iname = ((item.get("name") or item.get("description")) or "").strip().lower()
+                iname = _get_item_name(item)
                 if len(iname) < 3:
                     continue
+                iqty = item.get("quantity", 1) or 1
                 for sp in stock_products:
                     sp_name = (sp.get("name") or "").strip().lower()
                     if not sp_name:
@@ -451,23 +462,65 @@ async def expenses_analysis():
                             "product_id": sp.get("id"),
                             "movement_type": "entree"
                         }, {"_id": 0}, sort=[("created_at", -1)])
-                        stock_matches.append({
+
+                        current_qty = sp.get("quantity", 0)
+                        stock_min = sp.get("stock_min", 0)
+                        unit = sp.get("unit", "")
+                        is_warning = current_qty > (stock_min * 1.5)
+
+                        match = {
                             "product_name": sp.get("name"),
-                            "current_quantity": sp.get("quantity", 0),
-                            "unit": sp.get("unit", ""),
-                            "stock_min": sp.get("stock_min", 0),
+                            "current_quantity": current_qty,
+                            "unit": unit,
+                            "stock_min": stock_min,
                             "statut": sp.get("statut", "normal"),
                             "last_entry_date": (last_entry or {}).get("created_at", ""),
                             "last_entry_qty": (last_entry or {}).get("quantity", 0),
-                            "warning": (sp.get("quantity", 0) > (sp.get("stock_min", 0) * 1.5)),
+                            "warning": is_warning,
                             "requested_item": item.get("name") or item.get("description"),
-                        })
+                            "requested_qty": iqty,
+                        }
+                        stock_matches.append(match)
+
+                        if is_warning:
+                            redundant_items.append({
+                                **match,
+                                "estimated_waste": iqty * (item.get("unit_price", 0) or 0),
+                            })
                         break
+
+            # ---- RECENT PURCHASES HISTORY ----
+            recent_history = []
+            for item in items_to_check:
+                iname = _get_item_name(item)
+                if len(iname) < 3:
+                    continue
+                for p in recent_purchases:
+                    for pi in p.get("items", []):
+                        pi_name = ((pi.get("product_name") or pi.get("name")) or "").strip().lower()
+                        if pi_name and (iname == pi_name or iname in pi_name or pi_name in iname):
+                            recent_history.append({
+                                "product_name": pi.get("product_name") or pi.get("name"),
+                                "quantity": pi.get("quantity", 0),
+                                "unit": pi.get("unit", ""),
+                                "unit_price": pi.get("unit_price", 0),
+                                "purchase_date": (p.get("purchase_date") or p.get("created_at", ""))[:10],
+                                "supplier_name": p.get("supplier_name", "-"),
+                            })
+                            break
+            seen_h = set()
+            deduped_hist = []
+            for h in recent_history:
+                k = (h["product_name"], h["purchase_date"])
+                if k in seen_h:
+                    continue
+                seen_h.add(k)
+                deduped_hist.append(h)
+            recent_history = deduped_hist[:15]
 
             # ---- TREASURY IMPACT ----
             amount = e.get("amount", 0)
             ratio = (amount / available * 100) if available > 0 else None
-            level = "low"
             if ratio is None:
                 level = "critical"
             elif ratio > 50:
@@ -476,13 +529,22 @@ async def expenses_analysis():
                 level = "warning"
             elif ratio > 10:
                 level = "moderate"
+            else:
+                level = "low"
+
+            total_waste = sum(r.get("estimated_waste", 0) for r in redundant_items)
 
             analyses.append({
                 "expense_id": eid,
                 "duplicates_count": len(duplicates),
-                "duplicates": duplicates[:5],  # cap for UI
+                "duplicates": duplicates[:8],
                 "stock_matches_count": len(stock_matches),
-                "stock_matches": stock_matches[:10],
+                "stock_matches": stock_matches[:20],
+                "redundant_items_count": len(redundant_items),
+                "redundant_items": redundant_items,
+                "redundant_estimated_waste": total_waste,
+                "recent_purchases_count": len(recent_history),
+                "recent_purchases": recent_history,
                 "treasury_impact": {
                     "amount": amount,
                     "available_now": available,
