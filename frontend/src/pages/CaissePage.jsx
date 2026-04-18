@@ -42,6 +42,8 @@ import AnalyticsTab from "./caisse/components/AnalyticsTab";
 import ProductsTab from "./caisse/components/ProductsTab";
 import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
+import ForecastsTab from "./caisse/components/ForecastsTab";
+import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
@@ -315,6 +317,7 @@ const CaissePage = () => {
 
   // ============== EXPENSES (Achats/Dépenses) ==============
   const [expenses, setExpenses] = useState([]);
+  const [expenseAnalyses, setExpenseAnalyses] = useState({}); // { [expenseId]: analysis }
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [expenseForm, setExpenseForm] = useState({
@@ -839,6 +842,17 @@ const CaissePage = () => {
       setExpenses(expensesList);
       // Update revision count for manager
       setRevisionExpensesCount(expensesList.filter(e => e.status === 'revision_requested').length);
+      // Fetch admin analysis for pending/approved expenses
+      if (currentUser?.role === 'admin') {
+        try {
+          const ares = await axios.get(`${API}/expenses/analysis`);
+          const map = {};
+          (ares.data.analyses || []).forEach(a => { map[a.expense_id] = a; });
+          setExpenseAnalyses(map);
+        } catch (err) {
+          console.error("Error fetching expense analysis:", err);
+        }
+      }
     } catch (error) {
       console.error("Error fetching expenses:", error);
     }
@@ -3778,6 +3792,12 @@ _Gérante - Espace Maxo_
                 <TrendingUp className="w-4 h-4 mr-2" />Analytics
               </TabsTrigger>
             )}
+            {/* 8.7 PREVISIONS (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="forecasts" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white" data-testid="tab-forecasts">
+                <Wallet className="w-4 h-4 mr-2" />Prévisions
+              </TabsTrigger>
+            )}
             {/* 9. HEBDO */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
@@ -4011,14 +4031,19 @@ _Gérante - Espace Maxo_
                         <p className="text-yellow-400 text-sm font-medium mb-2 flex items-center gap-1">
                           <ShoppingCart className="w-4 h-4" /> Achats en attente d'approbation ({expenses.filter(e => e.status === 'pending').length})
                         </p>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                        <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
                           {expenses.filter(e => e.status === 'pending').map(exp => (
-                            <div key={exp.id} className="flex items-center justify-between bg-yellow-900/20 rounded-lg px-3 py-2 border border-yellow-500/20">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
-                                <span className="text-slate-400 text-xs">par {exp.requested_by}</span>
+                            <div key={exp.id} className="flex flex-col gap-1 bg-yellow-900/20 rounded-lg px-3 py-2 border border-yellow-500/20">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
+                                  <span className="text-slate-400 text-xs">par {exp.requested_by}</span>
+                                </div>
+                                <span className="text-yellow-400 text-sm font-bold whitespace-nowrap">{formatPrice(exp.amount)} F</span>
                               </div>
-                              <span className="text-yellow-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                              {currentUser?.role === 'admin' && expenseAnalyses[exp.id] && (
+                                <ExpenseAnalysisBadges analysis={expenseAnalyses[exp.id]} />
+                              )}
                             </div>
                           ))}
                         </div>
@@ -4031,14 +4056,19 @@ _Gérante - Espace Maxo_
                         <p className="text-red-400 text-sm font-medium mb-2 flex items-center gap-1">
                           <AlertTriangle className="w-4 h-4" /> Achats a reviser ({expenses.filter(e => e.status === 'revision_requested').length})
                         </p>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                        <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
                           {expenses.filter(e => e.status === 'revision_requested').map(exp => (
-                            <div key={exp.id} className="flex items-center justify-between bg-red-900/20 rounded-lg px-3 py-2 border border-red-500/20">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
-                                <Badge className="bg-red-500/20 text-red-400 text-xs">A reviser</Badge>
+                            <div key={exp.id} className="flex flex-col gap-1 bg-red-900/20 rounded-lg px-3 py-2 border border-red-500/20">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-white text-sm">{exp.description?.slice(0, 40)}</span>
+                                  <Badge className="bg-red-500/20 text-red-400 text-xs">A reviser</Badge>
+                                </div>
+                                <span className="text-red-400 text-sm font-bold whitespace-nowrap">{formatPrice(exp.amount)} F</span>
                               </div>
-                              <span className="text-red-400 text-sm font-bold">{formatPrice(exp.amount)} F</span>
+                              {currentUser?.role === 'admin' && expenseAnalyses[exp.id] && (
+                                <ExpenseAnalysisBadges analysis={expenseAnalyses[exp.id]} />
+                              )}
                             </div>
                           ))}
                         </div>
@@ -6249,6 +6279,13 @@ _Gérante - Espace Maxo_
           {currentUser?.role === 'admin' && (
           <TabsContent value="analytics">
             <AnalyticsTab />
+          </TabsContent>
+          )}
+
+          {/* ==================== PREVISIONS TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+          <TabsContent value="forecasts">
+            <ForecastsTab />
           </TabsContent>
           )}
         </Tabs>

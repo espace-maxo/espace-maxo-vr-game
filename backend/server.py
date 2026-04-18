@@ -29,6 +29,7 @@ from routers.financial_points import router as financial_points_router, set_db a
 from routers.caisse_users import router as caisse_users_router, set_db as set_caisse_users_db
 from routers.reports import router as reports_router, set_db as set_reports_db
 from routers.invoices import router as invoices_router, set_db as set_invoices_db
+from routers.forecasts import router as forecasts_router, set_db as set_forecasts_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -46,6 +47,7 @@ set_financial_points_db(db)
 set_caisse_users_db(db)
 set_reports_db(db)
 set_invoices_db(db)
+set_forecasts_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -85,6 +87,7 @@ api_router = APIRouter(prefix="/api")
 # precedence over inline dynamic paths (e.g. /invoices/{invoice_id}) defined later.
 api_router.include_router(reports_router)
 api_router.include_router(invoices_router)
+api_router.include_router(forecasts_router)
 api_router.include_router(caisse_users_router)
 api_router.include_router(financial_points_router)
 api_router.include_router(service_reports_router)

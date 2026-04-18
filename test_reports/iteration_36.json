@@ -1,0 +1,81 @@
+{
+  "summary": "Forecasts and Expense Analysis features testing complete. All backend endpoints working. Frontend ForecastsTab renders correctly with all components. ExpenseAnalysisBadges visible on admin dashboard. Fixed datetime comparison bug in recurrence expansion.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ GET /api/forecasts - Lists all forecasts",
+    "✅ POST /api/forecasts - Creates forecast with all fields (date, label, amount, category, status, recurrence, recurrence_day, notes)",
+    "✅ POST /api/forecasts - Weekly recurrence works",
+    "✅ POST /api/forecasts - Monthly recurrence with recurrence_day works",
+    "✅ POST /api/forecasts - Invalid category defaults to 'autre'",
+    "✅ PUT /api/forecasts/{id} - Updates forecast",
+    "✅ PUT /api/forecasts/{id} - Returns 404 for non-existent forecast",
+    "✅ DELETE /api/forecasts/{id} - Deletes forecast",
+    "✅ DELETE /api/forecasts/{id} - Returns 404 for non-existent forecast",
+    "✅ GET /api/forecasts/dashboard - Returns treasury, available_now, per_day, totals, missing_amount, min_running_balance",
+    "✅ GET /api/forecasts/dashboard?horizon_days=7 - Returns 7-day horizon",
+    "✅ GET /api/forecasts/dashboard?horizon_days=60 - Returns 60-day horizon",
+    "✅ GET /api/forecasts/dashboard - per_day structure correct (date, items, decaissement, running_balance)",
+    "✅ GET /api/forecasts/dashboard - missing_amount = max(0, -min_running_balance)",
+    "✅ Weekly recurrence expanded correctly (4+ occurrences in 30 days)",
+    "✅ Monthly recurrence expanded correctly (appears on correct day each month)",
+    "✅ GET /api/expenses/analysis - Returns treasury and analyses array",
+    "✅ GET /api/expenses/analysis - Each analysis has duplicates, stock_matches, treasury_impact",
+    "✅ GET /api/expenses/analysis - Treasury impact levels (low/moderate/warning/critical) calculated correctly",
+    "✅ Frontend: Prévisions tab (data-testid='tab-forecasts') visible for admin only",
+    "✅ Frontend: ForecastsTab (data-testid='forecasts-tab') renders correctly",
+    "✅ Frontend: forecasts-kpis (4 cards) visible",
+    "✅ Frontend: forecasts-alert visible when missing_amount > 0",
+    "✅ Frontend: forecasts-chart (line chart) visible",
+    "✅ Frontend: forecasts-agenda visible with forecast items",
+    "✅ Frontend: forecasts-list visible with all forecasts",
+    "✅ Frontend: forecasts-add-btn opens forecast-modal",
+    "✅ Frontend: forecasts-horizon selector changes horizon and reloads dashboard",
+    "✅ Frontend: Creating forecast via modal works and refreshes list",
+    "✅ Frontend: ExpenseAnalysisBadges (data-testid='expense-analysis-badges') visible on admin dashboard",
+    "✅ Frontend: Prévisions tab NOT visible for manager role (correct)",
+    "✅ Frontend Regression: Analytics, Hebdo, Produits, Clients, Utilisateurs, Statistiques tabs all work"
+  ],
+  "failed_tests": [],
+  "test_report_links": [
+    "/app/backend/tests/test_forecasts_and_analysis.py",
+    "/app/test_reports/pytest/forecasts_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fixed datetime comparison bug in _expand_recurrence() - base_date from date-only strings was offset-naive while start_date/end_date were offset-aware (UTC)",
+    "forecasts.py router correctly integrated at line 90 in server.py",
+    "Treasury calculation uses CA semaine validé - dépenses approuvées/terminées",
+    "Duplicate detection uses score-based system (description similarity + same supplier + common products + same day)",
+    "Stock matches check product name inclusion and warn if qty > stock_min * 1.5"
+  ],
+  "updated_files": [
+    "/app/backend/routers/forecasts.py",
+    "/app/backend/tests/test_forecasts_and_analysis.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all components render, all interactions work)"
+  },
+  "test_credentials": {
+    "caisse_admin": "Admin tab / password: Caisse2026",
+    "caisse_gerante": "Serveur (PIN) tab / PIN: 2468"
+  },
+  "seed_data_creation": "Existing forecasts: 'Loyer mensuel' 150000 F (monthly day 1), 'Salaire Mères' 120000 F (monthly day 30)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Forecasts and Expense Analysis features fully tested. Fixed datetime bug in recurrence expansion. All 20 backend tests pass. Frontend components render correctly. Prévisions tab is admin-only.",
+  "bug_fix_applied": {
+    "file": "/app/backend/routers/forecasts.py",
+    "function": "_expand_recurrence()",
+    "issue": "TypeError: can't compare offset-naive and offset-aware datetimes",
+    "fix": "Added timezone.utc to base_date when it's offset-naive (from date-only strings like '2026-04-18')"
+  }
+}
