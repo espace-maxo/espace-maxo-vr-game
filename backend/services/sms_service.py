@@ -9,7 +9,7 @@ from twilio.rest import Client as TwilioClient
 logger = logging.getLogger(__name__)
 
 # Admin phone numbers for notifications
-ADMIN_PHONE_NUMBERS = ["+22997720808", "+22991005084"]
+ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565"]
 
 _twilio_client = None
 

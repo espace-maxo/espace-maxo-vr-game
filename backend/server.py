@@ -2067,7 +2067,7 @@ async def get_payment_status(booking_id: str):
 
 CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
 # Admin phone numbers for SMS notifications (format: +229XXXXXXXX)
-ADMIN_PHONE_NUMBERS = ["+22997720808", "+22991005084"]
+ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565"]
 
 async def send_admin_sms_notification(message: str):
     """Send SMS notification to admin phone numbers via Twilio"""
