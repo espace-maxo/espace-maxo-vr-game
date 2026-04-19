@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, Send, ClipboardList, Flame, CheckCircle, X, Edit2,
   Home, Gamepad2, TreePine, UtensilsCrossed, Droplets, Package, ArrowRightCircle,
+  FileText, FileSpreadsheet,
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
 
@@ -226,6 +227,30 @@ const NeedsTab = ({ currentUser }) => {
     annule: needs.filter((n) => n.status === "annule").length,
   };
 
+  const exportNeeds = async (kind) => {
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (locationFilter !== "all") params.append("location", locationFilter);
+      const url = `${API}/needs/export/${kind}${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await axios.get(url, { responseType: "blob" });
+      const mime = kind === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const ext = kind === "pdf" ? "pdf" : "xlsx";
+      const blob = new Blob([res.data], { type: mime });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `liste_besoins_${new Date().toISOString().slice(0, 10)}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`Export ${ext.toUpperCase()} téléchargé`);
+    } catch (e) {
+      toast.error("Erreur lors de l'export");
+    }
+  };
+
   return (
     <div className="space-y-4" data-testid="needs-tab">
       {/* Header */}
@@ -238,13 +263,33 @@ const NeedsTab = ({ currentUser }) => {
           )}
         </h2>
         {(isManager || isAdmin) && (
-          <Button
-            onClick={openCreate}
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-            data-testid="new-need-btn"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Nouveau besoin
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => exportNeeds("pdf")}
+              disabled={needs.length === 0}
+              className="border-rose-500/50 text-rose-300 hover:bg-rose-500/20"
+              data-testid="export-needs-pdf"
+            >
+              <FileText className="w-4 h-4 mr-2" /> PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => exportNeeds("excel")}
+              disabled={needs.length === 0}
+              className="border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/20"
+              data-testid="export-needs-excel"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
+            </Button>
+            <Button
+              onClick={openCreate}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              data-testid="new-need-btn"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Nouveau besoin
+            </Button>
+          </div>
         )}
       </div>
 

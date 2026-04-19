@@ -14,6 +14,7 @@ Nouveau menu dédié à la gestion des besoins de TOUS les espaces (salle, salle
 - CRUD : `GET/POST /needs`, `PUT/DELETE /needs/{id}` (filtres status + location)
 - Admin : `POST /needs/{id}/cancel`, `POST /needs/{id}/convert-to-expense` (convertit en expense pending + marque need "traite" avec `converted_to_expense_id`)
 - `GET /needs/analysis` — analyse identique à `/expenses/analysis` : doublons (contre needs + expenses récents 14j), intra-doublons, stock_matches, redundant_items, recent_purchases, impact trésorerie.
+- **Exports** : `GET /needs/export/pdf` et `GET /needs/export/excel` (filtres status/location/date_from/date_to). PDF reportlab (KPI + tableau principal + détail articles). Excel openpyxl (2 feuilles : Besoins + Articles détaillés) avec couleurs urgence/statut.
 
 **Refactoring** (`forecasts.py`) :
 - Extraction de la logique d'analyse en fonction réutilisable `analyze_single_request(db, e, recent_requests, recent_purchases, stock_products, available, id_field, self_ref)`.

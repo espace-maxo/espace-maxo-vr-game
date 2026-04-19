@@ -12,9 +12,11 @@ Périmètre :
 Statuts : en_attente | traite | annule
 """
 from fastapi import APIRouter, HTTPException, Body, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import io
 import uuid
 import logging
 
@@ -311,4 +313,354 @@ async def needs_analysis():
         return {"treasury": treasury, "analyses": analyses}
     except Exception as e:
         logger.error(f"Error building needs analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== EXPORTS (PDF / EXCEL) ====================
+
+LOCATION_LABELS = {
+    "salle": "Salle",
+    "salle_jeux": "Salle de jeux",
+    "jardin": "Jardin",
+    "cuisine": "Cuisine",
+    "toilettes": "Toilettes",
+    "autres": "Autres",
+}
+STATUS_LABELS = {
+    "en_attente": "En attente",
+    "traite": "Traité",
+    "annule": "Annulé",
+}
+
+
+async def _fetch_filtered_needs(status: Optional[str], location: Optional[str],
+                                date_from: Optional[str], date_to: Optional[str]):
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+    if location and location != "all":
+        query["location"] = location
+    if date_from or date_to:
+        rng = {}
+        if date_from:
+            rng["$gte"] = date_from
+        if date_to:
+            rng["$lte"] = date_to + "T23:59:59"
+        query["created_at"] = rng
+    return await db.needs.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+
+
+@router.get("/needs/export/pdf")
+async def export_needs_pdf(
+    status: Optional[str] = None,
+    location: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Export the filtered needs list as a PDF document."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+        needs = await _fetch_filtered_needs(status, location, date_from, date_to)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            topMargin=15*mm, bottomMargin=15*mm, leftMargin=12*mm, rightMargin=12*mm,
+        )
+        styles = getSampleStyleSheet()
+        elements = []
+
+        title_style = ParagraphStyle(
+            'NeedsTitle', parent=styles['Heading1'], fontSize=16,
+            textColor=colors.HexColor('#4c51bf'), alignment=1,
+        )
+        elements.append(Paragraph("Liste de besoins — Espace Maxo", title_style))
+        elements.append(Spacer(1, 4*mm))
+
+        filter_parts = []
+        if status and status != "all":
+            filter_parts.append(f"Statut : {STATUS_LABELS.get(status, status)}")
+        if location and location != "all":
+            filter_parts.append(f"Espace : {LOCATION_LABELS.get(location, location)}")
+        if date_from:
+            filter_parts.append(f"Du : {date_from}")
+        if date_to:
+            filter_parts.append(f"Au : {date_to}")
+        filter_parts.append(f"Total : {len(needs)} besoin(s)")
+        filter_style = ParagraphStyle(
+            'NeedsFilters', parent=styles['Normal'], fontSize=9,
+            textColor=colors.grey, alignment=1,
+        )
+        elements.append(Paragraph(" | ".join(filter_parts), filter_style))
+        elements.append(Spacer(1, 6*mm))
+
+        # Summary KPI
+        total_items = sum(len(n.get("items") or []) for n in needs)
+        total_amount = sum(n.get("amount", 0) or 0 for n in needs)
+        by_status = {}
+        for n in needs:
+            k = n.get("status", "en_attente")
+            by_status[k] = by_status.get(k, 0) + 1
+        kpi_row = [
+            ["Besoins", "Articles", "Montant total"],
+            [str(len(needs)), str(total_items), f"{total_amount:,.0f} F".replace(",", " ")],
+        ]
+        kpi = Table(kpi_row, colWidths=[60*mm, 60*mm, 60*mm])
+        kpi.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4c51bf')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+        ]))
+        elements.append(kpi)
+        elements.append(Spacer(1, 6*mm))
+
+        # Main table : one row per need, then collapsed items line
+        header = ["Date", "Espace", "Description", "Articles", "Montant", "Urgence", "Statut", "Par"]
+        data = [header]
+        for n in needs[:300]:
+            created = (n.get("created_at") or "")[:10]
+            data.append([
+                created,
+                LOCATION_LABELS.get(n.get("location", "autres"), n.get("location", "")),
+                (n.get("description", "") or "")[:40],
+                str(len(n.get("items") or [])),
+                f"{(n.get('amount', 0) or 0):,.0f}".replace(",", " "),
+                "Urgent" if n.get("urgency") == "urgente" else "Normale",
+                STATUS_LABELS.get(n.get("status", "en_attente"), n.get("status", "")),
+                (n.get("requested_by", "") or "")[:18],
+            ])
+
+        col_w = [18*mm, 22*mm, 48*mm, 14*mm, 22*mm, 16*mm, 18*mm, 28*mm]
+        table = Table(data, colWidths=col_w, repeatRows=1)
+        style_commands = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a202c')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('ALIGN', (3, 0), (4, -1), 'RIGHT'),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#e2e8f0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]
+        # Urgency coloring
+        for i, n in enumerate(needs[:300], 1):
+            if n.get("urgency") == "urgente":
+                style_commands.append(('TEXTCOLOR', (5, i), (5, i), colors.HexColor('#e53e3e')))
+            st = n.get("status", "en_attente")
+            st_color = {
+                "en_attente": colors.HexColor('#d69e2e'),
+                "traite": colors.HexColor('#2f855a'),
+                "annule": colors.HexColor('#c53030'),
+            }.get(st)
+            if st_color:
+                style_commands.append(('TEXTCOLOR', (6, i), (6, i), st_color))
+        table.setStyle(TableStyle(style_commands))
+        elements.append(table)
+        elements.append(Spacer(1, 6*mm))
+
+        # Detailed items per need
+        detail_title = ParagraphStyle(
+            'DetailTitle', parent=styles['Heading3'], fontSize=11,
+            textColor=colors.HexColor('#4c51bf'),
+        )
+        elements.append(Paragraph("Détail des articles", detail_title))
+        elements.append(Spacer(1, 3*mm))
+        for n in needs[:100]:
+            items = n.get("items") or []
+            if not items:
+                continue
+            sub_title_style = ParagraphStyle(
+                'SubTitle', parent=styles['Normal'], fontSize=9,
+                textColor=colors.HexColor('#2d3748'),
+            )
+            elements.append(Paragraph(
+                f"<b>{LOCATION_LABELS.get(n.get('location','autres'),'')}</b> — "
+                f"{n.get('description','')} <font color='grey'>({(n.get('created_at') or '')[:10]})</font>",
+                sub_title_style,
+            ))
+            sub_data = [["#", "Article", "Espace", "Qté", "P.U.", "Total"]]
+            for idx, it in enumerate(items, 1):
+                qty = it.get("quantity", 1) or 1
+                up = it.get("unit_price", 0) or 0
+                amt = it.get("amount") or qty * up
+                sub_data.append([
+                    str(idx),
+                    (it.get("description", "") or "")[:36],
+                    LOCATION_LABELS.get(it.get("location", "autres"), ""),
+                    str(qty),
+                    f"{up:,.0f}".replace(",", " "),
+                    f"{amt:,.0f}".replace(",", " "),
+                ])
+            sub_w = [10*mm, 70*mm, 28*mm, 14*mm, 22*mm, 28*mm]
+            sub_t = Table(sub_data, colWidths=sub_w, repeatRows=1)
+            sub_t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e2e8f0')),
+                ('FONTSIZE', (0, 0), (-1, -1), 7),
+                ('GRID', (0, 0), (-1, -1), 0.2, colors.HexColor('#cbd5e0')),
+                ('ALIGN', (3, 0), (5, -1), 'RIGHT'),
+                ('TOPPADDING', (0, 0), (-1, -1), 1),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ]))
+            elements.append(sub_t)
+            elements.append(Spacer(1, 3*mm))
+
+        doc.build(elements)
+        buffer.seek(0)
+        filename = f"liste_besoins_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.pdf"
+        return StreamingResponse(
+            buffer, media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting needs PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/needs/export/excel")
+async def export_needs_excel(
+    status: Optional[str] = None,
+    location: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Export the filtered needs list as an Excel workbook (2 sheets)."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        needs = await _fetch_filtered_needs(status, location, date_from, date_to)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Besoins"
+
+        thin = Side(style="thin", color="CBD5E0")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        header_fill = PatternFill("solid", fgColor="4C51BF")
+        header_align = Alignment(horizontal="center", vertical="center")
+
+        # Title row
+        ws.merge_cells("A1:H1")
+        ws["A1"] = "Liste de besoins — Espace Maxo"
+        ws["A1"].font = Font(bold=True, size=14, color="4C51BF")
+        ws["A1"].alignment = Alignment(horizontal="center")
+
+        # Filters row
+        ws.merge_cells("A2:H2")
+        filter_parts = []
+        if status and status != "all":
+            filter_parts.append(f"Statut: {STATUS_LABELS.get(status, status)}")
+        if location and location != "all":
+            filter_parts.append(f"Espace: {LOCATION_LABELS.get(location, location)}")
+        if date_from:
+            filter_parts.append(f"Du: {date_from}")
+        if date_to:
+            filter_parts.append(f"Au: {date_to}")
+        filter_parts.append(f"Total: {len(needs)}")
+        ws["A2"] = " | ".join(filter_parts)
+        ws["A2"].font = Font(italic=True, color="718096", size=9)
+        ws["A2"].alignment = Alignment(horizontal="center")
+
+        headers = ["Date", "Espace", "Description", "Articles", "Montant", "Urgence", "Statut", "Par"]
+        for col, h in enumerate(headers, 1):
+            c = ws.cell(row=4, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = header_align
+            c.border = border
+
+        row = 5
+        for n in needs:
+            ws.cell(row=row, column=1, value=(n.get("created_at") or "")[:10])
+            ws.cell(row=row, column=2, value=LOCATION_LABELS.get(n.get("location", "autres"), ""))
+            ws.cell(row=row, column=3, value=n.get("description", "") or "")
+            ws.cell(row=row, column=4, value=len(n.get("items") or []))
+            ws.cell(row=row, column=5, value=n.get("amount", 0) or 0)
+            urg_cell = ws.cell(row=row, column=6, value="Urgent" if n.get("urgency") == "urgente" else "Normale")
+            if n.get("urgency") == "urgente":
+                urg_cell.font = Font(bold=True, color="E53E3E")
+            st = n.get("status", "en_attente")
+            st_cell = ws.cell(row=row, column=7, value=STATUS_LABELS.get(st, st))
+            st_cell.font = Font(
+                color={"en_attente": "D69E2E", "traite": "2F855A", "annule": "C53030"}.get(st, "000000"),
+                bold=True,
+            )
+            ws.cell(row=row, column=8, value=n.get("requested_by", "") or "")
+            for col in range(1, 9):
+                ws.cell(row=row, column=col).border = border
+            row += 1
+
+        # Auto-width
+        for col_idx in range(1, 9):
+            letter = openpyxl.utils.get_column_letter(col_idx)
+            max_len = 10
+            for r in range(4, row):
+                v = ws.cell(row=r, column=col_idx).value
+                if v and not isinstance(ws.cell(row=r, column=col_idx), openpyxl.cell.cell.MergedCell):
+                    max_len = max(max_len, min(50, len(str(v)) + 2))
+            ws.column_dimensions[letter].width = max_len
+
+        # Sheet 2 : items per need
+        ws2 = wb.create_sheet("Articles détaillés")
+        ws2.merge_cells("A1:G1")
+        ws2["A1"] = "Détail des articles"
+        ws2["A1"].font = Font(bold=True, size=12, color="4C51BF")
+        ws2["A1"].alignment = Alignment(horizontal="center")
+        headers2 = ["Date", "Besoin", "Espace article", "Article", "Quantité", "Prix unitaire", "Total"]
+        for col, h in enumerate(headers2, 1):
+            c = ws2.cell(row=3, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = header_align
+            c.border = border
+
+        r2 = 4
+        for n in needs:
+            nd_desc = n.get("description", "") or ""
+            n_date = (n.get("created_at") or "")[:10]
+            for it in (n.get("items") or []):
+                qty = it.get("quantity", 1) or 1
+                up = it.get("unit_price", 0) or 0
+                amt = it.get("amount") or qty * up
+                ws2.cell(row=r2, column=1, value=n_date)
+                ws2.cell(row=r2, column=2, value=nd_desc)
+                ws2.cell(row=r2, column=3, value=LOCATION_LABELS.get(it.get("location", "autres"), ""))
+                ws2.cell(row=r2, column=4, value=it.get("description", "") or "")
+                ws2.cell(row=r2, column=5, value=qty)
+                ws2.cell(row=r2, column=6, value=up)
+                ws2.cell(row=r2, column=7, value=amt)
+                for col in range(1, 8):
+                    ws2.cell(row=r2, column=col).border = border
+                r2 += 1
+        for col_idx in range(1, 8):
+            letter = openpyxl.utils.get_column_letter(col_idx)
+            max_len = 10
+            for r in range(3, r2):
+                v = ws2.cell(row=r, column=col_idx).value
+                if v and not isinstance(ws2.cell(row=r, column=col_idx), openpyxl.cell.cell.MergedCell):
+                    max_len = max(max_len, min(50, len(str(v)) + 2))
+            ws2.column_dimensions[letter].width = max_len
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        filename = f"liste_besoins_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting needs Excel: {e}")
         raise HTTPException(status_code=500, detail=str(e))
