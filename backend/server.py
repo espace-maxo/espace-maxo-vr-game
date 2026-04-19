@@ -5913,6 +5913,33 @@ async def create_instruction(instruction: InstructionCreate):
             instruction_dict["tasks"] = []
         
         await db.instructions.insert_one(instruction_dict)
+
+        # SMS admin notification when note comes from a non-admin role
+        try:
+            if (instruction_dict.get("sender_role") or "").lower() != "admin":
+                kind = "Liste de taches" if instruction_dict.get("instruction_type") == "task_list" else "Note"
+                prio = (instruction_dict.get("priority") or "normal").upper()
+                msg = (
+                    f"[{kind}] Nouvelle Espace Maxo\n"
+                    f"Titre: {(instruction_dict.get('title') or '')[:80]}\n"
+                    f"Priorite: {prio}\n"
+                    f"De: {instruction_dict.get('sender_name', '-')} ({instruction_dict.get('sender_role', '-')})\n"
+                    f"Contenu: {(instruction_dict.get('content') or '')[:200]}"
+                )
+                if instruction_dict.get("instruction_type") == "task_list":
+                    tasks = instruction_dict.get("tasks") or []
+                    if tasks:
+                        msg += f"\nTaches ({len(tasks)}):"
+                        for t in tasks[:5]:
+                            txt = (t.get("text") or "").strip()[:50] if isinstance(t, dict) else ""
+                            if txt:
+                                msg += f"\n- {txt}"
+                        if len(tasks) > 5:
+                            msg += f"\n+ {len(tasks) - 5} autre(s)..."
+                await send_admin_sms_notification(msg)
+        except Exception as notif_err:
+            logger.error(f"SMS new note notification failed: {notif_err}")
+
         return {"success": True, "instruction": {k: v for k, v in instruction_dict.items() if k != "_id"}}
     except Exception as e:
         logger.error(f"Error creating instruction: {e}")

@@ -6,6 +6,22 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (19/04/2026)
 
+### Notifications SMS admin (DONE)
+Notifications SMS Twilio automatiques envoyées aux 2 numéros admin (`+22997720808`, `+22966269565`) pour 3 événements :
+
+1. **Besoin urgent créé** (`POST /needs` avec `urgency='urgente'`) — SMS avec espace, demande, auteur, articles (max 6) + montant estimé.
+2. **Nouvelle demande d'achats** (`POST /expenses`) — SMS avec catégorie, demande, auteur, montant total, articles (max 6), fournisseur.
+3. **Nouvelle note/liste de tâches** (`POST /instructions`) — SMS uniquement si `sender_role != admin`. Inclut titre, priorité, auteur, contenu (200 chars) + tâches (max 5) si task_list.
+
+**Bugfix critique** (`services/sms_service.py`) : client Twilio lazy-instancié (les imports routers dans `server.py` précèdent `load_dotenv()`).
+
+**Tests validés Twilio en production** :
+- Besoin urgent → 2 SMS (201 OK)
+- Besoin normal → 0 SMS
+- Demande d'achats → 2 SMS
+- Note manager → 2 SMS
+- Note admin → 0 SMS (pas d'auto-notification)
+
 ### Feature : Liste de besoins (gérante + admin) (DONE)
 Nouveau menu dédié à la gestion des besoins de TOUS les espaces (salle, salle de jeux, jardin, cuisine, toilettes, autres), distinct mais intégré avec la Liste d'achats.
 

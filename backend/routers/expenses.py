@@ -11,6 +11,12 @@ import uuid
 import re
 import logging
 
+try:
+    from services.sms_service import send_admin_sms_notification
+except Exception:  # pragma: no cover
+    async def send_admin_sms_notification(_msg: str) -> bool:
+        return False
+
 router = APIRouter(tags=["expenses"])
 db = None
 logger = logging.getLogger(__name__)
@@ -138,6 +144,34 @@ async def create_expense(expense: ExpenseCreate):
 
         await db.expenses.insert_one(expense_doc)
         expense_doc.pop("_id", None)
+
+        # SMS admin notification (new purchase request)
+        try:
+            items_lines = []
+            for it in expense_doc.get("items") or []:
+                q = it.get("quantity") or 1
+                desc = (it.get("description") or "").strip()[:40]
+                if desc:
+                    items_lines.append(f"- {desc} x{q}")
+            items_block = "\n".join(items_lines[:6]) or "(demande simple)"
+            extra_count = max(0, len(expense_doc.get("items") or []) - 6)
+            extra = f"\n+ {extra_count} autre(s)..." if extra_count > 0 else ""
+
+            msg = (
+                "[ACHATS] Nouvelle demande Espace Maxo\n"
+                f"Categorie: {expense_doc.get('category', '-')}\n"
+                f"Demande: {(expense_doc.get('description') or '')[:80]}\n"
+                f"Par: {expense_doc.get('requested_by', '-')}\n"
+                f"Montant: {(expense_doc.get('amount') or 0):,.0f} F".replace(",", " ")
+                + f"\nArticles ({len(expense_doc.get('items') or [])}):\n"
+                + f"{items_block}{extra}"
+            )
+            if expense_doc.get("supplier"):
+                msg += f"\nFournisseur: {expense_doc['supplier'][:40]}"
+            await send_admin_sms_notification(msg)
+        except Exception as notif_err:
+            logger.error(f"SMS new expense notification failed: {notif_err}")
+
         return {"success": True, "expense": expense_doc}
     except Exception as e:
         logger.error(f"Error creating expense: {e}")
