@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
@@ -456,6 +456,9 @@ const NeedsTab = ({ currentUser }) => {
                 </Badge>
               )}
             </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Renseignez les articles dont vous avez besoin, avec ou sans prix. L'admin pourra les convertir en demande d'achats.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
