@@ -22,6 +22,12 @@ import logging
 
 from .forecasts import analyze_single_request, _compute_treasury
 
+try:
+    from services.sms_service import send_admin_sms_notification
+except Exception:  # pragma: no cover
+    async def send_admin_sms_notification(_msg: str) -> bool:
+        return False
+
 router = APIRouter(tags=["needs"])
 db = None
 logger = logging.getLogger(__name__)
@@ -118,6 +124,39 @@ async def create_need(data: NeedCreate):
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.needs.insert_one(doc)
+
+        # Urgent need → SMS to admins (non-blocking best-effort)
+        if doc["urgency"] == "urgente":
+            try:
+                loc_labels = {
+                    "salle": "Salle", "salle_jeux": "Salle de jeux",
+                    "jardin": "Jardin", "cuisine": "Cuisine",
+                    "toilettes": "Toilettes", "autres": "Autres",
+                }
+                items_lines = []
+                for it in doc.get("items") or []:
+                    q = it.get("quantity") or 1
+                    desc = (it.get("description") or "").strip()[:40]
+                    if desc:
+                        items_lines.append(f"- {desc} x{q}")
+                items_block = "\n".join(items_lines[:6]) or "(sans article détaillé)"
+                extra_count = max(0, len(doc.get("items") or []) - 6)
+                extra = f"\n+ {extra_count} autre(s)..." if extra_count > 0 else ""
+
+                msg = (
+                    "[URGENT] Nouveau besoin Espace Maxo\n"
+                    f"Espace: {loc_labels.get(doc.get('location',''), doc.get('location',''))}\n"
+                    f"Demande: {doc.get('description','')[:80]}\n"
+                    f"Par: {doc.get('requested_by','-')}\n"
+                    f"Articles ({len(doc.get('items') or [])}):\n"
+                    f"{items_block}{extra}"
+                )
+                if doc.get("amount"):
+                    msg += f"\nMontant estime: {doc['amount']:,.0f} F".replace(",", " ")
+                await send_admin_sms_notification(msg)
+            except Exception as notif_err:
+                logger.error(f"SMS urgent need notification failed: {notif_err}")
+
         return {"success": True, "need": {k: v for k, v in doc.items() if k != "_id"}}
     except Exception as e:
         logger.error(f"Error creating need: {e}")
