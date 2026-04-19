@@ -43,6 +43,7 @@ import ProductsTab from "./caisse/components/ProductsTab";
 import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
+import NeedsTab from "./caisse/components/NeedsTab";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
@@ -3768,6 +3769,12 @@ _Gérante - Espace Maxo_
                 )}
               </TabsTrigger>
             )}
+            {/* 5.5 LISTE DE BESOINS */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="needs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white" data-testid="tab-needs">
+                <ClipboardList className="w-4 h-4 mr-2" />Besoins
+              </TabsTrigger>
+            )}
             {/* 6. PROFORMA */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="proforma" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
@@ -6298,6 +6305,13 @@ _Gérante - Espace Maxo_
           {currentUser?.role === 'admin' && (
           <TabsContent value="forecasts">
             <ForecastsTab />
+          </TabsContent>
+          )}
+
+          {/* ==================== LISTE DE BESOINS (Manager & Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="needs">
+            <NeedsTab currentUser={currentUser} />
           </TabsContent>
           )}
         </Tabs>

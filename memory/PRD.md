@@ -4,6 +4,33 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## Recent Updates (19/04/2026)
+
+### Feature : Liste de besoins (gérante + admin) (DONE)
+Nouveau menu dédié à la gestion des besoins de TOUS les espaces (salle, salle de jeux, jardin, cuisine, toilettes, autres), distinct mais intégré avec la Liste d'achats.
+
+**Backend** (`/app/backend/routers/needs.py`) :
+- Modèles : `Need` / `NeedItem` avec `location`, `description`, `items[]`, `urgency`, `supplier`, `notes`, `status` (en_attente|traite|annule).
+- CRUD : `GET/POST /needs`, `PUT/DELETE /needs/{id}` (filtres status + location)
+- Admin : `POST /needs/{id}/cancel`, `POST /needs/{id}/convert-to-expense` (convertit en expense pending + marque need "traite" avec `converted_to_expense_id`)
+- `GET /needs/analysis` — analyse identique à `/expenses/analysis` : doublons (contre needs + expenses récents 14j), intra-doublons, stock_matches, redundant_items, recent_purchases, impact trésorerie.
+
+**Refactoring** (`forecasts.py`) :
+- Extraction de la logique d'analyse en fonction réutilisable `analyze_single_request(db, e, recent_requests, recent_purchases, stock_products, available, id_field, self_ref)`.
+- `/expenses/analysis` et `/needs/analysis` partagent la même logique (zéro duplication).
+
+**Frontend** (`NeedsTab.jsx`) :
+- Même configuration que la Liste d'achats (multi-items, fournisseur, modal, résumé).
+- 6 catégories d'espaces avec icônes (Home/Gamepad2/TreePine/UtensilsCrossed/Droplets/Package).
+- Urgence (normale|urgente) avec badge 🔥 si urgent.
+- Prix optionnel sur chaque item ("laissez vide si inconnu").
+- Admin voit l'analyse (ExpenseAnalysisBadges) + boutons "Convertir en achats" / "Annuler".
+- Gérante voit ses besoins avec boutons Modifier/Supprimer (si en_attente).
+- Onglet "Besoins" visible manager + admin (data-testid `tab-needs`).
+
+**Tests** : 10/10 pytest toujours verts + curl end-to-end (CRUD + analyse + conversion + cleanup) validés. Backend expenses/analysis régression OK (même logique, toujours 10 duplicate_items + 18 stock matches).
+
+---
 ## Recent Updates (18/04/2026 - Session fix doublons)
 
 ### Fix P0 : Détection des doublons item-par-item (DONE)
