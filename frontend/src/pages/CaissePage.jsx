@@ -5827,16 +5827,21 @@ _Gérante - Espace Maxo_
                 </Card>
               )}
 
-              {/* Admin view: Pending approvals */}
-              {currentUser?.role === 'admin' && expenses.filter(e => e.status === 'pending').length > 0 && (
-                <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/50">
+              {/* Pending validations (admin: full controls, manager: read-only) */}
+              {expenses.filter(e => e.status === 'pending').length > 0 && (
+                <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/50" data-testid="pending-expenses-card">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-purple-400 flex items-center gap-2">
                       <ShoppingCart className="w-5 h-5" />
-                      DEMANDES À VALIDER
+                      {currentUser?.role === 'admin' ? 'DEMANDES À VALIDER' : 'EN ATTENTE DE VALIDATION'}
                       <Badge className="bg-purple-500/30 text-purple-300 ml-2">
                         {expenses.filter(e => e.status === 'pending').length}
                       </Badge>
+                      {currentUser?.role !== 'admin' && (
+                        <Badge className="bg-slate-500/30 text-slate-300 ml-auto text-xs">
+                          Lecture seule
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -5927,6 +5932,8 @@ _Gérante - Espace Maxo_
                             </div>
                           )}
                           {/* Admin: Montant modifiable directement */}
+                          {currentUser?.role === 'admin' && (
+                          <>
                           <div className="flex items-center gap-3 flex-wrap bg-slate-800/50 rounded-lg p-3">
                             <div className="flex items-center gap-2">
                               <Label className="text-slate-400 text-sm">Montant total:</Label>
@@ -5992,6 +5999,15 @@ _Gérante - Espace Maxo_
                               Supprimer
                             </Button>
                           </div>
+                          </>
+                          )}
+                          {/* Manager: read-only banner */}
+                          {currentUser?.role !== 'admin' && (
+                            <div className="bg-slate-800/50 rounded-lg p-3 text-slate-400 text-sm flex items-center gap-2">
+                              <ShoppingCart className="w-4 h-4 text-purple-400" />
+                              Demande transmise à l'administrateur — en attente de validation.
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

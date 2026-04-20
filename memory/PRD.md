@@ -6,7 +6,19 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 ---
 ## Recent Updates (19/04/2026)
 
-### Notifications SMS admin (DONE)
+### Updates 20/04/2026 — Visibilité achats gérante + notifications besoins (DONE)
+
+**1. Gérante : consultation des achats en attente** (`CaissePage.jsx`) :
+- La section "DEMANDES À VALIDER" (pending) est désormais visible pour la gérante en **lecture seule** (titre "EN ATTENTE DE VALIDATION" + badge "Lecture seule")
+- Les contrôles admin (input montant, boutons Approuver/Réviser/Refuser/Supprimer) sont cachés pour les managers
+- Remplacés par un bandeau informatif : "Demande transmise à l'administrateur — en attente de validation."
+
+**2. Notifications besoins étendues** (`routers/needs.py`) :
+- Suppression du filtre `urgency='urgente'` : **tous** les nouveaux besoins déclenchent désormais une notification admin (comme les achats et les notes)
+- Préfixe `[URGENT]` conservé pour les besoins urgents, `[BESOIN]` pour les normaux
+- Test validé : besoin normal → WhatsApp delivered téléphone 1, SMS fallback téléphone 2
+
+### Notifications SMS/WhatsApp admin (DONE)
 Notifications SMS Twilio automatiques envoyées aux 2 numéros admin (`+22997720808`, `+22966269565`) pour 3 événements :
 
 1. **Besoin urgent créé** (`POST /needs` avec `urgency='urgente'`) — SMS avec espace, demande, auteur, articles (max 6) + montant estimé.
