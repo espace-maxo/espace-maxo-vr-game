@@ -2070,46 +2070,15 @@ CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
 ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565"]
 
 async def send_admin_sms_notification(message: str):
-    """Send SMS notification to admin phone numbers via Twilio"""
-    if not twilio_client:
-        logger.warning("Twilio not configured, skipping SMS notification")
+    """Send admin notification (WhatsApp with SMS fallback) via services.sms_service.
+    Kept for backward compatibility — delegates to the dual-channel implementation.
+    """
+    try:
+        from services.sms_service import send_admin_sms_notification as _svc_send
+        return await _svc_send(message)
+    except Exception as e:
+        logger.error(f"send_admin_sms_notification failed: {e}")
         return False
-    
-    # Get Twilio phone number for sending
-    twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER', '')
-    if not twilio_phone_number:
-        # Use Twilio Messaging Service or default sender
-        logger.warning("Twilio phone number not configured, trying without sender ID")
-    
-    success_count = 0
-    for admin_phone in ADMIN_PHONE_NUMBERS:
-        try:
-            # Clean the message for SMS (remove emojis that might cause issues)
-            clean_message = message.replace("*", "").replace("👤", "").replace("⭐", "*").replace("💬", "").replace("👉", "->").replace("🆕", "[NOUVEAU]").replace("🎮", "[JEUX]").replace("📅", "").replace("⏰", "").replace("👥", "").replace("💰", "").replace("📱", "Tel:").replace("📍", "").replace("🏠", "[LOCATION]").replace("📝", "")
-            
-            msg_params = {
-                "body": clean_message[:1600],  # SMS limit
-                "to": admin_phone
-            }
-            
-            if twilio_phone_number:
-                msg_params["from_"] = twilio_phone_number
-            else:
-                # Use messaging service if available
-                messaging_service_sid = os.environ.get('TWILIO_MESSAGING_SERVICE_SID', '')
-                if messaging_service_sid:
-                    msg_params["messaging_service_sid"] = messaging_service_sid
-                else:
-                    logger.error(f"No Twilio sender configured for {admin_phone}")
-                    continue
-            
-            message_response = twilio_client.messages.create(**msg_params)
-            logger.info(f"SMS notification sent to {admin_phone}, SID: {message_response.sid}")
-            success_count += 1
-        except Exception as e:
-            logger.error(f"Error sending SMS to {admin_phone}: {e}")
-    
-    return success_count > 0
 
 # Keep old function name for backward compatibility
 async def send_whatsapp_notification(message: str):
