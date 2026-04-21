@@ -19,7 +19,7 @@ from twilio.base.exceptions import TwilioRestException
 logger = logging.getLogger(__name__)
 
 # Admin phone numbers for notifications (Benin format +229)
-ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565", "+2290141530000"]
+ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565", "+22941530000"]
 
 _twilio_client = None
 

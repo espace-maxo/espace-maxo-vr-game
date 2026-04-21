@@ -2067,7 +2067,7 @@ async def get_payment_status(booking_id: str):
 
 CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
 # Admin phone numbers for SMS notifications (format: +229XXXXXXXX)
-ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565", "+2290141530000"]
+ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565", "+22941530000"]
 
 async def send_admin_sms_notification(message: str):
     """Send admin notification (WhatsApp with SMS fallback) via services.sms_service.
