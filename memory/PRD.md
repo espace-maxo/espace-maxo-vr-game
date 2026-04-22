@@ -4,6 +4,24 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Bugfix click notifications + horodatages relatifs (DONE)
+
+**Bug report utilisateur** : « je n'arrive pas à cliquer sur les notifications » — dans le dropdown du centre de notifications, les clics sur les items ne déclenchaient pas la navigation.
+
+**Root cause & correctifs** :
+- Le `<span>` animé `animate-ping` sur le gros badge rouge interceptait des clics sur le bouton Bell → ajout de `pointer-events-none`.
+- Collision potentielle de z-index entre le header (z-50), la TabsList, et le dropdown (z-50) → dropdown remonté à `z-[100]`.
+- Ajout d'un **backdrop** `fixed inset-0 z-[90]` (testid=`notif-center-backdrop`) qui capte les clics extérieurs et ferme le dropdown proprement.
+- Ajout de `onClick={(e) => e.stopPropagation()}` sur le panneau dropdown + `type="button"` explicite sur chaque ligne cliquable.
+- `max-w-[calc(100vw-1rem)]` pour éviter le débordement sur mobile.
+
+**Nouvelle feature approuvée** : horodatages relatifs par catégorie.
+- Backend : `_latest_date(collection, query)` helper + `latest_by_category` renvoyé dans `/api/notifications/counts` pour chaque rôle.
+- Frontend : `formatRelativeTime(iso)` helper (à l'instant / il y a X min / h / j / date) affiché en petit gris sous chaque libellé de catégorie (testid=`notif-item-<key>-ts`).
+
+**Tests** : iteration_47 → 100% backend + frontend. Bug confirmé corrigé en environnement réel.
+
+---
 ## 22/04/2026 — Centre de notifications cliquable (DONE)
 
 **Feature — Badge de notification global + dropdown** :
