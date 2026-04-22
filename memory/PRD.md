@@ -4,6 +4,25 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Gestion des pourboires / TipsTab (DONE)
+
+**Feature — Gestion complète des pourboires** :
+- Backend : `routers/tips.py` — CRUD + summary.
+  - Collection `tips` : `{ id, date, amount, payment_method, attribution_type ('pool'|'server'), server_name, notes, created_by, created_at }`.
+  - Endpoints : `GET/POST /tips`, `PUT/DELETE /tips/{id}`, `GET /tips/summary?date=&server=`.
+  - Validation : `payment_method ∈ {cash, mobile_money, card, other}`, amount > 0, `server_name` requis si `attribution_type='server'`.
+  - Filtres liste : `date_from/date_to`, `server`, `attribution`.
+- Frontend : `TipsTab.jsx` (nouveau composant dédié, rôle-aware).
+  - Admin + Gérante : CRUD complet, voient TOUT, voient le classement serveurs hebdo.
+  - Serveur : voit UNIQUEMENT ses propres pourboires (badge `Vue personnelle`, boutons create/edit/delete cachés, pas de ranking).
+  - 4 cartes KPI : Aujourd'hui / Semaine / Pool / Serveurs, avec compteurs.
+  - Classement serveurs hebdo (médailles 1-2-3).
+  - Modal création/édition : attribution toggle Pool (défaut) / Serveur, select serveur filtré par `role=server`, step="any" pour décimales.
+- Onglet `Pourboires` visible pour tous les rôles (data-testid=`tab-tips`).
+
+**Tests** : iteration_43 → 24/24 backend + frontend 100%. Role-based access vérifié.
+
+---
 ## 22/04/2026 — Sync automatique Achats + Compte courant auto-prélèvement + Décimales + Sous-menu Achats validés (DONE)
 
 **Feature 1 — Synchronisation automatique des achats (P0)** :
