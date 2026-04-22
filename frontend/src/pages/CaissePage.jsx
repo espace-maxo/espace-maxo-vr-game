@@ -333,6 +333,10 @@ const CaissePage = () => {
     receipt_image: null
   });
   
+  // Achats communs - multi-items
+  const [commonItems, setCommonItems] = useState([]);
+  const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+
   // Revision notifications for Manager
   const [revisionExpensesCount, setRevisionExpensesCount] = useState(0);
   const [showRevisionPanel, setShowRevisionPanel] = useState(false);
@@ -946,8 +950,52 @@ const CaissePage = () => {
 
   const createExpense = async () => {
     try {
+      // Multi-items mode : Achats communs supports a list of items
+      if (commonItems.length > 0) {
+        const totalAmount = commonItems.reduce((s, it) => s + (it.quantity || 1) * (it.unit_price || 0), 0);
+        const firstCat = commonItems[0]?.category || expenseForm.category || "autres";
+        const desc = expenseForm.description?.trim()
+          || `Achats communs - ${commonItems.length} article(s) - ${format(new Date(), "dd/MM/yyyy")}`;
+        await axios.post(`${API}/expenses`, {
+          category: firstCat,
+          description: desc,
+          amount: totalAmount,
+          quantity: commonItems.length,
+          unit_price: null,
+          supplier: expenseForm.supplier || null,
+          planned_date: expenseForm.planned_date,
+          receipt_image: expenseForm.receipt_image,
+          is_group: true,
+          items: commonItems.map((it) => ({
+            category: it.category || firstCat,
+            description: it.description,
+            quantity: it.quantity || 1,
+            unit_price: it.unit_price || 0,
+            amount: (it.quantity || 1) * (it.unit_price || 0),
+          })),
+          requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        });
+        toast.success(`Achats communs créés avec ${commonItems.length} article(s) !`);
+        setShowExpenseModal(false);
+        setCommonItems([]);
+        setCommonNewItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+        setExpenseForm({
+          category: "cuisine",
+          description: "",
+          quantity: 1,
+          unit_price: 0,
+          amount: 0,
+          supplier: "",
+          planned_date: format(new Date(), "yyyy-MM-dd"),
+          receipt_image: null,
+        });
+        fetchExpenses();
+        return;
+      }
+
+      // Legacy single-item mode (fallback if no items added yet)
       if (!expenseForm.description || expenseForm.unit_price <= 0 || expenseForm.quantity <= 0) {
-        toast.error("Veuillez remplir la description, la quantité et le prix unitaire");
+        toast.error("Ajoutez au moins un article dans la liste");
         return;
       }
       
@@ -977,6 +1025,23 @@ const CaissePage = () => {
       toast.error("Erreur lors de la création");
     }
   };
+
+  // Helpers for multi-item Achats communs modal
+  const addCommonItem = () => {
+    if (!commonNewItem.description.trim()) {
+      toast.error("Description requise");
+      return;
+    }
+    if ((commonNewItem.unit_price || 0) <= 0) {
+      toast.error("Prix unitaire requis");
+      return;
+    }
+    const amount = (commonNewItem.quantity || 1) * (commonNewItem.unit_price || 0);
+    setCommonItems([...commonItems, { ...commonNewItem, amount, id: Date.now() }]);
+    setCommonNewItem({ category: commonNewItem.category, description: "", quantity: 1, unit_price: 0 });
+  };
+  const removeCommonItem = (id) => setCommonItems(commonItems.filter((i) => i.id !== id));
+  const getCommonTotal = () => commonItems.reduce((s, it) => s + (it.amount || 0), 0);
 
   const updateExpense = async (expenseId, updateData) => {
     try {
@@ -6998,12 +7063,19 @@ _Gérante - Espace Maxo_
 
       {/* Expense Modal */}
       <Dialog open={showExpenseModal} onOpenChange={(open) => {
+        if (!open && commonItems.length > 0 && !editingExpense) {
+          if (!confirm("Articles non enregistrés. Fermer quand même ?")) return;
+        }
         if (!open) {
           setShowExpenseModal(false);
           setEditingExpense(null);
+          setCommonItems([]);
+          setCommonNewItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
           setExpenseForm({
             category: "cuisine",
             description: "",
+            quantity: 1,
+            unit_price: 0,
             amount: 0,
             supplier: "",
             planned_date: format(new Date(), "yyyy-MM-dd"),
@@ -7011,75 +7083,190 @@ _Gérante - Espace Maxo_
           });
         }
       }}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-purple-400 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" />
               {editingExpense ? 'Modifier la demande' : 'Nouveaux achats communs'}
+              {commonItems.length > 0 && !editingExpense && (
+                <Badge className="bg-purple-500/30 text-purple-200 ml-2">
+                  {commonItems.length} article(s) • {formatPrice(getCommonTotal())} F
+                </Badge>
+              )}
             </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Ajoutez un ou plusieurs articles (catégories différentes possibles). Le fournisseur, la date et le reçu sont communs.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label className="text-slate-300">Catégorie *</Label>
-              <Select 
-                value={expenseForm.category} 
-                onValueChange={(v) => setExpenseForm({...expenseForm, category: v})}
-              >
-                <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
-                  <SelectItem value="bar">🍹 Bar</SelectItem>
-                  <SelectItem value="paiement">💳 Paiement</SelectItem>
-                  <SelectItem value="autres">📦 Autres</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {editingExpense ? (
+              /* --- EDIT MODE (single-item legacy) --- */
+              <>
+                <div>
+                  <Label className="text-slate-300">Catégorie *</Label>
+                  <Select 
+                    value={expenseForm.category} 
+                    onValueChange={(v) => setExpenseForm({...expenseForm, category: v})}
+                  >
+                    <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                      <SelectItem value="bar">🍹 Bar</SelectItem>
+                      <SelectItem value="paiement">💳 Paiement</SelectItem>
+                      <SelectItem value="autres">📦 Autres</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label className="text-slate-300">Description / Libellé *</Label>
-              <Textarea
-                value={expenseForm.description}
-                onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
-                placeholder="Ex: Viande de boeuf, légumes frais..."
-                className="bg-slate-700/50 border-slate-600 text-white"
-                rows={2}
-              />
-            </div>
+                <div>
+                  <Label className="text-slate-300">Description / Libellé *</Label>
+                  <Textarea
+                    value={expenseForm.description}
+                    onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                    placeholder="Ex: Viande de boeuf, légumes frais..."
+                    className="bg-slate-700/50 border-slate-600 text-white"
+                    rows={2}
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-slate-300">Quantité *</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={expenseForm.quantity}
-                  onChange={(e) => setExpenseForm({...expenseForm, quantity: parseInt(e.target.value) || 1})}
-                  placeholder="1"
-                  className="bg-slate-700/50 border-slate-600 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-300">Prix unitaire (FCFA) *</Label>
-                <Input
-                  type="number"
-                  value={expenseForm.unit_price}
-                  onChange={(e) => setExpenseForm({...expenseForm, unit_price: parseFloat(e.target.value) || 0})}
-                  placeholder="0"
-                  className="bg-slate-700/50 border-slate-600 text-white"
-                />
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-slate-300">Quantité *</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={expenseForm.quantity}
+                      onChange={(e) => setExpenseForm({...expenseForm, quantity: parseInt(e.target.value) || 1})}
+                      placeholder="1"
+                      className="bg-slate-700/50 border-slate-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Prix unitaire (FCFA) *</Label>
+                    <Input
+                      type="number"
+                      value={expenseForm.unit_price}
+                      onChange={(e) => setExpenseForm({...expenseForm, unit_price: parseFloat(e.target.value) || 0})}
+                      placeholder="0"
+                      className="bg-slate-700/50 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
 
-            <div className="bg-indigo-900/30 rounded-lg p-3 border border-indigo-500/30">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-300">Total calculé:</span>
-                <span className="text-xl font-bold text-indigo-400">
-                  {formatPrice(expenseForm.quantity * expenseForm.unit_price)} F
-                </span>
-              </div>
-            </div>
+                <div className="bg-indigo-900/30 rounded-lg p-3 border border-indigo-500/30">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300">Total calculé:</span>
+                    <span className="text-xl font-bold text-indigo-400">
+                      {formatPrice(expenseForm.quantity * expenseForm.unit_price)} F
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* --- CREATE MODE (multi-items) --- */
+              <>
+                <div>
+                  <Label className="text-slate-300 text-sm">Libellé global (optionnel)</Label>
+                  <Input
+                    value={expenseForm.description}
+                    onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                    placeholder="Ex : Courses du jeudi"
+                    className="bg-slate-700/50 border-slate-600 text-white"
+                    data-testid="common-description-input"
+                  />
+                </div>
+
+                {/* Add new article block */}
+                <Card className="bg-purple-900/20 border-purple-500/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-purple-300 text-sm flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Ajouter un article
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                      <Select value={commonNewItem.category} onValueChange={(v) => setCommonNewItem({...commonNewItem, category: v})}>
+                        <SelectTrigger className="w-full sm:w-[140px] bg-slate-700/50 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                          <SelectItem value="bar">🍹 Bar</SelectItem>
+                          <SelectItem value="paiement">💳 Paiement</SelectItem>
+                          <SelectItem value="autres">📦 Autres</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={commonNewItem.description}
+                        onChange={(e) => setCommonNewItem({...commonNewItem, description: e.target.value})}
+                        placeholder="Article / libellé"
+                        className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
+                        data-testid="common-new-item-desc"
+                      />
+                      <Input
+                        type="number" min="1"
+                        value={commonNewItem.quantity || ""}
+                        onChange={(e) => setCommonNewItem({...commonNewItem, quantity: parseInt(e.target.value) || 1})}
+                        placeholder="Qté"
+                        className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
+                      />
+                      <Input
+                        type="number"
+                        value={commonNewItem.unit_price || ""}
+                        onChange={(e) => setCommonNewItem({...commonNewItem, unit_price: parseFloat(e.target.value) || 0})}
+                        placeholder="PU"
+                        className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
+                      />
+                      <div className="flex items-center bg-purple-900/30 rounded px-2 text-purple-300 text-sm">
+                        = {formatPrice((commonNewItem.quantity || 1) * (commonNewItem.unit_price || 0))} F
+                      </div>
+                      <Button onClick={addCommonItem} className="bg-purple-600 hover:bg-purple-700" data-testid="common-add-item-btn">
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Items list */}
+                {commonItems.length > 0 && (
+                  <Card className="bg-slate-700/30 border-slate-600">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-slate-300 text-sm">Articles ajoutés</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 max-h-[220px] overflow-y-auto">
+                      {commonItems.map((it, idx) => {
+                        const catLabel = { cuisine: "🍳 Cuisine", bar: "🍹 Bar", paiement: "💳 Paiement", autres: "📦 Autres" }[it.category] || it.category;
+                        return (
+                          <div key={it.id} className="flex items-center justify-between gap-2 bg-slate-600/30 rounded-lg p-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="text-slate-400 text-sm font-mono">{idx + 1}.</span>
+                              <Badge className="text-xs shrink-0 bg-slate-700/50 text-slate-300">{catLabel}</Badge>
+                              <span className="text-white truncate">{it.description}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-slate-400 text-xs">
+                                {it.quantity} × {formatPrice(it.unit_price)} = {formatPrice(it.amount)} F
+                              </span>
+                              <Button size="sm" variant="ghost" onClick={() => removeCommonItem(it.id)}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-end pt-1 border-t border-slate-600 mt-2">
+                        <span className="text-purple-300 font-bold">
+                          Total : {formatPrice(getCommonTotal())} F
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
 
             <div>
               <Label className="text-slate-300">Fournisseur</Label>
@@ -7151,8 +7338,11 @@ _Gérante - Espace Maxo_
                   }
                 }}
                 className="flex-1 bg-purple-600 hover:bg-purple-700"
+                data-testid="save-common-expense-btn"
               >
-                {editingExpense ? 'Soumettre à nouveau' : 'Créer la demande'}
+                {editingExpense
+                  ? 'Soumettre à nouveau'
+                  : `Soumettre ${commonItems.length > 0 ? `${commonItems.length} article(s)` : 'la demande'}`}
               </Button>
               <Button 
                 variant="outline" 
