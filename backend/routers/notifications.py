@@ -40,6 +40,8 @@ async def _admin_counts() -> dict:
     expenses_pending = await db.expenses.count_documents({
         "status": {"$in": ["pending", "revision_requested"]}
     })
+    # Only the strictly "pending" subset (manager-created, not yet actioned by admin)
+    expenses_pending_only = await db.expenses.count_documents({"status": "pending"})
     cancellation_pending = await db.cancellation_requests.count_documents({"status": "pending"})
     modification_pending = await db.modification_requests.count_documents({"status": "pending"})
     invoices_pending = await db.invoices.count_documents({"validation_status": "pending"})
@@ -58,7 +60,7 @@ async def _admin_counts() -> dict:
     except Exception:
         notes_unread = 0
 
-    # Latest timestamps per category
+    # Latest timestamps per category (for relative-time display)
     latest = {
         "needs": await _latest_date("needs", {"status": "en_attente"}),
         "purchase_orders": await _latest_date("purchase_orders", {"status": "draft"}),
@@ -69,6 +71,15 @@ async def _admin_counts() -> dict:
         "financial_points": await _latest_date("financial_points", {"signed": True, "admin_validated": False}),
         "tips_today": await _latest_date("tips", {"date": today}),
         "notes": await _latest_date("instructions", {"sender_role": {"$ne": "admin"}}),
+    }
+
+    # Cross-role banner (Gérante → Admin): aggregate items produced by the manager
+    cross = {
+        "needs": {"count": needs_pending, "latest": latest["needs"]},
+        "expenses": {"count": expenses_pending_only, "latest": await _latest_date("expenses", {"status": "pending"})},
+        "tips_today": {"count": tips_today, "latest": latest["tips_today"]},
+        "financial_points": {"count": fp_pending, "latest": latest["financial_points"]},
+        "notes": {"count": notes_unread, "latest": latest["notes"]},
     }
 
     return {
@@ -84,6 +95,11 @@ async def _admin_counts() -> dict:
             "notes": notes_unread,
         },
         "latest_by_category": latest,
+        "cross_role": {
+            "source_role": "manager",
+            "source_label": "la Gérante",
+            "items": cross,
+        },
     }
 
 
@@ -106,6 +122,12 @@ async def _manager_counts(user_name: Optional[str] = None) -> dict:
         "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
         "notes": await _latest_date("instructions", {"sender_role": "admin"}),
     }
+    # Cross-role banner (Admin → Gérante): items produced by the admin for the manager
+    cross = {
+        "expenses": {"count": expenses_revision, "latest": latest["expenses"]},
+        "purchase_orders": {"count": po_sent, "latest": latest["purchase_orders"]},
+        "notes": {"count": notes_unread, "latest": latest["notes"]},
+    }
     return {
         "counts": {
             "expenses": expenses_revision,
@@ -114,6 +136,11 @@ async def _manager_counts(user_name: Optional[str] = None) -> dict:
             "notes": notes_unread,
         },
         "latest_by_category": latest,
+        "cross_role": {
+            "source_role": "admin",
+            "source_label": "l'Administrateur",
+            "items": cross,
+        },
     }
 
 
@@ -130,7 +157,11 @@ async def _server_counts(user_name: Optional[str] = None) -> dict:
     latest = {
         "notes": await _latest_date("instructions", {"sender_role": {"$ne": "server"}}),
     }
-    return {"counts": {"notes": notes_unread}, "latest_by_category": latest}
+    return {
+        "counts": {"notes": notes_unread},
+        "latest_by_category": latest,
+        "cross_role": None,
+    }
 
 
 @router.get("/notifications/counts")
@@ -151,6 +182,7 @@ async def notifications_counts(
             "role": role,
             "counts": counts,
             "latest_by_category": result["latest_by_category"],
+            "cross_role": result.get("cross_role"),
             "total": total,
         }
     except Exception as e:
