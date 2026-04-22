@@ -1320,11 +1320,11 @@ const CaissePage = () => {
   // ============== SHOPPING LIST FUNCTIONS ==============
   
   const addToShoppingList = () => {
-    if (!newListItem.description || newListItem.unit_price <= 0 || newListItem.quantity <= 0) {
-      toast.error("Veuillez remplir la description, la quantité et le prix unitaire");
+    if (!newListItem.description || newListItem.quantity <= 0) {
+      toast.error("Description et quantité requises");
       return;
     }
-    const totalAmount = newListItem.quantity * newListItem.unit_price;
+    const totalAmount = (newListItem.quantity || 1) * (newListItem.unit_price || 0);
     setShoppingList([...shoppingList, { ...newListItem, amount: totalAmount, id: Date.now() }]);
     setNewListItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
     toast.success("Article ajouté à la liste");
@@ -7443,7 +7443,7 @@ _Gérante - Espace Maxo_
                     type="number"
                     value={newListItem.unit_price || ""}
                     onChange={(e) => setNewListItem({...newListItem, unit_price: parseFloat(e.target.value) || 0})}
-                    placeholder="Prix unit."
+                    placeholder="Prix (opt.)"
                     className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
                   />
                   <div className="flex items-center bg-indigo-900/30 rounded px-2 text-indigo-300 text-sm">
@@ -7456,6 +7456,7 @@ _Gérante - Espace Maxo_
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-slate-500 mt-2">💡 Le prix est optionnel — laissez vide si vous ne le connaissez pas.</p>
               </CardContent>
             </Card>
 
