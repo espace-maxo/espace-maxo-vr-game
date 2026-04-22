@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2, Truck
+  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2, Truck, Coins
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ import ForecastsTab from "./caisse/components/ForecastsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
 import CurrentAccountsTab from "./caisse/components/CurrentAccountsTab";
+import TipsTab from "./caisse/components/TipsTab";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
@@ -4040,6 +4041,10 @@ _Gérante - Espace Maxo_
                 <Wallet className="w-4 h-4 mr-2" />Compte courant
               </TabsTrigger>
             )}
+            {/* 15.5 POURBOIRES (tous les rôles) */}
+            <TabsTrigger value="tips" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="tab-tips">
+              <Coins className="w-4 h-4 mr-2" />Pourboires
+            </TabsTrigger>
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
@@ -6679,6 +6684,11 @@ _Gérante - Espace Maxo_
             <CurrentAccountsTab />
           </TabsContent>
           )}
+
+          {/* ==================== POURBOIRES (Admin + Manager + Server) ==================== */}
+          <TabsContent value="tips">
+            <TipsTab currentUser={currentUser} />
+          </TabsContent>
         </Tabs>
         )}
       </div>
