@@ -45,6 +45,7 @@ import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
+import CurrentAccountsTab from "./caisse/components/CurrentAccountsTab";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
@@ -336,6 +337,14 @@ const CaissePage = () => {
   // Achats communs - multi-items
   const [commonItems, setCommonItems] = useState([]);
   const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+
+  // Admin revision modal (modify expense before sending back to manager)
+  const [showReviseModal, setShowReviseModal] = useState(false);
+  const [revisingExpense, setRevisingExpense] = useState(null);
+  const [reviseItems, setReviseItems] = useState([]);
+  const [reviseSupplier, setReviseSupplier] = useState("");
+  const [reviseNote, setReviseNote] = useState("");
+  const [reviseNewItem, setReviseNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
 
   // Revision notifications for Manager
   const [revisionExpensesCount, setRevisionExpensesCount] = useState(0);
@@ -1042,6 +1051,70 @@ const CaissePage = () => {
   };
   const removeCommonItem = (id) => setCommonItems(commonItems.filter((i) => i.id !== id));
   const getCommonTotal = () => commonItems.reduce((s, it) => s + (it.amount || 0), 0);
+
+  // ----- Revise modal helpers -----
+  const openReviseModal = (expense) => {
+    setRevisingExpense(expense);
+    const existingItems = (expense.items && expense.items.length > 0)
+      ? expense.items.map((it, i) => ({
+          ...it,
+          amount: (it.quantity || 1) * (it.unit_price || 0),
+          _k: i + Date.now(),
+        }))
+      : [{
+          category: expense.category || "cuisine",
+          description: expense.description || "",
+          quantity: expense.quantity || 1,
+          unit_price: expense.unit_price || 0,
+          amount: (expense.quantity || 1) * (expense.unit_price || 0),
+          _k: Date.now(),
+        }];
+    setReviseItems(existingItems);
+    setReviseSupplier(expense.supplier || "");
+    setReviseNote("");
+    setReviseNewItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+    setShowReviseModal(true);
+  };
+  const addReviseItem = () => {
+    if (!reviseNewItem.description.trim()) { toast.error("Description requise"); return; }
+    const amt = (reviseNewItem.quantity || 1) * (reviseNewItem.unit_price || 0);
+    setReviseItems([...reviseItems, { ...reviseNewItem, amount: amt, _k: Date.now() }]);
+    setReviseNewItem({ category: reviseNewItem.category, description: "", quantity: 1, unit_price: 0 });
+  };
+  const removeReviseItem = (_k) => setReviseItems(reviseItems.filter((i) => i._k !== _k));
+  const updateReviseItem = (_k, patch) => setReviseItems(reviseItems.map((it) => {
+    if (it._k !== _k) return it;
+    const merged = { ...it, ...patch };
+    merged.amount = (merged.quantity || 1) * (merged.unit_price || 0);
+    return merged;
+  }));
+  const getReviseTotal = () => reviseItems.reduce((s, it) => s + (it.amount || 0), 0);
+  const submitRevision = async () => {
+    if (reviseItems.length === 0) { toast.error("Au moins un article requis"); return; }
+    const total = getReviseTotal();
+    const payload = {
+      status: "revision_requested",
+      admin_notes: reviseNote || "Veuillez réviser cette demande",
+      amount: total,
+      supplier: reviseSupplier || null,
+      items: reviseItems.map((it) => ({
+        category: it.category,
+        description: it.description,
+        quantity: it.quantity || 1,
+        unit_price: it.unit_price || 0,
+        amount: it.amount || (it.quantity || 1) * (it.unit_price || 0),
+      })),
+    };
+    try {
+      await axios.put(`${API}/expenses/${revisingExpense.id}`, payload);
+      toast.success("Demande renvoyée à la gérante pour révision");
+      setShowReviseModal(false);
+      setRevisingExpense(null);
+      fetchExpenses();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
 
   const updateExpense = async (expenseId, updateData) => {
     try {
@@ -3951,6 +4024,12 @@ _Gérante - Espace Maxo_
                 <Settings className="w-4 h-4 mr-2" />Utilisateurs
               </TabsTrigger>
             )}
+            {/* 15. COMPTE COURANT (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="current-accounts" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white" data-testid="tab-current-accounts">
+                <Wallet className="w-4 h-4 mr-2" />Compte courant
+              </TabsTrigger>
+            )}
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
@@ -6078,19 +6157,12 @@ _Gérante - Espace Maxo_
                             <Button 
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                const note = document.getElementById(`admin-note-${expense.id}`)?.value;
-                                const newAmount = parseFloat(document.getElementById(`admin-amount-${expense.id}`)?.value) || expense.amount;
-                                updateExpense(expense.id, { 
-                                  status: "revision_requested", 
-                                  admin_notes: note || "Veuillez réviser cette demande",
-                                  amount: newAmount
-                                });
-                              }}
+                              onClick={() => openReviseModal(expense)}
                               className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                              data-testid={`revise-btn-${expense.id}`}
                             >
                               <Edit2 className="w-4 h-4 mr-1" />
-                              Renvoyer pour révision
+                              Modifier & renvoyer
                             </Button>
                             <Button 
                               size="sm"
@@ -6459,6 +6531,13 @@ _Gérante - Espace Maxo_
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="po">
             <PurchaseOrdersTab currentUser={currentUser} />
+          </TabsContent>
+          )}
+
+          {/* ==================== COMPTE COURANT (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+          <TabsContent value="current-accounts">
+            <CurrentAccountsTab />
           </TabsContent>
           )}
         </Tabs>
@@ -7611,6 +7690,120 @@ _Gérante - Espace Maxo_
               Fermer
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Admin Revise Modal (modify items + supplier before resending to manager) ===== */}
+      <Dialog open={showReviseModal} onOpenChange={(open) => { if (!open) { setShowReviseModal(false); setRevisingExpense(null); } }}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-amber-300 flex items-center gap-2">
+              <Edit2 className="w-5 h-5" />
+              Modifier avant renvoi — {revisingExpense?.description || ""}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Ajustez les articles, quantités, prix et le fournisseur. La gérante pourra revoir et resoumettre.
+            </DialogDescription>
+          </DialogHeader>
+          {revisingExpense && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-slate-300 text-sm">Fournisseur</Label>
+                <Input value={reviseSupplier} onChange={(e) => setReviseSupplier(e.target.value)}
+                  placeholder="Nom du fournisseur"
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                  data-testid="revise-supplier-input" />
+              </div>
+
+              {/* Existing items editable inline */}
+              <Card className="bg-slate-700/30 border-slate-600">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-slate-300 text-sm">Articles ({reviseItems.length})</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[260px] overflow-y-auto">
+                  {reviseItems.map((it, idx) => (
+                    <div key={it._k} className="flex items-center gap-2 bg-slate-600/30 rounded p-2 flex-wrap">
+                      <span className="text-slate-400 text-xs font-mono w-5">{idx + 1}.</span>
+                      <Select value={it.category} onValueChange={(v) => updateReviseItem(it._k, { category: v })}>
+                        <SelectTrigger className="w-[110px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                          <SelectItem value="bar">🍹 Bar</SelectItem>
+                          <SelectItem value="paiement">💳 Paiement</SelectItem>
+                          <SelectItem value="autres">📦 Autres</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input value={it.description} onChange={(e) => updateReviseItem(it._k, { description: e.target.value })}
+                        className="flex-1 min-w-[120px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs" />
+                      <Input type="number" value={it.quantity || 1}
+                        onChange={(e) => updateReviseItem(it._k, { quantity: parseInt(e.target.value) || 1 })}
+                        className="w-[60px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs" />
+                      <Input type="number" value={it.unit_price || 0}
+                        onChange={(e) => updateReviseItem(it._k, { unit_price: parseFloat(e.target.value) || 0 })}
+                        className="w-[90px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs" />
+                      <span className="text-amber-300 text-xs w-20 text-right">= {formatPrice(it.amount)} F</span>
+                      <Button size="sm" variant="ghost" onClick={() => removeReviseItem(it._k)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0">
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Add new article */}
+              <Card className="bg-amber-900/20 border-amber-500/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-amber-300 text-sm flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Ajouter un article
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    <Select value={reviseNewItem.category} onValueChange={(v) => setReviseNewItem({...reviseNewItem, category: v})}>
+                      <SelectTrigger className="w-[120px] bg-slate-700/50 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                        <SelectItem value="bar">🍹 Bar</SelectItem>
+                        <SelectItem value="paiement">💳 Paiement</SelectItem>
+                        <SelectItem value="autres">📦 Autres</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input value={reviseNewItem.description} onChange={(e) => setReviseNewItem({...reviseNewItem, description: e.target.value})}
+                      placeholder="Description" className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
+                      data-testid="revise-new-desc" />
+                    <Input type="number" value={reviseNewItem.quantity || ""} onChange={(e) => setReviseNewItem({...reviseNewItem, quantity: parseInt(e.target.value) || 1})}
+                      placeholder="Qté" className="w-[70px] bg-slate-700/50 border-slate-600 text-white" />
+                    <Input type="number" value={reviseNewItem.unit_price || ""} onChange={(e) => setReviseNewItem({...reviseNewItem, unit_price: parseFloat(e.target.value) || 0})}
+                      placeholder="PU" className="w-[100px] bg-slate-700/50 border-slate-600 text-white" />
+                    <Button onClick={addReviseItem} className="bg-amber-600 hover:bg-amber-700" data-testid="revise-add-item-btn">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div>
+                <Label className="text-slate-300 text-sm">Note à la gérante</Label>
+                <Textarea value={reviseNote} onChange={(e) => setReviseNote(e.target.value)}
+                  placeholder="Ex : j'ai ajusté les quantités, merci de vérifier..."
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                  data-testid="revise-note-input" />
+              </div>
+
+              <div className="bg-amber-900/20 rounded-lg p-3 flex justify-between items-center">
+                <span className="text-slate-300">Nouveau total :</span>
+                <span className="text-xl font-bold text-amber-300">{formatPrice(getReviseTotal())} F</span>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setShowReviseModal(false)} className="border-slate-600 text-slate-300">Annuler</Button>
+                <Button onClick={submitRevision} className="bg-amber-600 hover:bg-amber-700" data-testid="submit-revision-btn">
+                  <Edit2 className="w-4 h-4 mr-2" /> Renvoyer à la gérante
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
