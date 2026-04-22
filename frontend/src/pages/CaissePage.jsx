@@ -5490,14 +5490,14 @@ _Gérante - Espace Maxo_
                       className="bg-purple-600 hover:bg-purple-700"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Demande unique
+                      Achats communs
                     </Button>
                     <Button 
                       onClick={() => setShowShoppingListModal(true)}
                       className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                     >
                       <ShoppingCart className="w-4 h-4 mr-2" />
-                      Liste d'achats
+                      Achats Fournisseurs
                       {shoppingList.length > 0 && (
                         <Badge className="ml-2 bg-white/20 text-white">{shoppingList.length}</Badge>
                       )}
@@ -7015,7 +7015,7 @@ _Gérante - Espace Maxo_
           <DialogHeader>
             <DialogTitle className="text-purple-400 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" />
-              {editingExpense ? 'Modifier la demande' : 'Nouvelle demande d\'achat'}
+              {editingExpense ? 'Modifier la demande' : 'Nouveaux achats communs'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -7179,7 +7179,7 @@ _Gérante - Espace Maxo_
           <DialogHeader>
             <DialogTitle className="text-indigo-400 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" />
-              Liste d'Achats
+              Achats Fournisseurs
               {shoppingList.length > 0 && (
                 <Badge className="bg-indigo-500/30 text-indigo-300 ml-2">
                   {shoppingList.length} article(s) • Total: {formatPrice(getShoppingListTotal())} F
