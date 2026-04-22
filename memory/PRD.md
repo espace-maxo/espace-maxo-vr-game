@@ -4,6 +4,23 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Révision admin + Compte courant (DONE)
+
+**Feature 1 — Modification admin des demandes avant renvoi** :
+- Nouveau modal "Modifier & renvoyer" (remplace l'ancien "Renvoyer pour révision") sur les dépenses en attente.
+- Admin peut : éditer tous les items (catégorie, description, qté, PU), ajouter/supprimer des articles, modifier le fournisseur, saisir une note.
+- Validation renvoie la dépense à la gérante avec `status=revision_requested` + items/supplier/amount mis à jour.
+
+**Feature 2 — Module Compte courant (admin-only)** :
+- Nouveau router `routers/current_accounts.py`.
+- Collection `current_accounts` : { id, name, total_advance, received_date, description, schedule[], repayments[] }.
+- Enrichissement dynamique côté backend : `total_repaid`, `balance_remaining`, `progress_pct`, `next_due_date/amount`, `late_count`, `is_fully_repaid`, schedule avec flag `paid` et `is_late`.
+- Échéancier (optionnel) + remboursements libres (méthode cash/virement/mobile money/chèque, référence).
+- UI : onglet Compte courant (admin-only), 4 KPIs globaux, liste des comptes avec progress bar, échéancier déroulable, historique des remboursements, alertes retard.
+
+**Tests** : iteration_41 = 100% backend + frontend (admin + visibilité gérante).
+
+---
 ## 22/04/2026 — Module Fournisseurs & Bons de Commande (DONE)
 
 Workflow procurement complet : **Demande d'achats → Approbation → Bon de Commande → Envoi → Réception (BL) → Paiement**.
