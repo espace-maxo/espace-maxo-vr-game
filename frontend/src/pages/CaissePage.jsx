@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import { 
   Receipt, Plus, Minus, Trash2, Printer, Save, Search,
@@ -270,6 +270,32 @@ const COUNT_LABELS = {
   notes: "nouvelle note",
 };
 
+// Map notification key → destination tab value (for click-to-navigate)
+const COUNT_TO_TAB = {
+  needs: "needs",
+  purchase_orders: "po",
+  expenses: "achats",
+  cancellation_requests: "bons",
+  modification_requests: "bons",
+  invoices: "bons",
+  financial_points: "stats",
+  tips_today: "tips",
+  notes: "instructions",
+};
+
+// Icon + color palette per notification key
+const COUNT_META = {
+  needs: { color: "red", label: "Besoins" },
+  purchase_orders: { color: "sky", label: "Bons de commande" },
+  expenses: { color: "purple", label: "Achats" },
+  cancellation_requests: { color: "red", label: "Annulations" },
+  modification_requests: { color: "orange", label: "Modifications" },
+  invoices: { color: "orange", label: "Factures à valider" },
+  financial_points: { color: "red", label: "Points financiers" },
+  tips_today: { color: "amber", label: "Pourboires" },
+  notes: { color: "red", label: "Notes" },
+};
+
 
 const CaissePage = () => {
   // Auth state
@@ -295,6 +321,11 @@ const CaissePage = () => {
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
+  // Acknowledged baseline (mark-as-read): displayed badge = max(0, raw - ack)
+  const [acknowledgedCounts, setAcknowledgedCounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("caisse_notif_ack") || "{}"); } catch { return {}; }
+  });
+  const [showNotifCenter, setShowNotifCenter] = useState(false);
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -1013,6 +1044,40 @@ const CaissePage = () => {
     }
     if (next) playDing(); // audio preview on enable
   };
+
+  // ---- Mark-as-read / Notification center helpers ----
+  const persistAck = (ack) => {
+    try { localStorage.setItem("caisse_notif_ack", JSON.stringify(ack)); } catch { /* noop */ }
+  };
+  const markAllNotifsRead = () => {
+    // Store current raw counts as acknowledged baseline → all badges fall to 0 until new arrivals.
+    setAcknowledgedCounts({ ...notifCounts });
+    persistAck({ ...notifCounts });
+    setShowNotifCenter(false);
+  };
+  const markOneNotifRead = (key) => {
+    const next = { ...acknowledgedCounts, [key]: notifCounts[key] || 0 };
+    setAcknowledgedCounts(next);
+    persistAck(next);
+  };
+  const openNotifAndNavigate = (key) => {
+    const tab = COUNT_TO_TAB[key];
+    if (tab) setActiveTab(tab);
+    markOneNotifRead(key);
+    setShowNotifCenter(false);
+  };
+  // Effective counts used for badge display (raw minus acknowledged baseline, clamped 0).
+  const effectiveCounts = useMemo(() => {
+    const out = {};
+    Object.keys(notifCounts || {}).forEach((k) => {
+      out[k] = Math.max(0, (Number(notifCounts[k]) || 0) - (Number(acknowledgedCounts[k]) || 0));
+    });
+    return out;
+  }, [notifCounts, acknowledgedCounts]);
+  const effectiveTotal = useMemo(
+    () => Object.values(effectiveCounts).reduce((s, v) => s + (Number(v) || 0), 0),
+    [effectiveCounts]
+  );
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -3946,20 +4011,6 @@ _Gérante - Espace Maxo_
               <div className="text-right hidden md:block">
                 <p className="text-white font-medium flex items-center justify-end gap-2">
                   {currentUser?.full_name || currentUser?.username}
-                  {(() => {
-                    const total = Object.values(notifCounts || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-                    return total > 0 ? (
-                      <span className="relative inline-flex" data-testid="profile-notif-bell" title={`${total} notification(s)`}>
-                        <Bell className="w-4 h-4 text-amber-300" />
-                        <span className="absolute -top-1 -right-1 inline-flex">
-                          <span className="absolute inset-0 rounded-full bg-red-500 opacity-75 animate-ping" />
-                          <span className="relative rounded-full bg-red-500 text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] flex items-center justify-center">
-                            {total > 99 ? "99+" : total}
-                          </span>
-                        </span>
-                      </span>
-                    ) : null;
-                  })()}
                 </p>
                 <Badge className={
                   currentUser?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 
@@ -3974,6 +4025,86 @@ _Gérante - Espace Maxo_
                    currentUser?.role === 'coach_jeux' ? 'Coach Jeux' :
                    'Serveur'}
                 </Badge>
+              </div>
+
+              {/* NOTIFICATION CENTER — gros badge rouge cliquable, tous rôles */}
+              <div className="relative" data-testid="notif-center">
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowNotifCenter((s) => !s)}
+                  className="relative px-2 text-slate-200 hover:bg-slate-700/40"
+                  data-testid="notif-center-btn"
+                  title={effectiveTotal > 0 ? `${effectiveTotal} notification(s)` : "Aucune notification"}
+                >
+                  <Bell className="w-6 h-6" />
+                  {effectiveTotal > 0 && (
+                    <span className="absolute -top-1 -right-1 inline-flex" data-testid="notif-center-badge">
+                      <span className="absolute inset-0 rounded-full bg-red-500 opacity-75 animate-ping" />
+                      <span className="relative rounded-full bg-red-500 text-white text-[11px] font-bold px-1.5 min-w-[22px] h-[22px] flex items-center justify-center shadow-lg">
+                        {effectiveTotal > 99 ? "99+" : effectiveTotal}
+                      </span>
+                    </span>
+                  )}
+                </Button>
+                {showNotifCenter && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-50 overflow-hidden"
+                    data-testid="notif-center-dropdown"
+                  >
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-700">
+                      <span className="text-slate-200 font-semibold text-sm flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-amber-300" /> Notifications
+                      </span>
+                      {effectiveTotal > 0 && (
+                        <button
+                          onClick={markAllNotifsRead}
+                          className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-600 px-2 py-1 rounded"
+                          data-testid="notif-mark-all-read"
+                        >
+                          Tout marquer lu
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-700/60">
+                      {effectiveTotal === 0 ? (
+                        <div className="p-6 text-center text-slate-500 text-sm">
+                          <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-400 opacity-70" />
+                          Aucune notification en attente
+                        </div>
+                      ) : (
+                        Object.entries(effectiveCounts)
+                          .filter(([, v]) => (Number(v) || 0) > 0)
+                          .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+                          .map(([key, count]) => {
+                            const meta = COUNT_META[key] || { color: "red", label: key };
+                            const color = {
+                              red: "bg-red-500", orange: "bg-orange-500", amber: "bg-amber-500",
+                              blue: "bg-blue-500", purple: "bg-purple-500", sky: "bg-sky-500",
+                            }[meta.color] || "bg-slate-500";
+                            return (
+                              <button
+                                key={key}
+                                onClick={() => openNotifAndNavigate(key)}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center justify-between gap-2 group"
+                                data-testid={`notif-item-${key}`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-2 h-2 rounded-full ${color}`} />
+                                  <span className="text-slate-200 text-sm truncate">{meta.label}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`${color} text-white text-xs font-bold rounded-full px-2 min-w-[24px] text-center`}>
+                                    {count}
+                                  </span>
+                                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300" />
+                                </div>
+                              </button>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
@@ -4127,9 +4258,9 @@ _Gérante - Espace Maxo_
             {/* 2. BONS */}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Printer className="w-4 h-4 mr-2" />BONS
-              <NotifBadge count={notifCounts.invoices} color="orange" testid="badge-bons" />
+              <NotifBadge count={effectiveCounts.invoices} color="orange" testid="badge-bons" />
               {currentUser?.role === 'admin' && (
-                <NotifBadge count={(notifCounts.cancellation_requests || 0) + (notifCounts.modification_requests || 0)} color="red" testid="badge-bons-requests" />
+                <NotifBadge count={(effectiveCounts.cancellation_requests || 0) + (effectiveCounts.modification_requests || 0)} color="red" testid="badge-bons-requests" />
               )}
             </TabsTrigger>
             {/* 3. PRISE DE COMMANDES */}
@@ -4152,7 +4283,7 @@ _Gérante - Espace Maxo_
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                 <ShoppingCart className="w-4 h-4 mr-2" />Achats
-                <NotifBadge count={notifCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
+                <NotifBadge count={effectiveCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
               </TabsTrigger>
             )}
             {/* 5.5 LISTE DE BESOINS */}
@@ -4160,7 +4291,7 @@ _Gérante - Espace Maxo_
               <TabsTrigger value="needs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white" data-testid="tab-needs">
                 <ClipboardList className="w-4 h-4 mr-2" />Besoins
                 {currentUser?.role === 'admin' && (
-                  <NotifBadge count={notifCounts.needs} color="red" testid="badge-needs" />
+                  <NotifBadge count={effectiveCounts.needs} color="red" testid="badge-needs" />
                 )}
               </TabsTrigger>
             )}
@@ -4168,7 +4299,7 @@ _Gérante - Espace Maxo_
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="po" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white" data-testid="tab-po">
                 <Truck className="w-4 h-4 mr-2" />Fournisseurs
-                <NotifBadge count={notifCounts.purchase_orders} color="sky" testid="badge-po" />
+                <NotifBadge count={effectiveCounts.purchase_orders} color="sky" testid="badge-po" />
               </TabsTrigger>
             )}
             {/* 6. PROFORMA */}
@@ -4187,7 +4318,7 @@ _Gérante - Espace Maxo_
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
                 <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
-                <NotifBadge count={notifCounts.financial_points} color="red" testid="badge-stats" />
+                <NotifBadge count={effectiveCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
             {/* 8.5 ANALYTICS (Admin only) */}
@@ -4227,7 +4358,7 @@ _Gérante - Espace Maxo_
               <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                 onClick={() => { if (unreadNotesCount > 0) markAllNotesRead(); }}>
                 <MessageSquare className="w-4 h-4 mr-2" />Notes
-                <NotifBadge count={unreadNotesCount || notifCounts.notes} color="red" testid="badge-notes" />
+                <NotifBadge count={unreadNotesCount || effectiveCounts.notes} color="red" testid="badge-notes" />
               </TabsTrigger>
             )}
             {/* 14. UTILISATEURS */}
@@ -4246,7 +4377,7 @@ _Gérante - Espace Maxo_
             <TabsTrigger value="tips" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="tab-tips">
               <Coins className="w-4 h-4 mr-2" />Pourboires
               {currentUser?.role === 'admin' && (
-                <NotifBadge count={notifCounts.tips_today} color="amber" testid="badge-tips" />
+                <NotifBadge count={effectiveCounts.tips_today} color="amber" testid="badge-tips" />
               )}
             </TabsTrigger>
             {/* Server-specific tabs */}
