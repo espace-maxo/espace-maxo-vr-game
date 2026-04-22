@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Refactoring étape B : extraction onglet Achats (DONE)
+
+**Objectif** : Extraire les 907 lignes de JSX de l'onglet Achats dans un composant dédié `AchatsTab.jsx`.
+
+**Résultat** :
+- `CaissePage.jsx` : 8629 → **7748 lignes** (-880 lignes)
+- Nouveau fichier : `AchatsTab.jsx` (959 lignes)
+- Signature : `AchatsTab = ({ ctx })` — reçoit un prop `ctx` contenant tous les state/handlers requis.
+- Destructure 21 identifiants : currentUser, expenses, shoppingList, achatsSubView(+setter), showAllExpenses(+setter), expenseRatioAlert, formatPrice, expenseAnalyses, setShowExpenseModal, setShowShoppingListModal, setExpenseToAssign, setShowWeekAssignModal, printExpensesTicket, printAllExpensesList, printAllApprovedExpenses, printExpensePDF, openExpenseForEdit, deleteExpense, updateExpense, openReviseModal, convertExpenseToPO.
+- Imports : Button, Badge, Card*, Input, Label, 12 icônes lucide, ExpenseAnalysisBadges.
+
+**Bugs corrigés par le testing agent** :
+1. Signature de composant (passé par déstructuration `{ ctx }`)
+2. Imports manquants Label/Input
+3. Prop `expenseAnalyses` manquant dans le ctx
+
+**Total refactoring A+B** : CaissePage.jsx 9050 → 7748 lignes (**-1302 lignes, -14%**).
+
+**Tests** : iteration_50 → 100% frontend, ZÉRO régression. Un warning HTML cosmétique (span dans tr/td) non-bloquant.
+
+---
 ## 22/04/2026 — Refactoring étape A : extraction système de notifications (DONE)
 
 **Objectif** : Réduire la taille de `CaissePage.jsx` (9050 lignes) en extrayant le système de notifications dans des fichiers dédiés, sans régression.
