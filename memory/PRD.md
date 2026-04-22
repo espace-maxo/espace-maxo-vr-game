@@ -4,6 +4,37 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Sync automatique Achats + Compte courant auto-prélèvement + Décimales + Sous-menu Achats validés (DONE)
+
+**Feature 1 — Synchronisation automatique des achats (P0)** :
+- `fetchExpenses()` ajouté au polling 5s existant dans `CaissePage.jsx` (quand `activeTab === 'achats'`).
+- L'admin et la gérante voient instantanément les changements (création, modification, approbation) sans refresh manuel.
+
+**Feature 2 — Compte courant : prélèvements automatiques + remboursements manuels (P0)** :
+- Nouveau champ `auto_deduct_enabled` sur `AccountCreate` / `AccountUpdate`.
+- Nouveau helper `_run_auto_deduction_for_account(acc, run_date)` : pour chaque échéance due et non couverte, crée une repayment `method="auto_deduction"` avec `reference=AUTO-{schedule_id}-{date}` (idempotent).
+- Revenue journalier = somme des `invoices.total` (validation_status='validated') pour la date du jour.
+- Nouveau endpoint `POST /api/current-accounts/run-auto-deduction` (date optionnelle dans le body) → traite tous les comptes avec `auto_deduct_enabled=true`.
+- `GET /api/current-accounts?auto_run=true` (défaut) déclenche automatiquement le prélèvement à la première consultation du jour.
+- UI : toggle `Prélèvement automatique` dans le modal de création/édition d'un compte + bouton `Prélèvement auto du jour` + badges `Auto` sur les cartes + distinction `AUTO` dans l'historique.
+
+**Feature 3 — Admin voit les achats modifiés et peut les re-approuver ou re-réviser** :
+- Nouvelle card `MODIFIÉS — EN COURS DE RÉVISION CHEZ LA GÉRANTE` (admin-only, sous-tab En cours) avec boutons `Approuver` (vert) et `Nouvelle révision` (amber).
+- Le modal `Modifier & renvoyer` a désormais 3 boutons : `Annuler`, `Renvoyer à la gérante`, `Approuver directement` (admin peut modifier puis approuver en une étape).
+
+**Feature 4 — Support décimales (0,5) (P1)** :
+- Backend : `quantity: int` → `float` dans `expenses.ExpenseItem/Create/Update` et `needs.NeedItem/Create/Update`.
+- Frontend : tous les champs `quantity` utilisent `type="number" step="any"` + `parseFloat(e.target.value.replace(',','.'))` (CaissePage.jsx expense modal, shopping list, revise modal ; NeedsTab new-item).
+
+**Feature 5 — Sous-menu Achats validés (P1)** :
+- State `achatsSubView` avec 2 valeurs (`en_cours` | `valides`).
+- Sous-navigation sous le header de l'onglet Achats avec compteurs.
+- `en_cours` → cards pending + revision_requested (gérante) + admin-revision card.
+- `valides` → cards approved + completed.
+
+**Tests** : iteration_42 → 100% backend + 100% frontend (auto-deduction idempotence vérifiée, decimals 0.5 acceptés, UI sub-tabs visibles, revise modal 3 boutons).
+
+---
 ## 22/04/2026 — Révision admin + Compte courant (DONE)
 
 **Feature 1 — Modification admin des demandes avant renvoi** :
