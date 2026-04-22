@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
   Receipt, Plus, Minus, Trash2, Printer, Save, Search,
@@ -47,6 +47,8 @@ import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
 import CurrentAccountsTab from "./caisse/components/CurrentAccountsTab";
 import TipsTab from "./caisse/components/TipsTab";
+import { NotifBadge, NotificationBell, CrossRoleBanner } from "./caisse/components/NotificationCenter";
+import { useNotifications } from "./caisse/hooks/useNotifications";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
@@ -193,129 +195,6 @@ const PAYMENT_METHODS = [
   { value: "check", label: "Chèque", icon: FileText },
 ];
 
-// Animated notification badge (pulse + color-coded)
-const NotifBadge = ({ count, color = "red", testid }) => {
-  if (!count || count <= 0) return null;
-  const colors = {
-    red: "bg-red-500 text-white",
-    orange: "bg-orange-500 text-white",
-    amber: "bg-amber-500 text-white",
-    blue: "bg-blue-500 text-white",
-    purple: "bg-purple-500 text-white",
-    emerald: "bg-emerald-500 text-white",
-    sky: "bg-sky-500 text-white",
-  };
-  return (
-    <span className="relative inline-flex ml-1" data-testid={testid}>
-      <span className={`absolute inset-0 rounded-full ${colors[color]} opacity-75 animate-ping`} />
-      <span className={`relative inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] ${colors[color]}`}>
-        {count > 99 ? "99+" : count}
-      </span>
-    </span>
-  );
-};
-
-// Discrete "ding" played via Web Audio API (no external asset, CSP-friendly).
-const playDing = () => {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
-    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12); // E6
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-    osc.onended = () => ctx.close();
-  } catch {
-    /* silent */
-  }
-};
-
-// Best-effort browser notification (requires user permission).
-const sendBrowserNotification = (title, body) => {
-  try {
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission === "granted") {
-      const n = new Notification(title, {
-        body,
-        icon: "/favicon.ico",
-        tag: "caisse-pro-notif",
-        silent: false,
-      });
-      setTimeout(() => { try { n.close(); } catch { /* noop */ } }, 6000);
-    }
-  } catch {
-    /* silent */
-  }
-};
-
-// Human-readable label per count key (singular form)
-const COUNT_LABELS = {
-  needs: "nouveau besoin",
-  purchase_orders: "nouveau bon de commande",
-  expenses: "nouvelle demande d'achats",
-  cancellation_requests: "demande d'annulation",
-  modification_requests: "demande de modification",
-  invoices: "facture à valider",
-  financial_points: "point financier à valider",
-  tips_today: "nouveau pourboire",
-  notes: "nouvelle note",
-};
-
-// Map notification key → destination tab value (for click-to-navigate)
-const COUNT_TO_TAB = {
-  needs: "needs",
-  purchase_orders: "po",
-  expenses: "achats",
-  cancellation_requests: "bons",
-  modification_requests: "bons",
-  invoices: "bons",
-  financial_points: "stats",
-  tips_today: "tips",
-  notes: "instructions",
-};
-
-// Format relative time "il y a X min/h/j" — lightweight, no external lib call.
-const formatRelativeTime = (isoStr) => {
-  if (!isoStr) return "";
-  try {
-    const d = new Date(isoStr);
-    const diff = Math.max(0, Date.now() - d.getTime());
-    const sec = Math.floor(diff / 1000);
-    if (sec < 60) return "à l'instant";
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `il y a ${min} min`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `il y a ${h} h`;
-    const days = Math.floor(h / 24);
-    if (days < 30) return `il y a ${days} j`;
-    return d.toLocaleDateString("fr-FR");
-  } catch {
-    return "";
-  }
-};
-
-// Icon + color palette per notification key
-const COUNT_META = {
-  needs: { color: "red", label: "Besoins" },
-  purchase_orders: { color: "sky", label: "Bons de commande" },
-  expenses: { color: "purple", label: "Achats" },
-  cancellation_requests: { color: "red", label: "Annulations" },
-  modification_requests: { color: "orange", label: "Modifications" },
-  invoices: { color: "orange", label: "Factures à valider" },
-  financial_points: { color: "red", label: "Points financiers" },
-  tips_today: { color: "amber", label: "Pourboires" },
-  notes: { color: "red", label: "Notes" },
-};
-
 
 const CaissePage = () => {
   // Auth state
@@ -330,24 +209,7 @@ const CaissePage = () => {
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
 
-  // Notification counts (aggregated badges on tabs)
-  const [notifCounts, setNotifCounts] = useState({});
-  const [notifLatest, setNotifLatest] = useState({}); // latest created_at per category
-  const [notifCrossRole, setNotifCrossRole] = useState(null); // { source_role, source_label, items: {key: {count, latest}} }
-  const prevNotifCountsRef = useRef(null);
-  const notifInitRef = useRef(false);
-  const [notifEnabled, setNotifEnabled] = useState(() => {
-    try { return localStorage.getItem("caisse_notif_enabled") !== "0"; } catch { return true; }
-  });
-  const notifEnabledRef = useRef(notifEnabled);
-  const [notifPermission, setNotifPermission] = useState(
-    typeof Notification !== "undefined" ? Notification.permission : "default"
-  );
-  // Acknowledged baseline (mark-as-read): displayed badge = max(0, raw - ack)
-  const [acknowledgedCounts, setAcknowledgedCounts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("caisse_notif_ack") || "{}"); } catch { return {}; }
-  });
-  const [showNotifCenter, setShowNotifCenter] = useState(false);
+  // Notification counts & handlers are now managed by useNotifications hook (see below).
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -999,168 +861,27 @@ const CaissePage = () => {
     }
   };
 
-  // ============== NOTIFICATION COUNTS (badges agrégés) ==============
-  const fetchNotifCounts = async () => {
-    if (!currentUser?.role) return;
-    try {
-      const res = await axios.get(`${API}/notifications/counts`, {
-        params: {
-          role: currentUser.role,
-          user: currentUser.full_name || currentUser.username || "",
-        },
-      });
-      const newCounts = res.data?.counts || {};
-      setNotifCounts(newCounts);
-      setNotifLatest(res.data?.latest_by_category || {});
-      setNotifCrossRole(res.data?.cross_role || null);
-
-      // Detect increases vs previous snapshot (only admin + manager get alerts).
-      const prev = prevNotifCountsRef.current;
-      const alertRoles = currentUser?.role === "admin" || currentUser?.role === "manager";
-      if (alertRoles && notifInitRef.current && prev && notifEnabledRef.current) {
-        const deltas = [];
-        Object.keys(newCounts).forEach((k) => {
-          const curr = Number(newCounts[k] || 0);
-          const old = Number(prev[k] || 0);
-          if (curr > old) deltas.push({ key: k, delta: curr - old, total: curr });
-        });
-        if (deltas.length > 0) {
-          playDing();
-          const lines = deltas.slice(0, 4).map((d) => {
-            const label = COUNT_LABELS[d.key] || d.key;
-            return d.delta > 1 ? `• ${d.delta} ${label}s` : `• ${d.delta} ${label}`;
-          });
-          sendBrowserNotification(
-            "Espace Maxo — Nouvelle notification",
-            lines.join("\n"),
-          );
-        }
-      }
-      prevNotifCountsRef.current = newCounts;
-      notifInitRef.current = true;
-    } catch {
-      /* silencieux : les badges ne doivent pas bloquer l'UI */
-    }
-  };
-
-  // Request browser notification permission for admin / manager, once, after login.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    if (typeof Notification === "undefined") return;
-    if (currentUser?.role !== "admin" && currentUser?.role !== "manager") return;
-    if (Notification.permission === "default") {
-      // Defer slightly so the user sees the app first
-      const t = setTimeout(() => {
-        Notification.requestPermission().then((p) => setNotifPermission(p)).catch(() => {});
-      }, 1500);
-      return () => clearTimeout(t);
-    }
-    setNotifPermission(Notification.permission);
-  }, [isAuthenticated, currentUser]);
-
-  const toggleNotifEnabled = () => {
-    const next = !notifEnabled;
-    setNotifEnabled(next);
-    notifEnabledRef.current = next;
-    try { localStorage.setItem("caisse_notif_enabled", next ? "1" : "0"); } catch { /* noop */ }
-    if (next && typeof Notification !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission().then((p) => setNotifPermission(p)).catch(() => {});
-    }
-    if (next) playDing(); // audio preview on enable
-  };
-
-  // ---- Mark-as-read / Notification center helpers ----
-  const persistAck = (ack) => {
-    try { localStorage.setItem("caisse_notif_ack", JSON.stringify(ack)); } catch { /* noop */ }
-  };
-  const markAllNotifsRead = () => {
-    // Store current raw counts as acknowledged baseline → all badges fall to 0 until new arrivals.
-    setAcknowledgedCounts({ ...notifCounts });
-    persistAck({ ...notifCounts });
-    setShowNotifCenter(false);
-  };
-  const markOneNotifRead = (key) => {
-    const next = { ...acknowledgedCounts, [key]: notifCounts[key] || 0 };
-    setAcknowledgedCounts(next);
-    persistAck(next);
-  };
-  const openNotifAndNavigate = (key) => {
-    const tab = COUNT_TO_TAB[key];
-    if (tab) setActiveTab(tab);
-    markOneNotifRead(key);
-    setShowNotifCenter(false);
-  };
-  // Effective counts used for badge display (raw minus acknowledged baseline, clamped 0).
-  const effectiveCounts = useMemo(() => {
-    const out = {};
-    Object.keys(notifCounts || {}).forEach((k) => {
-      out[k] = Math.max(0, (Number(notifCounts[k]) || 0) - (Number(acknowledgedCounts[k]) || 0));
-    });
-    return out;
-  }, [notifCounts, acknowledgedCounts]);
-  const effectiveTotal = useMemo(
-    () => Object.values(effectiveCounts).reduce((s, v) => s + (Number(v) || 0), 0),
-    [effectiveCounts]
-  );
-
-  // Cross-role banner data (items sent FROM the other role). Uses acknowledgedCounts to hide handled items.
-  const effectiveCrossRole = useMemo(() => {
-    if (!notifCrossRole || !notifCrossRole.items) return null;
-    const adjusted = {};
-    let total = 0;
-    let latestCategory = null;
-    let latestTs = "";
-    Object.entries(notifCrossRole.items).forEach(([key, v]) => {
-      const raw = Number(v?.count) || 0;
-      const ack = Number(acknowledgedCounts[key]) || 0;
-      const eff = Math.max(0, raw - ack);
-      adjusted[key] = { count: eff, latest: v?.latest || "" };
-      total += eff;
-      if (eff > 0 && v?.latest && v.latest > latestTs) {
-        latestTs = v.latest;
-        latestCategory = key;
-      }
-    });
-    return {
-      source_role: notifCrossRole.source_role,
-      source_label: notifCrossRole.source_label,
-      items: adjusted,
-      total,
-      latest_category: latestCategory,
-      latest_timestamp: latestTs,
-    };
-  }, [notifCrossRole, acknowledgedCounts]);
-
-  const openCrossRoleLatest = () => {
-    if (!effectiveCrossRole || effectiveCrossRole.total === 0) return;
-    const key = effectiveCrossRole.latest_category || Object.keys(effectiveCrossRole.items).find(k => effectiveCrossRole.items[k].count > 0);
-    if (!key) return;
-    const tab = COUNT_TO_TAB[key];
-    if (tab) setActiveTab(tab);
-    markOneNotifRead(key);
-  };
-
-  const dismissCrossRoleBanner = () => {
-    if (!effectiveCrossRole) return;
-    // Acknowledge ALL categories in the cross-role set.
-    const next = { ...acknowledgedCounts };
-    Object.keys(effectiveCrossRole.items || {}).forEach((k) => {
-      next[k] = Number(notifCounts[k]) || 0;
-    });
-    setAcknowledgedCounts(next);
-    persistAck(next);
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    // Reset diff-detection baseline so first fetch after login/user-change doesn't spam alerts
-    prevNotifCountsRef.current = null;
-    notifInitRef.current = false;
-    fetchNotifCounts();
-    const id = setInterval(fetchNotifCounts, 10000); // 10s polling
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, currentUser]);
+  // ============== NOTIFICATIONS (extracted to hook) ==============
+  const {
+    notifLatest,
+    effectiveCounts,
+    effectiveTotal,
+    effectiveCrossRole,
+    showNotifCenter,
+    setShowNotifCenter,
+    notifEnabled,
+    notifPermission,
+    toggleNotifEnabled,
+    markAllNotifsRead,
+    openNotifAndNavigate,
+    openCrossRoleLatest,
+    dismissCrossRoleBanner,
+  } = useNotifications({
+    isAuthenticated,
+    currentUser,
+    apiBase: API,
+    onNavigateTab: setActiveTab,
+  });
 
   // ============== EXPENSES FUNCTIONS ==============
   
@@ -4099,104 +3820,16 @@ _Gérante - Espace Maxo_
                 </Badge>
               </div>
 
-              {/* NOTIFICATION CENTER — gros badge rouge cliquable, tous rôles */}
-              <div className="relative" data-testid="notif-center">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowNotifCenter((s) => !s)}
-                  className="relative px-2 text-slate-200 hover:bg-slate-700/40"
-                  data-testid="notif-center-btn"
-                  title={effectiveTotal > 0 ? `${effectiveTotal} notification(s)` : "Aucune notification"}
-                >
-                  <Bell className="w-6 h-6" />
-                  {effectiveTotal > 0 && (
-                    <span className="absolute -top-1 -right-1 inline-flex pointer-events-none" data-testid="notif-center-badge">
-                      <span className="absolute inset-0 rounded-full bg-red-500 opacity-75 animate-ping" />
-                      <span className="relative rounded-full bg-red-500 text-white text-[11px] font-bold px-1.5 min-w-[22px] h-[22px] flex items-center justify-center shadow-lg">
-                        {effectiveTotal > 99 ? "99+" : effectiveTotal}
-                      </span>
-                    </span>
-                  )}
-                </Button>
-                {showNotifCenter && (
-                  <>
-                    {/* Backdrop: capture outside clicks (covers whole screen, below dropdown). */}
-                    <div
-                      className="fixed inset-0 z-[90]"
-                      onClick={() => setShowNotifCenter(false)}
-                      data-testid="notif-center-backdrop"
-                    />
-                    {/* Dropdown panel */}
-                    <div
-                      className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1rem)] bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-[100] overflow-hidden"
-                      data-testid="notif-center-dropdown"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-700">
-                        <span className="text-slate-200 font-semibold text-sm flex items-center gap-2">
-                          <Bell className="w-4 h-4 text-amber-300" /> Notifications
-                        </span>
-                        {effectiveTotal > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllNotifsRead}
-                            className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-600 px-2 py-1 rounded cursor-pointer"
-                            data-testid="notif-mark-all-read"
-                          >
-                            Tout marquer lu
-                          </button>
-                        )}
-                      </div>
-                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-700/60">
-                        {effectiveTotal === 0 ? (
-                          <div className="p-6 text-center text-slate-500 text-sm">
-                            <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-400 opacity-70" />
-                            Aucune notification en attente
-                          </div>
-                        ) : (
-                          Object.entries(effectiveCounts)
-                            .filter(([, v]) => (Number(v) || 0) > 0)
-                            .sort((a, b) => (b[1] || 0) - (a[1] || 0))
-                            .map(([key, count]) => {
-                              const meta = COUNT_META[key] || { color: "red", label: key };
-                              const color = {
-                                red: "bg-red-500", orange: "bg-orange-500", amber: "bg-amber-500",
-                                blue: "bg-blue-500", purple: "bg-purple-500", sky: "bg-sky-500",
-                              }[meta.color] || "bg-slate-500";
-                              const ts = notifLatest[key];
-                              const rel = formatRelativeTime(ts);
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => openNotifAndNavigate(key)}
-                                  className="w-full text-left px-3 py-2 hover:bg-slate-700/40 active:bg-slate-700/60 flex items-center justify-between gap-2 group cursor-pointer"
-                                  data-testid={`notif-item-${key}`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <span className={`w-2 h-2 rounded-full ${color} shrink-0`} />
-                                    <div className="flex flex-col min-w-0 flex-1">
-                                      <span className="text-slate-200 text-sm truncate">{meta.label}</span>
-                                      {rel && (
-                                        <span className="text-[11px] text-slate-500 truncate" data-testid={`notif-item-${key}-ts`}>{rel}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className={`${color} text-white text-xs font-bold rounded-full px-2 min-w-[24px] text-center`}>
-                                      {count}
-                                    </span>
-                                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300" />
-                                  </div>
-                                </button>
-                              );
-                            })
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* NOTIFICATION CENTER — extracted component */}
+              <NotificationBell
+                effectiveCounts={effectiveCounts}
+                effectiveTotal={effectiveTotal}
+                notifLatest={notifLatest}
+                showNotifCenter={showNotifCenter}
+                setShowNotifCenter={setShowNotifCenter}
+                onOpenNotif={openNotifAndNavigate}
+                onMarkAllRead={markAllNotifsRead}
+              />
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
 
@@ -4221,58 +3854,13 @@ _Gérante - Espace Maxo_
         </div>
       </header>
 
-      {/* ===== Cross-role floating banner (Admin ↔ Gérante) ===== */}
-      {effectiveCrossRole && effectiveCrossRole.total > 0 && (currentUser?.role === "admin" || currentUser?.role === "manager") && (
-        <div
-          className={`sticky top-[60px] z-[80] w-full border-b-2 shadow-lg animate-pulse ${
-            currentUser?.role === "manager"
-              ? "bg-gradient-to-r from-amber-600/95 via-orange-600/95 to-amber-600/95 border-amber-300"
-              : "bg-gradient-to-r from-emerald-600/95 via-teal-600/95 to-emerald-600/95 border-emerald-300"
-          }`}
-          data-testid="cross-role-banner"
-        >
-          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={openCrossRoleLatest}
-              className="flex items-center gap-3 text-white font-semibold flex-1 min-w-0 text-left hover:opacity-90 transition-opacity"
-              data-testid="cross-role-banner-link"
-            >
-              <span className="relative inline-flex shrink-0">
-                <span className="absolute inset-0 rounded-full bg-white/40 opacity-75 animate-ping" />
-                <span className="relative inline-flex items-center justify-center rounded-full bg-white text-slate-900 text-sm font-bold px-2.5 min-w-[32px] h-[32px]">
-                  {effectiveCrossRole.total > 99 ? "99+" : effectiveCrossRole.total}
-                </span>
-              </span>
-              <div className="flex flex-col min-w-0">
-                <span className="text-base sm:text-lg leading-tight">
-                  Nouvelle(s) information(s) de <span className="underline underline-offset-2">{effectiveCrossRole.source_label}</span>
-                </span>
-                <span className="text-xs text-white/90 truncate">
-                  {Object.entries(effectiveCrossRole.items)
-                    .filter(([, v]) => v.count > 0)
-                    .sort((a, b) => b[1].count - a[1].count)
-                    .map(([k, v]) => `${v.count} ${(COUNT_META[k]?.label || k).toLowerCase()}`)
-                    .join(" • ")}
-                  {effectiveCrossRole.latest_timestamp && ` — ${formatRelativeTime(effectiveCrossRole.latest_timestamp)}`}
-                </span>
-              </div>
-              <span className="hidden sm:inline-flex items-center gap-1 text-white text-sm underline underline-offset-2 shrink-0 ml-auto">
-                Ouvrir <ChevronRight className="w-4 h-4" />
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={dismissCrossRoleBanner}
-              className="shrink-0 text-white/80 hover:text-white p-1.5 hover:bg-white/10 rounded"
-              title="Masquer la bannière"
-              data-testid="cross-role-banner-dismiss"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ===== Cross-role floating banner (Admin ↔ Gérante) — extracted component ===== */}
+      <CrossRoleBanner
+        crossRole={effectiveCrossRole}
+        role={currentUser?.role}
+        onOpenLatest={openCrossRoleLatest}
+        onDismiss={dismissCrossRoleBanner}
+      />
 
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* ==================== CUISINIER VIEW ==================== */}
