@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Compte courant : trésorerie utilisable pour les achats (DONE)
+
+**Objectif** : permettre à l'admin de lier une dépense (achat/paiement) à un compte courant (avance promoteur) comme source de financement, même rétroactivement sur des achats déjà réalisés.
+
+**Backend** :
+- `expenses.py` : nouveaux champs `funded_by_account_id`, `funded_by_account_name`, `funded_affects_ca` (bool, défaut True) sur ExpenseCreate/Update.
+- Helpers `_allocate_expense_to_account` et `_unallocate_expense_from_accounts` : créent/suppriment une repayment de méthode `expense_allocation` avec référence `EXP-{expense_id}` (idempotent, de-dup cross-comptes).
+- Hooks automatiques : création/update/delete d'une dépense met à jour le compte lié en conséquence.
+- Nouveaux endpoints dédiés :
+  - `POST /api/expenses/{id}/allocate-account {account_id, account_name, affects_ca}` — rétroactif, fonctionne sur n'importe quel statut (y compris `completed`).
+  - `DELETE /api/expenses/{id}/allocate-account` — retire le lien.
+- `current_accounts.py` : `_enrich_account` retourne désormais `allocated_to_expenses` + `balance_available` (max 0, total_advance − total_repaid).
+
+**Frontend** :
+- **Modal création d'achat** : nouvelle section « Payé depuis » (testid=`expense-funded-by-select`) avec dropdown « 💰 Recettes de la caisse » (défaut) + liste des comptes courants avec leur `balance_available` inline, et checkbox « Affecte quand même le CA » (testid=`expense-funded-affects-ca`).
+- **AchatsTab (admin)** : sur chaque dépense approved/completed, ligne « 💰 Payé depuis : » avec select (testid=`funding-source-<id>`) permettant l'imputation/désimputation en temps réel. Badge « imputé » quand rattaché.
+- **Compte courant** : chaque carte affiche désormais trois lignes : Solde restant (dette), « ↳ X F utilisés pour achats » (testid=`allocated-<id>`), « Disponible : X F » (testid=`available-<id>`, vert).
+
+**Tests** : iteration_52 → 15/15 backend + frontend 100% fonctionnel (un warning hydration mineur pré-existant sur un Select shadcn, non lié à cette feature).
+
+---
 ## 22/04/2026 — Refactoring étape C : extraction onglet Commande/FACTURES (DONE)
 
 **Contexte** : les onglets Bons/Stats/Notes étaient en réalité **déjà extraits** (BonsTab, StatsTab, InstructionsTab). J'ai donc continué avec le plus gros bloc inline restant : l'onglet **Commande/FACTURES** (907 lignes).
