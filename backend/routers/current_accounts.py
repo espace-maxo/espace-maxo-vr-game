@@ -70,8 +70,15 @@ def _enrich_account(acc: dict) -> dict:
     schedule = acc.get("schedule") or []
 
     total_repaid = sum(r.get("amount", 0) or 0 for r in repayments)
+    allocated_to_expenses = sum(
+        (r.get("amount", 0) or 0)
+        for r in repayments
+        if r.get("method") == "expense_allocation"
+    )
     total = acc.get("total_advance", 0) or 0
     balance = total - total_repaid
+    # Amount still available for funding new expenses (promoter money left in the account)
+    balance_available = max(0, total - total_repaid)
     progress = (total_repaid / total * 100) if total > 0 else 0
 
     # Enrich schedule entries
@@ -100,7 +107,9 @@ def _enrich_account(acc: dict) -> dict:
         **acc,
         "schedule": enriched_schedule,
         "total_repaid": total_repaid,
+        "allocated_to_expenses": allocated_to_expenses,
         "balance_remaining": balance,
+        "balance_available": balance_available,
         "progress_pct": round(progress, 1),
         "next_due_date": (next_due or {}).get("due_date"),
         "next_due_amount": (next_due or {}).get("expected_amount"),

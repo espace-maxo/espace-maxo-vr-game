@@ -211,7 +211,7 @@ const CaissePage = () => {
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
 
-  // Notification counts & handlers are now managed by useNotifications hook (see below).
+  // ============== NOTIFICATIONS (extracted to hook) ==============
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -339,8 +339,13 @@ const CaissePage = () => {
     amount: 0,
     supplier: "",
     planned_date: format(new Date(), "yyyy-MM-dd"),
-    receipt_image: null
+    receipt_image: null,
+    funded_by_account_id: "",
+    funded_by_account_name: "",
+    funded_affects_ca: true,
   });
+  // Available current accounts (for funding-source selector)
+  const [availableAccounts, setAvailableAccounts] = useState([]);
   
   // Achats communs - multi-items
   const [commonItems, setCommonItems] = useState([]);
@@ -994,6 +999,44 @@ const CaissePage = () => {
     }
   };
 
+  // ============== CURRENT ACCOUNTS (for expense funding source) ==============
+  const fetchAvailableAccounts = async () => {
+    try {
+      const res = await axios.get(`${API}/current-accounts`, { params: { include_closed: false, auto_run: false } });
+      setAvailableAccounts(res.data.accounts || []);
+    } catch (err) {
+      console.error("Error fetching accounts:", err);
+    }
+  };
+
+  const allocateExpenseToAccount = async (expense, accountId, affectsCA = true) => {
+    try {
+      if (!accountId) {
+        await axios.delete(`${API}/expenses/${expense.id}/allocate-account`);
+        toast.success("Compte courant détaché");
+      } else {
+        const acc = availableAccounts.find((a) => a.id === accountId);
+        await axios.post(`${API}/expenses/${expense.id}/allocate-account`, {
+          account_id: accountId,
+          account_name: acc?.name || "",
+          affects_ca: affectsCA,
+        });
+        toast.success(`Dépense imputée sur : ${acc?.name || ""}`);
+      }
+      fetchExpenses();
+      fetchAvailableAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur d'imputation");
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && (currentUser?.role === "admin" || currentUser?.role === "manager")) {
+      fetchAvailableAccounts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentUser]);
+
   const createExpense = async () => {
     try {
       // Multi-items mode : Achats communs supports a list of items
@@ -1020,6 +1063,9 @@ const CaissePage = () => {
             amount: (it.quantity || 1) * (it.unit_price || 0),
           })),
           requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+          funded_by_account_id: expenseForm.funded_by_account_id || null,
+          funded_by_account_name: expenseForm.funded_by_account_name || null,
+          funded_affects_ca: expenseForm.funded_affects_ca,
         });
         toast.success(`Achats communs créés avec ${commonItems.length} article(s) !`);
         setShowExpenseModal(false);
@@ -4871,6 +4917,8 @@ _Gérante - Espace Maxo_
               updateExpense,
               openReviseModal,
               convertExpenseToPO,
+              availableAccounts,
+              allocateExpenseToAccount,
             }} />
           </TabsContent>
           )}
@@ -5846,6 +5894,46 @@ _Gérante - Espace Maxo_
                 onChange={(e) => setExpenseForm({...expenseForm, planned_date: e.target.value})}
                 className="bg-slate-700/50 border-slate-600 text-white"
               />
+            </div>
+
+            {/* FINANCEMENT — Source de paiement */}
+            <div className="bg-cyan-900/20 border border-cyan-500/30 rounded p-3 space-y-2">
+              <Label className="text-cyan-300 text-sm flex items-center gap-2">
+                <Wallet className="w-4 h-4" /> Payé depuis (source de financement)
+              </Label>
+              <select
+                value={expenseForm.funded_by_account_id || ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const acc = availableAccounts.find((a) => a.id === id);
+                  setExpenseForm({
+                    ...expenseForm,
+                    funded_by_account_id: id,
+                    funded_by_account_name: acc?.name || "",
+                  });
+                }}
+                className="w-full bg-slate-700/50 border border-slate-600 text-white rounded px-3 py-2 text-sm"
+                data-testid="expense-funded-by-select"
+              >
+                <option value="">💰 Recettes de la caisse (par défaut)</option>
+                {availableAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    📒 {acc.name} — Dispo : {formatPrice(acc.balance_available || 0)} F
+                  </option>
+                ))}
+              </select>
+              {expenseForm.funded_by_account_id && (
+                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!expenseForm.funded_affects_ca}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, funded_affects_ca: e.target.checked })}
+                    className="w-3.5 h-3.5 accent-cyan-400"
+                    data-testid="expense-funded-affects-ca"
+                  />
+                  Cette dépense est quand même déduite du CA journalier
+                </label>
+              )}
             </div>
 
             <div>

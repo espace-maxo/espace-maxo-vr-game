@@ -27,6 +27,52 @@ def set_db(database):
     db = database
 
 
+# ==================== CURRENT-ACCOUNT ALLOCATION HELPERS ====================
+
+async def _allocate_expense_to_account(expense_doc: dict, account_id: str) -> None:
+    """Register an 'expense_allocation' repayment on the given current account.
+
+    Idempotent: if a previous allocation exists for this expense on this account, do nothing.
+    The allocation has:
+      method='expense_allocation', reference='EXP-{expense_id}', amount=expense.amount
+    """
+    if not account_id or not expense_doc:
+        return
+    expense_id = expense_doc.get("id")
+    if not expense_id:
+        return
+    # Remove any prior allocations for this expense (across accounts) to avoid duplicates
+    await db.current_accounts.update_many(
+        {"repayments.reference": f"EXP-{expense_id}"},
+        {"$pull": {"repayments": {"reference": f"EXP-{expense_id}"}}},
+    )
+    repayment = {
+        "id": str(uuid.uuid4()),
+        "repayment_date": datetime.now(timezone.utc).date().isoformat(),
+        "amount": float(expense_doc.get("amount") or 0),
+        "method": "expense_allocation",
+        "reference": f"EXP-{expense_id}",
+        "notes": f"Achat: {(expense_doc.get('description') or '')[:80]}",
+        "expense_id": expense_id,
+        "auto": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.current_accounts.update_one(
+        {"id": account_id},
+        {"$push": {"repayments": repayment}},
+    )
+
+
+async def _unallocate_expense_from_accounts(expense_id: str) -> None:
+    """Remove any 'expense_allocation' repayment linked to this expense, on any account."""
+    if not expense_id:
+        return
+    await db.current_accounts.update_many(
+        {"repayments.reference": f"EXP-{expense_id}"},
+        {"$pull": {"repayments": {"reference": f"EXP-{expense_id}"}}},
+    )
+
+
 # ==================== MODELS ====================
 
 class ExpenseItem(BaseModel):
@@ -51,6 +97,10 @@ class ExpenseCreate(BaseModel):
     group_id: Optional[str] = None
     items: Optional[List[ExpenseItem]] = None
     assigned_week: Optional[str] = None
+    # Funding source — optional link to a current account
+    funded_by_account_id: Optional[str] = None
+    funded_by_account_name: Optional[str] = None
+    funded_affects_ca: Optional[bool] = True  # if True, expense still deducted from daily CA
 
 
 class ExpenseUpdate(BaseModel):
@@ -66,6 +116,9 @@ class ExpenseUpdate(BaseModel):
     status: Optional[str] = None
     is_group: Optional[bool] = None
     items: Optional[List[ExpenseItem]] = None
+    funded_by_account_id: Optional[str] = None
+    funded_by_account_name: Optional[str] = None
+    funded_affects_ca: Optional[bool] = None
 
 
 # ==================== CRUD ====================
@@ -139,11 +192,21 @@ async def create_expense(expense: ExpenseCreate):
             "approved_at": None,
             "completed_at": None,
             "assigned_week": expense.assigned_week,
+            "funded_by_account_id": expense.funded_by_account_id,
+            "funded_by_account_name": expense.funded_by_account_name,
+            "funded_affects_ca": bool(expense.funded_affects_ca) if expense.funded_affects_ca is not None else True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
         await db.expenses.insert_one(expense_doc)
         expense_doc.pop("_id", None)
+
+        # If funding source set → allocate on that current account now
+        if expense_doc.get("funded_by_account_id"):
+            try:
+                await _allocate_expense_to_account(expense_doc, expense_doc["funded_by_account_id"])
+            except Exception as alloc_err:
+                logger.warning(f"Expense allocation failed: {alloc_err}")
 
         # SMS admin notification (new purchase request)
         try:
@@ -204,6 +267,22 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         await db.expenses.update_one({"id": expense_id}, {"$set": update_data})
+
+        # === Handle funding-source (current-account) allocation ===
+        try:
+            old_account = expense.get("funded_by_account_id")
+            # Did the client request a change? Note: None in update means no-op; empty string means clear.
+            new_account = update_data.get("funded_by_account_id", old_account)
+            # Amount might have changed as well
+            if new_account != old_account or "amount" in update_data:
+                # Always unallocate first (idempotent)
+                await _unallocate_expense_from_accounts(expense_id)
+                if new_account:
+                    refreshed = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+                    if refreshed:
+                        await _allocate_expense_to_account(refreshed, new_account)
+        except Exception as alloc_err:
+            logger.warning(f"Expense funding-alloc sync failed: {alloc_err}")
 
         # === SYNC WITH STOCK MODULE (Achats Caisse → Entrées Stock) ===
         if update.status == "completed" and not was_completed_before:
@@ -357,6 +436,11 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
 async def delete_expense(expense_id: str):
     """Delete an expense"""
     try:
+        # Unallocate from current account first (if any)
+        try:
+            await _unallocate_expense_from_accounts(expense_id)
+        except Exception as alloc_err:
+            logger.warning(f"Expense unalloc on delete failed: {alloc_err}")
         result = await db.expenses.delete_one({"id": expense_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Expense not found")
@@ -401,3 +485,70 @@ async def unassign_expenses_bulk(ids: List[str] = Body(..., embed=True)):
     """Remove week assignment from expenses"""
     result = await db.expenses.update_many({"id": {"$in": ids}}, {"$unset": {"assigned_week": ""}})
     return {"success": True, "modified": result.modified_count}
+
+
+
+# ==================== ALLOCATE EXPENSE TO CURRENT ACCOUNT ====================
+
+class AllocateExpenseBody(BaseModel):
+    account_id: str
+    account_name: Optional[str] = None
+    affects_ca: Optional[bool] = True
+
+
+@router.post("/expenses/{expense_id}/allocate-account")
+async def allocate_expense_to_current_account(expense_id: str, body: AllocateExpenseBody):
+    """Link an expense to a current account as funding source. Works on any status
+    (including 'completed' for retroactive assignment). Idempotent."""
+    try:
+        expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        if not expense:
+            raise HTTPException(404, "Dépense non trouvée")
+        account = await db.current_accounts.find_one({"id": body.account_id}, {"_id": 0})
+        if not account:
+            raise HTTPException(404, "Compte courant non trouvé")
+
+        # Update expense with funding info
+        await db.expenses.update_one(
+            {"id": expense_id},
+            {"$set": {
+                "funded_by_account_id": body.account_id,
+                "funded_by_account_name": body.account_name or account.get("name"),
+                "funded_affects_ca": bool(body.affects_ca) if body.affects_ca is not None else True,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        # Re-fetch with new values, then allocate
+        refreshed = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        await _allocate_expense_to_account(refreshed, body.account_id)
+
+        return {"success": True, "expense": refreshed}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Allocate expense error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@router.delete("/expenses/{expense_id}/allocate-account")
+async def unallocate_expense_from_current_account(expense_id: str):
+    """Remove the funding-source link for an expense (restores default = recettes)."""
+    try:
+        expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        if not expense:
+            raise HTTPException(404, "Dépense non trouvée")
+        await _unallocate_expense_from_accounts(expense_id)
+        await db.expenses.update_one(
+            {"id": expense_id},
+            {"$set": {
+                "funded_by_account_id": None,
+                "funded_by_account_name": None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unallocate expense error: {e}")
+        raise HTTPException(500, str(e))

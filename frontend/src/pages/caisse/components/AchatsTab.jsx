@@ -43,6 +43,8 @@ const AchatsTab = ({ ctx }) => {
     updateExpense,
     openReviseModal,
     convertExpenseToPO,
+    availableAccounts,
+    allocateExpenseToAccount,
   } = ctx;
   return (
             <div className="space-y-4">
@@ -866,6 +868,30 @@ const AchatsTab = ({ ctx }) => {
                               )}
                             </div>
                           </div>
+                          {/* Funding source control (admin only) */}
+                          {currentUser?.role === 'admin' && availableAccounts && availableAccounts.length > 0 && (
+                            <div className="mt-2 flex items-center gap-2 bg-cyan-900/10 border border-cyan-500/20 rounded px-2 py-1.5">
+                              <span className="text-[11px] text-cyan-300 shrink-0">💰 Payé depuis :</span>
+                              <select
+                                value={expense.funded_by_account_id || ""}
+                                onChange={(e) => allocateExpenseToAccount(expense, e.target.value, expense.funded_affects_ca !== false)}
+                                className="flex-1 bg-slate-800/60 border border-slate-600 text-white text-xs rounded px-2 py-1 min-w-0"
+                                data-testid={`funding-source-${expense.id}`}
+                              >
+                                <option value="">Recettes de la caisse</option>
+                                {availableAccounts.map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    📒 {acc.name} — Dispo : {formatPrice(acc.balance_available || 0)} F
+                                  </option>
+                                ))}
+                              </select>
+                              {expense.funded_by_account_name && (
+                                <Badge className="bg-cyan-500/30 text-cyan-200 text-[10px] shrink-0">
+                                  imputé
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                           {/* Show sub-items for grouped lists */}
                           {expense.is_group && expense.items && expense.items.length > 0 && (
                             <div className="bg-slate-800/50 rounded p-2 mt-1">

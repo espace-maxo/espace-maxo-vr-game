@@ -249,6 +249,14 @@ const CurrentAccountsTab = () => {
                         {formatPrice(acc.total_repaid)} / {formatPrice(acc.total_advance)} F
                       </div>
                       <div className="text-xs text-slate-400">Solde : <b className="text-amber-300">{formatPrice(acc.balance_remaining)} F</b></div>
+                      {(acc.allocated_to_expenses || 0) > 0 && (
+                        <div className="text-[11px] text-cyan-300 mt-0.5" data-testid={`allocated-${acc.id}`}>
+                          ↳ {formatPrice(acc.allocated_to_expenses)} F utilisés pour achats
+                        </div>
+                      )}
+                      <div className="text-[11px] text-emerald-300 font-semibold mt-0.5" data-testid={`available-${acc.id}`}>
+                        Disponible : {formatPrice(acc.balance_available || 0)} F
+                      </div>
                     </div>
                   </div>
 
