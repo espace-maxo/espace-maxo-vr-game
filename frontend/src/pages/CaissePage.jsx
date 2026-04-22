@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2, Truck, Coins
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -215,6 +215,61 @@ const NotifBadge = ({ count, color = "red", testid }) => {
   );
 };
 
+// Discrete "ding" played via Web Audio API (no external asset, CSP-friendly).
+const playDing = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12); // E6
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+    osc.onended = () => ctx.close();
+  } catch {
+    /* silent */
+  }
+};
+
+// Best-effort browser notification (requires user permission).
+const sendBrowserNotification = (title, body) => {
+  try {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "granted") {
+      const n = new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+        tag: "caisse-pro-notif",
+        silent: false,
+      });
+      setTimeout(() => { try { n.close(); } catch { /* noop */ } }, 6000);
+    }
+  } catch {
+    /* silent */
+  }
+};
+
+// Human-readable label per count key (singular form)
+const COUNT_LABELS = {
+  needs: "nouveau besoin",
+  purchase_orders: "nouveau bon de commande",
+  expenses: "nouvelle demande d'achats",
+  cancellation_requests: "demande d'annulation",
+  modification_requests: "demande de modification",
+  invoices: "facture à valider",
+  financial_points: "point financier à valider",
+  tips_today: "nouveau pourboire",
+  notes: "nouvelle note",
+};
+
 
 const CaissePage = () => {
   // Auth state
@@ -231,6 +286,15 @@ const CaissePage = () => {
 
   // Notification counts (aggregated badges on tabs)
   const [notifCounts, setNotifCounts] = useState({});
+  const prevNotifCountsRef = useRef(null);
+  const notifInitRef = useRef(false);
+  const [notifEnabled, setNotifEnabled] = useState(() => {
+    try { return localStorage.getItem("caisse_notif_enabled") !== "0"; } catch { return true; }
+  });
+  const notifEnabledRef = useRef(notifEnabled);
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -892,14 +956,69 @@ const CaissePage = () => {
           user: currentUser.full_name || currentUser.username || "",
         },
       });
-      setNotifCounts(res.data?.counts || {});
+      const newCounts = res.data?.counts || {};
+      setNotifCounts(newCounts);
+
+      // Detect increases vs previous snapshot (only admin + manager get alerts).
+      const prev = prevNotifCountsRef.current;
+      const alertRoles = currentUser?.role === "admin" || currentUser?.role === "manager";
+      if (alertRoles && notifInitRef.current && prev && notifEnabledRef.current) {
+        const deltas = [];
+        Object.keys(newCounts).forEach((k) => {
+          const curr = Number(newCounts[k] || 0);
+          const old = Number(prev[k] || 0);
+          if (curr > old) deltas.push({ key: k, delta: curr - old, total: curr });
+        });
+        if (deltas.length > 0) {
+          playDing();
+          const lines = deltas.slice(0, 4).map((d) => {
+            const label = COUNT_LABELS[d.key] || d.key;
+            return d.delta > 1 ? `• ${d.delta} ${label}s` : `• ${d.delta} ${label}`;
+          });
+          sendBrowserNotification(
+            "Espace Maxo — Nouvelle notification",
+            lines.join("\n"),
+          );
+        }
+      }
+      prevNotifCountsRef.current = newCounts;
+      notifInitRef.current = true;
     } catch {
       /* silencieux : les badges ne doivent pas bloquer l'UI */
     }
   };
 
+  // Request browser notification permission for admin / manager, once, after login.
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (typeof Notification === "undefined") return;
+    if (currentUser?.role !== "admin" && currentUser?.role !== "manager") return;
+    if (Notification.permission === "default") {
+      // Defer slightly so the user sees the app first
+      const t = setTimeout(() => {
+        Notification.requestPermission().then((p) => setNotifPermission(p)).catch(() => {});
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+    setNotifPermission(Notification.permission);
+  }, [isAuthenticated, currentUser]);
+
+  const toggleNotifEnabled = () => {
+    const next = !notifEnabled;
+    setNotifEnabled(next);
+    notifEnabledRef.current = next;
+    try { localStorage.setItem("caisse_notif_enabled", next ? "1" : "0"); } catch { /* noop */ }
+    if (next && typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().then((p) => setNotifPermission(p)).catch(() => {});
+    }
+    if (next) playDing(); // audio preview on enable
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    // Reset diff-detection baseline so first fetch after login/user-change doesn't spam alerts
+    prevNotifCountsRef.current = null;
+    notifInitRef.current = false;
     fetchNotifCounts();
     const id = setInterval(fetchNotifCounts, 10000); // 10s polling
     return () => clearInterval(id);
@@ -3858,6 +3977,20 @@ _Gérante - Espace Maxo_
               </div>
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
+
+              {/* Toggle ding + browser notifications (admin + manager) */}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                <Button
+                  variant="ghost"
+                  onClick={toggleNotifEnabled}
+                  title={notifEnabled ? (notifPermission === 'granted' ? "Notifications activées" : "Cliquer pour autoriser les notifications") : "Notifications muettes — cliquer pour réactiver"}
+                  className={notifEnabled ? "text-amber-300 hover:bg-amber-500/10" : "text-slate-500 hover:bg-slate-700/40"}
+                  data-testid="notif-toggle-btn"
+                >
+                  {notifEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                </Button>
+              )}
+
               <Button variant="ghost" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                 <LogOut className="w-5 h-5" />
               </Button>
