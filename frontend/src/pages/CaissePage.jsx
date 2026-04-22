@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2
+  Building2, MessageSquare, Bell, ClipboardList, QrCode, Share2, Truck
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
+import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
 // Import logo for printing
@@ -998,6 +999,26 @@ const CaissePage = () => {
     } catch (error) {
       console.error("Error deleting expense:", error);
       toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  // Convert approved expense into a purchase order
+  const convertExpenseToPO = async (expense) => {
+    if (expense.converted_to_po_id) {
+      toast.info(`Déjà converti en ${expense.converted_to_po_number || "BC"}`);
+      return;
+    }
+    if (!confirm(`Convertir « ${expense.description} » en bon de commande ?`)) return;
+    try {
+      const res = await axios.post(`${API}/purchase-orders/from-expense/${expense.id}`, {
+        created_by: currentUser?.name || currentUser?.username || "Admin",
+      });
+      if (res.data?.success) {
+        toast.success(`Bon de commande créé : ${res.data.purchase_order?.number}`);
+        fetchExpenses();
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la conversion");
     }
   };
 
@@ -3775,6 +3796,12 @@ _Gérante - Espace Maxo_
                 <ClipboardList className="w-4 h-4 mr-2" />Besoins
               </TabsTrigger>
             )}
+            {/* 5.6 FOURNISSEURS & BC */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="po" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white" data-testid="tab-po">
+                <Truck className="w-4 h-4 mr-2" />Fournisseurs
+              </TabsTrigger>
+            )}
             {/* 6. PROFORMA */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="proforma" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
@@ -6125,6 +6152,18 @@ _Gérante - Espace Maxo_
                               {currentUser?.role === 'admin' && (
                                 <Button 
                                   size="sm"
+                                  onClick={() => convertExpenseToPO(expense)}
+                                  disabled={!!expense.converted_to_po_id}
+                                  className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50"
+                                  data-testid={`convert-po-${expense.id}`}
+                                >
+                                  <Truck className="w-4 h-4 mr-1" />
+                                  {expense.converted_to_po_id ? `BC ${expense.converted_to_po_number || ''}` : 'Convertir en BC'}
+                                </Button>
+                              )}
+                              {currentUser?.role === 'admin' && (
+                                <Button 
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => deleteExpense(expense.id)}
                                   className="border-red-700/50 text-red-500 hover:bg-red-700/20"
@@ -6328,6 +6367,13 @@ _Gérante - Espace Maxo_
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="needs">
             <NeedsTab currentUser={currentUser} />
+          </TabsContent>
+          )}
+
+          {/* ==================== FOURNISSEURS & BONS DE COMMANDE (Manager & Admin) ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="po">
+            <PurchaseOrdersTab currentUser={currentUser} />
           </TabsContent>
           )}
         </Tabs>
