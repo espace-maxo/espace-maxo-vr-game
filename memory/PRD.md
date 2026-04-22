@@ -4,6 +4,32 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Refactoring étape C : extraction onglet Commande/FACTURES (DONE)
+
+**Contexte** : les onglets Bons/Stats/Notes étaient en réalité **déjà extraits** (BonsTab, StatsTab, InstructionsTab). J'ai donc continué avec le plus gros bloc inline restant : l'onglet **Commande/FACTURES** (907 lignes).
+
+**Résultat** :
+- `CaissePage.jsx` : 7748 → **6874 lignes** (-874 lignes cette étape)
+- Nouveau `CommandeTab.jsx` (980 lignes) — reçoit un prop `ctx` avec 40+ state/handlers (cancellation/modification requests, table+bill state, catalog, custom items, save/clear/updateQty handlers, DEPARTMENT_CONFIG, PAYMENT_METHODS, ...).
+
+**Bugs corrigés par le testing agent** :
+1. Imports manquants : format, AlertTriangle, Receipt, Calculator, Send, Eye, Textarea
+2. Props ctx manquants : invoices, total, subtotal, discountAmount, totalByDepartment, DEPARTMENT_CONFIG, PAYMENT_METHODS, closeTable
+3. Mauvais nom : DEPARTMENTS → DEPARTMENT_CONFIG
+
+**Total refactoring A+B+C** : **CaissePage.jsx 9050 → 6874 lignes (-24%, -2176 lignes)** répartis sur 5 nouveaux fichiers (`AchatsTab`, `CommandeTab`, `NotificationCenter`, `useNotifications`, `utils/notifications`).
+
+**Objectif <3500 lignes non encore atteint** — les plus gros blocs restants sont des modals :
+- Server Report Detail Modal (408 lignes)
+- Expense Modal (294 lignes)
+- Shopping List Modal (237 lignes)
+- Invoice Edit Modal (173 lignes)
+- Admin Revise Modal (115 lignes)
+- Onglets points_serveurs (202), invoices (180), mon_point (165)
+
+**Tests** : iteration_51 → 100% frontend, ZÉRO régression.
+
+---
 ## 22/04/2026 — Refactoring étape B : extraction onglet Achats (DONE)
 
 **Objectif** : Extraire les 907 lignes de JSX de l'onglet Achats dans un composant dédié `AchatsTab.jsx`.
