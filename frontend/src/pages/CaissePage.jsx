@@ -193,6 +193,29 @@ const PAYMENT_METHODS = [
   { value: "check", label: "Chèque", icon: FileText },
 ];
 
+// Animated notification badge (pulse + color-coded)
+const NotifBadge = ({ count, color = "red", testid }) => {
+  if (!count || count <= 0) return null;
+  const colors = {
+    red: "bg-red-500 text-white",
+    orange: "bg-orange-500 text-white",
+    amber: "bg-amber-500 text-white",
+    blue: "bg-blue-500 text-white",
+    purple: "bg-purple-500 text-white",
+    emerald: "bg-emerald-500 text-white",
+    sky: "bg-sky-500 text-white",
+  };
+  return (
+    <span className="relative inline-flex ml-1" data-testid={testid}>
+      <span className={`absolute inset-0 rounded-full ${colors[color]} opacity-75 animate-ping`} />
+      <span className={`relative inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] ${colors[color]}`}>
+        {count > 99 ? "99+" : count}
+      </span>
+    </span>
+  );
+};
+
+
 const CaissePage = () => {
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -205,6 +228,9 @@ const CaissePage = () => {
   const [activeTab, setActiveTab] = useState("tables");
   const [activeDepartment, setActiveDepartment] = useState("salle_jardin");
   const [productSearch, setProductSearch] = useState("");
+
+  // Notification counts (aggregated badges on tabs)
+  const [notifCounts, setNotifCounts] = useState({});
   
   // Catalog/Products
   const [products, setProducts] = useState([]);
@@ -855,6 +881,30 @@ const CaissePage = () => {
       console.error("Error fetching history invoices:", error);
     }
   };
+
+  // ============== NOTIFICATION COUNTS (badges agrégés) ==============
+  const fetchNotifCounts = async () => {
+    if (!currentUser?.role) return;
+    try {
+      const res = await axios.get(`${API}/notifications/counts`, {
+        params: {
+          role: currentUser.role,
+          user: currentUser.full_name || currentUser.username || "",
+        },
+      });
+      setNotifCounts(res.data?.counts || {});
+    } catch {
+      /* silencieux : les badges ne doivent pas bloquer l'UI */
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchNotifCounts();
+    const id = setInterval(fetchNotifCounts, 10000); // 10s polling
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentUser]);
 
   // ============== EXPENSES FUNCTIONS ==============
   
@@ -3775,7 +3825,23 @@ _Gérante - Espace Maxo_
               )}
               
               <div className="text-right hidden md:block">
-                <p className="text-white font-medium">{currentUser?.full_name || currentUser?.username}</p>
+                <p className="text-white font-medium flex items-center justify-end gap-2">
+                  {currentUser?.full_name || currentUser?.username}
+                  {(() => {
+                    const total = Object.values(notifCounts || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+                    return total > 0 ? (
+                      <span className="relative inline-flex" data-testid="profile-notif-bell" title={`${total} notification(s)`}>
+                        <Bell className="w-4 h-4 text-amber-300" />
+                        <span className="absolute -top-1 -right-1 inline-flex">
+                          <span className="absolute inset-0 rounded-full bg-red-500 opacity-75 animate-ping" />
+                          <span className="relative rounded-full bg-red-500 text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] flex items-center justify-center">
+                            {total > 99 ? "99+" : total}
+                          </span>
+                        </span>
+                      </span>
+                    ) : null;
+                  })()}
+                </p>
                 <Badge className={
                   currentUser?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 
                   currentUser?.role === 'manager' ? 'bg-blue-500/20 text-blue-400' : 
@@ -3928,8 +3994,9 @@ _Gérante - Espace Maxo_
             {/* 2. BONS */}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Printer className="w-4 h-4 mr-2" />BONS
-              {invoices.filter(i => i.validation_status === 'pending').length > 0 && (
-                <Badge className="ml-1 bg-orange-600 text-white text-xs">{invoices.filter(i => i.validation_status === 'pending').length}</Badge>
+              <NotifBadge count={notifCounts.invoices} color="orange" testid="badge-bons" />
+              {currentUser?.role === 'admin' && (
+                <NotifBadge count={(notifCounts.cancellation_requests || 0) + (notifCounts.modification_requests || 0)} color="red" testid="badge-bons-requests" />
               )}
             </TabsTrigger>
             {/* 3. PRISE DE COMMANDES */}
@@ -3952,23 +4019,23 @@ _Gérante - Espace Maxo_
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
                 <ShoppingCart className="w-4 h-4 mr-2" />Achats
-                {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length > 0 && (
-                  <Badge className="ml-1 bg-purple-500 text-white text-xs">
-                    {expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length}
-                  </Badge>
-                )}
+                <NotifBadge count={notifCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
               </TabsTrigger>
             )}
             {/* 5.5 LISTE DE BESOINS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="needs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white" data-testid="tab-needs">
                 <ClipboardList className="w-4 h-4 mr-2" />Besoins
+                {currentUser?.role === 'admin' && (
+                  <NotifBadge count={notifCounts.needs} color="red" testid="badge-needs" />
+                )}
               </TabsTrigger>
             )}
             {/* 5.6 FOURNISSEURS & BC */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="po" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white" data-testid="tab-po">
                 <Truck className="w-4 h-4 mr-2" />Fournisseurs
+                <NotifBadge count={notifCounts.purchase_orders} color="sky" testid="badge-po" />
               </TabsTrigger>
             )}
             {/* 6. PROFORMA */}
@@ -3987,6 +4054,7 @@ _Gérante - Espace Maxo_
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">
                 <BarChart3 className="w-4 h-4 mr-2" />Statistiques & Rapport
+                <NotifBadge count={notifCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
             {/* 8.5 ANALYTICS (Admin only) */}
@@ -4026,7 +4094,7 @@ _Gérante - Espace Maxo_
               <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                 onClick={() => { if (unreadNotesCount > 0) markAllNotesRead(); }}>
                 <MessageSquare className="w-4 h-4 mr-2" />Notes
-                {unreadNotesCount > 0 && (<Badge className="ml-1 bg-red-500 text-white text-xs animate-pulse">{unreadNotesCount > 9 ? '9+' : unreadNotesCount}</Badge>)}
+                <NotifBadge count={unreadNotesCount || notifCounts.notes} color="red" testid="badge-notes" />
               </TabsTrigger>
             )}
             {/* 14. UTILISATEURS */}
@@ -4044,6 +4112,9 @@ _Gérante - Espace Maxo_
             {/* 15.5 POURBOIRES (tous les rôles) */}
             <TabsTrigger value="tips" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="tab-tips">
               <Coins className="w-4 h-4 mr-2" />Pourboires
+              {currentUser?.role === 'admin' && (
+                <NotifBadge count={notifCounts.tips_today} color="amber" testid="badge-tips" />
+              )}
             </TabsTrigger>
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
