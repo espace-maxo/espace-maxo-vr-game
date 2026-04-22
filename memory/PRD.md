@@ -4,6 +4,20 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Badges de notification animés (DONE)
+
+**Feature — Notifications visuelles temps réel** :
+- Backend : `routers/notifications.py` (nouveau) — endpoint unique `GET /api/notifications/counts?role=<admin|manager|server>&user=`.
+  - Admin (f) : needs en_attente, PO draft, expenses pending+revision, cancellation/modification requests, invoices pending, financial_points signés non-validés, tips_today, notes unread.
+  - Manager (d) : expenses revision_requested, PO sent, invoices pending, admin notes unread.
+  - Server : admin/manager notes unread.
+- Frontend : composant `NotifBadge` (pulse `animate-ping` + chiffre) color-codé par type (red/orange/amber/sky/purple/emerald).
+- Polling 10s dans `CaissePage.jsx` (`fetchNotifCounts`) → état `notifCounts` → badges sur 7 onglets (BONS, Achats, Besoins, Fournisseurs, Stats, Pourboires, Notes) + icône Bell globale sur le profil avec total agrégé.
+- Badge caché si count=0. Affichage `99+` si >99.
+
+**Tests** : iteration_44 → 14/14 backend + frontend 100%. Polling + 2 rôles vérifiés.
+
+---
 ## 22/04/2026 — Gestion des pourboires / TipsTab (DONE)
 
 **Feature — Gestion complète des pourboires** :
