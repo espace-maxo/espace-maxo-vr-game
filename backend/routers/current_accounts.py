@@ -40,6 +40,7 @@ class AccountCreate(BaseModel):
     description: Optional[str] = ""
     notes: Optional[str] = ""
     schedule: Optional[List[ScheduleEntry]] = None
+    auto_deduct_enabled: Optional[bool] = False
 
 
 class AccountUpdate(BaseModel):
@@ -50,6 +51,7 @@ class AccountUpdate(BaseModel):
     notes: Optional[str] = None
     schedule: Optional[List[ScheduleEntry]] = None
     is_closed: Optional[bool] = None
+    auto_deduct_enabled: Optional[bool] = None
 
 
 class RepaymentCreate(BaseModel):
@@ -109,7 +111,20 @@ def _enrich_account(acc: dict) -> dict:
 
 
 @router.get("/current-accounts")
-async def list_accounts(include_closed: bool = True):
+async def list_accounts(include_closed: bool = True, auto_run: bool = True):
+    # Run auto-deduction for accounts with auto_deduct_enabled (idempotent)
+    if auto_run:
+        try:
+            today = date.today().isoformat()
+            enabled = await db.current_accounts.find({
+                "auto_deduct_enabled": True,
+                "is_closed": {"$ne": True},
+            }, {"_id": 0}).to_list(500)
+            for acc in enabled:
+                await _run_auto_deduction_for_account(acc, today)
+        except Exception as auto_err:
+            logger.warning(f"Auto-deduction during list failed: {auto_err}")
+
     query = {} if include_closed else {"is_closed": {"$ne": True}}
     items = await db.current_accounts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     enriched = [_enrich_account(a) for a in items]
@@ -159,6 +174,7 @@ async def create_account(data: AccountCreate):
             "schedule": schedule,
             "repayments": [],
             "is_closed": False,
+            "auto_deduct_enabled": bool(data.auto_deduct_enabled),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.current_accounts.insert_one(doc)
@@ -241,3 +257,126 @@ async def delete_repayment(account_id: str, repayment_id: str):
     if res.matched_count == 0:
         raise HTTPException(404, "Compte ou remboursement non trouvé")
     return {"success": True}
+
+
+# ==================== AUTO-DEDUCTION (from daily revenue) ====================
+
+async def _compute_daily_revenue(target_date: str) -> float:
+    """Return today's validated revenue (sum of validated invoices for target_date, YYYY-MM-DD)."""
+    try:
+        invs = await db.invoices.find({
+            "created_at": {"$regex": f"^{target_date}"},
+            "validation_status": "validated",
+        }, {"_id": 0, "total": 1}).to_list(5000)
+        return sum((i.get("total") or 0) for i in invs)
+    except Exception:
+        return 0
+
+
+async def _run_auto_deduction_for_account(acc: dict, run_date: str) -> dict:
+    """For a single account with auto_deduct_enabled, scan schedule entries whose due_date <= run_date
+    and cumulative_expected is not yet covered by existing repayments. Create auto-repayments.
+
+    Idempotent: checks existing repayments with reference starting with 'AUTO-{schedule_id}' to avoid
+    duplicates.
+    Returns a small summary dict.
+    """
+    if not acc.get("auto_deduct_enabled"):
+        return {"created": 0, "reason": "disabled"}
+    if acc.get("is_closed"):
+        return {"created": 0, "reason": "closed"}
+
+    schedule = sorted(acc.get("schedule") or [], key=lambda s: s.get("due_date") or "")
+    repayments = list(acc.get("repayments") or [])
+    total_repaid = sum(r.get("amount", 0) or 0 for r in repayments)
+    total_advance = acc.get("total_advance", 0) or 0
+
+    daily_revenue = await _compute_daily_revenue(run_date)
+    used_revenue = 0  # cumulative consumed from today's revenue across entries
+    created_entries = []
+    cumul = 0
+
+    for s in schedule:
+        cumul += s.get("expected_amount", 0) or 0
+        due = s.get("due_date") or ""
+        if not due or due > run_date:
+            # Not yet due
+            continue
+        if total_repaid >= cumul:
+            # Already covered by repayments
+            continue
+        sched_id = s.get("id") or ""
+        # Idempotency: skip if an AUTO repayment for this schedule id already exists today
+        already = any(
+            (r.get("reference") or "").startswith(f"AUTO-{sched_id}")
+            for r in repayments
+        )
+        if already:
+            continue
+        missing = cumul - total_repaid
+        # Revenue remaining for today
+        remaining_revenue = max(0, daily_revenue - used_revenue)
+        if remaining_revenue <= 0:
+            break  # No more revenue to allocate today
+        # Do not exceed total_advance
+        max_repayable = max(0, total_advance - total_repaid)
+        deduct = min(missing, remaining_revenue, max_repayable)
+        if deduct <= 0:
+            continue
+        repayment = {
+            "id": str(uuid.uuid4()),
+            "repayment_date": run_date,
+            "amount": round(deduct, 2),
+            "method": "auto_deduction",
+            "reference": f"AUTO-{sched_id}-{run_date}",
+            "notes": f"Prélèvement automatique sur recettes du {run_date}",
+            "schedule_id": sched_id,
+            "auto": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        repayments.append(repayment)
+        total_repaid += deduct
+        used_revenue += deduct
+        created_entries.append(repayment)
+
+    if created_entries:
+        await db.current_accounts.update_one(
+            {"id": acc["id"]},
+            {"$push": {"repayments": {"$each": created_entries}}},
+        )
+    return {
+        "created": len(created_entries),
+        "amount_deducted": sum(r["amount"] for r in created_entries),
+        "revenue_used": used_revenue,
+        "daily_revenue": daily_revenue,
+    }
+
+
+@router.post("/current-accounts/run-auto-deduction")
+async def run_auto_deduction(body: dict = Body(default={})):
+    """Trigger auto-deduction manually. Body can provide target_date (YYYY-MM-DD), default today."""
+    try:
+        target_date = (body or {}).get("date") or date.today().isoformat()
+        accounts = await db.current_accounts.find({
+            "auto_deduct_enabled": True,
+            "is_closed": {"$ne": True},
+        }, {"_id": 0}).to_list(500)
+        results = []
+        total_created = 0
+        total_amount = 0
+        for acc in accounts:
+            r = await _run_auto_deduction_for_account(acc, target_date)
+            results.append({"account_id": acc["id"], "name": acc.get("name"), **r})
+            total_created += r.get("created", 0)
+            total_amount += r.get("amount_deducted", 0)
+        return {
+            "success": True,
+            "date": target_date,
+            "accounts_processed": len(accounts),
+            "repayments_created": total_created,
+            "total_deducted": total_amount,
+            "results": results,
+        }
+    except Exception as e:
+        logger.error(f"Auto-deduction error: {e}")
+        raise HTTPException(500, str(e))

@@ -49,7 +49,7 @@ class NeedItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
     location: str = "autres"  # salle | salle_jeux | jardin | cuisine | toilettes | autres
     description: str
-    quantity: int = 1
+    quantity: float = 1
     unit_price: Optional[float] = 0
     amount: Optional[float] = 0
     notes: Optional[str] = ""
@@ -59,7 +59,7 @@ class NeedCreate(BaseModel):
     location: str = "autres"
     description: str
     items: Optional[List[NeedItem]] = None
-    quantity: Optional[int] = 1
+    quantity: Optional[float] = 1
     unit_price: Optional[float] = 0
     amount: Optional[float] = 0
     supplier: Optional[str] = None
@@ -72,7 +72,7 @@ class NeedUpdate(BaseModel):
     location: Optional[str] = None
     description: Optional[str] = None
     items: Optional[List[NeedItem]] = None
-    quantity: Optional[int] = None
+    quantity: Optional[float] = None
     unit_price: Optional[float] = None
     amount: Optional[float] = None
     supplier: Optional[str] = None

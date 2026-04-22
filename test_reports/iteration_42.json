@@ -1,0 +1,102 @@
+{
+  "summary": "Iteration 42 testing completed. All 16 backend tests passed (100%). Frontend tests verified: (1) Achats sub-tabs 'En cours' and 'Achats validés' with counters, (2) Admin revision card with 'Approuver' and 'Nouvelle révision' buttons, (3) Revise modal with 3 buttons (Annuler, Renvoyer à la gérante, Approuver directement), (4) Compte courant tab with 'Prélèvement auto du jour' button and auto-deduct toggle in account modal, (5) Decimal quantity support (step='any') in expense revise modal and needs form.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration42_features.py",
+    "/app/test_reports/pytest/iteration42_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": ["/app/backend/tests/test_iteration42_features.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Test data created and cleaned up during pytest execution",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 42 tested new features: (1) Decimal support for expenses/needs quantities - backend accepts float values like 0.5, frontend inputs have step='any'. (2) Current accounts auto_deduct_enabled field and run-auto-deduction endpoint with idempotency. (3) Achats sub-tabs 'En cours' (data-testid='achats-subtab-en-cours') and 'Achats validés' (data-testid='achats-subtab-valides'). (4) Admin revision card (data-testid='admin-revision-card') with approve/revise buttons. (5) Revise modal has 3 buttons: Annuler, 'Renvoyer à la gérante' (data-testid='submit-revision-btn'), 'Approuver directement' (data-testid='submit-revise-approve-btn'). (6) Compte courant tab has 'Prélèvement auto du jour' button (data-testid='run-auto-deduction-btn') and auto-deduct toggle (data-testid='auto-deduct-toggle') in account modal.",
+  "features_tested": {
+    "backend_decimal_support": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/expenses accepts quantity=0.5 (float)",
+        "POST /api/expenses with items[] containing float quantities",
+        "PUT /api/expenses/{id} accepts quantity float in items list",
+        "POST /api/needs accepts quantity=0.5 at need level",
+        "POST /api/needs accepts quantity=0.5 inside items[]",
+        "PUT /api/needs/{id} accepts float quantity"
+      ]
+    },
+    "backend_auto_deduction": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/current-accounts accepts auto_deduct_enabled=true",
+        "PUT /api/current-accounts/{id} can toggle auto_deduct_enabled",
+        "POST /api/current-accounts/run-auto-deduction returns proper structure",
+        "Auto-deduction is idempotent (no duplicate repayments)",
+        "GET /api/current-accounts?auto_run=false works",
+        "GET /api/current-accounts (default auto_run=true) works"
+      ]
+    },
+    "backend_regression": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/expenses works",
+        "Expenses CRUD flow works",
+        "GET /api/needs works",
+        "Needs CRUD flow works"
+      ]
+    },
+    "frontend_achats_subtabs": {
+      "status": "PASS",
+      "tests": [
+        "'En cours' subtab visible with counter",
+        "'Achats validés' subtab visible with counter",
+        "Clicking subtabs switches view correctly"
+      ]
+    },
+    "frontend_admin_revision_card": {
+      "status": "PASS",
+      "tests": [
+        "Admin revision card visible for revision_requested expenses",
+        "'Approuver' button visible (data-testid='admin-revision-approve-{id}')",
+        "'Nouvelle révision' button visible (data-testid='admin-revision-revise-{id}')"
+      ]
+    },
+    "frontend_revise_modal": {
+      "status": "PASS",
+      "tests": [
+        "Revise modal opens when clicking 'Nouvelle révision'",
+        "'Annuler' button visible",
+        "'Renvoyer à la gérante' button visible (data-testid='submit-revision-btn')",
+        "'Approuver directement' button visible (data-testid='submit-revise-approve-btn')",
+        "Quantity inputs have step='any' for decimal support"
+      ]
+    },
+    "frontend_compte_courant": {
+      "status": "PASS",
+      "tests": [
+        "'Prélèvement auto du jour' button visible (data-testid='run-auto-deduction-btn')",
+        "'Nouvelle avance' button visible (data-testid='new-account-btn')",
+        "Account modal has auto-deduct toggle (data-testid='auto-deduct-toggle')",
+        "Account modal has name input (data-testid='account-name-input')",
+        "Account modal has amount input (data-testid='account-amount-input')",
+        "Account modal has add schedule button (data-testid='add-schedule-btn')"
+      ]
+    },
+    "frontend_needs_decimal": {
+      "status": "PASS",
+      "tests": [
+        "New need form has quantity input with step='any'",
+        "New item description input found (data-testid='new-item-desc')",
+        "Add item button found (data-testid='add-item-btn')"
+      ]
+    }
+  }
+}

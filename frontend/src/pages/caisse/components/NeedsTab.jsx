@@ -536,9 +536,9 @@ const NeedsTab = ({ currentUser }) => {
                     data-testid="new-item-desc"
                   />
                   <Input
-                    type="number" min="1"
+                    type="number" min="0" step="any"
                     value={newItem.quantity || ""}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 1 })}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1 })}
                     placeholder="Qté"
                     className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
                   />

@@ -21,7 +21,7 @@ import {
 const API = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
 const formatPrice = (p) => new Intl.NumberFormat("fr-FR").format(Math.round(p || 0));
 
-const emptyAccount = { name: "", total_advance: 0, received_date: "", description: "", notes: "" };
+const emptyAccount = { name: "", total_advance: 0, received_date: "", description: "", notes: "", auto_deduct_enabled: false };
 const emptySchedEntry = { label: "", due_date: "", expected_amount: 0 };
 const emptyRepay = { repayment_date: new Date().toISOString().slice(0, 10), amount: 0, method: "cash", reference: "", notes: "" };
 
@@ -65,6 +65,7 @@ const CurrentAccountsTab = () => {
     setAccountForm({
       name: acc.name, total_advance: acc.total_advance, received_date: acc.received_date || "",
       description: acc.description || "", notes: acc.notes || "",
+      auto_deduct_enabled: !!acc.auto_deduct_enabled,
     });
     setAccountSched((acc.schedule || []).map((s, i) => ({
       id: s.id, label: s.label || "", due_date: s.due_date, expected_amount: s.expected_amount, _k: i + Date.now(),
@@ -82,6 +83,7 @@ const CurrentAccountsTab = () => {
     const payload = {
       ...accountForm,
       total_advance: parseFloat(accountForm.total_advance) || 0,
+      auto_deduct_enabled: !!accountForm.auto_deduct_enabled,
       schedule: accountSched.map((s) => ({
         label: s.label || "",
         due_date: s.due_date,
@@ -133,6 +135,26 @@ const CurrentAccountsTab = () => {
     } catch (e) { toast.error("Erreur"); }
   };
 
+  // ---- Auto-deduction ----
+  const runAutoDeduction = async () => {
+    if (!confirm("Lancer le prélèvement automatique sur les recettes du jour ?")) return;
+    try {
+      const res = await axios.post(`${API}/current-accounts/run-auto-deduction`, {
+        date: new Date().toISOString().slice(0, 10),
+      });
+      const nbCreated = res.data?.repayments_created || 0;
+      const amount = res.data?.total_deducted || 0;
+      if (nbCreated > 0) {
+        toast.success(`${nbCreated} remboursement(s) auto pour un total de ${formatPrice(amount)} F`);
+      } else {
+        toast.info("Aucun prélèvement effectué (pas de recettes suffisantes ou aucune échéance due)");
+      }
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors du prélèvement");
+    }
+  };
+
   return (
     <div className="space-y-4" data-testid="current-accounts-tab">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -140,9 +162,16 @@ const CurrentAccountsTab = () => {
           <Wallet className="w-6 h-6" />
           Compte courant — Avances du promoteur
         </h2>
-        <Button onClick={openAccountCreate} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-account-btn">
-          <Plus className="w-4 h-4 mr-2" /> Nouvelle avance
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={runAutoDeduction} variant="outline"
+            className="border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/20"
+            data-testid="run-auto-deduction-btn">
+            <TrendingDown className="w-4 h-4 mr-2" /> Prélèvement auto du jour
+          </Button>
+          <Button onClick={openAccountCreate} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-account-btn">
+            <Plus className="w-4 h-4 mr-2" /> Nouvelle avance
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}
@@ -198,6 +227,11 @@ const CurrentAccountsTab = () => {
                         {isFull && (
                           <Badge className="bg-emerald-500/30 text-emerald-300">
                             <CheckCircle className="w-3 h-3 mr-1" /> Soldé
+                          </Badge>
+                        )}
+                        {acc.auto_deduct_enabled && (
+                          <Badge className="bg-cyan-500/30 text-cyan-300" data-testid={`auto-deduct-badge-${acc.id}`}>
+                            <TrendingDown className="w-3 h-3 mr-1" /> Auto
                           </Badge>
                         )}
                         {acc.late_count > 0 && (
@@ -300,7 +334,8 @@ const CurrentAccountsTab = () => {
                               <div key={r.id} className="flex justify-between items-center text-xs">
                                 <div className="text-slate-300">
                                   <span className="text-emerald-400 mr-2">✓</span>
-                                  {r.repayment_date} — {r.method}
+                                  {r.repayment_date} — {r.method === 'auto_deduction' ? 'Prélèvement auto' : r.method}
+                                  {r.auto && <Badge className="ml-1 bg-cyan-500/30 text-cyan-300 text-[10px] py-0 px-1">AUTO</Badge>}
                                   {r.reference && <span className="text-slate-500"> ({r.reference})</span>}
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -362,6 +397,25 @@ const CurrentAccountsTab = () => {
                 <Input value={accountForm.description} onChange={(e) => setAccountForm({ ...accountForm, description: e.target.value })}
                   placeholder="But de l'avance..."
                   className="bg-slate-700/50 border-slate-600 text-white" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 bg-cyan-900/20 border border-cyan-500/30 rounded p-3 cursor-pointer hover:bg-cyan-900/30">
+                  <input
+                    type="checkbox"
+                    checked={!!accountForm.auto_deduct_enabled}
+                    onChange={(e) => setAccountForm({ ...accountForm, auto_deduct_enabled: e.target.checked })}
+                    className="w-4 h-4 accent-cyan-400"
+                    data-testid="auto-deduct-toggle"
+                  />
+                  <div className="flex-1">
+                    <div className="text-cyan-300 text-sm font-medium flex items-center gap-2">
+                      <TrendingDown className="w-4 h-4" /> Prélèvement automatique sur recettes quotidiennes
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Les échéances dues seront automatiquement déduites des recettes validées du jour.
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
 

@@ -32,7 +32,7 @@ def set_db(database):
 class ExpenseItem(BaseModel):
     category: str
     description: str
-    quantity: int = 1
+    quantity: float = 1
     unit_price: float
     amount: float
 
@@ -40,7 +40,7 @@ class ExpenseItem(BaseModel):
 class ExpenseCreate(BaseModel):
     category: str
     description: str
-    quantity: Optional[int] = 1
+    quantity: Optional[float] = 1
     unit_price: Optional[float] = None
     amount: float
     supplier: Optional[str] = None
@@ -56,7 +56,7 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     category: Optional[str] = None
     description: Optional[str] = None
-    quantity: Optional[int] = None
+    quantity: Optional[float] = None
     unit_price: Optional[float] = None
     amount: Optional[float] = None
     supplier: Optional[str] = None

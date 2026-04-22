@@ -357,6 +357,8 @@ const CaissePage = () => {
   const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0, supplier: "" });
   const [showAllExpenses, setShowAllExpenses] = useState(false);
+  // Sub-view filter for Achats tab: 'en_cours' (pending/revision/approved) or 'valides' (approved+completed)
+  const [achatsSubView, setAchatsSubView] = useState('en_cours');
   
   // Expense week assignment
   const [showWeekAssignModal, setShowWeekAssignModal] = useState(false);
@@ -767,6 +769,11 @@ const CaissePage = () => {
         if (activeTab === 'rapport') {
           fetchRapportData();
         }
+
+        // Refresh expenses list when on the purchases tab (sync admin <-> manager)
+        if (activeTab === 'achats') {
+          fetchExpenses();
+        }
       }, 5000); // Refresh every 5 seconds
       
       return () => clearInterval(interval);
@@ -1089,12 +1096,12 @@ const CaissePage = () => {
     return merged;
   }));
   const getReviseTotal = () => reviseItems.reduce((s, it) => s + (it.amount || 0), 0);
-  const submitRevision = async () => {
+  const submitRevision = async (directApprove = false) => {
     if (reviseItems.length === 0) { toast.error("Au moins un article requis"); return; }
     const total = getReviseTotal();
     const payload = {
-      status: "revision_requested",
-      admin_notes: reviseNote || "Veuillez réviser cette demande",
+      status: directApprove ? "approved" : "revision_requested",
+      admin_notes: reviseNote || (directApprove ? "Approuvé après modification" : "Veuillez réviser cette demande"),
       amount: total,
       supplier: reviseSupplier || null,
       items: reviseItems.map((it) => ({
@@ -1105,9 +1112,12 @@ const CaissePage = () => {
         amount: it.amount || (it.quantity || 1) * (it.unit_price || 0),
       })),
     };
+    if (directApprove) {
+      payload.approved_by = "Administrateur";
+    }
     try {
       await axios.put(`${API}/expenses/${revisingExpense.id}`, payload);
-      toast.success("Demande renvoyée à la gérante pour révision");
+      toast.success(directApprove ? "Demande approuvée après modification" : "Demande renvoyée à la gérante pour révision");
       setShowReviseModal(false);
       setRevisingExpense(null);
       fetchExpenses();
@@ -5670,6 +5680,41 @@ _Gérante - Espace Maxo_
                 )}
               </div>
 
+              {/* Sub-navigation: En cours / Validés */}
+              <div className="flex items-center gap-2 border-b border-slate-700 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('en_cours')}
+                  data-testid="achats-subtab-en-cours"
+                  className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+                    achatsSubView === 'en_cours'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  En cours
+                  <Badge className="ml-2 bg-white/20 text-white text-xs">
+                    {expenses.filter(e => ['pending', 'revision_requested'].includes(e.status)).length}
+                  </Badge>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('valides')}
+                  data-testid="achats-subtab-valides"
+                  className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+                    achatsSubView === 'valides'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1 inline" />
+                  Achats validés
+                  <Badge className="ml-2 bg-white/20 text-white text-xs">
+                    {expenses.filter(e => ['approved', 'completed'].includes(e.status)).length}
+                  </Badge>
+                </button>
+              </div>
+
               {/* Categories legend */}
               <div className="flex flex-wrap gap-2 items-center justify-between">
                 <div className="flex flex-wrap gap-2">
@@ -5933,7 +5978,7 @@ _Gérante - Espace Maxo_
               )}
 
               {/* Pending expenses that need manager revision (revision_requested) */}
-              {currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+              {achatsSubView === 'en_cours' && currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
                 <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-amber-400 flex items-center gap-2">
@@ -6018,8 +6063,102 @@ _Gérante - Espace Maxo_
                 </Card>
               )}
 
+              {/* Admin: Purchases sent for manager revision — still visible to admin with re-approve/re-revise controls */}
+              {achatsSubView === 'en_cours' && currentUser?.role === 'admin' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+                <Card className="bg-gradient-to-br from-orange-900/30 to-amber-900/20 border-orange-500/50" data-testid="admin-revision-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-orange-400 flex items-center gap-2">
+                      <Edit2 className="w-5 h-5" />
+                      MODIFIÉS — EN COURS DE RÉVISION CHEZ LA GÉRANTE
+                      <Badge className="bg-orange-500/30 text-orange-300 ml-2">
+                        {expenses.filter(e => e.status === 'revision_requested').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-xs text-slate-400">
+                      Ces demandes ont été modifiées par vous et renvoyées à la gérante. Vous pouvez les approuver directement ou demander une nouvelle révision.
+                    </p>
+                    {expenses.filter(e => e.status === 'revision_requested').map(expense => (
+                      <div key={expense.id} className="bg-orange-900/20 rounded-lg p-3 border border-orange-500/30">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-start justify-between flex-wrap gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
+                                ) : (
+                                  <Badge className={`text-xs ${
+                                    expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{expense.category}</Badge>
+                                )}
+                                <span className="text-white font-medium">{expense.description}</span>
+                              </div>
+                              <p className="text-orange-300 font-bold text-lg mt-1">{formatPrice(expense.amount)} F</p>
+                              {expense.supplier && <p className="text-slate-500 text-xs">Fournisseur: {expense.supplier}</p>}
+                              <p className="text-slate-500 text-xs">
+                                Demandé par: {expense.requested_by} • Modifié le {expense.updated_at ? new Date(expense.updated_at).toLocaleDateString('fr-FR') : '-'}
+                              </p>
+                              {expense.admin_notes && (
+                                <p className="text-orange-200 text-sm mt-1 italic">
+                                  <strong>Note:</strong> {expense.admin_notes}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2 flex-wrap shrink-0">
+                              <Button
+                                size="sm"
+                                onClick={() => updateExpense(expense.id, { status: "approved", approved_by: "Administrateur" })}
+                                className="bg-green-600 hover:bg-green-700"
+                                data-testid={`admin-revision-approve-${expense.id}`}
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Approuver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openReviseModal(expense)}
+                                className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                                data-testid={`admin-revision-revise-${expense.id}`}
+                              >
+                                <Edit2 className="w-4 h-4 mr-1" />
+                                Nouvelle révision
+                              </Button>
+                            </div>
+                          </div>
+                          {/* Sub-items for grouped lists */}
+                          {expense.is_group && expense.items && expense.items.length > 0 && (
+                            <div className="bg-slate-800/50 rounded p-2 mt-1">
+                              <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
+                              <div className="space-y-1">
+                                {expense.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500">{idx + 1}.</span>
+                                      <span className="text-white">{item.description}</span>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-slate-400">{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                      <span className="text-orange-300 font-bold">{formatPrice(item.amount)} F</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Pending validations (admin: full controls, manager: read-only) */}
-              {expenses.filter(e => e.status === 'pending').length > 0 && (
+              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'pending').length > 0 && (
                 <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/50" data-testid="pending-expenses-card">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-purple-400 flex items-center gap-2">
@@ -6200,7 +6339,7 @@ _Gérante - Espace Maxo_
               )}
 
               {/* Approved expenses (ready for purchase) */}
-              {expenses.filter(e => e.status === 'approved').length > 0 && (
+              {achatsSubView === 'valides' && expenses.filter(e => e.status === 'approved').length > 0 && (
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-green-400 flex items-center justify-between flex-wrap gap-2">
@@ -6365,7 +6504,7 @@ _Gérante - Espace Maxo_
               )}
 
               {/* Completed expenses (history) */}
-              {expenses.filter(e => e.status === 'completed').length > 0 && (
+              {achatsSubView === 'valides' && expenses.filter(e => e.status === 'completed').length > 0 && (
                 <Card className="bg-slate-800/30 border-slate-700">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-slate-400 flex items-center gap-2">
@@ -7235,9 +7374,10 @@ _Gérante - Espace Maxo_
                     <Label className="text-slate-300">Quantité *</Label>
                     <Input
                       type="number"
-                      min="1"
+                      min="0"
+                      step="any"
                       value={expenseForm.quantity}
-                      onChange={(e) => setExpenseForm({...expenseForm, quantity: parseInt(e.target.value) || 1})}
+                      onChange={(e) => setExpenseForm({...expenseForm, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
                       placeholder="1"
                       className="bg-slate-700/50 border-slate-600 text-white"
                     />
@@ -7305,9 +7445,9 @@ _Gérante - Espace Maxo_
                         data-testid="common-new-item-desc"
                       />
                       <Input
-                        type="number" min="1"
+                        type="number" min="0" step="any"
                         value={commonNewItem.quantity || ""}
-                        onChange={(e) => setCommonNewItem({...commonNewItem, quantity: parseInt(e.target.value) || 1})}
+                        onChange={(e) => setCommonNewItem({...commonNewItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
                         placeholder="Qté"
                         className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
                       />
@@ -7535,9 +7675,10 @@ _Gérante - Espace Maxo_
                   />
                   <Input
                     type="number"
-                    min="1"
+                    min="0"
+                    step="any"
                     value={newListItem.quantity || ""}
-                    onChange={(e) => setNewListItem({...newListItem, quantity: parseInt(e.target.value) || 1})}
+                    onChange={(e) => setNewListItem({...newListItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
                     placeholder="Qté"
                     className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
                   />
@@ -7735,8 +7876,8 @@ _Gérante - Espace Maxo_
                       </Select>
                       <Input value={it.description} onChange={(e) => updateReviseItem(it._k, { description: e.target.value })}
                         className="flex-1 min-w-[120px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs" />
-                      <Input type="number" value={it.quantity || 1}
-                        onChange={(e) => updateReviseItem(it._k, { quantity: parseInt(e.target.value) || 1 })}
+                      <Input type="number" step="any" value={it.quantity || 1}
+                        onChange={(e) => updateReviseItem(it._k, { quantity: parseFloat(e.target.value.replace(',', '.')) || 1 })}
                         className="w-[60px] bg-slate-700/50 border-slate-600 text-white h-8 text-xs" />
                       <Input type="number" value={it.unit_price || 0}
                         onChange={(e) => updateReviseItem(it._k, { unit_price: parseFloat(e.target.value) || 0 })}
@@ -7772,7 +7913,7 @@ _Gérante - Espace Maxo_
                     <Input value={reviseNewItem.description} onChange={(e) => setReviseNewItem({...reviseNewItem, description: e.target.value})}
                       placeholder="Description" className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
                       data-testid="revise-new-desc" />
-                    <Input type="number" value={reviseNewItem.quantity || ""} onChange={(e) => setReviseNewItem({...reviseNewItem, quantity: parseInt(e.target.value) || 1})}
+                    <Input type="number" step="any" value={reviseNewItem.quantity || ""} onChange={(e) => setReviseNewItem({...reviseNewItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
                       placeholder="Qté" className="w-[70px] bg-slate-700/50 border-slate-600 text-white" />
                     <Input type="number" value={reviseNewItem.unit_price || ""} onChange={(e) => setReviseNewItem({...reviseNewItem, unit_price: parseFloat(e.target.value) || 0})}
                       placeholder="PU" className="w-[100px] bg-slate-700/50 border-slate-600 text-white" />
@@ -7796,10 +7937,13 @@ _Gérante - Espace Maxo_
                 <span className="text-xl font-bold text-amber-300">{formatPrice(getReviseTotal())} F</span>
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="flex gap-2 justify-end pt-2 flex-wrap">
                 <Button variant="outline" onClick={() => setShowReviseModal(false)} className="border-slate-600 text-slate-300">Annuler</Button>
-                <Button onClick={submitRevision} className="bg-amber-600 hover:bg-amber-700" data-testid="submit-revision-btn">
+                <Button onClick={() => submitRevision(false)} className="bg-amber-600 hover:bg-amber-700" data-testid="submit-revision-btn">
                   <Edit2 className="w-4 h-4 mr-2" /> Renvoyer à la gérante
+                </Button>
+                <Button onClick={() => submitRevision(true)} className="bg-green-600 hover:bg-green-700" data-testid="submit-revise-approve-btn">
+                  <CheckCircle className="w-4 h-4 mr-2" /> Approuver directement
                 </Button>
               </div>
             </div>
