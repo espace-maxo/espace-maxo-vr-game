@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Refactoring étape A : extraction système de notifications (DONE)
+
+**Objectif** : Réduire la taille de `CaissePage.jsx` (9050 lignes) en extrayant le système de notifications dans des fichiers dédiés, sans régression.
+
+**Fichiers créés** :
+- `/app/frontend/src/pages/caisse/utils/notifications.js` (128 lignes)
+  - Constantes : `COUNT_LABELS`, `COUNT_TO_TAB`, `COUNT_META`, `COLOR_BG`, `COLOR_BADGE`
+  - Helpers purs : `playDing`, `sendBrowserNotification`, `formatRelativeTime`
+- `/app/frontend/src/pages/caisse/hooks/useNotifications.js` (232 lignes)
+  - Hook custom : state, polling 10s, delta-detection + ding, mark-read, cross-role memos
+- `/app/frontend/src/pages/caisse/components/NotificationCenter.jsx` (193 lignes)
+  - Composants : `NotifBadge`, `NotificationBell`, `CrossRoleBanner`
+
+**Fichier modifié** :
+- `CaissePage.jsx` : 9050 → **8629 lignes** (~420 lignes extraites / -4,7%)
+
+**Bugfix testing agent** : destructuration de `notifPermission` manquante → ajoutée.
+
+**Tests** : iteration_49 → 100% frontend, ZÉRO régression sur les itérations 42-48.
+
+---
 ## 22/04/2026 — Bannière flottante cross-rôle Admin ↔ Gérante (DONE)
 
 **Feature — Badge flottant grand format sous le header** :
