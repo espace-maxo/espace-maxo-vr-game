@@ -1,0 +1,84 @@
+{
+  "summary": "Iteration 47 testing completed for Notification Center bug fix and relative timestamp feature. All tests PASSED. The user-reported bug 'je n'arrive pas à cliquer sur les notifications' is FIXED. Clicking notification items now works correctly - dropdown closes and navigates to the correct tab.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_notifications_iter47.py",
+    "/app/test_reports/iteration_47.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_notifications_iter47.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None - used existing notification counts from database",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 47 verified the notification center bug fix. Key findings: (1) Clicking notification items (testid=notif-item-{key}) now works - dropdown closes and navigates to correct tab. (2) Backdrop (testid=notif-center-backdrop) closes dropdown when clicked. (3) Clicking header text keeps dropdown open (stopPropagation works). (4) 'Tout marquer lu' (testid=notif-mark-all-read) clears all badges and closes dropdown. (5) Relative timestamps (testid=notif-item-{key}-ts) display correctly: 'à l'instant', 'il y a X min', 'il y a X h', 'il y a X j'. (6) Backend returns latest_by_category with ISO-8601 timestamps for all roles.",
+  "features_tested": {
+    "bug_fix_notification_click": {
+      "status": "PASS",
+      "tests": [
+        "Admin: Click notif-item-invoices → dropdown closes, navigates to BONS tab",
+        "Manager: Click notif-item-invoices → dropdown closes, navigates to BONS tab",
+        "Backdrop click closes dropdown without navigation",
+        "Header text click keeps dropdown open (stopPropagation works)",
+        "'Tout marquer lu' clears all badges and closes dropdown"
+      ]
+    },
+    "new_feature_relative_timestamps": {
+      "status": "PASS",
+      "tests": [
+        "Admin dropdown shows 6 timestamps (notif-item-{key}-ts)",
+        "Manager dropdown shows 4 timestamps",
+        "Timestamps display correctly: 'il y a 6 j', 'il y a 5 h', 'il y a 2 j', 'il y a 14 j'",
+        "formatRelativeTime helper: <1min='à l'instant', 1-59min='il y a X min', 1-23h='il y a X h', 1-29d='il y a X j'"
+      ]
+    },
+    "backend_latest_by_category": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/notifications/counts?role=admin returns latest_by_category with 9 keys",
+        "GET /api/notifications/counts?role=manager returns latest_by_category with 4 keys (expenses, purchase_orders, invoices, notes)",
+        "GET /api/notifications/counts?role=server returns latest_by_category with 1 key (notes)",
+        "All timestamps are ISO-8601 format or empty string"
+      ]
+    },
+    "z_index_and_pointer_events": {
+      "status": "PASS",
+      "tests": [
+        "Dropdown has z-[100] and is above all other elements",
+        "Backdrop has z-[90] and captures outside clicks",
+        "Badge ping animation has pointer-events-none (doesn't intercept bell clicks)"
+      ]
+    },
+    "regression_tab_badges": {
+      "status": "PASS",
+      "tests": [
+        "Tab badges still work with effectiveCounts",
+        "Badge count updates after marking notifications as read"
+      ]
+    }
+  },
+  "test_credentials_used": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "manager": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "screenshots": [
+    ".screenshots/iter47_initial_state.png - Admin logged in with badge showing 30",
+    ".screenshots/iter47_dropdown_open.png - Dropdown with 6 notification categories + timestamps",
+    ".screenshots/iter47_after_item_click.png - After clicking notification (navigated to BONS tab)",
+    ".screenshots/iter47_after_mark_all.png - After 'Tout marquer lu' (badge gone)",
+    ".screenshots/iter47_manager_initial.png - Manager logged in with badge showing 23",
+    ".screenshots/iter47_manager_dropdown.png - Manager dropdown with 4 categories + timestamps",
+    ".screenshots/iter47_manager_after_click.png - Manager after clicking notification"
+  ]
+}

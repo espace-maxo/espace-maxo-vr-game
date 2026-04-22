@@ -22,9 +22,19 @@ def set_db(database):
     db = database
 
 
+async def _latest_date(collection_name: str, query: dict) -> str:
+    """Return ISO created_at of the most recent document matching query, or empty string."""
+    try:
+        doc = await db[collection_name].find_one(query, sort=[("created_at", -1)])
+        if not doc:
+            return ""
+        return doc.get("created_at") or ""
+    except Exception:
+        return ""
+
+
 async def _admin_counts() -> dict:
     today = date_cls.today().isoformat()
-    # Parallel-safe Motor calls
     needs_pending = await db.needs.count_documents({"status": "en_attente"})
     po_draft = await db.purchase_orders.count_documents({"status": "draft"})
     expenses_pending = await db.expenses.count_documents({
@@ -38,7 +48,6 @@ async def _admin_counts() -> dict:
         "admin_validated": False,
     })
     tips_today = await db.tips.count_documents({"date": today})
-    # Unread notes (for admin, count notes with read=false targeted to admin or broadcast)
     try:
         notes_unread = await db.instructions.count_documents({
             "$and": [
@@ -49,21 +58,36 @@ async def _admin_counts() -> dict:
     except Exception:
         notes_unread = 0
 
+    # Latest timestamps per category
+    latest = {
+        "needs": await _latest_date("needs", {"status": "en_attente"}),
+        "purchase_orders": await _latest_date("purchase_orders", {"status": "draft"}),
+        "expenses": await _latest_date("expenses", {"status": {"$in": ["pending", "revision_requested"]}}),
+        "cancellation_requests": await _latest_date("cancellation_requests", {"status": "pending"}),
+        "modification_requests": await _latest_date("modification_requests", {"status": "pending"}),
+        "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
+        "financial_points": await _latest_date("financial_points", {"signed": True, "admin_validated": False}),
+        "tips_today": await _latest_date("tips", {"date": today}),
+        "notes": await _latest_date("instructions", {"sender_role": {"$ne": "admin"}}),
+    }
+
     return {
-        "needs": needs_pending,
-        "purchase_orders": po_draft,
-        "expenses": expenses_pending,
-        "cancellation_requests": cancellation_pending,
-        "modification_requests": modification_pending,
-        "invoices": invoices_pending,
-        "financial_points": fp_pending,
-        "tips_today": tips_today,
-        "notes": notes_unread,
+        "counts": {
+            "needs": needs_pending,
+            "purchase_orders": po_draft,
+            "expenses": expenses_pending,
+            "cancellation_requests": cancellation_pending,
+            "modification_requests": modification_pending,
+            "invoices": invoices_pending,
+            "financial_points": fp_pending,
+            "tips_today": tips_today,
+            "notes": notes_unread,
+        },
+        "latest_by_category": latest,
     }
 
 
 async def _manager_counts(user_name: Optional[str] = None) -> dict:
-    # Manager: achats à réviser + notes admin non lues + BC récents (sent)
     expenses_revision = await db.expenses.count_documents({"status": "revision_requested"})
     po_sent = await db.purchase_orders.count_documents({"status": "sent"})
     invoices_pending = await db.invoices.count_documents({"validation_status": "pending"})
@@ -76,16 +100,24 @@ async def _manager_counts(user_name: Optional[str] = None) -> dict:
         })
     except Exception:
         notes_unread = 0
+    latest = {
+        "expenses": await _latest_date("expenses", {"status": "revision_requested"}),
+        "purchase_orders": await _latest_date("purchase_orders", {"status": "sent"}),
+        "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
+        "notes": await _latest_date("instructions", {"sender_role": "admin"}),
+    }
     return {
-        "expenses": expenses_revision,
-        "purchase_orders": po_sent,
-        "invoices": invoices_pending,
-        "notes": notes_unread,
+        "counts": {
+            "expenses": expenses_revision,
+            "purchase_orders": po_sent,
+            "invoices": invoices_pending,
+            "notes": notes_unread,
+        },
+        "latest_by_category": latest,
     }
 
 
 async def _server_counts(user_name: Optional[str] = None) -> dict:
-    # Server: unread notes targeted to them + their own pending tips count (info)
     try:
         notes_unread = await db.instructions.count_documents({
             "$and": [
@@ -95,7 +127,10 @@ async def _server_counts(user_name: Optional[str] = None) -> dict:
         })
     except Exception:
         notes_unread = 0
-    return {"notes": notes_unread}
+    latest = {
+        "notes": await _latest_date("instructions", {"sender_role": {"$ne": "server"}}),
+    }
+    return {"counts": {"notes": notes_unread}, "latest_by_category": latest}
 
 
 @router.get("/notifications/counts")
@@ -105,13 +140,19 @@ async def notifications_counts(
 ):
     try:
         if role == "admin":
-            counts = await _admin_counts()
+            result = await _admin_counts()
         elif role == "manager":
-            counts = await _manager_counts(user)
+            result = await _manager_counts(user)
         else:
-            counts = await _server_counts(user)
+            result = await _server_counts(user)
+        counts = result["counts"]
         total = sum(counts.values())
-        return {"role": role, "counts": counts, "total": total}
+        return {
+            "role": role,
+            "counts": counts,
+            "latest_by_category": result["latest_by_category"],
+            "total": total,
+        }
     except Exception as e:
         logger.error(f"notifications/counts error: {e}")
         raise HTTPException(500, str(e))

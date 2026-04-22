@@ -283,6 +283,26 @@ const COUNT_TO_TAB = {
   notes: "instructions",
 };
 
+// Format relative time "il y a X min/h/j" — lightweight, no external lib call.
+const formatRelativeTime = (isoStr) => {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    const diff = Math.max(0, Date.now() - d.getTime());
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return "à l'instant";
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `il y a ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `il y a ${h} h`;
+    const days = Math.floor(h / 24);
+    if (days < 30) return `il y a ${days} j`;
+    return d.toLocaleDateString("fr-FR");
+  } catch {
+    return "";
+  }
+};
+
 // Icon + color palette per notification key
 const COUNT_META = {
   needs: { color: "red", label: "Besoins" },
@@ -312,6 +332,7 @@ const CaissePage = () => {
 
   // Notification counts (aggregated badges on tabs)
   const [notifCounts, setNotifCounts] = useState({});
+  const [notifLatest, setNotifLatest] = useState({}); // latest created_at per category
   const prevNotifCountsRef = useRef(null);
   const notifInitRef = useRef(false);
   const [notifEnabled, setNotifEnabled] = useState(() => {
@@ -989,6 +1010,7 @@ const CaissePage = () => {
       });
       const newCounts = res.data?.counts || {};
       setNotifCounts(newCounts);
+      setNotifLatest(res.data?.latest_by_category || {});
 
       // Detect increases vs previous snapshot (only admin + manager get alerts).
       const prev = prevNotifCountsRef.current;
@@ -4038,7 +4060,7 @@ _Gérante - Espace Maxo_
                 >
                   <Bell className="w-6 h-6" />
                   {effectiveTotal > 0 && (
-                    <span className="absolute -top-1 -right-1 inline-flex" data-testid="notif-center-badge">
+                    <span className="absolute -top-1 -right-1 inline-flex pointer-events-none" data-testid="notif-center-badge">
                       <span className="absolute inset-0 rounded-full bg-red-500 opacity-75 animate-ping" />
                       <span className="relative rounded-full bg-red-500 text-white text-[11px] font-bold px-1.5 min-w-[22px] h-[22px] flex items-center justify-center shadow-lg">
                         {effectiveTotal > 99 ? "99+" : effectiveTotal}
@@ -4047,63 +4069,82 @@ _Gérante - Espace Maxo_
                   )}
                 </Button>
                 {showNotifCenter && (
-                  <div
-                    className="absolute right-0 top-full mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-50 overflow-hidden"
-                    data-testid="notif-center-dropdown"
-                  >
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-700">
-                      <span className="text-slate-200 font-semibold text-sm flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-amber-300" /> Notifications
-                      </span>
-                      {effectiveTotal > 0 && (
-                        <button
-                          onClick={markAllNotifsRead}
-                          className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-600 px-2 py-1 rounded"
-                          data-testid="notif-mark-all-read"
-                        >
-                          Tout marquer lu
-                        </button>
-                      )}
+                  <>
+                    {/* Backdrop: capture outside clicks (covers whole screen, below dropdown). */}
+                    <div
+                      className="fixed inset-0 z-[90]"
+                      onClick={() => setShowNotifCenter(false)}
+                      data-testid="notif-center-backdrop"
+                    />
+                    {/* Dropdown panel */}
+                    <div
+                      className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1rem)] bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-[100] overflow-hidden"
+                      data-testid="notif-center-dropdown"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-700">
+                        <span className="text-slate-200 font-semibold text-sm flex items-center gap-2">
+                          <Bell className="w-4 h-4 text-amber-300" /> Notifications
+                        </span>
+                        {effectiveTotal > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotifsRead}
+                            className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-600 px-2 py-1 rounded cursor-pointer"
+                            data-testid="notif-mark-all-read"
+                          >
+                            Tout marquer lu
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-700/60">
+                        {effectiveTotal === 0 ? (
+                          <div className="p-6 text-center text-slate-500 text-sm">
+                            <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-400 opacity-70" />
+                            Aucune notification en attente
+                          </div>
+                        ) : (
+                          Object.entries(effectiveCounts)
+                            .filter(([, v]) => (Number(v) || 0) > 0)
+                            .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+                            .map(([key, count]) => {
+                              const meta = COUNT_META[key] || { color: "red", label: key };
+                              const color = {
+                                red: "bg-red-500", orange: "bg-orange-500", amber: "bg-amber-500",
+                                blue: "bg-blue-500", purple: "bg-purple-500", sky: "bg-sky-500",
+                              }[meta.color] || "bg-slate-500";
+                              const ts = notifLatest[key];
+                              const rel = formatRelativeTime(ts);
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => openNotifAndNavigate(key)}
+                                  className="w-full text-left px-3 py-2 hover:bg-slate-700/40 active:bg-slate-700/60 flex items-center justify-between gap-2 group cursor-pointer"
+                                  data-testid={`notif-item-${key}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className={`w-2 h-2 rounded-full ${color} shrink-0`} />
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <span className="text-slate-200 text-sm truncate">{meta.label}</span>
+                                      {rel && (
+                                        <span className="text-[11px] text-slate-500 truncate" data-testid={`notif-item-${key}-ts`}>{rel}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className={`${color} text-white text-xs font-bold rounded-full px-2 min-w-[24px] text-center`}>
+                                      {count}
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300" />
+                                  </div>
+                                </button>
+                              );
+                            })
+                        )}
+                      </div>
                     </div>
-                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-700/60">
-                      {effectiveTotal === 0 ? (
-                        <div className="p-6 text-center text-slate-500 text-sm">
-                          <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-400 opacity-70" />
-                          Aucune notification en attente
-                        </div>
-                      ) : (
-                        Object.entries(effectiveCounts)
-                          .filter(([, v]) => (Number(v) || 0) > 0)
-                          .sort((a, b) => (b[1] || 0) - (a[1] || 0))
-                          .map(([key, count]) => {
-                            const meta = COUNT_META[key] || { color: "red", label: key };
-                            const color = {
-                              red: "bg-red-500", orange: "bg-orange-500", amber: "bg-amber-500",
-                              blue: "bg-blue-500", purple: "bg-purple-500", sky: "bg-sky-500",
-                            }[meta.color] || "bg-slate-500";
-                            return (
-                              <button
-                                key={key}
-                                onClick={() => openNotifAndNavigate(key)}
-                                className="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center justify-between gap-2 group"
-                                data-testid={`notif-item-${key}`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`w-2 h-2 rounded-full ${color}`} />
-                                  <span className="text-slate-200 text-sm truncate">{meta.label}</span>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className={`${color} text-white text-xs font-bold rounded-full px-2 min-w-[24px] text-center`}>
-                                    {count}
-                                  </span>
-                                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300" />
-                                </div>
-                              </button>
-                            );
-                          })
-                      )}
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
               {/* Share QR Code Button */}
