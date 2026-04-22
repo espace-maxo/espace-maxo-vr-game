@@ -1,0 +1,124 @@
+{
+  "summary": "Iteration 50 testing completed for AchatsTab refactoring (Step B). Found and FIXED 3 critical bugs: (1) Wrong component signature - `const AchatsTab = (ctx)` should be `const AchatsTab = ({ ctx })`, (2) Missing imports for Label and Input components, (3) Missing `expenseAnalyses` prop in ctx. After fixes, AchatsTab renders correctly with ZERO regression.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "AchatsTab full detail table",
+        "issues": ["React hydration warnings about HTML structure (span inside tr/tbody/th/td) - cosmetic only, doesn't affect functionality"]
+      }
+    ]
+  },
+  "bugs_found_and_fixed": [
+    {
+      "file": "/app/frontend/src/pages/caisse/components/AchatsTab.jsx",
+      "line": "21",
+      "issue": "Wrong component signature - receiving ctx as entire props object instead of destructured prop",
+      "error": "TypeError: Cannot read properties of undefined (reading 'filter')",
+      "fix": "Changed `const AchatsTab = (ctx)` to `const AchatsTab = ({ ctx })`",
+      "status": "FIXED"
+    },
+    {
+      "file": "/app/frontend/src/pages/caisse/components/AchatsTab.jsx",
+      "line": "10-18",
+      "issue": "Missing imports for Label and Input components used in admin expense editing section",
+      "error": "Would cause ReferenceError when admin tries to edit expense amount",
+      "fix": "Added imports: `import { Input } from '@/components/ui/input'; import { Label } from '@/components/ui/label';`",
+      "status": "FIXED"
+    },
+    {
+      "file": "/app/frontend/src/pages/CaissePage.jsx",
+      "line": "5726-5748",
+      "issue": "Missing `expenseAnalyses` prop in ctx object passed to AchatsTab",
+      "error": "expenseAnalyses would be undefined, causing ExpenseAnalysisBadges to not render",
+      "fix": "Added `expenseAnalyses` to the ctx prop object",
+      "status": "FIXED"
+    },
+    {
+      "file": "/app/frontend/src/pages/caisse/components/AchatsTab.jsx",
+      "line": "55-60",
+      "issue": "Missing data-testid on 'Achats communs' button",
+      "error": "Test requirement not met",
+      "fix": "Added `data-testid=\"new-expense-btn\"` to the button",
+      "status": "FIXED"
+    }
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_50.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "React hydration warnings in AchatsTab table structure - consider wrapping conditional `<th>` and `<td>` elements properly to avoid span wrappers in table rows. This is cosmetic and doesn't affect functionality."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/caisse/components/AchatsTab.jsx",
+    "/app/frontend/src/pages/CaissePage.jsx"
+  ],
+  "success_rate": {"backend": "N/A - frontend only test", "frontend": "100%"},
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 50 verified the AchatsTab refactoring (Step B). The refactoring extracted ~900 lines of Achats tab JSX from CaissePage.jsx into a new AchatsTab.jsx component. Three bugs were found and fixed: (1) component signature was wrong - needed `({ ctx })` instead of `(ctx)`, (2) missing Label and Input imports, (3) missing expenseAnalyses prop. All features now work correctly for both Admin and Manager roles: header, sub-tabs (En cours/Achats validés), categories legend, summary stats, summary card, full detail table with Ticket 80mm and Imprimer A4 buttons, admin revision card with Approuver/Nouvelle révision buttons, pending expenses card with admin controls, approved expenses with Semaine/PDF/Convertir en BC buttons, manager-specific Achats communs and Achats Fournisseurs buttons, À RÉVISER card for manager, Acheté button for manager on approved expenses. Regression test passed for all other tabs.",
+  "features_tested": {
+    "admin_achats_tab": {
+      "status": "PASS",
+      "tests": [
+        "Header 'Achats & Dépenses' visible",
+        "Sub-tabs 'En cours' and 'Achats validés' with testids",
+        "Categories legend (Cuisine, Bar, Paiement, Autres)",
+        "Summary stats (Total, en attente, à réviser, approuvées, terminées)",
+        "Summary card with totals",
+        "'Voir tout en détail' button toggles full detail table",
+        "Full detail table with Ticket 80mm and Imprimer A4 buttons",
+        "Admin revision card 'MODIFIÉS — EN COURS DE RÉVISION CHEZ LA GÉRANTE'",
+        "Approuver button with testid (admin-revision-approve-<id>)",
+        "Nouvelle révision button with testid (admin-revision-revise-<id>)",
+        "Pending expenses card with admin controls (Approuver, Modifier & renvoyer, Refuser)",
+        "Approved expenses with Semaine, PDF, Convertir en BC buttons"
+      ]
+    },
+    "manager_achats_tab": {
+      "status": "PASS",
+      "tests": [
+        "Header 'Achats & Dépenses' visible",
+        "'Achats communs' button with testid (new-expense-btn)",
+        "'Achats Fournisseurs' button with shopping list count",
+        "'À RÉVISER' card for revision_requested expenses",
+        "'Acheté' button on approved expenses"
+      ]
+    },
+    "regression_other_tabs": {
+      "status": "PASS",
+      "tests": [
+        "Tables tab works",
+        "BONS tab works",
+        "Besoins tab works",
+        "Fournisseurs tab works",
+        "Stats tab works",
+        "Notes tab works",
+        "Pourboires tab works",
+        "Compte courant tab works"
+      ]
+    }
+  },
+  "test_credentials_used": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "manager": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "data_testids_verified": [
+    "achats-subtab-en-cours - 'En cours' sub-tab",
+    "achats-subtab-valides - 'Achats validés' sub-tab",
+    "new-expense-btn - 'Achats communs' button (manager only)",
+    "admin-revision-approve-<id> - Admin approve button on revision_requested expenses",
+    "admin-revision-revise-<id> - Admin revise button on revision_requested expenses",
+    "revise-btn-<id> - 'Modifier & renvoyer' button on pending expenses",
+    "convert-po-<id> - 'Convertir en BC' button on approved expenses",
+    "expense-ratio-alert - Alert card when expense ratio > 40%",
+    "expense-ratio-ok - OK indicator when expense ratio <= 40%"
+  ]
+}
