@@ -346,7 +346,7 @@ const CaissePage = () => {
   const [showShoppingListModal, setShowShoppingListModal] = useState(false);
   const [shoppingListSupplier, setShoppingListSupplier] = useState("");
   const [shoppingListDate, setShoppingListDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+  const [newListItem, setNewListItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0, supplier: "" });
   const [showAllExpenses, setShowAllExpenses] = useState(false);
   
   // Expense week assignment
@@ -1325,8 +1325,9 @@ const CaissePage = () => {
       return;
     }
     const totalAmount = (newListItem.quantity || 1) * (newListItem.unit_price || 0);
-    setShoppingList([...shoppingList, { ...newListItem, amount: totalAmount, id: Date.now() }]);
-    setNewListItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+    const supplier = (newListItem.supplier || shoppingListSupplier || "").trim();
+    setShoppingList([...shoppingList, { ...newListItem, supplier, amount: totalAmount, id: Date.now() }]);
+    setNewListItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0, supplier: "" });
     toast.success("Article ajouté à la liste");
   };
 
@@ -1339,37 +1340,56 @@ const CaissePage = () => {
       toast.error("La liste est vide");
       return;
     }
-    
+
     try {
-      // Generate a unique group ID for this shopping list
-      const groupId = `GRP-${Date.now()}`;
-      const groupName = shoppingListSupplier ? `Liste - ${shoppingListSupplier}` : `Liste du ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
-      
-      // Calculate total for the group
-      const groupTotal = shoppingList.reduce((sum, item) => sum + item.amount, 0);
-      
-      // Create a single expense with all items as a group
-      await axios.post(`${API}/expenses`, {
-        category: shoppingList[0].category, // Use first item's category as main
-        description: groupName,
-        quantity: shoppingList.length,
-        unit_price: groupTotal,
-        amount: groupTotal,
-        supplier: shoppingListSupplier,
-        planned_date: shoppingListDate,
-        requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
-        is_group: true,
-        group_id: groupId,
-        items: shoppingList.map(item => ({
-          category: item.category,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          amount: item.amount
-        }))
+      // Group items by supplier. An item without supplier falls into "__NO_SUPPLIER__"
+      const groups = {};
+      shoppingList.forEach((item) => {
+        const key = (item.supplier || "").trim() || "__NO_SUPPLIER__";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
       });
-      
-      toast.success(`Liste d'achats créée avec ${shoppingList.length} article(s) !`);
+
+      const groupKeys = Object.keys(groups);
+      const now = format(new Date(), "dd/MM/yyyy HH:mm");
+      const createdFor = [];
+
+      for (const supKey of groupKeys) {
+        const items = groups[supKey];
+        const supplierName = supKey === "__NO_SUPPLIER__" ? "" : supKey;
+        const groupId = `GRP-${Date.now()}-${supKey.slice(0, 8).replace(/\s/g, "")}`;
+        const groupTotal = items.reduce((sum, it) => sum + (it.amount || 0), 0);
+        const groupName = supplierName
+          ? `Liste ${supplierName} - ${now}`
+          : `Liste sans fournisseur - ${now}`;
+
+        await axios.post(`${API}/expenses`, {
+          category: items[0].category,
+          description: groupName,
+          quantity: items.length,
+          unit_price: groupTotal,
+          amount: groupTotal,
+          supplier: supplierName || null,
+          planned_date: shoppingListDate,
+          requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+          is_group: true,
+          group_id: groupId,
+          items: items.map((it) => ({
+            category: it.category,
+            description: it.description,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            amount: it.amount,
+          })),
+        });
+        createdFor.push(supplierName || "sans fournisseur");
+      }
+
+      toast.success(
+        createdFor.length === 1
+          ? `Demande créée pour ${createdFor[0]} (${shoppingList.length} article(s))`
+          : `${createdFor.length} demandes créées — ${createdFor.join(", ")}`
+      );
       setShoppingList([]);
       setShoppingListSupplier("");
       setShowShoppingListModal(false);
@@ -7379,14 +7399,14 @@ _Gérante - Espace Maxo_
           </DialogHeader>
           
           <div className="space-y-4">
-            {/* Global settings for the list */}
+            {/* Global settings : default supplier + date */}
             <div className="grid grid-cols-2 gap-3 bg-slate-700/30 rounded-lg p-3">
               <div>
-                <Label className="text-slate-300 text-sm">Fournisseur (commun)</Label>
+                <Label className="text-slate-300 text-sm">Fournisseur par défaut</Label>
                 <Input
                   value={shoppingListSupplier}
                   onChange={(e) => setShoppingListSupplier(e.target.value)}
-                  placeholder="Nom du fournisseur"
+                  placeholder="Pré-rempli pour chaque nouvel article"
                   className="bg-slate-700/50 border-slate-600 text-white"
                 />
               </div>
@@ -7398,6 +7418,9 @@ _Gérante - Espace Maxo_
                   onChange={(e) => setShoppingListDate(e.target.value)}
                   className="bg-slate-700/50 border-slate-600 text-white"
                 />
+              </div>
+              <div className="col-span-2 text-xs text-indigo-300 bg-indigo-900/20 rounded p-2">
+                💡 Une demande d'achat distincte sera créée <b>par fournisseur</b>. Renseignez le fournisseur directement sur chaque article si besoin.
               </div>
             </div>
 
@@ -7446,53 +7469,90 @@ _Gérante - Espace Maxo_
                     placeholder="Prix (opt.)"
                     className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
                   />
-                  <div className="flex items-center bg-indigo-900/30 rounded px-2 text-indigo-300 text-sm">
+                </div>
+                {/* Per-item supplier row */}
+                <div className="flex gap-2 mt-2 items-center">
+                  <Input
+                    value={newListItem.supplier || ""}
+                    onChange={(e) => setNewListItem({...newListItem, supplier: e.target.value})}
+                    placeholder={`Fournisseur de l'article${shoppingListSupplier ? ` (défaut : ${shoppingListSupplier})` : ""}`}
+                    className="flex-1 bg-slate-700/50 border-slate-600 text-white"
+                    data-testid="list-item-supplier"
+                  />
+                  <div className="flex items-center bg-indigo-900/30 rounded px-2 text-indigo-300 text-sm shrink-0">
                     = {formatPrice((newListItem.quantity || 1) * (newListItem.unit_price || 0))} F
                   </div>
                   <Button 
                     onClick={addToShoppingList}
-                    className="bg-indigo-600 hover:bg-indigo-700"
+                    className="bg-indigo-600 hover:bg-indigo-700 shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">💡 Le prix est optionnel — laissez vide si vous ne le connaissez pas.</p>
+                <p className="text-xs text-slate-500 mt-2">💡 Prix optionnel — laissez vide si inconnu. Fournisseur optionnel (utilise le fournisseur par défaut ci-dessus).</p>
               </CardContent>
             </Card>
 
-            {/* Shopping list items */}
+            {/* Shopping list items grouped by supplier */}
             {shoppingList.length > 0 ? (
               <Card className="bg-slate-700/30 border-slate-600">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-slate-300 text-sm">Articles dans la liste</CardTitle>
+                  <CardTitle className="text-slate-300 text-sm">Articles groupés par fournisseur</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 max-h-[250px] overflow-y-auto">
-                  {shoppingList.map((item, index) => (
-                    <div key={item.id} className="flex items-center justify-between gap-2 bg-slate-600/30 rounded-lg p-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-slate-400 text-sm font-mono">{index + 1}.</span>
-                        <Badge className={`text-xs shrink-0 ${
-                          item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                          item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                          item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-slate-500/20 text-slate-400'
-                        }`}>{item.category}</Badge>
-                        <span className="text-white truncate">{item.description}</span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-slate-400 text-xs">{item.quantity || 1} x {formatPrice(item.unit_price || item.amount)} =</span>
-                        <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={() => removeFromShoppingList(item.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <CardContent className="space-y-3 max-h-[300px] overflow-y-auto">
+                  {(() => {
+                    const groups = {};
+                    shoppingList.forEach((item) => {
+                      const key = (item.supplier || "").trim() || "__NO_SUPPLIER__";
+                      if (!groups[key]) groups[key] = [];
+                      groups[key].push(item);
+                    });
+                    return Object.entries(groups).map(([supKey, items]) => {
+                      const supLabel = supKey === "__NO_SUPPLIER__" ? "Sans fournisseur" : supKey;
+                      const groupTotal = items.reduce((s, it) => s + (it.amount || 0), 0);
+                      return (
+                        <div key={supKey} className="bg-slate-800/40 rounded-lg p-2 border-l-2 border-indigo-500/60">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-3 h-3 text-indigo-400" />
+                              <span className="text-indigo-300 font-bold text-sm">{supLabel}</span>
+                              <Badge className="bg-slate-700/50 text-slate-300 text-[10px]">
+                                {items.length} article(s)
+                              </Badge>
+                            </div>
+                            <span className="text-indigo-300 font-bold text-sm">{formatPrice(groupTotal)} F</span>
+                          </div>
+                          <div className="space-y-1">
+                            {items.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between gap-2 bg-slate-700/30 rounded p-1.5">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <Badge className={`text-[10px] shrink-0 ${
+                                    item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                    item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                    item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                  }`}>{item.category}</Badge>
+                                  <span className="text-white text-sm truncate">{item.description}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-slate-400 text-xs">{item.quantity || 1} × {formatPrice(item.unit_price)} = </span>
+                                  <span className="text-amber-400 font-bold text-sm">{formatPrice(item.amount)} F</span>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    onClick={() => removeFromShoppingList(item.id)}
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-6 w-6 p-0"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </CardContent>
               </Card>
             ) : (
@@ -7504,10 +7564,19 @@ _Gérante - Espace Maxo_
             )}
 
             {/* Summary and submit */}
-            {shoppingList.length > 0 && (
+            {shoppingList.length > 0 && (() => {
+              const groups = {};
+              shoppingList.forEach((item) => {
+                const key = (item.supplier || "").trim() || "__NO_SUPPLIER__";
+                groups[key] = (groups[key] || 0) + 1;
+              });
+              const nbGroups = Object.keys(groups).length;
+              return (
               <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg p-4 border border-indigo-500/30">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-slate-300">Total de la liste:</span>
+                  <span className="text-slate-300">
+                    {nbGroups} fournisseur(s) • {shoppingList.length} article(s) • Total :
+                  </span>
                   <span className="text-2xl font-bold text-indigo-400">{formatPrice(getShoppingListTotal())} F</span>
                 </div>
                 <div className="flex gap-2">
@@ -7516,7 +7585,7 @@ _Gérante - Espace Maxo_
                     className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Soumettre {shoppingList.length} demande(s)
+                    Soumettre {nbGroups} demande(s) d'achat
                   </Button>
                   <Button 
                     variant="outline"
@@ -7531,7 +7600,8 @@ _Gérante - Espace Maxo_
                   </Button>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             <Button 
               variant="outline" 
