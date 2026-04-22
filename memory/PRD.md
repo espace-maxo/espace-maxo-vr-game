@@ -4,6 +4,25 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Centre de notifications cliquable (DONE)
+
+**Feature — Badge de notification global + dropdown** :
+- Gros bouton Bell (testid=`notif-center-btn`) dans le header avec **badge rouge animé** (testid=`notif-center-badge`) affichant le total des notifications effectives.
+- Clic sur le bouton → **dropdown** (testid=`notif-center-dropdown`) listant chaque catégorie non-vide avec :
+  - Pastille colorée + libellé + compteur + chevron
+  - Tri par ordre décroissant
+  - Clic sur une ligne → navigue automatiquement vers l'onglet concerné (`setActiveTab`) ET marque cette catégorie comme lue
+- Bouton **« Tout marquer lu »** (testid=`notif-mark-all-read`) remet tous les compteurs à 0.
+- **Persistance** : baseline `caisse_notif_ack` stocké dans localStorage — les badges restent clearés jusqu'à nouvelle activité.
+- **Effective counts** : tous les badges d'onglets (iter 44) utilisent désormais `effectiveCount = max(0, raw - ack)`.
+- **Tous rôles** (admin + gérante + serveur). Serveur ne voit que la catégorie `notes`.
+- Empty state : message « Aucune notification en attente » avec CheckCircle vert quand total=0.
+
+**Mapping catégorie → onglet** : needs→Besoins, purchase_orders→Fournisseurs, expenses→Achats, invoices/cancel/mod→Bons, financial_points→Stats, tips_today→Pourboires, notes→Instructions.
+
+**Tests** : iteration_46 → frontend 100%, 0 bug fonctionnel. Le ding + browser Notification (iter 45) continue de fonctionner sur les deltas raw (indépendamment de l'ack).
+
+---
 ## 22/04/2026 — Son ding + notifications navigateur (DONE)
 
 **Feature — Alertes sonores et notifications système** :
