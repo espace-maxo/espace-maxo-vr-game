@@ -4,6 +4,19 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Son ding + notifications navigateur (DONE)
+
+**Feature — Alertes sonores et notifications système** :
+- Son « ding » discret généré via **Web Audio API** (oscillateur sine 880→1320Hz, 400ms, pas d'asset externe, CSP-friendly).
+- **Notification navigateur** (API `Notification`) avec titre + détails des deltas (« 1 nouveau besoin », « 2 nouvelles demandes d'achats », etc.).
+- Déclenchement : uniquement lorsqu'un compteur augmente entre 2 polls (delta strict, `notifInitRef` garde pour éviter les faux alertes au 1er chargement).
+- Permissions : `Notification.requestPermission()` auto-demandé 1,5s après login pour admin/manager uniquement.
+- **Toggle cloche** dans le header (testid=`notif-toggle-btn`) — admin + manager. État persisté dans `localStorage` (`caisse_notif_enabled`). Icône Bell/BellOff.
+- Bugfix stale-closure : `notifEnabledRef` synchronisé à chaque toggle pour que l'intervalle lise la valeur à jour (détecté et corrigé par le testing agent).
+
+**Tests** : iteration_45 → 100% frontend, 0 bug résiduel. Backend inchangé (endpoint notifications/counts existant depuis iter 44).
+
+---
 ## 22/04/2026 — Badges de notification animés (DONE)
 
 **Feature — Notifications visuelles temps réel** :
