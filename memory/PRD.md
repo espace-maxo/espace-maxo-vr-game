@@ -4,6 +4,34 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Module Fournisseurs & Bons de Commande (DONE)
+
+Workflow procurement complet : **Demande d'achats → Approbation → Bon de Commande → Envoi → Réception (BL) → Paiement**.
+
+**Backend** :
+- `routers/suppliers.py` : CRUD `caisse_suppliers` (name, category, payment_terms, phone, email, address, ifu, notes).
+- `routers/purchase_orders.py` :
+  - Statuts : `draft → sent → partially_received → received → paid` + `cancelled`.
+  - Numérotation auto `BC-YYYYMM-XXXX`.
+  - `POST /purchase-orders/from-expense/{id}` : convertit une dépense approved en BC, marque `converted_to_po_id` sur l'expense.
+  - `POST /.../receive` : saisie quantités reçues, append un `delivery_note`, crée un mouvement stock `entree` par item, auto-crée le stock_product si pas de match (fuzzy normalisé).
+  - `POST /.../pay` : enregistre paiement (cash/virement/mobile_money/chèque), verrouille le BC.
+  - Validations strictes des transitions (pas de receive avant send, pas de pay avant receive, pas de delete après send).
+
+**Frontend** (`PurchaseOrdersTab.jsx`) :
+- Sous-onglets : Bons de commande + Fournisseurs (CRUD complet).
+- Cards BC avec statuts colorés, tableau items (cmd/reçu/PU/total), historique BL, infos paiement.
+- Modals : création BC, réception (avec quantités restantes pré-remplies), paiement.
+- **Impression 80mm** (format ticket thermique) : BC et BL séparés, en-tête Espace Maxo.
+- Bouton **"Convertir en BC"** dans l'onglet Achats sur chaque dépense approved.
+
+**Permissions** :
+- Admin : contrôle total.
+- Gérante : lecture seule + peut **réceptionner** les livraisons (met à jour le stock).
+
+**Tests** : 23/23 pytest backend + Frontend Admin + Gérante 100% (iteration_40).
+
+---
 ## Recent Updates (19/04/2026)
 
 ### Updates 20/04/2026 — Visibilité achats gérante + notifications besoins (DONE)
