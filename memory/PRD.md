@@ -4,6 +4,22 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Bannière flottante cross-rôle Admin ↔ Gérante (DONE)
+
+**Feature — Badge flottant grand format sous le header** :
+- Bannière **pleine largeur**, sticky sous le header (`top-[60px] z-[80]`), pulsante (`animate-pulse` + pastille `animate-ping`).
+- **Admin** : gradient émeraude, texte « Nouvelle(s) information(s) de **la Gérante** ». Périmètre : needs, expenses (pending uniquement, pas revision_requested), tips_today, financial_points, notes.
+- **Gérante** : gradient ambre/orange, texte « Nouvelle(s) information(s) de **l'Administrateur** ». Périmètre : expenses (revision_requested), purchase_orders (sent), notes (sender_role=admin).
+- **Serveur** : pas de bannière (cross_role=null).
+- **Clic sur le lien** : navigue vers l'onglet de la catégorie avec le timestamp le plus récent, et marque cette catégorie comme lue.
+- **Bouton X** : acquitte TOUTES les catégories cross-rôle d'un coup — la bannière disparaît jusqu'à nouvelle activité.
+- **Affichage** : total pill blanc, libellé principal + breakdown (`4 besoins • 2 notes — il y a 12 min`).
+
+**Backend** : nouveau champ `cross_role: {source_role, source_label, items:{key:{count,latest}}}` dans `/api/notifications/counts`. Pour admin, `expenses.count` est strictement `pending` (exclut les `revision_requested` qui proviennent de l'admin lui-même).
+
+**Tests** : iteration_48 → 100% backend + frontend. Différenciation stricte des 3 rôles vérifiée.
+
+---
 ## 22/04/2026 — Bugfix click notifications + horodatages relatifs (DONE)
 
 **Bug report utilisateur** : « je n'arrive pas à cliquer sur les notifications » — dans le dropdown du centre de notifications, les clics sur les items ne déclenchaient pas la navigation.
