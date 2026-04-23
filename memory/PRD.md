@@ -4,6 +4,35 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Compte courant : 3 modes de remboursement avancés (DONE)
+
+**Demande utilisateur** : prévoir des options de remboursement flexibles pour les avances en compte courant :
+1. % des recettes journalières
+2. Montant fixe par période (jour / semaine / mois / année)
+3. Remboursement manuel (conservé)
+Les 3 modes doivent pouvoir coexister sur un même compte.
+
+**Backend** (`routers/current_accounts.py`) :
+- Nouveaux champs sur `AccountCreate`/`AccountUpdate` : `repayment_percentage`, `repayment_fixed_amount`, `repayment_fixed_period` (`daily|weekly|monthly|yearly`), `repayment_fixed_start_date`.
+- `NULLABLE_FIELDS` : permet de *clearer* un champ via PUT avec `null` (pour désactiver un mode).
+- `_run_auto_deduction_for_account` enrichi :
+  - **Mode % recettes** : lit revenue du jour, crée une repayment `method="auto_deduction"` avec `reference=AUTO-PCT-{date}`. Idempotent par jour.
+  - **Mode fixe** : déclenche uniquement en fin de période (daily=tous les jours ; weekly=dimanche weekday=6 ; monthly=dernier jour du mois ; yearly=31 déc). Références uniques (`AUTO-FIX-YYYY-MM-DD`, `AUTO-FIX-YYYY-Wnn`, `AUTO-FIX-YYYY-MM`, `AUTO-FIX-YYYY`). Respecte `repayment_fixed_start_date`.
+  - **Cap de remboursement** : les déductions ne dépassent jamais `total_advance - already_repaid`.
+- Filtre auto-déduction élargi : `auto_deduct_enabled OR repayment_percentage>0 OR repayment_fixed_amount>0`.
+- Validation période invalide : nullifié en création, erreur 400 en update.
+
+**Frontend** (`CurrentAccountsTab.jsx`) :
+- Modal création/édition : 3 blocs de configuration colorés :
+  - 🔵 cyan — Échéancier (toggle `auto-deduct-toggle`).
+  - 🟣 violet — Pourcentage (toggle `pct-mode-toggle` + input `pct-value-input`, pré-rempli à **5%**).
+  - 🟠 ambre — Montant fixe (toggle `fixed-mode-toggle` + input `fixed-amount-input` (pré-rempli **10 000 F**) + select période `fixed-period-select` (défaut `weekly`) + date `fixed-start-input`).
+- Cartes comptes : 3 badges possibles (`auto-deduct-badge-{id}`, `pct-badge-{id}`, `fixed-badge-{id}`) pouvant apparaître ensemble.
+- Modal d'édition recharge correctement les valeurs sauvegardées.
+
+**Tests** : iteration_54 → **21/21 backend PASSED** + frontend 100%. Tous les scénarios validés (idempotence, fin de période, start_date, cap, combinaison des 3 modes, manual coexistence).
+
+---
 ## 22/04/2026 — Sous-menus Achats remaniés + badges fixés + anti-slow-click (DONE)
 
 **Demandes utilisateur** :
