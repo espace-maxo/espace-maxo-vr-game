@@ -4,6 +4,23 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 22/04/2026 — Sous-menus Achats remaniés + badges fixés + anti-slow-click (DONE)
+
+**Demandes utilisateur** :
+1. Renommer « En cours » → « Validation en cours »
+2. Ajouter sous-menu « À réviser » (status=revision_requested)
+3. Ajouter sous-menu « Rejetés » (status=rejected)
+4. Badges de notification disparus → restaurer
+5. App ralentie lors du clic sur « Envoyer la demande d'achat »
+
+**Changements** :
+- **AchatsTab.jsx** : 4 sous-tabs désormais (Validation en cours / À réviser / Achats validés / Rejetés), chacun avec son compteur + couleur distincte (violet/ambre/vert/rose). Les sections `revision_requested` (manager « À RÉVISER » + admin « MODIFIÉS EN COURS DE RÉVISION ») déplacées sous `a_reviser`. Nouvelle carte `rejected-expenses-card` pour l'onglet Rejetés listant les demandes avec description, notes admin et bouton delete (admin only).
+- **useNotifications.js** : auto-clamp du `acknowledgedCounts` — si le compteur brut décroît (items traités/supprimés), l'ack est automatiquement clampé. Ainsi, quand une nouvelle demande arrive, le badge réapparaît correctement au premier delta positif.
+- **CaissePage.jsx** : `createExpense` enveloppé dans un state `expenseSubmitLoading` — le bouton « Soumettre » passe à disabled + label « Envoi en cours... » pendant l'API call, évitant le double-clic et donnant un feedback visuel clair au ralentissement.
+
+**Tests** : iteration_53 → 100% frontend, 0 bug fonctionnel. Warnings hydration mineurs pré-existants (shadcn Select) non liés.
+
+---
 ## 22/04/2026 — Compte courant : trésorerie utilisable pour les achats (DONE)
 
 **Objectif** : permettre à l'admin de lier une dépense (achat/paiement) à un compte courant (avance promoteur) comme source de financement, même rétroactivement sur des achats déjà réalisés.
