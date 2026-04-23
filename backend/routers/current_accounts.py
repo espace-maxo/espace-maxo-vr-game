@@ -33,6 +33,9 @@ class ScheduleEntry(BaseModel):
     expected_amount: float
 
 
+VALID_FIXED_PERIODS = {"daily", "weekly", "monthly", "yearly"}
+
+
 class AccountCreate(BaseModel):
     name: str
     total_advance: float
@@ -41,6 +44,12 @@ class AccountCreate(BaseModel):
     notes: Optional[str] = ""
     schedule: Optional[List[ScheduleEntry]] = None
     auto_deduct_enabled: Optional[bool] = False
+    # % des recettes journalières (mode cumul journalier)
+    repayment_percentage: Optional[float] = None  # 0-100, null = désactivé
+    # Montant fixe par période (prélèvement en fin de période)
+    repayment_fixed_amount: Optional[float] = None  # null = désactivé
+    repayment_fixed_period: Optional[str] = None  # daily | weekly | monthly | yearly
+    repayment_fixed_start_date: Optional[str] = None  # YYYY-MM-DD, début effectif
 
 
 class AccountUpdate(BaseModel):
@@ -52,6 +61,10 @@ class AccountUpdate(BaseModel):
     schedule: Optional[List[ScheduleEntry]] = None
     is_closed: Optional[bool] = None
     auto_deduct_enabled: Optional[bool] = None
+    repayment_percentage: Optional[float] = None
+    repayment_fixed_amount: Optional[float] = None
+    repayment_fixed_period: Optional[str] = None
+    repayment_fixed_start_date: Optional[str] = None
 
 
 class RepaymentCreate(BaseModel):
@@ -121,13 +134,19 @@ def _enrich_account(acc: dict) -> dict:
 
 @router.get("/current-accounts")
 async def list_accounts(include_closed: bool = True, auto_run: bool = True):
-    # Run auto-deduction for accounts with auto_deduct_enabled (idempotent)
+    # Run auto-deduction for accounts with any auto-repayment config (idempotent)
     if auto_run:
         try:
             today = date.today().isoformat()
             enabled = await db.current_accounts.find({
-                "auto_deduct_enabled": True,
-                "is_closed": {"$ne": True},
+                "$and": [
+                    {"is_closed": {"$ne": True}},
+                    {"$or": [
+                        {"auto_deduct_enabled": True},
+                        {"repayment_percentage": {"$gt": 0}},
+                        {"repayment_fixed_amount": {"$gt": 0}},
+                    ]},
+                ],
             }, {"_id": 0}).to_list(500)
             for acc in enabled:
                 await _run_auto_deduction_for_account(acc, today)
@@ -184,6 +203,10 @@ async def create_account(data: AccountCreate):
             "repayments": [],
             "is_closed": False,
             "auto_deduct_enabled": bool(data.auto_deduct_enabled),
+            "repayment_percentage": data.repayment_percentage,
+            "repayment_fixed_amount": data.repayment_fixed_amount,
+            "repayment_fixed_period": data.repayment_fixed_period if data.repayment_fixed_period in VALID_FIXED_PERIODS else None,
+            "repayment_fixed_start_date": data.repayment_fixed_start_date,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.current_accounts.insert_one(doc)
@@ -197,7 +220,13 @@ async def create_account(data: AccountCreate):
 @router.put("/current-accounts/{account_id}")
 async def update_account(account_id: str, data: AccountUpdate):
     try:
-        update = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+        # Keep None for nullable repayment config fields (to be able to CLEAR them)
+        NULLABLE_FIELDS = {"repayment_percentage", "repayment_fixed_amount", "repayment_fixed_period", "repayment_fixed_start_date"}
+        raw = data.model_dump(exclude_unset=True)
+        update = {k: v for k, v in raw.items() if v is not None or k in NULLABLE_FIELDS}
+        # Validate fixed period
+        if update.get("repayment_fixed_period") and update["repayment_fixed_period"] not in VALID_FIXED_PERIODS:
+            raise HTTPException(400, "repayment_fixed_period invalide")
         if "schedule" in update:
             new_sched = []
             for s in update["schedule"]:
@@ -282,71 +311,159 @@ async def _compute_daily_revenue(target_date: str) -> float:
         return 0
 
 
-async def _run_auto_deduction_for_account(acc: dict, run_date: str) -> dict:
-    """For a single account with auto_deduct_enabled, scan schedule entries whose due_date <= run_date
-    and cumulative_expected is not yet covered by existing repayments. Create auto-repayments.
-
-    Idempotent: checks existing repayments with reference starting with 'AUTO-{schedule_id}' to avoid
-    duplicates.
-    Returns a small summary dict.
+def _fixed_period_key(period: str, run_date: str) -> str:
+    """Return a stable string for the period containing `run_date`. Used as idempotency key.
+      daily  → 'YYYY-MM-DD'
+      weekly → 'YYYY-Wnn' (ISO week)
+      monthly→ 'YYYY-MM'
+      yearly → 'YYYY'
     """
-    if not acc.get("auto_deduct_enabled"):
-        return {"created": 0, "reason": "disabled"}
+    try:
+        d = datetime.fromisoformat(run_date).date()
+        if period == "weekly":
+            y, w, _ = d.isocalendar()
+            return f"{y:04d}-W{w:02d}"
+        if period == "monthly":
+            return d.strftime("%Y-%m")
+        if period == "yearly":
+            return d.strftime("%Y")
+        return d.isoformat()
+    except Exception:
+        return run_date
+
+
+def _is_end_of_period(period: str, run_date: str) -> bool:
+    """Return True if run_date is the LAST day of the given period.
+    daily → always True. weekly → Sunday. monthly → last day of month. yearly → 12-31.
+    """
+    try:
+        d = datetime.fromisoformat(run_date).date()
+        if period == "daily":
+            return True
+        if period == "weekly":
+            return d.weekday() == 6  # Sunday
+        if period == "monthly":
+            import calendar
+            last = calendar.monthrange(d.year, d.month)[1]
+            return d.day == last
+        if period == "yearly":
+            return d.month == 12 and d.day == 31
+    except Exception:
+        pass
+    return False
+
+
+async def _run_auto_deduction_for_account(acc: dict, run_date: str) -> dict:
+    """Run all enabled auto-deduction modes for a single account (schedule, percentage, fixed-recurring).
+
+    All modes are idempotent per day/period via distinct `reference` prefixes:
+      - schedule: AUTO-{schedule_id}-{date}
+      - percentage: AUTO-PCT-{date}
+      - fixed_recurring: AUTO-FIX-{period_key}
+
+    Returns a summary dict aggregating created repayments.
+    """
     if acc.get("is_closed"):
         return {"created": 0, "reason": "closed"}
 
-    schedule = sorted(acc.get("schedule") or [], key=lambda s: s.get("due_date") or "")
+    total_advance = acc.get("total_advance", 0) or 0
     repayments = list(acc.get("repayments") or [])
     total_repaid = sum(r.get("amount", 0) or 0 for r in repayments)
-    total_advance = acc.get("total_advance", 0) or 0
 
-    daily_revenue = await _compute_daily_revenue(run_date)
-    used_revenue = 0  # cumulative consumed from today's revenue across entries
     created_entries = []
-    cumul = 0
+    daily_revenue = await _compute_daily_revenue(run_date)
+    used_revenue = 0  # tracks how much of today's revenue we've allocated
 
-    for s in schedule:
-        cumul += s.get("expected_amount", 0) or 0
-        due = s.get("due_date") or ""
-        if not due or due > run_date:
-            # Not yet due
-            continue
-        if total_repaid >= cumul:
-            # Already covered by repayments
-            continue
-        sched_id = s.get("id") or ""
-        # Idempotency: skip if an AUTO repayment for this schedule id already exists today
-        already = any(
-            (r.get("reference") or "").startswith(f"AUTO-{sched_id}")
-            for r in repayments
-        )
-        if already:
-            continue
-        missing = cumul - total_repaid
-        # Revenue remaining for today
-        remaining_revenue = max(0, daily_revenue - used_revenue)
-        if remaining_revenue <= 0:
-            break  # No more revenue to allocate today
-        # Do not exceed total_advance
-        max_repayable = max(0, total_advance - total_repaid)
-        deduct = min(missing, remaining_revenue, max_repayable)
-        if deduct <= 0:
-            continue
-        repayment = {
-            "id": str(uuid.uuid4()),
-            "repayment_date": run_date,
-            "amount": round(deduct, 2),
-            "method": "auto_deduction",
-            "reference": f"AUTO-{sched_id}-{run_date}",
-            "notes": f"Prélèvement automatique sur recettes du {run_date}",
-            "schedule_id": sched_id,
-            "auto": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        repayments.append(repayment)
-        total_repaid += deduct
-        used_revenue += deduct
-        created_entries.append(repayment)
+    def _remaining_cap() -> float:
+        """Amount still repayable without exceeding total_advance."""
+        return max(0, total_advance - total_repaid - sum(r["amount"] for r in created_entries))
+
+    # ---- MODE 1: Schedule-based (existing) ----
+    if acc.get("auto_deduct_enabled"):
+        schedule = sorted(acc.get("schedule") or [], key=lambda s: s.get("due_date") or "")
+        cumul = 0
+        for s in schedule:
+            cumul += s.get("expected_amount", 0) or 0
+            due = s.get("due_date") or ""
+            if not due or due > run_date:
+                continue
+            if total_repaid >= cumul:
+                continue
+            sched_id = s.get("id") or ""
+            already = any((r.get("reference") or "").startswith(f"AUTO-{sched_id}") for r in repayments)
+            if already:
+                continue
+            missing = cumul - total_repaid
+            remaining_revenue = max(0, daily_revenue - used_revenue)
+            if remaining_revenue <= 0:
+                break
+            deduct = min(missing, remaining_revenue, _remaining_cap())
+            if deduct <= 0:
+                continue
+            repayment = {
+                "id": str(uuid.uuid4()),
+                "repayment_date": run_date,
+                "amount": round(deduct, 2),
+                "method": "auto_deduction",
+                "reference": f"AUTO-{sched_id}-{run_date}",
+                "notes": f"Prélèvement planning du {run_date}",
+                "schedule_id": sched_id,
+                "auto": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            created_entries.append(repayment)
+            used_revenue += deduct
+
+    # ---- MODE 2: Percentage of daily revenue (cumul journalier) ----
+    pct = acc.get("repayment_percentage")
+    if pct and pct > 0:
+        ref_today = f"AUTO-PCT-{run_date}"
+        already_pct = any(r.get("reference") == ref_today for r in repayments + created_entries)
+        if not already_pct:
+            # Percentage applied to TODAY's revenue minus amount already used by schedule mode
+            remaining_revenue = max(0, daily_revenue - used_revenue)
+            deduct = min(
+                remaining_revenue * float(pct) / 100.0,
+                _remaining_cap(),
+            )
+            if deduct > 0:
+                repayment = {
+                    "id": str(uuid.uuid4()),
+                    "repayment_date": run_date,
+                    "amount": round(deduct, 2),
+                    "method": "auto_percentage",
+                    "reference": ref_today,
+                    "notes": f"Prélèvement {pct}% des recettes du {run_date}",
+                    "auto": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                created_entries.append(repayment)
+                used_revenue += deduct
+
+    # ---- MODE 3: Fixed amount at end of period ----
+    fixed_amount = acc.get("repayment_fixed_amount")
+    fixed_period = acc.get("repayment_fixed_period")
+    fixed_start = acc.get("repayment_fixed_start_date")
+    if fixed_amount and fixed_amount > 0 and fixed_period in VALID_FIXED_PERIODS:
+        # Only deduct if run_date is at the end of the period AND start_date has been reached
+        if _is_end_of_period(fixed_period, run_date) and (not fixed_start or fixed_start <= run_date):
+            period_key = _fixed_period_key(fixed_period, run_date)
+            ref_period = f"AUTO-FIX-{period_key}"
+            already_fix = any(r.get("reference") == ref_period for r in repayments + created_entries)
+            if not already_fix:
+                deduct = min(float(fixed_amount), _remaining_cap())
+                if deduct > 0:
+                    repayment = {
+                        "id": str(uuid.uuid4()),
+                        "repayment_date": run_date,
+                        "amount": round(deduct, 2),
+                        "method": "auto_fixed",
+                        "reference": ref_period,
+                        "notes": f"Prélèvement fixe ({fixed_period}) — période {period_key}",
+                        "auto": True,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    created_entries.append(repayment)
 
     if created_entries:
         await db.current_accounts.update_one(
@@ -367,8 +484,14 @@ async def run_auto_deduction(body: dict = Body(default={})):
     try:
         target_date = (body or {}).get("date") or date.today().isoformat()
         accounts = await db.current_accounts.find({
-            "auto_deduct_enabled": True,
-            "is_closed": {"$ne": True},
+            "$and": [
+                {"is_closed": {"$ne": True}},
+                {"$or": [
+                    {"auto_deduct_enabled": True},
+                    {"repayment_percentage": {"$gt": 0}},
+                    {"repayment_fixed_amount": {"$gt": 0}},
+                ]},
+            ],
         }, {"_id": 0}).to_list(500)
         results = []
         total_created = 0

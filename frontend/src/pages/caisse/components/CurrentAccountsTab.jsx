@@ -21,7 +21,18 @@ import {
 const API = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
 const formatPrice = (p) => new Intl.NumberFormat("fr-FR").format(Math.round(p || 0));
 
-const emptyAccount = { name: "", total_advance: 0, received_date: "", description: "", notes: "", auto_deduct_enabled: false };
+const emptyAccount = {
+  name: "",
+  total_advance: 0,
+  received_date: "",
+  description: "",
+  notes: "",
+  auto_deduct_enabled: false,
+  repayment_percentage: "",
+  repayment_fixed_amount: "",
+  repayment_fixed_period: "weekly",
+  repayment_fixed_start_date: "",
+};
 const emptySchedEntry = { label: "", due_date: "", expected_amount: 0 };
 const emptyRepay = { repayment_date: new Date().toISOString().slice(0, 10), amount: 0, method: "cash", reference: "", notes: "" };
 
@@ -66,6 +77,10 @@ const CurrentAccountsTab = () => {
       name: acc.name, total_advance: acc.total_advance, received_date: acc.received_date || "",
       description: acc.description || "", notes: acc.notes || "",
       auto_deduct_enabled: !!acc.auto_deduct_enabled,
+      repayment_percentage: acc.repayment_percentage ?? "",
+      repayment_fixed_amount: acc.repayment_fixed_amount ?? "",
+      repayment_fixed_period: acc.repayment_fixed_period || "weekly",
+      repayment_fixed_start_date: acc.repayment_fixed_start_date || "",
     });
     setAccountSched((acc.schedule || []).map((s, i) => ({
       id: s.id, label: s.label || "", due_date: s.due_date, expected_amount: s.expected_amount, _k: i + Date.now(),
@@ -84,6 +99,10 @@ const CurrentAccountsTab = () => {
       ...accountForm,
       total_advance: parseFloat(accountForm.total_advance) || 0,
       auto_deduct_enabled: !!accountForm.auto_deduct_enabled,
+      repayment_percentage: accountForm.repayment_percentage === "" ? null : parseFloat(accountForm.repayment_percentage) || null,
+      repayment_fixed_amount: accountForm.repayment_fixed_amount === "" ? null : parseFloat(accountForm.repayment_fixed_amount) || null,
+      repayment_fixed_period: accountForm.repayment_fixed_amount ? accountForm.repayment_fixed_period : null,
+      repayment_fixed_start_date: accountForm.repayment_fixed_amount ? (accountForm.repayment_fixed_start_date || null) : null,
       schedule: accountSched.map((s) => ({
         label: s.label || "",
         due_date: s.due_date,
@@ -231,7 +250,19 @@ const CurrentAccountsTab = () => {
                         )}
                         {acc.auto_deduct_enabled && (
                           <Badge className="bg-cyan-500/30 text-cyan-300" data-testid={`auto-deduct-badge-${acc.id}`}>
-                            <TrendingDown className="w-3 h-3 mr-1" /> Auto
+                            <TrendingDown className="w-3 h-3 mr-1" /> Planning
+                          </Badge>
+                        )}
+                        {acc.repayment_percentage > 0 && (
+                          <Badge className="bg-purple-500/30 text-purple-200" data-testid={`pct-badge-${acc.id}`}>
+                            {acc.repayment_percentage}% / jour
+                          </Badge>
+                        )}
+                        {acc.repayment_fixed_amount > 0 && acc.repayment_fixed_period && (
+                          <Badge className="bg-amber-500/30 text-amber-200" data-testid={`fixed-badge-${acc.id}`}>
+                            {formatPrice(acc.repayment_fixed_amount)} F / {
+                              { daily: "jour", weekly: "semaine", monthly: "mois", yearly: "an" }[acc.repayment_fixed_period]
+                            }
                           </Badge>
                         )}
                         {acc.late_count > 0 && (
@@ -417,13 +448,111 @@ const CurrentAccountsTab = () => {
                   />
                   <div className="flex-1">
                     <div className="text-cyan-300 text-sm font-medium flex items-center gap-2">
-                      <TrendingDown className="w-4 h-4" /> Prélèvement automatique sur recettes quotidiennes
+                      <TrendingDown className="w-4 h-4" /> Prélèvement selon l'échéancier prévu
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      Les échéances dues seront automatiquement déduites des recettes validées du jour.
+                      Prélève automatiquement les échéances dues définies ci-dessous sur les recettes validées du jour.
                     </div>
                   </div>
                 </label>
+              </div>
+
+              {/* MODE 2 — Pourcentage des recettes */}
+              <div className="sm:col-span-2 bg-purple-900/20 border border-purple-500/30 rounded p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="flex items-center gap-2 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      checked={Number(accountForm.repayment_percentage) > 0}
+                      onChange={(e) => setAccountForm({
+                        ...accountForm,
+                        repayment_percentage: e.target.checked ? (accountForm.repayment_percentage || 5) : "",
+                      })}
+                      className="w-4 h-4 accent-purple-400"
+                      data-testid="pct-mode-toggle"
+                    />
+                    <span className="text-purple-300 text-sm font-medium">% des recettes journalières (cumul soir)</span>
+                  </label>
+                  <Input
+                    type="number" min="0" max="100" step="0.1"
+                    value={accountForm.repayment_percentage ?? ""}
+                    onChange={(e) => setAccountForm({
+                      ...accountForm,
+                      repayment_percentage: e.target.value === "" ? "" : parseFloat(e.target.value.replace(",", ".")),
+                    })}
+                    placeholder="5"
+                    className="w-[90px] bg-slate-700/50 border-slate-600 text-white text-right"
+                    data-testid="pct-value-input"
+                  />
+                  <span className="text-purple-300 text-sm">%</span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Chaque soir, ce pourcentage est prélevé sur les recettes validées du jour.
+                </div>
+              </div>
+
+              {/* MODE 3 — Montant fixe par période */}
+              <div className="sm:col-span-2 bg-amber-900/20 border border-amber-500/30 rounded p-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Number(accountForm.repayment_fixed_amount) > 0}
+                    onChange={(e) => setAccountForm({
+                      ...accountForm,
+                      repayment_fixed_amount: e.target.checked ? (accountForm.repayment_fixed_amount || 10000) : "",
+                    })}
+                    className="w-4 h-4 accent-amber-400"
+                    data-testid="fixed-mode-toggle"
+                  />
+                  <span className="text-amber-300 text-sm font-medium">Montant fixe par période (fin de période)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-slate-400 text-xs">Montant (F)</Label>
+                    <Input
+                      type="number" min="0" step="any"
+                      value={accountForm.repayment_fixed_amount ?? ""}
+                      onChange={(e) => setAccountForm({
+                        ...accountForm,
+                        repayment_fixed_amount: e.target.value === "" ? "" : parseFloat(e.target.value.replace(",", ".")),
+                      })}
+                      placeholder="10000"
+                      className="bg-slate-700/50 border-slate-600 text-white"
+                      data-testid="fixed-amount-input"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs">Période</Label>
+                    <select
+                      value={accountForm.repayment_fixed_period || "weekly"}
+                      onChange={(e) => setAccountForm({ ...accountForm, repayment_fixed_period: e.target.value })}
+                      className="w-full bg-slate-700/50 border border-slate-600 text-white rounded px-2 py-2 text-sm"
+                      data-testid="fixed-period-select"
+                    >
+                      <option value="daily">Chaque jour</option>
+                      <option value="weekly">Chaque semaine (dimanche)</option>
+                      <option value="monthly">Chaque mois (dernier jour)</option>
+                      <option value="yearly">Chaque année (31 déc.)</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-slate-400 text-xs">Date de démarrage (optionnel)</Label>
+                  <Input
+                    type="date"
+                    value={accountForm.repayment_fixed_start_date || ""}
+                    onChange={(e) => setAccountForm({ ...accountForm, repayment_fixed_start_date: e.target.value })}
+                    className="bg-slate-700/50 border-slate-600 text-white"
+                    data-testid="fixed-start-input"
+                  />
+                </div>
+                <div className="text-xs text-slate-400">
+                  Le prélèvement est effectué automatiquement le dernier jour de chaque période.
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 text-[11px] text-slate-400 bg-slate-700/20 rounded p-2 border border-slate-600/30">
+                💡 Vous pouvez cumuler ces 3 modes automatiques + ajouter des <b className="text-slate-200">remboursements manuels</b> à tout moment depuis la fiche du compte.
               </div>
             </div>
 
