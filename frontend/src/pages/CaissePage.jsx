@@ -1037,8 +1037,11 @@ const CaissePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, currentUser]);
 
+  const [expenseSubmitLoading, setExpenseSubmitLoading] = useState(false);
   const createExpense = async () => {
+    if (expenseSubmitLoading) return; // prevent double-submit
     try {
+      setExpenseSubmitLoading(true);
       // Multi-items mode : Achats communs supports a list of items
       if (commonItems.length > 0) {
         const totalAmount = commonItems.reduce((s, it) => s + (it.quantity || 1) * (it.unit_price || 0), 0);
@@ -1115,6 +1118,8 @@ const CaissePage = () => {
     } catch (error) {
       console.error("Error creating expense:", error);
       toast.error("Erreur lors de la création");
+    } finally {
+      setExpenseSubmitLoading(false);
     }
   };
 
@@ -5985,12 +5990,15 @@ _Gérante - Espace Maxo_
                     createExpense();
                   }
                 }}
-                className="flex-1 bg-purple-600 hover:bg-purple-700"
+                disabled={expenseSubmitLoading}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-wait"
                 data-testid="save-common-expense-btn"
               >
-                {editingExpense
-                  ? 'Soumettre à nouveau'
-                  : `Soumettre ${commonItems.length > 0 ? `${commonItems.length} article(s)` : 'la demande'}`}
+                {expenseSubmitLoading
+                  ? "Envoi en cours..."
+                  : editingExpense
+                    ? 'Soumettre à nouveau'
+                    : `Soumettre ${commonItems.length > 0 ? `${commonItems.length} article(s)` : 'la demande'}`}
               </Button>
               <Button 
                 variant="outline" 

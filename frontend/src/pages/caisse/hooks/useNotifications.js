@@ -65,6 +65,26 @@ export function useNotifications({ isAuthenticated, currentUser, apiBase, onNavi
       setNotifLatest(res.data?.latest_by_category || {});
       setNotifCrossRole(res.data?.cross_role || null);
 
+      // Auto-clamp ack: if raw count decreased (items processed/deleted), decrement ack
+      // so that NEW arrivals above the remaining raw still light up the badge.
+      setAcknowledgedCounts((prevAck) => {
+        let changed = false;
+        const next = { ...prevAck };
+        Object.keys(newCounts).forEach((k) => {
+          const curr = Number(newCounts[k] || 0);
+          const ack = Number(prevAck[k] || 0);
+          if (ack > curr) {
+            next[k] = curr;
+            changed = true;
+          }
+        });
+        if (changed) {
+          try { localStorage.setItem(ACK_KEY, JSON.stringify(next)); } catch { /* noop */ }
+          return next;
+        }
+        return prevAck;
+      });
+
       const prev = prevNotifCountsRef.current;
       const alertRoles = currentUser?.role === "admin" || currentUser?.role === "manager";
       if (alertRoles && notifInitRef.current && prev && notifEnabledRef.current) {

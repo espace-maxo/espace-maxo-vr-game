@@ -78,28 +78,44 @@ const AchatsTab = ({ ctx }) => {
                 )}
               </div>
 
-              {/* Sub-navigation: En cours / Validés */}
-              <div className="flex items-center gap-2 border-b border-slate-700 pb-2">
+              {/* Sub-navigation: Validation en cours / À réviser / Validés / Rejetés */}
+              <div className="flex items-center gap-2 border-b border-slate-700 pb-2 overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setAchatsSubView('en_cours')}
                   data-testid="achats-subtab-en-cours"
-                  className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
                     achatsSubView === 'en_cours'
                       ? 'bg-purple-600 text-white'
                       : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
                   }`}
                 >
-                  En cours
+                  Validation en cours
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => ['pending', 'revision_requested'].includes(e.status)).length}
+                    {expenses.filter(e => e.status === 'pending').length}
+                  </Badge>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('a_reviser')}
+                  data-testid="achats-subtab-a-reviser"
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
+                    achatsSubView === 'a_reviser'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <Edit2 className="w-4 h-4 mr-1 inline" />
+                  À réviser
+                  <Badge className="ml-2 bg-white/20 text-white text-xs">
+                    {expenses.filter(e => e.status === 'revision_requested').length}
                   </Badge>
                 </button>
                 <button
                   type="button"
                   onClick={() => setAchatsSubView('valides')}
                   data-testid="achats-subtab-valides"
-                  className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
                     achatsSubView === 'valides'
                       ? 'bg-green-600 text-white'
                       : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
@@ -109,6 +125,22 @@ const AchatsTab = ({ ctx }) => {
                   Achats validés
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
                     {expenses.filter(e => ['approved', 'completed'].includes(e.status)).length}
+                  </Badge>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('rejetes')}
+                  data-testid="achats-subtab-rejetes"
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
+                    achatsSubView === 'rejetes'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <X className="w-4 h-4 mr-1 inline" />
+                  Rejetés
+                  <Badge className="ml-2 bg-white/20 text-white text-xs">
+                    {expenses.filter(e => e.status === 'rejected').length}
                   </Badge>
                 </button>
               </div>
@@ -376,7 +408,7 @@ const AchatsTab = ({ ctx }) => {
               )}
 
               {/* Pending expenses that need manager revision (revision_requested) */}
-              {achatsSubView === 'en_cours' && currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+              {achatsSubView === 'a_reviser' && currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
                 <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-amber-400 flex items-center gap-2">
@@ -462,7 +494,7 @@ const AchatsTab = ({ ctx }) => {
               )}
 
               {/* Admin: Purchases sent for manager revision — still visible to admin with re-approve/re-revise controls */}
-              {achatsSubView === 'en_cours' && currentUser?.role === 'admin' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
+              {achatsSubView === 'a_reviser' && currentUser?.role === 'admin' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
                 <Card className="bg-gradient-to-br from-orange-900/30 to-amber-900/20 border-orange-500/50" data-testid="admin-revision-card">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-orange-400 flex items-center gap-2">
@@ -959,6 +991,51 @@ const AchatsTab = ({ ctx }) => {
                               onClick={() => deleteExpense(expense.id)}
                               className="h-6 w-6 p-0 text-red-500 hover:bg-red-700/20"
                             >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Rejected expenses */}
+              {achatsSubView === 'rejetes' && expenses.filter(e => e.status === 'rejected').length > 0 && (
+                <Card className="bg-rose-900/20 border-rose-500/30" data-testid="rejected-expenses-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-rose-300 flex items-center gap-2">
+                      <X className="w-5 h-5" />
+                      Achats rejetés
+                      <Badge className="bg-rose-500/30 text-rose-200 ml-2">
+                        {expenses.filter(e => e.status === 'rejected').length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {expenses.filter(e => e.status === 'rejected').map(expense => (
+                      <div key={expense.id} className="flex items-center justify-between gap-2 bg-rose-800/10 rounded-lg p-2 border border-rose-500/20" data-testid={`rejected-expense-${expense.id}`}>
+                        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                          <Badge className={`text-xs ${
+                            expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                            expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                            expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>{expense.category}</Badge>
+                          <span className="text-slate-200 text-sm truncate">{expense.description}</span>
+                          {expense.admin_notes && (
+                            <span className="text-rose-300 text-xs italic">
+                              — {expense.admin_notes}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-rose-300 font-semibold text-sm">{formatPrice(expense.amount)} F</span>
+                          {currentUser?.role === 'admin' && (
+                            <Button size="sm" variant="ghost"
+                              onClick={() => deleteExpense(expense.id)}
+                              className="h-7 w-7 p-0 text-rose-400 hover:bg-rose-500/20">
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           )}
