@@ -2070,6 +2070,103 @@ const CaissePage = () => {
     toast.success(`Préparation de ${approved.length} bon(s) d'achat détaillé(s)...`);
   };
 
+  // Print a SINGLE expense as 80mm thermal ticket (used in completed list)
+  const printSingleExpenseTicket = (expense) => {
+    const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
+    if (!expense) return;
+
+    const isGroup = expense.is_group && expense.items && expense.items.length > 0;
+    let totalItems = isGroup ? expense.items.length : 1;
+    let itemsHtml = '';
+
+    if (isGroup) {
+      itemsHtml = expense.items.map((it, idx) => (
+        '<div class="sub-item">' +
+        '<div class="sub-item-row">' +
+        '<span class="sub-num">' + (idx + 1) + '.</span>' +
+        '<span class="sub-cat">[' + (categoryLabels[it.category] || (it.category || '').substring(0, 4).toUpperCase()) + ']</span>' +
+        '</div>' +
+        '<div class="sub-desc">' + it.description + '</div>' +
+        '<div class="sub-detail">' +
+        '<span>Qte: ' + it.quantity + '</span>' +
+        '<span>PU: ' + formatPrice(it.unit_price) + '</span>' +
+        '<span class="sub-total">' + formatPrice(it.amount) + ' F</span>' +
+        '</div>' +
+        '</div>'
+      )).join('');
+    } else {
+      const qty = expense.quantity || 1;
+      const unitPrice = expense.unit_price || expense.amount;
+      itemsHtml = '<div class="single-item">' +
+        '<div class="cat-tag">[' + (categoryLabels[expense.category] || (expense.category || '').substring(0, 4).toUpperCase()) + ']</div>' +
+        '<div class="desc">' + expense.description + '</div>' +
+        '<div class="detail-row"><span>Qte: ' + qty + '</span><span>PU: ' + formatPrice(unitPrice) + ' F</span></div>' +
+        '</div>';
+    }
+
+    const supplierLine = expense.supplier ? '<div class="info">Fourn: ' + expense.supplier + '</div>' : '';
+    const dateLine = expense.completed_at ? '<div class="info">Termine le ' + expense.completed_at.slice(0, 10) + '</div>' : '';
+
+    const html = '<!DOCTYPE html><html><head><title>Achat ' + (expense.description || '').slice(0, 20) + '</title><meta charset="UTF-8">' +
+      '<style>' +
+      '@page { size: 80mm auto; margin: 0; }' +
+      '@media print { body { -webkit-print-color-adjust: exact; } }' +
+      '* { margin: 0; padding: 0; box-sizing: border-box; }' +
+      'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; background: white; color: black; }' +
+      '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }' +
+      '.title { font-size: 14px; font-weight: 900; letter-spacing: 1px; }' +
+      '.subtitle { font-size: 10px; margin-top: 2px; font-style: italic; }' +
+      '.date { font-size: 10px; margin-top: 4px; }' +
+      '.status-badge { display: inline-block; border: 2px solid #000; padding: 2px 8px; font-size: 11px; font-weight: bold; margin-top: 4px; }' +
+      '.info { font-size: 10px; margin: 3px 0; }' +
+      '.cat-tag { font-size: 11px; font-weight: bold; }' +
+      '.desc { font-size: 14px; font-weight: bold; margin: 4px 0; text-transform: uppercase; }' +
+      '.detail-row { display: flex; justify-content: space-between; font-size: 11px; margin-top: 3px; }' +
+      '.single-item { border-bottom: 1px dashed #000; padding: 6px 0; }' +
+      '.sub-item { border-bottom: 1px dotted #999; padding: 4px 0; }' +
+      '.sub-item-row { display: flex; justify-content: space-between; font-size: 9px; }' +
+      '.sub-num { font-weight: bold; } .sub-cat { font-size: 8px; font-weight: bold; }' +
+      '.sub-desc { font-size: 11px; font-weight: bold; margin: 2px 0; }' +
+      '.sub-detail { display: flex; justify-content: space-between; font-size: 10px; }' +
+      '.sub-total { font-weight: bold; }' +
+      '.grand-total { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
+      '.grand-total-label { font-size: 12px; }' +
+      '.grand-total-value { font-size: 22px; font-weight: 900; }' +
+      '.signature { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; }' +
+      '.signature-line { border-bottom: 1px solid #000; height: 28px; margin: 8px 0 3px; }' +
+      '.signature-label { font-size: 10px; text-align: center; }' +
+      '.footer { margin-top: 10px; text-align: center; font-size: 9px; border-top: 1px dashed #000; padding-top: 6px; }' +
+      '.cut-line { margin-top: 8px; text-align: center; font-size: 10px; }' +
+      '</style></head>' +
+      '<body>' +
+      '<div class="header">' +
+      '<div class="title">ACHAT TERMINE</div>' +
+      '<div class="subtitle">Bon d\'achat individuel</div>' +
+      '<div class="status-badge">✓ ACHETE</div>' +
+      '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
+      '</div>' +
+      supplierLine + dateLine +
+      (isGroup ? '<div class="info" style="font-weight:bold;text-transform:uppercase;font-size:12px;margin:6px 0;">📦 ' + expense.description + ' (' + totalItems + ' articles)</div>' : '') +
+      itemsHtml +
+      '<div class="grand-total">' +
+      '<div class="grand-total-label">MONTANT TOTAL</div>' +
+      '<div class="grand-total-value">' + formatPrice(expense.amount) + ' F</div>' +
+      '</div>' +
+      '<div class="signature">' +
+      '<div class="signature-line"></div><div class="signature-label">Acheteur</div>' +
+      '</div>' +
+      '<div class="footer">Espace Maxo - Caisse Pro<br>- - - - - - - - - - - - - -</div>' +
+      '<div class="cut-line">. . . . . . . . . . . . . . .</div>' +
+      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>' +
+      '</body></html>';
+
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    if (!printWindow) { toast.error("Popup bloqué! Autorisez les popups."); return; }
+    printWindow.document.write(html);
+    printWindow.document.close();
+    toast.success("Ouverture du ticket d'impression...");
+  };
+
   // Print all expenses (full list)
   const printAllExpensesList = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -5465,6 +5562,7 @@ _Gérante - Espace Maxo_
               printApprovedExpensesDetailed,
               printCompletedExpensesTicket,
               printAllCompletedExpenses,
+              printSingleExpenseTicket,
               printExpensePDF,
               openExpenseForEdit,
               deleteExpense,

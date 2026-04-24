@@ -40,6 +40,7 @@ const AchatsTab = ({ ctx }) => {
     printApprovedExpensesDetailed,
     printCompletedExpensesTicket,
     printAllCompletedExpenses,
+    printSingleExpenseTicket,
     printExpensePDF,
     openExpenseForEdit,
     deleteExpense,
@@ -1060,6 +1061,16 @@ const AchatsTab = ({ ctx }) => {
                                 <p className="text-slate-500 text-xs">Terminé le {expense.completed_at?.slice(0, 10) || '—'}</p>
                               </div>
                               <div className="flex gap-2 flex-wrap shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => printSingleExpenseTicket(expense)}
+                                  className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                                  data-testid={`print-ticket-${expense.id}`}
+                                >
+                                  <Receipt className="w-4 h-4 mr-1" />
+                                  Ticket 80mm
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
