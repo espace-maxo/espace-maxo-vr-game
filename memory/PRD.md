@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Sync Caisse→Stock : expansion automatique des conditionnements (DONE)
+
+**Demande utilisateur** : dans stock, renseigner les quantités des boissons en nombre de bouteilles contenues dans les casiers/packs (pas en nombre de casiers).
+
+**Changement** (`backend/routers/expenses.py`) :
+- Nouvelle fonction utilitaire `_expand_conditioning(description, quantity, unit_price, unit)`.
+- Regex `_COND_RE` reconnaît les suffixes `(Casier|Pack|Carton|Bac|Caisse|Sac|Bidon|Pot|Plateau|Paquet|Lot) de N <unité>` dans la description.
+- Si détecté :
+  - `quantity × N` (2 casiers × 24 bouteilles = 48 bouteilles)
+  - `unit_price / N` (7 200 F/casier / 24 = 300 F/bouteille)
+  - `unit` forcée sur l'unité intérieure singulière (ex. « bouteilles » → « bouteille »)
+  - Description nettoyée du suffixe
+- **Cohérence comptable préservée** : valeur totale inchangée (qté × PU reste identique).
+- Appliqué aux 2 branches de la sync Caisse→Stock : produit existant (entrée + MAJ qty) et produit auto-créé.
+
+**Test end-to-end** validé via curl :
+- Input : « Coca-Cola (Casier de 24 bouteilles) » × 2 casiers @ 7 200 F (total 14 400 F).
+- Stock : nom = « Coca-Cola », qty = 48, unit = « bouteille », PU = 300 F, valeur = 14 400 F ✅.
+
+---
 ## 24/04/2026 — Achats : conditionnement personnalisé + persistance par produit (DONE)
 
 **Demande utilisateur** : permettre d'ajouter un package personnalisé pour les produits du bar, et une fois renseigné, le re-proposer automatiquement pour les mêmes produits à venir.

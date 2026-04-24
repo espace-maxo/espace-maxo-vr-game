@@ -27,6 +27,53 @@ def set_db(database):
     db = database
 
 
+# ==================== PACKAGE CONDITIONING HELPERS ====================
+
+# Matches suffixes like "(Casier de 24 bouteilles)", "(Pack de 6 bouteilles)",
+# "(Carton de 12 sachets)", etc. Captures <tag>, <count>, <inner_unit>.
+_COND_RE = re.compile(
+    r"\s*\((casier|pack|carton|bac|caisse|sac|bidon|pot|plateau|paquet|lot)"
+    r"\s+(?:de|of)\s+(\d+)\s+([a-zéèàâêîôûçùïüœ]+)\s*\)\s*",
+    re.IGNORECASE,
+)
+
+
+def _expand_conditioning(description: str, quantity: float, unit_price: float, unit: str):
+    """Si la description contient un suffixe du type '(Casier de 24 bouteilles)',
+    multiplie la quantité par 24 et divise le prix unitaire par 24 pour obtenir
+    la quantité et le prix par bouteille. Force aussi l'unité sur le contenu
+    (bouteille, sachet, …) si l'unité d'origine n'est pas déjà cohérente.
+
+    Retourne (clean_description, new_quantity, new_unit_price, new_unit, expanded_flag).
+    Si rien n'est détecté, retourne les valeurs inchangées et expanded_flag=False.
+    """
+    if not description:
+        return description, quantity, unit_price, unit, False
+
+    m = _COND_RE.search(description)
+    if not m:
+        return description, quantity, unit_price, unit, False
+
+    try:
+        bundle_size = int(m.group(2))
+    except (TypeError, ValueError):
+        return description, quantity, unit_price, unit, False
+    if bundle_size <= 0:
+        return description, quantity, unit_price, unit, False
+
+    inner_unit = m.group(3).lower().rstrip("s")  # "bouteilles" -> "bouteille"
+    clean_desc = _COND_RE.sub(" ", description).strip()
+    # Collapse any double spaces
+    clean_desc = re.sub(r"\s+", " ", clean_desc)
+
+    new_qty = (quantity or 0) * bundle_size
+    new_price = (unit_price or 0) / bundle_size if unit_price else 0.0
+    # Force unit to the inner unit (so stock tracks individual items, not packages)
+    new_unit = inner_unit or (unit or "unite")
+
+    return clean_desc, new_qty, new_price, new_unit, True
+
+
 # ==================== CURRENT-ACCOUNT ALLOCATION HELPERS ====================
 
 async def _allocate_expense_to_account(expense_doc: dict, account_id: str) -> None:
@@ -316,10 +363,21 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                         item_desc = exp_item.get("description", "").strip()
                         item_qty = exp_item.get("quantity", 1) or 1
                         item_price = exp_item.get("unit_price", 0) or 0
-    
+                        item_unit_hint = exp_item.get("unit") or ""
+
                         if not item_desc:
                             continue
-    
+
+                        # Expand package conditioning: "(Casier de 24 bouteilles)" → qty × 24
+                        item_desc, item_qty, item_price, item_unit_hint, was_expanded = _expand_conditioning(
+                            item_desc, item_qty, item_price, item_unit_hint
+                        )
+                        if was_expanded:
+                            logger.info(
+                                f"Conditioning expanded: '{exp_item.get('description')}' "
+                                f"→ '{item_desc}' qty={item_qty} pu={item_price} unit={item_unit_hint}"
+                            )
+
                         escaped = re.escape(item_desc)
                         stock_product = await db.stock_products.find_one({
                             "name": {"$regex": f"^{escaped}$", "$options": "i"},
@@ -401,7 +459,7 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                                 await db.stock_categories.insert_one(nonclass_cat)
                                 logger.info("Auto-created stock category 'Non classé' for Caisse sync")
     
-                            exp_unit = exp_item.get("unit") or "unite"
+                            exp_unit = item_unit_hint or exp_item.get("unit") or "unite"
                             new_product = {
                                 "id": str(uuid.uuid4()),
                                 "code": f"AUTO-{str(uuid.uuid4())[:6].upper()}",
