@@ -9,6 +9,7 @@ Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de r
 **Demande utilisateur** :
 - Pour les achats de **boissons** (bières/sodas) : proposer *casier* avec nombre par casier.
 - Pour les achats d'**eau minérale** : proposer *pack* avec nombre par pack.
+- **MAJ**: proposer systématiquement le conditionnement dès que la catégorie = **Bar**, même sans mot-clé détecté (choix optionnel pour l'utilisateur).
 
 **Changement** (`CaissePage.jsx`) :
 - Nouveau helper `detectConditioningPresets(description)` qui détecte via regex :

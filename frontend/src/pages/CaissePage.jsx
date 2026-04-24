@@ -200,19 +200,19 @@ const PAYMENT_METHODS = [
 /**
  * Détecte les mots-clés boisson/eau dans la description d'un article et propose
  * des presets de conditionnement (casier/pack) que l'utilisateur peut appliquer
- * en 1 clic.
- * Retourne null si rien ne matche → l'UI n'affiche rien.
+ * en 1 clic. Si la catégorie est "bar", propose systématiquement les presets
+ * (même sans mot-clé détecté) pour que l'utilisateur puisse choisir.
+ * Retourne null si rien ne doit s'afficher.
  */
-const detectConditioningPresets = (description) => {
+const detectConditioningPresets = (description, category) => {
   const d = (description || "").toLowerCase().trim();
-  if (d.length < 3) return null;
   // Avoid showing again if already contains a conditioning mention
   if (/(casier|pack)\s*(de|of)?\s*\d+/i.test(description || "")) return null;
 
-  const BEER_SODA = /\b(biere|bière|beer|lager|beaufort|beaufor|castel|heineken|flag|33|eku|guinness|awooyo|awoyo|soda|coca|coca-cola|fanta|sprite|schweppes|youki|youkii|malta|mirinda|seven ?up|7up|pepsi|ginger|youki|bissap|jus|cocktail|bmalt|malt)\b/;
+  const BEER_SODA = /\b(biere|bière|beer|lager|beaufort|beaufor|castel|heineken|flag|33|eku|guinness|awooyo|awoyo|soda|coca|coca-cola|fanta|sprite|schweppes|youki|youkii|malta|mirinda|seven ?up|7up|pepsi|ginger|bissap|jus|cocktail|bmalt|malt)\b/;
   const WATER = /\b(eau|water|eau minerale|eau minérale|possotome|possotomé|okuta|oasis|awa|volvic|evian|aveyron|source)\b/;
 
-  if (WATER.test(d)) {
+  if (d.length >= 3 && WATER.test(d)) {
     return {
       type: "pack",
       label: "Eau minérale détectée",
@@ -224,7 +224,7 @@ const detectConditioningPresets = (description) => {
       ],
     };
   }
-  if (BEER_SODA.test(d)) {
+  if (d.length >= 3 && BEER_SODA.test(d)) {
     return {
       type: "casier",
       label: "Bière/Soda détecté",
@@ -232,6 +232,20 @@ const detectConditioningPresets = (description) => {
       presets: [
         { qty: 12, suffix: "(Casier de 12 bouteilles)" },
         { qty: 24, suffix: "(Casier de 24 bouteilles)" },
+      ],
+    };
+  }
+  // Systematic proposal for any Bar-category item (user preference)
+  if (category === "bar") {
+    return {
+      type: "bar",
+      label: "Produit Bar — conditionnement (optionnel)",
+      color: "orange",
+      presets: [
+        { qty: 12, suffix: "(Casier de 12 bouteilles)", tag: "Casier" },
+        { qty: 24, suffix: "(Casier de 24 bouteilles)", tag: "Casier" },
+        { qty: 6,  suffix: "(Pack de 6 bouteilles)",    tag: "Pack" },
+        { qty: 12, suffix: "(Pack de 12 bouteilles)",   tag: "Pack" },
       ],
     };
   }
@@ -6422,19 +6436,22 @@ _Gérante - Espace Maxo_
                         <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                    {/* Auto-detect conditioning suggestions (bière/soda/eau) */}
+                    {/* Auto-detect conditioning suggestions (bière/soda/eau ou catégorie Bar) */}
                     {(() => {
-                      const s = detectConditioningPresets(commonNewItem.description);
+                      const s = detectConditioningPresets(commonNewItem.description, commonNewItem.category);
                       if (!s) return null;
-                      const bgColor = s.color === 'amber' ? 'bg-amber-900/20 border-amber-500/30' : 'bg-sky-900/20 border-sky-500/30';
-                      const textColor = s.color === 'amber' ? 'text-amber-300' : 'text-sky-300';
-                      const btnColor = s.color === 'amber' ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20';
+                      const colors = {
+                        amber:  { bg: 'bg-amber-900/20 border-amber-500/30',  text: 'text-amber-300',  btn: 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' },
+                        sky:    { bg: 'bg-sky-900/20 border-sky-500/30',      text: 'text-sky-300',    btn: 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20' },
+                        orange: { bg: 'bg-orange-900/20 border-orange-500/30',text: 'text-orange-300', btn: 'border-orange-500/50 text-orange-300 hover:bg-orange-500/20' },
+                      };
+                      const c = colors[s.color] || colors.amber;
                       return (
-                        <div className={`mt-2 ${bgColor} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="common-conditioning-suggest">
-                          <span className={`${textColor} text-xs font-medium`}>💡 {s.label} — conditionnement :</span>
-                          {s.presets.map((p) => (
+                        <div className={`mt-2 ${c.bg} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="common-conditioning-suggest">
+                          <span className={`${c.text} text-xs font-medium`}>💡 {s.label}{s.type !== 'bar' ? ' — conditionnement :' : ''}</span>
+                          {s.presets.map((p, i) => (
                             <Button
-                              key={p.suffix}
+                              key={`${p.tag || s.type}-${p.qty}-${i}`}
                               size="sm"
                               variant="outline"
                               type="button"
@@ -6445,10 +6462,10 @@ _Gérante - Espace Maxo_
                                   quantity: commonNewItem.quantity || 1,
                                 });
                               }}
-                              className={`h-7 text-xs ${btnColor}`}
-                              data-testid={`common-cond-${s.type}-${p.qty}`}
+                              className={`h-7 text-xs ${c.btn}`}
+                              data-testid={`common-cond-${p.tag ? p.tag.toLowerCase() : s.type}-${p.qty}`}
                             >
-                              {s.type === 'casier' ? 'Casier' : 'Pack'} × {p.qty}
+                              {p.tag || (s.type === 'casier' ? 'Casier' : 'Pack')} × {p.qty}
                             </Button>
                           ))}
                         </div>
@@ -6741,19 +6758,22 @@ _Gérante - Espace Maxo_
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
-                {/* Auto-detect conditioning suggestions (bière/soda/eau) */}
+                {/* Auto-detect conditioning suggestions (bière/soda/eau ou catégorie Bar) */}
                 {(() => {
-                  const s = detectConditioningPresets(newListItem.description);
+                  const s = detectConditioningPresets(newListItem.description, newListItem.category);
                   if (!s) return null;
-                  const bgColor = s.color === 'amber' ? 'bg-amber-900/20 border-amber-500/30' : 'bg-sky-900/20 border-sky-500/30';
-                  const textColor = s.color === 'amber' ? 'text-amber-300' : 'text-sky-300';
-                  const btnColor = s.color === 'amber' ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20';
+                  const colors = {
+                    amber:  { bg: 'bg-amber-900/20 border-amber-500/30',  text: 'text-amber-300',  btn: 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' },
+                    sky:    { bg: 'bg-sky-900/20 border-sky-500/30',      text: 'text-sky-300',    btn: 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20' },
+                    orange: { bg: 'bg-orange-900/20 border-orange-500/30',text: 'text-orange-300', btn: 'border-orange-500/50 text-orange-300 hover:bg-orange-500/20' },
+                  };
+                  const c = colors[s.color] || colors.amber;
                   return (
-                    <div className={`mt-2 ${bgColor} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="list-conditioning-suggest">
-                      <span className={`${textColor} text-xs font-medium`}>💡 {s.label} — conditionnement :</span>
-                      {s.presets.map((p) => (
+                    <div className={`mt-2 ${c.bg} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="list-conditioning-suggest">
+                      <span className={`${c.text} text-xs font-medium`}>💡 {s.label}{s.type !== 'bar' ? ' — conditionnement :' : ''}</span>
+                      {s.presets.map((p, i) => (
                         <Button
-                          key={p.suffix}
+                          key={`${p.tag || s.type}-${p.qty}-${i}`}
                           size="sm"
                           variant="outline"
                           type="button"
@@ -6764,10 +6784,10 @@ _Gérante - Espace Maxo_
                               quantity: newListItem.quantity || 1,
                             });
                           }}
-                          className={`h-7 text-xs ${btnColor}`}
-                          data-testid={`list-cond-${s.type}-${p.qty}`}
+                          className={`h-7 text-xs ${c.btn}`}
+                          data-testid={`list-cond-${p.tag ? p.tag.toLowerCase() : s.type}-${p.qty}`}
                         >
-                          {s.type === 'casier' ? 'Casier' : 'Pack'} × {p.qty}
+                          {p.tag || (s.type === 'casier' ? 'Casier' : 'Pack')} × {p.qty}
                         </Button>
                       ))}
                     </div>
