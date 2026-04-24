@@ -4,7 +4,7 @@ import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
-  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck
+  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -743,7 +743,13 @@ export default function StockPage() {
         {activeSection === "products" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="text-2xl font-bold text-white">Produits</h2>
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Package className="w-6 h-6 text-emerald-400" />
+                  Produits
+                </h2>
+                <p className="text-slate-500 text-sm mt-0.5">Gestion du catalogue et des niveaux de stock</p>
+              </div>
               <div className="flex gap-2">
                 <Button onClick={() => { setShowMovementModal(true); setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); }}
                   className="bg-blue-600 hover:bg-blue-700" data-testid="new-movement-btn"><ArrowUpDown className="w-4 h-4 mr-1" /> Mouvement</Button>
@@ -751,6 +757,71 @@ export default function StockPage() {
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-product-btn"><Plus className="w-4 h-4 mr-1" /> Nouveau Produit</Button>
               </div>
             </div>
+
+            {/* KPI Summary Cards */}
+            {products.length > 0 && (() => {
+              const totalProducts = products.length;
+              const renseigned = products.filter(p => p.quantity > 0 || p.purchase_price > 0).length;
+              const totalValue = products.reduce((s, p) => s + (p.quantity * p.purchase_price || 0), 0);
+              const rupture = products.filter(p => p.quantity <= 0).length;
+              const faible = products.filter(p => p.quantity > 0 && p.quantity <= p.stock_min).length;
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="products-kpi-cards">
+                  <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/80 border-slate-700">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-slate-400 text-xs uppercase tracking-wider">Total produits</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-total">{totalProducts}</p>
+                        </div>
+                        <Package className="w-8 h-8 text-slate-500" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 border-emerald-700/40">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-emerald-300 text-xs uppercase tracking-wider">Renseignés</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-renseigned">{renseigned}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">sur {totalProducts} ({totalProducts > 0 ? Math.round(renseigned / totalProducts * 100) : 0}%)</p>
+                        </div>
+                        <CheckSquare className="w-8 h-8 text-emerald-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-cyan-900/40 to-slate-900/80 border-cyan-700/40">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-cyan-300 text-xs uppercase tracking-wider">Valeur totale</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value">{formatPrice(totalValue)}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA</p>
+                        </div>
+                        <TrendingUp className="w-8 h-8 text-cyan-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className={`bg-gradient-to-br ${rupture > 0 ? 'from-red-900/50 to-slate-900/80 border-red-600/50' : 'from-amber-900/30 to-slate-900/80 border-amber-700/40'}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={`${rupture > 0 ? 'text-red-300' : 'text-amber-300'} text-xs uppercase tracking-wider`}>Alertes</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-alerts">{rupture + faible}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">
+                            {rupture > 0 && <span className="text-red-400">{rupture} rupture</span>}
+                            {rupture > 0 && faible > 0 && <span> · </span>}
+                            {faible > 0 && <span className="text-orange-400">{faible} faible</span>}
+                            {rupture === 0 && faible === 0 && <span className="text-emerald-400">Aucune</span>}
+                          </p>
+                        </div>
+                        <AlertTriangle className={`w-8 h-8 ${rupture > 0 ? 'text-red-400/70' : 'text-amber-400/60'}`} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
 
             {/* Filters */}
             <div className="flex gap-3 flex-wrap">
@@ -811,39 +882,86 @@ export default function StockPage() {
               </Card>
             )}
 
-            {/* Product Table */}
+            {/* Product Table — refined presentation */}
             {products.length > 0 && (
-            <Card className="bg-slate-900/80 border-slate-800">
+            <Card className="bg-slate-900/80 border-slate-800 overflow-hidden">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                      {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={sortedProducts.length > 0 && sortedProducts.every(p => selectedItems.includes(p.id))} onChange={() => toggleSelectAll(sortedProducts.map(p => p.id))} /></th>}
-                      <th className="p-3">Code</th><th className="p-3">Produit</th><th className="p-3">Categorie</th><th className="p-3">Sous-cat.</th><th className="p-3">Stock</th><th className="p-3">Min</th><th className="p-3">Unite</th><th className="p-3 text-right">Prix Achat</th><th className="p-3 text-right">Valeur</th><th className="p-3">Statut</th><th className="p-3">Lieu</th><th className="p-3"></th>
-                    </tr></thead>
+                    <thead className="sticky top-0 z-10">
+                      <tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900">
+                        {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={sortedProducts.length > 0 && sortedProducts.every(p => selectedItems.includes(p.id))} onChange={() => toggleSelectAll(sortedProducts.map(p => p.id))} /></th>}
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Produit</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Catégorie</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider w-[200px]">Stock</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Prix achat</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Valeur</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Statut</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Lieu</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider"></th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {sortedProducts.map(p => {
+                      {sortedProducts.map((p, idx) => {
                         const status = stockStatus(p);
+                        const isEmpty = !(p.quantity > 0) && !(p.purchase_price > 0);
+                        const stockMax = Math.max(p.stock_max || 0, p.stock_min * 4 || 20, p.quantity || 0);
+                        const stockPct = stockMax > 0 ? Math.min(100, (p.quantity / stockMax) * 100) : 0;
+                        const barColor = p.quantity <= 0 ? 'bg-red-500' : p.quantity <= p.stock_min ? 'bg-orange-500' : 'bg-emerald-500';
+                        const selected = selectedItems.includes(p.id);
                         return (
-                          <tr key={p.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(p.id) ? 'bg-slate-800/50' : ''}`}>
-                            {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(p.id)} onChange={() => toggleSelect(p.id)} /></td>}
-                            <td className="p-3 text-slate-500 font-mono text-xs">{p.code}</td>
-                            <td className="p-3 text-white font-medium">{p.name}</td>
-                            <td className="p-3 text-slate-400 text-xs">{catName(p.category_id)}</td>
-                            <td className="p-3 text-slate-500 text-xs">{p.subcategory || "-"}</td>
-                            <td className="p-3"><span className={`font-bold ${p.quantity <= 0 ? 'text-red-400' : p.quantity <= p.stock_min ? 'text-orange-400' : 'text-emerald-400'}`}>{p.quantity}</span></td>
-                            <td className="p-3 text-slate-500">{p.stock_min}</td>
-                            <td className="p-3 text-slate-400">{p.unit}</td>
-                            <td className="p-3 text-right text-slate-300">{formatPrice(p.purchase_price)} F</td>
-                            <td className="p-3 text-right text-emerald-400">{formatPrice(p.quantity * p.purchase_price)} F</td>
-                            <td className="p-3"><Badge className={status.color + " text-xs"}>{status.label}</Badge></td>
-                            <td className="p-3 text-slate-500 text-xs">{p.storage_location}</td>
+                          <tr
+                            key={p.id}
+                            className={`border-b border-slate-800/60 transition-colors ${selected ? 'bg-emerald-900/10' : (idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/10')} hover:bg-slate-800/50 ${isEmpty ? 'opacity-60' : ''}`}
+                            data-testid={`product-row-${p.id}`}
+                          >
+                            {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selected} onChange={() => toggleSelect(p.id)} /></td>}
+                            {/* Produit: code + nom empilés */}
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="text-white font-medium leading-tight">{p.name}</span>
+                                <span className="text-slate-500 font-mono text-[11px] mt-0.5">{p.code}</span>
+                                {isEmpty && <Badge className="bg-slate-700/60 text-slate-400 text-[9px] mt-1 w-fit border border-slate-600/40">Non renseigné</Badge>}
+                              </div>
+                            </td>
+                            {/* Catégorie + sous-cat */}
+                            <td className="p-3">
+                              <div className="flex flex-col gap-1">
+                                <Badge className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] w-fit">{catName(p.category_id)}</Badge>
+                                {p.subcategory && <span className="text-slate-500 text-[10px]">{p.subcategory}</span>}
+                              </div>
+                            </td>
+                            {/* Stock: quantité + unité + barre de progression vs max */}
+                            <td className="p-3">
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className={`font-bold text-base ${p.quantity <= 0 ? 'text-red-400' : p.quantity <= p.stock_min ? 'text-orange-400' : 'text-emerald-400'}`}>{p.quantity}</span>
+                                  <span className="text-slate-500 text-xs">{p.unit}</span>
+                                  <span className="text-slate-600 text-[10px] ml-auto">min: {p.stock_min}</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+                                  <div className={`h-full ${barColor} transition-all`} style={{ width: `${stockPct}%` }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={p.purchase_price > 0 ? 'text-slate-200 font-medium' : 'text-slate-600 italic text-xs'}>
+                                {p.purchase_price > 0 ? `${formatPrice(p.purchase_price)} F` : '—'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={p.quantity * p.purchase_price > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-600'}>
+                                {p.quantity * p.purchase_price > 0 ? `${formatPrice(p.quantity * p.purchase_price)} F` : '—'}
+                              </span>
+                            </td>
+                            <td className="p-3"><Badge className={status.color + " text-[10px] border border-current/20"}>{status.label}</Badge></td>
+                            <td className="p-3 text-slate-500 text-xs">{p.storage_location || '—'}</td>
                             <td className="p-3">
                               <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400" onClick={() => openEditProduct(p)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                                {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400" onClick={() => resetSingleProduct(p.id)} title="RAZ quantite"><RefreshCw className="w-3.5 h-3.5" /></Button>}
-                                {isAdmin && p.purchase_price > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-amber-400" onClick={() => resetSinglePrice(p.id)} title="RAZ prix"><X className="w-3.5 h-3.5" /></Button>}
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteProduct(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10" onClick={() => openEditProduct(p)} title="Modifier"><Edit2 className="w-3.5 h-3.5" /></Button>
+                                {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10" onClick={() => resetSingleProduct(p.id)} title="RAZ quantité"><RefreshCw className="w-3.5 h-3.5" /></Button>}
+                                {isAdmin && p.purchase_price > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => resetSinglePrice(p.id)} title="RAZ prix"><X className="w-3.5 h-3.5" /></Button>}
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10" onClick={() => deleteProduct(p.id)} title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></Button>
                               </div>
                             </td>
                           </tr>

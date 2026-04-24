@@ -4,6 +4,30 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Stock : refonte de la présentation du menu Produits (DONE)
+
+**Demande utilisateur** : améliorer la présentation du menu Produits (module Stock).
+
+**Changements** (`StockPage.jsx`) :
+- **4 KPI cards en tête** (testid=`products-kpi-cards`) avec dégradés colorés :
+  - *Total produits* (icône Package, neutre)
+  - *Renseignés* (émeraude) : nombre + pourcentage (quantité > 0 OU prix > 0)
+  - *Valeur totale* (cyan) : somme quantity × purchase_price en F CFA
+  - *Alertes* (rouge si rupture, ambre sinon) : breakdown rupture + stock faible
+- **Table refondue** : 12 colonnes denses → **7 colonnes hiérarchisées** :
+  - *Produit* : nom en blanc + code monospace en petit + badge « Non renseigné » si vide
+  - *Catégorie* : badge indigo avec sous-catégorie en dessous
+  - *Stock* : quantité + unité + min à droite + **mini-barre de progression** colorée (vert/orange/rouge selon statut vs stock_min)
+  - *Prix achat* / *Valeur* : alignés droite, placeholder « — » si vide
+  - *Statut* / *Lieu* / *Actions* : inchangés mais resserrés
+- **Lignes zébrées** (slate-900/40 vs slate-900/10) + hover slate-800/50.
+- **Produits non renseignés** (quantity=0 ET price=0) : opacité 60% + badge slate « Non renseigné ».
+- **Header sticky** (`sticky top-0 z-10`) pour garder les colonnes visibles lors du scroll.
+- En-tête visuel : titre avec icône Package émeraude + sous-titre descriptif.
+
+**Tests** : lint propre, smoke-test visuel admin (447 produits affichés, toutes les KPI cards correctes, barres de progression fonctionnelles, tri `sortedProducts` conservé).
+
+---
 ## 24/04/2026 — Stock : tri des produits renseignés en premier (DONE)
 
 **Demande utilisateur** : dans la gestion de stock, mettre en premier les produits renseignés (quantité > 0 OU prix > 0 OU les deux), les produits "vides" en fin de liste.
