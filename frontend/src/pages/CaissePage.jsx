@@ -31,6 +31,7 @@ import HebdoReport from "./caisse/components/HebdoReport";
 import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
+import ConditioningSuggester from "./caisse/components/ConditioningSuggester";
 import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
 import ShareModal, { ShareButton } from "./caisse/components/ShareModal";
 import MonsieurTab from "./caisse/components/MonsieurTab";
@@ -196,62 +197,6 @@ const PAYMENT_METHODS = [
   { value: "wallet", label: "Porte-monnaie", icon: Wallet },
   { value: "check", label: "Chèque", icon: FileText },
 ];
-
-/**
- * Détecte les mots-clés boisson/eau dans la description d'un article et propose
- * des presets de conditionnement (casier/pack) que l'utilisateur peut appliquer
- * en 1 clic. Si la catégorie est "bar", propose systématiquement les presets
- * (même sans mot-clé détecté) pour que l'utilisateur puisse choisir.
- * Retourne null si rien ne doit s'afficher.
- */
-const detectConditioningPresets = (description, category) => {
-  const d = (description || "").toLowerCase().trim();
-  // Avoid showing again if already contains a conditioning mention
-  if (/(casier|pack)\s*(de|of)?\s*\d+/i.test(description || "")) return null;
-
-  const BEER_SODA = /\b(biere|bière|beer|lager|beaufort|beaufor|castel|heineken|flag|33|eku|guinness|awooyo|awoyo|soda|coca|coca-cola|fanta|sprite|schweppes|youki|youkii|malta|mirinda|seven ?up|7up|pepsi|ginger|bissap|jus|cocktail|bmalt|malt)\b/;
-  const WATER = /\b(eau|water|eau minerale|eau minérale|possotome|possotomé|okuta|oasis|awa|volvic|evian|aveyron|source)\b/;
-
-  if (d.length >= 3 && WATER.test(d)) {
-    return {
-      type: "pack",
-      label: "Eau minérale détectée",
-      color: "sky",
-      presets: [
-        { qty: 6,  suffix: "(Pack de 6 bouteilles)" },
-        { qty: 12, suffix: "(Pack de 12 bouteilles)" },
-        { qty: 24, suffix: "(Pack de 24 bouteilles)" },
-      ],
-    };
-  }
-  if (d.length >= 3 && BEER_SODA.test(d)) {
-    return {
-      type: "casier",
-      label: "Bière/Soda détecté",
-      color: "amber",
-      presets: [
-        { qty: 12, suffix: "(Casier de 12 bouteilles)" },
-        { qty: 24, suffix: "(Casier de 24 bouteilles)" },
-      ],
-    };
-  }
-  // Systematic proposal for any Bar-category item (user preference)
-  if (category === "bar") {
-    return {
-      type: "bar",
-      label: "Produit Bar — conditionnement (optionnel)",
-      color: "orange",
-      presets: [
-        { qty: 12, suffix: "(Casier de 12 bouteilles)", tag: "Casier" },
-        { qty: 24, suffix: "(Casier de 24 bouteilles)", tag: "Casier" },
-        { qty: 6,  suffix: "(Pack de 6 bouteilles)",    tag: "Pack" },
-        { qty: 12, suffix: "(Pack de 12 bouteilles)",   tag: "Pack" },
-      ],
-    };
-  }
-  return null;
-};
-
 
 const CaissePage = () => {
   // Auth state
@@ -6436,41 +6381,14 @@ _Gérante - Espace Maxo_
                         <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                    {/* Auto-detect conditioning suggestions (bière/soda/eau ou catégorie Bar) */}
-                    {(() => {
-                      const s = detectConditioningPresets(commonNewItem.description, commonNewItem.category);
-                      if (!s) return null;
-                      const colors = {
-                        amber:  { bg: 'bg-amber-900/20 border-amber-500/30',  text: 'text-amber-300',  btn: 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' },
-                        sky:    { bg: 'bg-sky-900/20 border-sky-500/30',      text: 'text-sky-300',    btn: 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20' },
-                        orange: { bg: 'bg-orange-900/20 border-orange-500/30',text: 'text-orange-300', btn: 'border-orange-500/50 text-orange-300 hover:bg-orange-500/20' },
-                      };
-                      const c = colors[s.color] || colors.amber;
-                      return (
-                        <div className={`mt-2 ${c.bg} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="common-conditioning-suggest">
-                          <span className={`${c.text} text-xs font-medium`}>💡 {s.label}{s.type !== 'bar' ? ' — conditionnement :' : ''}</span>
-                          {s.presets.map((p, i) => (
-                            <Button
-                              key={`${p.tag || s.type}-${p.qty}-${i}`}
-                              size="sm"
-                              variant="outline"
-                              type="button"
-                              onClick={() => {
-                                setCommonNewItem({
-                                  ...commonNewItem,
-                                  description: `${commonNewItem.description.trim()} ${p.suffix}`,
-                                  quantity: commonNewItem.quantity || 1,
-                                });
-                              }}
-                              className={`h-7 text-xs ${c.btn}`}
-                              data-testid={`common-cond-${p.tag ? p.tag.toLowerCase() : s.type}-${p.qty}`}
-                            >
-                              {p.tag || (s.type === 'casier' ? 'Casier' : 'Pack')} × {p.qty}
-                            </Button>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                    {/* Conditioning suggestions (persisted + static presets + custom creator) */}
+                    <ConditioningSuggester
+                      description={commonNewItem.description}
+                      category={commonNewItem.category}
+                      quantity={commonNewItem.quantity}
+                      onApply={(desc, qty) => setCommonNewItem({ ...commonNewItem, description: desc, quantity: qty })}
+                      testIdPrefix="common"
+                    />
                   </CardContent>
                 </Card>
 
@@ -6758,41 +6676,14 @@ _Gérante - Espace Maxo_
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
-                {/* Auto-detect conditioning suggestions (bière/soda/eau ou catégorie Bar) */}
-                {(() => {
-                  const s = detectConditioningPresets(newListItem.description, newListItem.category);
-                  if (!s) return null;
-                  const colors = {
-                    amber:  { bg: 'bg-amber-900/20 border-amber-500/30',  text: 'text-amber-300',  btn: 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' },
-                    sky:    { bg: 'bg-sky-900/20 border-sky-500/30',      text: 'text-sky-300',    btn: 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20' },
-                    orange: { bg: 'bg-orange-900/20 border-orange-500/30',text: 'text-orange-300', btn: 'border-orange-500/50 text-orange-300 hover:bg-orange-500/20' },
-                  };
-                  const c = colors[s.color] || colors.amber;
-                  return (
-                    <div className={`mt-2 ${c.bg} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="list-conditioning-suggest">
-                      <span className={`${c.text} text-xs font-medium`}>💡 {s.label}{s.type !== 'bar' ? ' — conditionnement :' : ''}</span>
-                      {s.presets.map((p, i) => (
-                        <Button
-                          key={`${p.tag || s.type}-${p.qty}-${i}`}
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          onClick={() => {
-                            setNewListItem({
-                              ...newListItem,
-                              description: `${newListItem.description.trim()} ${p.suffix}`,
-                              quantity: newListItem.quantity || 1,
-                            });
-                          }}
-                          className={`h-7 text-xs ${c.btn}`}
-                          data-testid={`list-cond-${p.tag ? p.tag.toLowerCase() : s.type}-${p.qty}`}
-                        >
-                          {p.tag || (s.type === 'casier' ? 'Casier' : 'Pack')} × {p.qty}
-                        </Button>
-                      ))}
-                    </div>
-                  );
-                })()}
+                {/* Conditioning suggestions (persisted + static presets + custom creator) */}
+                <ConditioningSuggester
+                  description={newListItem.description}
+                  category={newListItem.category}
+                  quantity={newListItem.quantity}
+                  onApply={(desc, qty) => setNewListItem({ ...newListItem, description: desc, quantity: qty })}
+                  testIdPrefix="list"
+                />
                 <p className="text-xs text-slate-500 mt-2">💡 Prix optionnel — laissez vide si inconnu. Fournisseur optionnel (utilise le fournisseur par défaut ci-dessus).</p>
               </CardContent>
             </Card>

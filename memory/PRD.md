@@ -4,12 +4,28 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
-## 24/04/2026 — Achats : suggestions auto de conditionnement (casier/pack) (DONE)
+## 24/04/2026 — Achats : conditionnement personnalisé + persistance par produit (DONE)
 
-**Demande utilisateur** :
-- Pour les achats de **boissons** (bières/sodas) : proposer *casier* avec nombre par casier.
-- Pour les achats d'**eau minérale** : proposer *pack* avec nombre par pack.
-- **MAJ**: proposer systématiquement le conditionnement dès que la catégorie = **Bar**, même sans mot-clé détecté (choix optionnel pour l'utilisateur).
+**Demande utilisateur** : permettre d'ajouter un package personnalisé pour les produits du bar, et une fois renseigné, le re-proposer automatiquement pour les mêmes produits à venir.
+
+**Backend** (`routers/product_packages.py` — nouveau) :
+- Collection `product_packages` avec `{id, product_key, description_sample, category, tag, qty, suffix, usage_count, created_at, last_used}`.
+- `GET /api/product-packages?q=<libellé>&category=bar` : retourne les packages matchant le premier mot normalisé (accents retirés, lowercase). Priorise exact match puis prefix par `usage_count` desc.
+- `POST /api/product-packages` : crée un nouveau package OU incrémente `usage_count` + met à jour `last_used` si même clé/tag/qty existe.
+- `DELETE /api/product-packages/{id}` : supprime un package enregistré.
+- Enregistré dans `server.py` avec `set_db`.
+
+**Frontend** (`ConditioningSuggester.jsx` — nouveau composant réutilisable) :
+- Remplace les 2 blocs inline dans les modals d'achat.
+- Fetch debounced (400ms) des packages persistés dès que description >= 3 caractères.
+- Affichage composite :
+  1. **Packages enregistrés** (violets) avec badge `×N` (usage_count) et icône poubelle au hover pour les supprimer.
+  2. **Presets statiques** selon mot-clé détecté (ambre pour bière/soda, sky pour eau) OU systématique si catégorie=bar (orange).
+  3. **Bouton « + Autre »** qui ouvre un formulaire inline : Select tag (Casier/Pack/Carton/Bac/Caisse/Sac/Bidon) + input qty + input unité libre (bouteilles, litres…) + bouton *Enregistrer*.
+- **Workflow apprentissage** : chaque clic sur un preset (persisté OU statique OU custom) fait un POST qui incrémente `usage_count`. Le tri par usage_count met en tête les conditionnements les plus utilisés pour ce produit.
+- Test backend end-to-end validé via curl : POST + GET sur variantes orthographiques (« Youki » match « youki cocktail » stocké).
+
+**Testing** : lint JS/Python propre, app charge correctement, endpoints testés OK.
 
 **Changement** (`CaissePage.jsx`) :
 - Nouveau helper `detectConditioningPresets(description)` qui détecte via regex :
