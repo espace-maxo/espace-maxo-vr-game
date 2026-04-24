@@ -20,7 +20,7 @@ import { Toaster } from "@/components/ui/sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
-const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","bac","sac","bidon","pot","pack","unite","regime","botte","boite","plateau","paire","rame","cartouche","rouleau","bloc","lot","aerosol","douzaine","barquette","brique","plaquette","bombe","fagot","flacon","tablette"];
+const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","portion","bac","sac","bidon","pot","pack","unite","regime","botte","boite","plateau","paire","rame","cartouche","rouleau","bloc","lot","aerosol","douzaine","barquette","brique","plaquette","bombe","fagot","flacon","tablette"];
 const MOVEMENT_TYPES = [
   { value: "entree", label: "Entree", color: "emerald", icon: ArrowDown },
   { value: "sortie", label: "Sortie", color: "red", icon: ArrowUp },
