@@ -37,6 +37,7 @@ const AchatsTab = ({ ctx }) => {
     printExpensesTicket,
     printAllExpensesList,
     printAllApprovedExpenses,
+    printApprovedExpensesDetailed,
     printCompletedExpensesTicket,
     printAllCompletedExpenses,
     printExpensePDF,
@@ -801,7 +802,7 @@ const AchatsTab = ({ ctx }) => {
                           Total: {formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F
                         </Badge>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Button 
                           size="sm"
                           variant="outline"
@@ -818,6 +819,15 @@ const AchatsTab = ({ ctx }) => {
                         >
                           <Printer className="w-4 h-4 mr-1" />
                           Imprimer A4
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={printApprovedExpensesDetailed}
+                          className="bg-indigo-600 hover:bg-indigo-700"
+                          data-testid="print-approved-detailed-btn"
+                        >
+                          <FileText className="w-4 h-4 mr-1" />
+                          Détail par achat
                         </Button>
                       </div>
                     </CardTitle>

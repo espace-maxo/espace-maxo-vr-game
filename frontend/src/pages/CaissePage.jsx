@@ -1747,35 +1747,35 @@ const CaissePage = () => {
     const itemsHtml = approved.map((expense, index) => {
       const headerRow = `
         <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${index + 1}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
-            <span style="background: ${catColor(expense.category)}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${index + 1}</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            <span style="background: ${catColor(expense.category)}; color: white; padding: 3px 10px; border-radius: 10px; font-size: 11pt; font-weight: 600;">
               ${categoryLabels[expense.category] || expense.category}
             </span>
           </td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
-            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:9pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12pt;">
+            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:10pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
           </td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${expense.supplier || '-'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600; vertical-align: top;">${formatPrice(expense.amount)} F</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${expense.supplier || '-'}</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; vertical-align: top; font-size: 12pt;">${formatPrice(expense.amount)} F</td>
         </tr>
       `;
       // Expand sub-items for grouped lists
       if (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0) {
         const subRows = expense.items.map((it, sIdx) => `
           <tr style="background: #fafafa;">
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #666;">${index + 1}.${sIdx + 1}</td>
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;">
-              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9pt;">
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 10pt; color: #666;">${index + 1}.${sIdx + 1}</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0;">
+              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 2px 8px; border-radius: 8px; font-size: 10pt;">
                 ${categoryLabels[it.category] || it.category}
               </span>
             </td>
-            <td style="padding: 4px 8px 4px 24px; border-bottom: 1px solid #f0f0f0; font-size: 9pt; color: #333;">
+            <td style="padding: 6px 8px 6px 24px; border-bottom: 1px solid #f0f0f0; font-size: 11pt; color: #333;">
               ↳ ${it.description}
-              <span style="color: #888; font-size: 8pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
+              <span style="color: #555; font-size: 10pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
             </td>
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;"></td>
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #444;">${formatPrice(it.amount)} F</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0;"></td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 11pt; color: #222; font-weight: 600;">${formatPrice(it.amount)} F</td>
           </tr>
         `).join('');
         return headerRow + subRows;
@@ -1785,7 +1785,7 @@ const CaissePage = () => {
         const detailRow = `
           <tr style="background: #fafafa;">
             <td></td><td></td>
-            <td style="padding: 2px 8px 4px 24px; font-size: 9pt; color: #666; border-bottom: 1px solid #f0f0f0;">
+            <td style="padding: 4px 8px 6px 24px; font-size: 10pt; color: #555; border-bottom: 1px solid #f0f0f0;">
               ↳ Qté ${expense.quantity} × ${formatPrice(expense.unit_price)} F
             </td>
             <td style="border-bottom: 1px solid #f0f0f0;"></td>
@@ -1806,23 +1806,23 @@ const CaissePage = () => {
           <style>
             @page { size: A4; margin: 15mm; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 10pt; }
+            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 12pt; }
             .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
             .logo { width: 80px; height: 80px; }
             .logo img { width: 100%; height: 100%; object-fit: contain; }
-            .header-right { text-align: right; font-size: 9pt; }
-            .doc-title { text-align: center; font-size: 14pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
-            .date-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 15px; }
-            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+            .header-right { text-align: right; font-size: 11pt; }
+            .doc-title { text-align: center; font-size: 18pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+            .date-line { text-align: center; font-size: 12pt; color: #555; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11pt; }
             thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
-            th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
-            td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+            th { padding: 10px 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 10pt; }
+            td { padding: 8px; border-bottom: 1px solid #ddd; }
             .total-row { border-top: 2px solid #333; }
-            .total-row td { font-weight: bold; padding: 10px 8px; }
+            .total-row td { font-weight: bold; padding: 12px 8px; font-size: 14pt; }
             .footer { display: flex; justify-content: space-between; margin-top: 30px; }
             .signature-box { text-align: center; width: 30%; }
             .signature-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px; }
-            .signature-label { font-size: 8pt; color: #666; }
+            .signature-label { font-size: 11pt; color: #666; }
           </style>
         </head>
         <body>
@@ -1877,6 +1877,194 @@ const CaissePage = () => {
       </html>
     `);
     printWindow.document.close();
+  };
+
+  // Print approved expenses — ONE FULL PAGE PER EXPENSE with complete detail
+  const printApprovedExpensesDetailed = () => {
+    const approved = expenses.filter(e => e.status === 'approved');
+    if (approved.length === 0) {
+      toast.error("Aucune demande approuvée à imprimer");
+      return;
+    }
+    const categoryLabels = { cuisine: 'Cuisine', bar: 'Bar', paiement: 'Paiement', autres: 'Autres' };
+    const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
+
+    const pagesHtml = approved.map((e, idx) => {
+      const itemsTable = (e.is_group && Array.isArray(e.items) && e.items.length > 0)
+        ? `
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:6%">#</th>
+                <th style="width:15%">Catégorie</th>
+                <th>Description</th>
+                <th style="width:10%;text-align:right">Qté</th>
+                <th style="width:15%;text-align:right">PU</th>
+                <th style="width:18%;text-align:right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${e.items.map((it, i) => `
+                <tr>
+                  <td>${i + 1}</td>
+                  <td><span class="cat-badge" style="background:${catColor(it.category)}">${categoryLabels[it.category] || it.category}</span></td>
+                  <td>${it.description}</td>
+                  <td style="text-align:right">${it.quantity}</td>
+                  <td style="text-align:right">${formatPrice(it.unit_price)} F</td>
+                  <td style="text-align:right;font-weight:600">${formatPrice(it.amount)} F</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `
+        : (e.quantity && e.unit_price ? `
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th style="width:15%;text-align:right">Qté</th>
+                <th style="width:20%;text-align:right">PU</th>
+                <th style="width:20%;text-align:right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${e.description}</td>
+                <td style="text-align:right">${e.quantity}</td>
+                <td style="text-align:right">${formatPrice(e.unit_price)} F</td>
+                <td style="text-align:right;font-weight:600">${formatPrice(e.amount)} F</td>
+              </tr>
+            </tbody>
+          </table>
+        ` : '');
+
+      return `
+        <section class="page ${idx < approved.length - 1 ? 'break-after' : ''}">
+          <div class="page-header">
+            <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+            <div class="header-right">
+              <p><strong>ESPACE MAXO</strong></p>
+              <p>Tél: +229 01 4147 0000</p>
+              <p>RCCM RB/COT/22 B 32037</p>
+              <p>Fidjrossè, Cotonou</p>
+            </div>
+          </div>
+
+          <div class="doc-title">Bon d'Achat Approuvé <span class="badge-approved">✓ APPROUVÉ</span></div>
+          <div class="doc-sub">Achat ${idx + 1} / ${approved.length} — ${new Date().toLocaleDateString('fr-FR')}</div>
+
+          <div class="meta-grid">
+            <div class="meta-box">
+              <div class="meta-label">Catégorie</div>
+              <div class="meta-value"><span class="cat-badge" style="background:${catColor(e.category)}">${categoryLabels[e.category] || e.category}</span></div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-label">Date prévue</div>
+              <div class="meta-value">${e.planned_date || '—'}</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-label">Demandé par</div>
+              <div class="meta-value">${e.requested_by || '—'}</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-label">Approuvé par</div>
+              <div class="meta-value">${e.approved_by || '—'}</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-label">Fournisseur</div>
+              <div class="meta-value">${e.supplier || '—'}</div>
+            </div>
+            <div class="meta-box">
+              <div class="meta-label">Type</div>
+              <div class="meta-value">${e.is_group ? '📦 Liste (' + (e.items?.length || 0) + ' articles)' : 'Achat unique'}</div>
+            </div>
+          </div>
+
+          <div class="desc-block">
+            <div class="meta-label">Description</div>
+            <div class="desc-text">${e.description}</div>
+          </div>
+
+          ${itemsTable}
+
+          <div class="amount-box">
+            <div class="amount-label">MONTANT TOTAL APPROUVÉ</div>
+            <div class="amount-value">${formatPrice(e.amount)} F CFA</div>
+          </div>
+
+          <div class="signatures">
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Gérante</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Administrateur</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Comptable</div>
+            </div>
+          </div>
+
+          <div class="print-footer">
+            Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) { toast.error("Popup bloqué! Autorisez les popups pour ce site."); return; }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Détail des Achats Approuvés</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: A4; margin: 15mm; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; background: #fff; color: #222; font-size: 12pt; }
+            .page { padding: 10px 0; }
+            .break-after { page-break-after: always; }
+            .page-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 18px; }
+            .logo { width: 80px; height: 80px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .header-right { text-align: right; font-size: 11pt; line-height: 1.5; }
+            .doc-title { text-align: center; font-size: 20pt; font-weight: bold; margin: 6px 0 2px; text-transform: uppercase; letter-spacing: 1px; }
+            .doc-sub { text-align: center; font-size: 12pt; color: #555; margin-bottom: 18px; }
+            .badge-approved { display: inline-block; background: #16a34a; color: #fff; padding: 3px 12px; border-radius: 14px; font-size: 12pt; vertical-align: middle; font-weight: 600; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+            .meta-box { border: 1px solid #ddd; padding: 10px 12px; border-radius: 4px; background: #fafafa; }
+            .meta-label { font-size: 10pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+            .meta-value { font-size: 13pt; font-weight: 600; color: #222; }
+            .cat-badge { display: inline-block; color: white; padding: 3px 12px; border-radius: 12px; font-size: 11pt; font-weight: 600; }
+            .desc-block { border-left: 4px solid #4f46e5; padding: 10px 14px; background: #f5f5ff; margin-bottom: 18px; }
+            .desc-text { font-size: 14pt; font-weight: 600; color: #1e1b4b; margin-top: 4px; }
+            .items-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 12pt; }
+            .items-table thead tr { background: #1e293b; color: white; }
+            .items-table th { padding: 10px; text-align: left; font-weight: 600; font-size: 11pt; text-transform: uppercase; letter-spacing: 0.5px; }
+            .items-table tbody td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 12pt; }
+            .items-table tbody tr:nth-child(even) { background: #f9fafb; }
+            .amount-box { border: 3px solid #333; padding: 18px; text-align: center; margin: 18px 0; background: #fffbeb; border-radius: 6px; }
+            .amount-label { font-size: 12pt; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+            .amount-value { font-size: 30pt; font-weight: 900; margin-top: 6px; color: #b45309; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+            .signature-box { text-align: center; width: 28%; }
+            .signature-line { border-bottom: 1px solid #333; height: 50px; margin-bottom: 5px; }
+            .signature-label { font-size: 11pt; color: #555; font-weight: 600; }
+            .print-footer { text-align: center; font-size: 10pt; color: #999; margin-top: 20px; font-style: italic; }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 400); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    toast.success(`Préparation de ${approved.length} bon(s) d'achat détaillé(s)...`);
   };
 
   // Print all expenses (full list)
@@ -2218,35 +2406,35 @@ const CaissePage = () => {
     const itemsHtml = completed.map((expense, index) => {
       const headerRow = `
         <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${index + 1}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
-            <span style="background: ${catColor(expense.category)}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${index + 1}</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            <span style="background: ${catColor(expense.category)}; color: white; padding: 3px 10px; border-radius: 10px; font-size: 11pt; font-weight: 600;">
               ${categoryLabels[expense.category] || expense.category}
             </span>
           </td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
-            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:9pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12pt;">
+            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:10pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
           </td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${expense.supplier || '-'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 10pt; color:#666;">${expense.completed_at?.slice(0, 10) || '-'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600; vertical-align: top;">${formatPrice(expense.amount)} F</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${expense.supplier || '-'}</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt; color:#666;">${expense.completed_at?.slice(0, 10) || '-'}</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; vertical-align: top; font-size: 12pt;">${formatPrice(expense.amount)} F</td>
         </tr>
       `;
       if (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0) {
         const subRows = expense.items.map((it, sIdx) => `
           <tr style="background: #fafafa;">
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #666;">${index + 1}.${sIdx + 1}</td>
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;">
-              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9pt;">
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 10pt; color: #666;">${index + 1}.${sIdx + 1}</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0;">
+              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 2px 8px; border-radius: 8px; font-size: 10pt;">
                 ${categoryLabels[it.category] || it.category}
               </span>
             </td>
-            <td style="padding: 4px 8px 4px 24px; border-bottom: 1px solid #f0f0f0; font-size: 9pt; color: #333;">
+            <td style="padding: 6px 8px 6px 24px; border-bottom: 1px solid #f0f0f0; font-size: 11pt; color: #333;">
               ↳ ${it.description}
-              <span style="color: #888; font-size: 8pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
+              <span style="color: #555; font-size: 10pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
             </td>
             <td colspan="2" style="border-bottom: 1px solid #f0f0f0;"></td>
-            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #444;">${formatPrice(it.amount)} F</td>
+            <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 11pt; color: #222; font-weight: 600;">${formatPrice(it.amount)} F</td>
           </tr>
         `).join('');
         return headerRow + subRows;
@@ -2263,23 +2451,23 @@ const CaissePage = () => {
           <style>
             @page { size: A4; margin: 15mm; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 10pt; }
+            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 12pt; }
             .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
             .logo { width: 80px; height: 80px; }
             .logo img { width: 100%; height: 100%; object-fit: contain; }
-            .header-right { text-align: right; font-size: 9pt; }
-            .doc-title { text-align: center; font-size: 14pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
-            .date-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 15px; }
-            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+            .header-right { text-align: right; font-size: 11pt; }
+            .doc-title { text-align: center; font-size: 18pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+            .date-line { text-align: center; font-size: 12pt; color: #555; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11pt; }
             thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
-            th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
-            td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+            th { padding: 10px 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 10pt; }
+            td { padding: 8px; border-bottom: 1px solid #ddd; }
             .total-row { border-top: 2px solid #333; }
-            .total-row td { font-weight: bold; padding: 10px 8px; }
+            .total-row td { font-weight: bold; padding: 12px 8px; font-size: 14pt; }
             .footer { display: flex; justify-content: space-between; margin-top: 30px; }
             .signature-box { text-align: center; width: 30%; }
             .signature-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px; }
-            .signature-label { font-size: 8pt; color: #666; }
+            .signature-label { font-size: 11pt; color: #666; }
           </style>
         </head>
         <body>
@@ -5267,6 +5455,7 @@ _Gérante - Espace Maxo_
               printExpensesTicket,
               printAllExpensesList,
               printAllApprovedExpenses,
+              printApprovedExpensesDetailed,
               printCompletedExpensesTicket,
               printAllCompletedExpenses,
               printExpensePDF,

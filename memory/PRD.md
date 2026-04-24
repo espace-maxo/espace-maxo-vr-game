@@ -4,6 +4,42 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Impression achats : police agrandie + bouton « Détail par achat » (DONE)
+
+**Demandes utilisateur** :
+1. Augmenter la taille de la police sur l'impression des achats.
+2. Imprimer les achats validés un par un avec leur détail complet.
+
+**Changements** :
+
+**1. Police agrandie** (`CaissePage.jsx`) sur les 2 fonctions A4 `printAllApprovedExpenses` et `printAllCompletedExpenses` :
+- Body : 10pt → **12pt**
+- Titre document : 14pt → **18pt** avec letter-spacing
+- Date : 10pt → **12pt**
+- En-têtes de colonnes : 8pt → **10pt**
+- Cellules : 9pt → **11-12pt**
+- Ligne total : non renseigné → **14pt bold**
+- Badges catégorie : 11px → **11pt** avec font-weight 600 + padding augmenté
+- Labels signatures : 8pt → **11pt**
+- Sous-lignes items groupés : 9pt → **10-11pt** avec montant en gras 600
+
+**2. Nouveau bouton « Détail par achat »** (testid=`print-approved-detailed-btn`, bouton indigo dans la carte APPROUVÉS) :
+- Fonction `printApprovedExpensesDetailed` : génère **une page A4 complète par achat validé** avec saut de page automatique (`page-break-after: always` sauf pour le dernier).
+- Chaque page contient :
+  - En-tête Espace Maxo (logo + coordonnées)
+  - Titre « Bon d'Achat Approuvé » + badge ✓ APPROUVÉ émeraude
+  - Indicateur « Achat N / M »
+  - **Grille meta 3×2** : Catégorie, Date prévue, Demandé par, Approuvé par, Fournisseur, Type (unique ou liste)
+  - Bloc description (fond lavande, bordure gauche indigo, 14pt)
+  - **Tableau d'articles** détaillé si liste groupée (#, catégorie, description, Qté, PU, Total) — ou tableau simple pour un item unique
+  - **Cadre MONTANT TOTAL APPROUVÉ** (fond ambre, bordure 3px, police 30pt)
+  - 3 cadres signature (Gérante, Administrateur, Comptable)
+  - Footer avec date+heure d'impression
+- Toast de confirmation : « Préparation de N bon(s) d'achat détaillé(s)... »
+
+**Tests** : lint propre sur les 2 fichiers, smoke-test OK. Pas de testing agent (fix purement d'affichage HTML généré, aucun impact API/state).
+
+---
 ## 24/04/2026 — Stock : refonte de la présentation du menu Produits (DONE)
 
 **Demande utilisateur** : améliorer la présentation du menu Produits (module Stock).
