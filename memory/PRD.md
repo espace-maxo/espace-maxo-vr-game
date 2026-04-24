@@ -4,6 +4,32 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Stock : conversion manuelle d'unité (casier → bouteille) (DONE)
+
+**Demande utilisateur** : convertir manuellement les boissons existantes du stock qui sont en *casier/pack/carton* pour passer en *bouteille* (nombre de bouteilles × nombre de casiers).
+
+**Backend** (`/app/backend/routers/stock.py`) :
+- Nouvel endpoint `POST /api/stock/products/{id}/convert-unit` avec body `{multiplier: int, new_unit: str}`.
+- Applique la conversion :
+  - `quantity × multiplier`, `purchase_price / multiplier`, `stock_min × multiplier`, `stock_max × multiplier`
+  - Change `unit` vers la nouvelle unité
+  - Recalcule `valeur_stock` et `statut`
+  - Trace une `stock_movements` de type `conversion` pour audit
+  - Ajoute une note d'observation sur le produit
+- **Valeur comptable préservée** (qty × price reste identique).
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- Nouveau bouton **icône Package violet** dans chaque ligne produit (visible seulement si unit ∈ {casier, pack, carton, bac, caisse, sac, bidon, pot, plateau, paquet, lot} et pour admin).
+- **Modal de conversion** (testid `convert-unit-modal`) avec :
+  - Résumé avant (qty actuelle × prix actuel = valeur).
+  - 2 champs : *Nombre par <unit>* (auto-rempli intelligemment : casier=24, pack=6, carton=12, sac=25kg, bidon=20L) et *Nouvelle unité* (bouteille par défaut).
+  - **Aperçu violet** qui calcule en live la future qty/prix/valeur.
+  - Bouton *Convertir* violet (testid `convert-submit-btn`).
+
+**Test end-to-end** validé :
+- `Soda tonic` : 6 casier × 6 000 F = 36 000 F → 144 bouteille × 250 F = 36 000 F ✅
+
+---
 ## 24/04/2026 — Sync Caisse→Stock : expansion automatique des conditionnements (DONE)
 
 **Demande utilisateur** : dans stock, renseigner les quantités des boissons en nombre de bouteilles contenues dans les casiers/packs (pas en nombre de casiers).

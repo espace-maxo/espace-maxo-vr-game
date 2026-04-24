@@ -90,6 +90,42 @@ export default function StockPage() {
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
+  // Unit conversion modal (casier → bouteille, pack → bouteille, …)
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [convertTarget, setConvertTarget] = useState(null);
+  const [convertForm, setConvertForm] = useState({ multiplier: 24, new_unit: "bouteille" });
+
+  const openConvertUnit = (p) => {
+    setConvertTarget(p);
+    // Smart defaults by current unit
+    const u = (p.unit || "").toLowerCase();
+    let m = 24, nu = "bouteille";
+    if (u === "pack") m = 6;
+    else if (u === "carton") m = 12;
+    else if (u === "sac") { m = 25; nu = "kg"; }
+    else if (u === "bidon") { m = 20; nu = "litre"; }
+    setConvertForm({ multiplier: m, new_unit: nu });
+    setShowConvertModal(true);
+  };
+
+  const submitConvertUnit = async () => {
+    if (!convertTarget) return;
+    const m = parseInt(convertForm.multiplier, 10);
+    const nu = (convertForm.new_unit || "").trim();
+    if (!m || m <= 0) { toast.error("Le multiplicateur doit être > 0"); return; }
+    if (!nu) { toast.error("La nouvelle unité est requise"); return; }
+    try {
+      await axios.post(`${API}/stock/products/${convertTarget.id}/convert-unit`, { multiplier: m, new_unit: nu });
+      toast.success(`${convertTarget.name} converti en ${nu}`);
+      setShowConvertModal(false);
+      setConvertTarget(null);
+      fetchProducts();
+      fetchDashboard();
+    } catch (e) {
+      toast.error("Erreur lors de la conversion");
+    }
+  };
+
   // Forms
   const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" });
   const [movementForm, setMovementForm] = useState({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" });
@@ -959,6 +995,11 @@ export default function StockPage() {
                             <td className="p-3">
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10" onClick={() => openEditProduct(p)} title="Modifier"><Edit2 className="w-3.5 h-3.5" /></Button>
+                                {isAdmin && ['casier','pack','carton','bac','caisse','sac','bidon','pot','plateau','paquet','lot'].includes((p.unit||'').toLowerCase()) && (
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-violet-400 hover:bg-violet-500/10" onClick={() => openConvertUnit(p)} title="Convertir en unité interne (ex: casier → bouteille)" data-testid={`convert-unit-${p.id}`}>
+                                    <Package className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
                                 {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10" onClick={() => resetSingleProduct(p.id)} title="RAZ quantité"><RefreshCw className="w-3.5 h-3.5" /></Button>}
                                 {isAdmin && p.purchase_price > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => resetSinglePrice(p.id)} title="RAZ prix"><X className="w-3.5 h-3.5" /></Button>}
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10" onClick={() => deleteProduct(p.id)} title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></Button>
@@ -1675,11 +1716,80 @@ export default function StockPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Unit Conversion Modal */}
+      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-md" data-testid="convert-unit-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white">Convertir en unité interne</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {convertTarget ? (
+                <>Convertir <strong className="text-white">{convertTarget.name}</strong> de <span className="text-amber-400">{convertTarget.unit}</span> vers l'unité individuelle (bouteille, litre, etc.).</>
+              ) : "Convertir un produit en unité interne"}
+            </DialogDescription>
+          </DialogHeader>
+          {convertTarget && (
+            <div className="space-y-4">
+              <div className="bg-slate-800/50 border border-slate-700 rounded p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-slate-400">Quantité actuelle</span><span className="text-white font-semibold">{convertTarget.quantity} {convertTarget.unit}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Prix actuel</span><span className="text-white font-semibold">{formatPrice(convertTarget.purchase_price)} F / {convertTarget.unit}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Valeur totale</span><span className="text-emerald-400 font-semibold">{formatPrice(convertTarget.quantity * convertTarget.purchase_price)} F</span></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-slate-300 text-xs">Nombre par {convertTarget.unit} *</Label>
+                  <Input
+                    type="number" min="1"
+                    value={convertForm.multiplier}
+                    onChange={(e) => setConvertForm({ ...convertForm, multiplier: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="convert-multiplier-input"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-xs">Nouvelle unité *</Label>
+                  <Input
+                    value={convertForm.new_unit}
+                    onChange={(e) => setConvertForm({ ...convertForm, new_unit: e.target.value })}
+                    placeholder="bouteille, litre, kg..."
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="convert-new-unit-input"
+                  />
+                </div>
+              </div>
+
+              {(() => {
+                const m = parseInt(convertForm.multiplier, 10) || 0;
+                const nu = (convertForm.new_unit || "").trim() || "unité";
+                if (m <= 0) return null;
+                const newQty = convertTarget.quantity * m;
+                const newPrice = convertTarget.purchase_price / m;
+                const newValeur = newQty * newPrice;
+                return (
+                  <div className="bg-violet-900/20 border border-violet-500/40 rounded p-3 text-sm space-y-1">
+                    <p className="text-violet-300 font-medium mb-1">📦 Après conversion :</p>
+                    <div className="flex justify-between"><span className="text-slate-400">Quantité</span><span className="text-white font-bold">{newQty} {nu}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Prix unitaire</span><span className="text-white font-bold">{formatPrice(newPrice)} F / {nu}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Valeur totale</span><span className="text-emerald-400 font-bold">{formatPrice(newValeur)} F <span className="text-[10px] text-slate-500">(inchangée)</span></span></div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setShowConvertModal(false)} className="text-slate-400">Annuler</Button>
+                <Button onClick={submitConvertUnit} className="bg-violet-600 hover:bg-violet-700" data-testid="convert-submit-btn">
+                  <Package className="w-4 h-4 mr-1" /> Convertir
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Movement Modal */}
       <Dialog open={showMovementModal} onOpenChange={setShowMovementModal}>
         <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
-          <DialogHeader><DialogTitle className="text-white">Nouveau Mouvement</DialogTitle><DialogDescription className="text-slate-400">Enregistrer une entree, sortie ou ajustement</DialogDescription></DialogHeader>
-          <div className="space-y-3">
+          <DialogHeader><DialogTitle className="text-white">Nouveau Mouvement</DialogTitle><DialogDescription className="text-slate-400">Enregistrer une entree, sortie ou ajustement</DialogDescription></DialogHeader>          <div className="space-y-3">
             <div><Label className="text-slate-300 text-xs">Produit *</Label>
               <Select value={movementForm.product_id} onValueChange={v => setMovementForm(p => ({...p, product_id: v}))}>
                 <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choisir un produit" /></SelectTrigger>

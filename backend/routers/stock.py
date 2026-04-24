@@ -387,6 +387,78 @@ async def delete_movements_bulk(ids: List[str] = Body(..., embed=True)):
     result = await db.stock_movements.delete_many({"id": {"$in": ids}})
     return {"success": True, "deleted": result.deleted_count}
 
+
+class ConvertUnitRequest(BaseModel):
+    multiplier: int  # e.g. 24 bouteilles per casier
+    new_unit: str    # e.g. "bouteille"
+
+
+@router.post("/products/{product_id}/convert-unit")
+async def convert_product_unit(product_id: str, data: ConvertUnitRequest):
+    """Convert a product from a package unit (casier, pack, ...) to its inner unit
+    (bouteille, ...). Multiplies quantity and stock_min by `multiplier`, divides
+    purchase_price by `multiplier`, and updates the unit label. The total value
+    (qty * price) is preserved."""
+    if data.multiplier <= 0:
+        raise HTTPException(400, "Le multiplicateur doit être > 0")
+    if not data.new_unit.strip():
+        raise HTTPException(400, "La nouvelle unité est requise")
+
+    product = await db.stock_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(404, "Produit non trouve")
+
+    old_qty = product.get("quantity", 0) or 0
+    old_price = product.get("purchase_price", 0) or 0
+    old_min = product.get("stock_min", 0) or 0
+    old_max = product.get("stock_max", 0) or 0
+    old_unit = product.get("unit", "")
+
+    new_qty = old_qty * data.multiplier
+    new_price = old_price / data.multiplier if old_price else 0.0
+    new_min = old_min * data.multiplier
+    new_max = old_max * data.multiplier if old_max else 0
+    new_valeur = new_qty * new_price
+    smin = new_min or 5
+    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.stock_products.update_one(
+        {"id": product_id},
+        {"$set": {
+            "quantity": new_qty,
+            "purchase_price": new_price,
+            "stock_min": new_min,
+            "stock_max": new_max,
+            "unit": data.new_unit.strip(),
+            "valeur_stock": new_valeur,
+            "statut": new_statut,
+            "updated_at": now_iso,
+            "observation": (product.get("observation") or "") + f" [Unité convertie: {old_unit}×{data.multiplier} → {data.new_unit.strip()} le {now_iso[:10]}]",
+        }}
+    )
+
+    # Trace the conversion as a special movement
+    await db.stock_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "product_id": product_id,
+        "product_name": product.get("name", ""),
+        "product_code": product.get("code", ""),
+        "movement_type": "conversion",
+        "quantity": new_qty - old_qty,
+        "previous_quantity": old_qty,
+        "new_quantity": new_qty,
+        "unit": data.new_unit.strip(),
+        "unit_price": new_price,
+        "total_value": 0,  # value unchanged
+        "reason": f"Conversion {old_unit} → {data.new_unit.strip()} (×{data.multiplier})",
+        "user_name": "Admin",
+        "created_at": now_iso,
+    })
+
+    updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+    return {"success": True, "product": updated}
+
 # ==================== SUPPLIERS ====================
 
 @router.get("/suppliers")
