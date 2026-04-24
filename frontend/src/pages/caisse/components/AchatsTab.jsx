@@ -893,11 +893,12 @@ const AchatsTab = ({ ctx }) => {
                                 <Printer className="w-4 h-4 mr-1" />
                                 PDF
                               </Button>
-                              {currentUser?.role === 'manager' && (
+                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                                 <Button 
                                   size="sm"
                                   onClick={() => updateExpense(expense.id, { status: "completed" })}
                                   className="bg-emerald-600 hover:bg-emerald-700"
+                                  data-testid={`mark-completed-${expense.id}`}
                                 >
                                   <CheckCircle className="w-4 h-4 mr-1" />
                                   Acheté
