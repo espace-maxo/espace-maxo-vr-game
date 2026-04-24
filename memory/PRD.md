@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Achats : suggestions auto de conditionnement (casier/pack) (DONE)
+
+**Demande utilisateur** :
+- Pour les achats de **boissons** (bières/sodas) : proposer *casier* avec nombre par casier.
+- Pour les achats d'**eau minérale** : proposer *pack* avec nombre par pack.
+
+**Changement** (`CaissePage.jsx`) :
+- Nouveau helper `detectConditioningPresets(description)` qui détecte via regex :
+  - **Bières/Sodas** : `biere, bière, beaufort, castel, heineken, flag, 33, eku, guinness, awooyo, coca, fanta, sprite, schweppes, youki, malta, mirinda, 7up, pepsi, ginger, bissap, jus, bmalt, malt` → presets **Casier × 12** / **Casier × 24** (fond ambre).
+  - **Eau minérale** : `eau, eau minérale, possotome, okuta, oasis, awa, volvic, evian, aveyron, source` → presets **Pack × 6** / **Pack × 12** / **Pack × 24** (fond sky).
+- Skip si la description contient déjà une mention « Casier de N » ou « Pack de N ».
+- Affichage **dans les 2 modals** d'achats :
+  - Modal « Achats communs » (multi-items) → testid `common-conditioning-suggest` + boutons `common-cond-{casier|pack}-{qty}`.
+  - Modal « Achats Fournisseurs » (shopping list) → testid `list-conditioning-suggest` + boutons `list-cond-{casier|pack}-{qty}`.
+- 1 clic sur un preset → suffixe ajouté à la description (ex: « Bière Beaufort **(Casier de 24 bouteilles)** ») + quantité initialisée à 1 si vide.
+- UX non-intrusive : suggesteur caché si pas de match, affiché en petite bande colorée sous le formulaire d'ajout.
+
+**Tests** : lint JS propre, app charge correctement.
+
+---
 ## 24/04/2026 — Backfill sync Caisse→Stock + garde idempotente (DONE)
 
 **Demandes utilisateur** :

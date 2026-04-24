@@ -197,6 +197,47 @@ const PAYMENT_METHODS = [
   { value: "check", label: "Chèque", icon: FileText },
 ];
 
+/**
+ * Détecte les mots-clés boisson/eau dans la description d'un article et propose
+ * des presets de conditionnement (casier/pack) que l'utilisateur peut appliquer
+ * en 1 clic.
+ * Retourne null si rien ne matche → l'UI n'affiche rien.
+ */
+const detectConditioningPresets = (description) => {
+  const d = (description || "").toLowerCase().trim();
+  if (d.length < 3) return null;
+  // Avoid showing again if already contains a conditioning mention
+  if (/(casier|pack)\s*(de|of)?\s*\d+/i.test(description || "")) return null;
+
+  const BEER_SODA = /\b(biere|bière|beer|lager|beaufort|beaufor|castel|heineken|flag|33|eku|guinness|awooyo|awoyo|soda|coca|coca-cola|fanta|sprite|schweppes|youki|youkii|malta|mirinda|seven ?up|7up|pepsi|ginger|youki|bissap|jus|cocktail|bmalt|malt)\b/;
+  const WATER = /\b(eau|water|eau minerale|eau minérale|possotome|possotomé|okuta|oasis|awa|volvic|evian|aveyron|source)\b/;
+
+  if (WATER.test(d)) {
+    return {
+      type: "pack",
+      label: "Eau minérale détectée",
+      color: "sky",
+      presets: [
+        { qty: 6,  suffix: "(Pack de 6 bouteilles)" },
+        { qty: 12, suffix: "(Pack de 12 bouteilles)" },
+        { qty: 24, suffix: "(Pack de 24 bouteilles)" },
+      ],
+    };
+  }
+  if (BEER_SODA.test(d)) {
+    return {
+      type: "casier",
+      label: "Bière/Soda détecté",
+      color: "amber",
+      presets: [
+        { qty: 12, suffix: "(Casier de 12 bouteilles)" },
+        { qty: 24, suffix: "(Casier de 24 bouteilles)" },
+      ],
+    };
+  }
+  return null;
+};
+
 
 const CaissePage = () => {
   // Auth state
@@ -6381,6 +6422,38 @@ _Gérante - Espace Maxo_
                         <Plus className="w-4 h-4" />
                       </Button>
                     </div>
+                    {/* Auto-detect conditioning suggestions (bière/soda/eau) */}
+                    {(() => {
+                      const s = detectConditioningPresets(commonNewItem.description);
+                      if (!s) return null;
+                      const bgColor = s.color === 'amber' ? 'bg-amber-900/20 border-amber-500/30' : 'bg-sky-900/20 border-sky-500/30';
+                      const textColor = s.color === 'amber' ? 'text-amber-300' : 'text-sky-300';
+                      const btnColor = s.color === 'amber' ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20';
+                      return (
+                        <div className={`mt-2 ${bgColor} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="common-conditioning-suggest">
+                          <span className={`${textColor} text-xs font-medium`}>💡 {s.label} — conditionnement :</span>
+                          {s.presets.map((p) => (
+                            <Button
+                              key={p.suffix}
+                              size="sm"
+                              variant="outline"
+                              type="button"
+                              onClick={() => {
+                                setCommonNewItem({
+                                  ...commonNewItem,
+                                  description: `${commonNewItem.description.trim()} ${p.suffix}`,
+                                  quantity: commonNewItem.quantity || 1,
+                                });
+                              }}
+                              className={`h-7 text-xs ${btnColor}`}
+                              data-testid={`common-cond-${s.type}-${p.qty}`}
+                            >
+                              {s.type === 'casier' ? 'Casier' : 'Pack'} × {p.qty}
+                            </Button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -6668,6 +6741,38 @@ _Gérante - Espace Maxo_
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
+                {/* Auto-detect conditioning suggestions (bière/soda/eau) */}
+                {(() => {
+                  const s = detectConditioningPresets(newListItem.description);
+                  if (!s) return null;
+                  const bgColor = s.color === 'amber' ? 'bg-amber-900/20 border-amber-500/30' : 'bg-sky-900/20 border-sky-500/30';
+                  const textColor = s.color === 'amber' ? 'text-amber-300' : 'text-sky-300';
+                  const btnColor = s.color === 'amber' ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/20' : 'border-sky-500/50 text-sky-300 hover:bg-sky-500/20';
+                  return (
+                    <div className={`mt-2 ${bgColor} border rounded px-3 py-2 flex items-center gap-2 flex-wrap`} data-testid="list-conditioning-suggest">
+                      <span className={`${textColor} text-xs font-medium`}>💡 {s.label} — conditionnement :</span>
+                      {s.presets.map((p) => (
+                        <Button
+                          key={p.suffix}
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => {
+                            setNewListItem({
+                              ...newListItem,
+                              description: `${newListItem.description.trim()} ${p.suffix}`,
+                              quantity: newListItem.quantity || 1,
+                            });
+                          }}
+                          className={`h-7 text-xs ${btnColor}`}
+                          data-testid={`list-cond-${s.type}-${p.qty}`}
+                        >
+                          {s.type === 'casier' ? 'Casier' : 'Pack'} × {p.qty}
+                        </Button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-slate-500 mt-2">💡 Prix optionnel — laissez vide si inconnu. Fournisseur optionnel (utilise le fournisseur par défaut ci-dessus).</p>
               </CardContent>
             </Card>
