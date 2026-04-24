@@ -2075,7 +2075,263 @@ const CaissePage = () => {
     toast.success("Ouverture du ticket d'impression...");
   };
 
-  // Open expense for editing
+  // Print COMPLETED expenses on 80mm thermal — same layout as printExpensesTicket
+  const printCompletedExpensesTicket = () => {
+    const categoryLabels = { cuisine: 'CUIS', bar: 'BAR', paiement: 'PAIE', autres: 'AUTR' };
+    const toPrint = expenses.filter(e => e.status === 'completed');
+    const total = toPrint.reduce((sum, e) => sum + (e.amount || 0), 0);
+    if (toPrint.length === 0) {
+      toast.error("Aucun achat terminé à imprimer.");
+      return;
+    }
+    let totalItems = 0;
+    const itemsHtml = toPrint.map((e, i) => {
+      const dateLine = e.completed_at ? ('<div class="supplier">Termine le ' + e.completed_at.slice(0, 10) + '</div>') : '';
+      if (e.is_group && e.items && e.items.length > 0) {
+        totalItems += e.items.length;
+        const subItemsHtml = e.items.map((item, subIdx) => (
+          '<div class="sub-item">' +
+          '<div class="sub-item-row">' +
+          '<span class="sub-num">' + (subIdx + 1) + '.</span>' +
+          '<span class="sub-cat">[' + (categoryLabels[item.category] || item.category.substring(0, 4).toUpperCase()) + ']</span>' +
+          '</div>' +
+          '<div class="sub-desc">' + item.description + '</div>' +
+          '<div class="sub-detail">' +
+          '<span>Qte: ' + item.quantity + '</span>' +
+          '<span>PU: ' + formatPrice(item.unit_price) + '</span>' +
+          '<span class="sub-total">' + formatPrice(item.amount) + ' F</span>' +
+          '</div>' +
+          '</div>'
+        )).join('');
+        return '<div class="group-item">' +
+          '<div class="group-header">' +
+          '<span class="group-icon">📦</span>' +
+          '<span class="group-title">' + e.description + '</span>' +
+          '</div>' +
+          (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
+          dateLine +
+          '<div class="sub-items">' + subItemsHtml + '</div>' +
+          '<div class="group-total">' +
+          '<span>TOTAL LISTE:</span>' +
+          '<span>' + formatPrice(e.amount) + ' F</span>' +
+          '</div>' +
+          '</div>';
+      }
+      totalItems += 1;
+      const qty = e.quantity || 1;
+      const unitPrice = e.unit_price || e.amount;
+      const lineTotal = e.amount || (qty * unitPrice);
+      return '<div class="item">' +
+        '<div class="item-row">' +
+        '<span class="num">' + (i + 1) + '.</span>' +
+        '<span class="cat">[' + (categoryLabels[e.category] || e.category.substring(0, 4).toUpperCase()) + ']</span>' +
+        '</div>' +
+        '<div class="desc">' + e.description + '</div>' +
+        '<div class="detail-row">' +
+        '<span>Qte: ' + qty + '</span>' +
+        '<span>PU: ' + formatPrice(unitPrice) + ' F</span>' +
+        '</div>' +
+        '<div class="total-row">' +
+        '<span>TOTAL:</span>' +
+        '<span class="line-total">' + formatPrice(lineTotal) + ' F</span>' +
+        '</div>' +
+        (e.supplier ? '<div class="supplier">Fourn: ' + e.supplier + '</div>' : '') +
+        dateLine +
+        '</div>';
+    }).join('');
+
+    const html = '<!DOCTYPE html><html><head><title>Achats Termines</title><meta charset="UTF-8">' +
+      '<style>' +
+      '@page { size: 80mm auto; margin: 0; }' +
+      '@media print { body { -webkit-print-color-adjust: exact; } }' +
+      '* { margin: 0; padding: 0; box-sizing: border-box; }' +
+      'body { font-family: "Courier New", monospace; width: 80mm; padding: 3mm; font-size: 11px; line-height: 1.3; background: white; color: black; }' +
+      '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }' +
+      '.title { font-size: 14px; font-weight: 900; letter-spacing: 1px; }' +
+      '.subtitle { font-size: 10px; margin-top: 2px; font-style: italic; }' +
+      '.date { font-size: 10px; margin-top: 4px; }' +
+      '.count { font-size: 12px; font-weight: bold; margin-top: 4px; border: 1px solid #000; display: inline-block; padding: 2px 8px; }' +
+      '.item { border-bottom: 1px dashed #000; padding: 6px 0; }' +
+      '.item-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }' +
+      '.num { font-weight: bold; } .cat { font-weight: bold; }' +
+      '.desc { font-size: 13px; font-weight: bold; margin: 3px 0; text-transform: uppercase; }' +
+      '.detail-row { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }' +
+      '.total-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 3px; border-top: 1px dotted #000; padding-top: 2px; }' +
+      '.line-total { font-size: 13px; }' +
+      '.supplier { font-size: 9px; color: #333; margin-top: 2px; }' +
+      '.group-item { border: 2px solid #000; padding: 6px; margin-bottom: 8px; }' +
+      '.group-header { display: flex; align-items: center; gap: 5px; font-weight: bold; font-size: 12px; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 4px; }' +
+      '.group-icon { font-size: 14px; } .group-title { text-transform: uppercase; }' +
+      '.sub-items { padding-left: 5px; }' +
+      '.sub-item { border-bottom: 1px dotted #999; padding: 3px 0; }' +
+      '.sub-item-row { display: flex; justify-content: space-between; font-size: 9px; }' +
+      '.sub-num { font-weight: bold; } .sub-cat { font-size: 8px; }' +
+      '.sub-desc { font-size: 11px; font-weight: bold; margin: 2px 0; }' +
+      '.sub-detail { display: flex; justify-content: space-between; font-size: 10px; }' +
+      '.sub-total { font-weight: bold; }' +
+      '.group-total { display: flex; justify-content: space-between; font-weight: 900; font-size: 12px; border-top: 2px solid #000; margin-top: 4px; padding-top: 4px; }' +
+      '.grand-total { border-top: 3px solid #000; margin-top: 10px; padding-top: 8px; text-align: center; }' +
+      '.grand-total-label { font-size: 12px; }' +
+      '.grand-total-value { font-size: 22px; font-weight: 900; }' +
+      '.footer { margin-top: 10px; text-align: center; font-size: 9px; border-top: 1px dashed #000; padding-top: 6px; }' +
+      '.cut-line { margin-top: 8px; text-align: center; font-size: 10px; }' +
+      '</style></head>' +
+      '<body>' +
+      '<div class="header">' +
+      '<div class="title">ACHATS TERMINES</div>' +
+      '<div class="subtitle">Historique des achats effectues</div>' +
+      '<div class="date">' + new Date().toLocaleDateString('fr-FR') + ' - ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) + '</div>' +
+      '<div class="count">' + totalItems + ' article(s)</div>' +
+      '</div>' +
+      itemsHtml +
+      '<div class="grand-total">' +
+      '<div class="grand-total-label">TOTAL DEPENSE</div>' +
+      '<div class="grand-total-value">' + formatPrice(total) + ' F</div>' +
+      '</div>' +
+      '<div class="footer">Espace Maxo - Caisse Pro<br>- - - - - - - - - - - - - -</div>' +
+      '<div class="cut-line">. . . . . . . . . . . . . . .</div>' +
+      '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>' +
+      '</body></html>';
+
+    const printWindow = window.open('', '_blank', 'width=350,height=700');
+    if (!printWindow || printWindow.closed || typeof printWindow.closed === 'undefined') {
+      toast.error("Popup bloqué! Autorisez les popups pour ce site.");
+      return;
+    }
+    printWindow.document.write(html);
+    printWindow.document.close();
+    toast.success("Ouverture du ticket d'impression...");
+  };
+
+  // Print all COMPLETED expenses as an A4 summary (same style as printAllApprovedExpenses)
+  const printAllCompletedExpenses = () => {
+    const completed = expenses.filter(e => e.status === 'completed');
+    if (completed.length === 0) {
+      toast.error("Aucun achat terminé à imprimer");
+      return;
+    }
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    const total = completed.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const categoryLabels = { cuisine: 'Cuisine', bar: 'Bar', paiement: 'Paiement', autres: 'Autres' };
+    const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
+
+    const itemsHtml = completed.map((expense, index) => {
+      const headerRow = `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${index + 1}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            <span style="background: ${catColor(expense.category)}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+              ${categoryLabels[expense.category] || expense.category}
+            </span>
+          </td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:9pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
+          </td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${expense.supplier || '-'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 10pt; color:#666;">${expense.completed_at?.slice(0, 10) || '-'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600; vertical-align: top;">${formatPrice(expense.amount)} F</td>
+        </tr>
+      `;
+      if (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0) {
+        const subRows = expense.items.map((it, sIdx) => `
+          <tr style="background: #fafafa;">
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #666;">${index + 1}.${sIdx + 1}</td>
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;">
+              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9pt;">
+                ${categoryLabels[it.category] || it.category}
+              </span>
+            </td>
+            <td style="padding: 4px 8px 4px 24px; border-bottom: 1px solid #f0f0f0; font-size: 9pt; color: #333;">
+              ↳ ${it.description}
+              <span style="color: #888; font-size: 8pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
+            </td>
+            <td colspan="2" style="border-bottom: 1px solid #f0f0f0;"></td>
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #444;">${formatPrice(it.amount)} F</td>
+          </tr>
+        `).join('');
+        return headerRow + subRows;
+      }
+      return headerRow;
+    }).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Achats Terminés</title>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: A4; margin: 15mm; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; font-size: 10pt; }
+            .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+            .logo { width: 80px; height: 80px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .header-right { text-align: right; font-size: 9pt; }
+            .doc-title { text-align: center; font-size: 14pt; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+            .date-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+            thead tr { border-top: 2px solid #333; border-bottom: 2px solid #333; }
+            th { padding: 8px; text-align: left; font-weight: bold; text-transform: uppercase; font-size: 8pt; }
+            td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+            .total-row { border-top: 2px solid #333; }
+            .total-row td { font-weight: bold; padding: 10px 8px; }
+            .footer { display: flex; justify-content: space-between; margin-top: 30px; }
+            .signature-box { text-align: center; width: 30%; }
+            .signature-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px; }
+            .signature-label { font-size: 8pt; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
+            <div class="header-right">
+              <p>Tél: +229 01 4147 0000</p>
+              <p>RCCM RB/COT/22 B 32037</p>
+              <p>Fidjrossè, Cotonou</p>
+            </div>
+          </div>
+          <div class="doc-title">Historique des Achats Terminés</div>
+          <div class="date-line">${new Date().toLocaleDateString('fr-FR')}</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 12%;">Catégorie</th>
+                <th style="width: 33%;">Description</th>
+                <th style="width: 18%;">Fournisseur</th>
+                <th style="width: 12%;">Terminé le</th>
+                <th style="width: 20%; text-align: right;">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+              <tr class="total-row">
+                <td colspan="5" style="text-align: right;">TOTAL:</td>
+                <td style="text-align: right;">${formatPrice(total)} F CFA</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Gérante</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Administrateur</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line"></div>
+              <div class="signature-label">Comptable</div>
+            </div>
+          </div>
+          <script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
   const openExpenseForEdit = (expense) => {
     setExpenseForm({
       category: expense.category,
@@ -5011,6 +5267,8 @@ _Gérante - Espace Maxo_
               printExpensesTicket,
               printAllExpensesList,
               printAllApprovedExpenses,
+              printCompletedExpensesTicket,
+              printAllCompletedExpenses,
               printExpensePDF,
               openExpenseForEdit,
               deleteExpense,

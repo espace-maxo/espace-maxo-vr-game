@@ -37,6 +37,8 @@ const AchatsTab = ({ ctx }) => {
     printExpensesTicket,
     printAllExpensesList,
     printAllApprovedExpenses,
+    printCompletedExpensesTicket,
+    printAllCompletedExpenses,
     printExpensePDF,
     openExpenseForEdit,
     deleteExpense,
@@ -124,7 +126,23 @@ const AchatsTab = ({ ctx }) => {
                   <CheckCircle className="w-4 h-4 mr-1 inline" />
                   Achats validés
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => ['approved', 'completed'].includes(e.status)).length}
+                    {expenses.filter(e => e.status === 'approved').length}
+                  </Badge>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('termines')}
+                  data-testid="achats-subtab-termines"
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
+                    achatsSubView === 'termines'
+                      ? 'bg-slate-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 mr-1 inline" />
+                  Achats terminés
+                  <Badge className="ml-2 bg-white/20 text-white text-xs">
+                    {expenses.filter(e => e.status === 'completed').length}
                   </Badge>
                 </button>
                 <button
@@ -957,48 +975,137 @@ const AchatsTab = ({ ctx }) => {
                 </Card>
               )}
 
-              {/* Completed expenses (history) */}
-              {achatsSubView === 'valides' && expenses.filter(e => e.status === 'completed').length > 0 && (
-                <Card className="bg-slate-800/30 border-slate-700">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-slate-400 flex items-center gap-2">
-                      <FileText className="w-5 h-5" />
-                      Historique des achats
-                      <Badge className="bg-slate-600/50 text-slate-300 ml-2">
-                        {expenses.filter(e => e.status === 'completed').length}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {expenses.filter(e => e.status === 'completed').slice(0, 20).map(expense => (
-                      <div key={expense.id} className="flex items-center justify-between gap-2 bg-slate-700/30 rounded-lg p-2 border border-slate-600/30">
+              {/* Completed expenses (Achats terminés — dedicated sub-menu) */}
+              {achatsSubView === 'termines' && (
+                expenses.filter(e => e.status === 'completed').length > 0 ? (
+                  <Card className="bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-slate-600/50" data-testid="completed-expenses-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-slate-200 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          <Badge className={`text-xs ${
-                            expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                            expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                            expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
-                            'bg-slate-500/20 text-slate-400'
-                          }`}>{expense.category}</Badge>
-                          <span className="text-slate-300 text-sm">{expense.description}</span>
+                          <FileText className="w-5 h-5" />
+                          Achats terminés
+                          <Badge className="bg-slate-500/30 text-slate-200 ml-2">
+                            {expenses.filter(e => e.status === 'completed').length}
+                          </Badge>
+                          <Badge className="bg-emerald-500/30 text-emerald-300">
+                            Total: {formatPrice(expenses.filter(e => e.status === 'completed').reduce((s, e) => s + (e.amount || 0), 0))} F
+                          </Badge>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400 text-sm">{formatPrice(expense.amount)} F</span>
-                          <span className="text-slate-500 text-xs">{expense.completed_at?.slice(0, 10)}</span>
-                          {currentUser?.role === 'admin' && (
-                            <Button 
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => deleteExpense(expense.id)}
-                              className="h-6 w-6 p-0 text-red-500 hover:bg-red-700/20"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={printCompletedExpensesTicket}
+                            className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                            data-testid="print-completed-ticket-btn"
+                          >
+                            <Receipt className="w-4 h-4 mr-1" />
+                            Ticket 80mm
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={printAllCompletedExpenses}
+                            className="bg-slate-600 hover:bg-slate-700"
+                            data-testid="print-completed-a4-btn"
+                          >
+                            <Printer className="w-4 h-4 mr-1" />
+                            Imprimer A4
+                          </Button>
                         </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
+                      {expenses.filter(e => e.status === 'completed').map(expense => (
+                        <div key={expense.id} className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/30" data-testid={`completed-expense-${expense.id}`}>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {expense.is_group ? (
+                                    <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
+                                  ) : (
+                                    <Badge className={`text-xs ${
+                                      expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                      expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                      expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                      'bg-slate-500/20 text-slate-400'
+                                    }`}>{expense.category}</Badge>
+                                  )}
+                                  <span className="text-white font-medium">{expense.description}</span>
+                                </div>
+                                {!expense.is_group && (
+                                  <div className="text-slate-300 text-sm mt-1">
+                                    <span className="text-slate-400">Qté:</span> <span className="font-bold">{expense.quantity || 1}</span>
+                                    <span className="mx-2">×</span>
+                                    <span className="text-slate-400">PU:</span> <span className="font-bold">{formatPrice(expense.unit_price || expense.amount)} F</span>
+                                  </div>
+                                )}
+                                <p className="text-emerald-400 font-bold text-lg">{formatPrice(expense.amount)} F</p>
+                                {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
+                                <p className="text-slate-500 text-xs">Terminé le {expense.completed_at?.slice(0, 10) || '—'}</p>
+                              </div>
+                              <div className="flex gap-2 flex-wrap shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => printExpensePDF(expense)}
+                                  className="border-slate-500/50 text-slate-300 hover:bg-slate-500/20"
+                                  data-testid={`print-pdf-${expense.id}`}
+                                >
+                                  <Printer className="w-4 h-4 mr-1" />
+                                  PDF
+                                </Button>
+                                {currentUser?.role === 'admin' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => deleteExpense(expense.id)}
+                                    className="border-red-700/50 text-red-500 hover:bg-red-700/20"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    Supprimer
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            {expense.is_group && expense.items && expense.items.length > 0 && (
+                              <div className="bg-slate-800/40 rounded p-2 mt-1">
+                                <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
+                                <div className="space-y-1">
+                                  {expense.items.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-slate-500">{idx + 1}.</span>
+                                        <Badge className={`text-xs ${
+                                          item.category === 'cuisine' ? 'bg-green-500/10 text-green-500' :
+                                          item.category === 'bar' ? 'bg-orange-500/10 text-orange-500' :
+                                          item.category === 'paiement' ? 'bg-blue-500/10 text-blue-500' :
+                                          'bg-slate-500/10 text-slate-500'
+                                        }`}>{item.category}</Badge>
+                                        <span className="text-white">{item.description}</span>
+                                      </div>
+                                      <div className="text-right">
+                                        <span className="text-slate-400 text-xs">{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                        <span className="text-emerald-400 font-bold">{formatPrice(item.amount)} F</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="bg-slate-800/30 border-slate-700">
+                    <CardContent className="py-12 text-center">
+                      <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-500">Aucun achat terminé</p>
+                    </CardContent>
+                  </Card>
+                )
               )}
 
               {/* Rejected expenses */}
