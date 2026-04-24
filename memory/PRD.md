@@ -4,6 +4,25 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Caisse → Stock : auto-création des produits manquants à la complétion (DONE)
+
+**Demande utilisateur** : faire entrer automatiquement les achats validés dans le stock (quantité + valeur) à partir du 24/04/2026. Si le produit n'existe pas, le créer aussitôt avec sa fiche de stock correspondante.
+
+**Changement** (`backend/routers/expenses.py`, bloc `PUT /expenses/{id}` avec `status="completed"`) :
+- Avant : quand un item d'achat ne matchait aucun produit stock, un mouvement **non lié** (`product_id=""`) était enregistré → aucune fiche créée, produit « invisible » dans le catalogue.
+- Après : auto-création complète :
+  1. Garantit l'existence de la catégorie stock **« Non classé »** (slate `#64748b`, icône Package), créée à la volée si absente.
+  2. Crée un `stock_products` avec : code généré `AUTO-XXXXXX`, nom = description de l'item, catégorie « Non classé », unité = `unit` de l'item (ou `unite`), quantité initiale = qté achetée, `purchase_price` = prix unitaire, `valeur_stock` calculé, `stock_min=5`, `stock_max=max(100, qty×4)`, `date_achat=today`, observation « Auto-créé depuis Achat Caisse », et traçabilité via `auto_created_from_expense=expense_id`.
+  3. Enregistre un mouvement `entree` **lié** au nouveau produit (avec product_id réel).
+  4. Ajoute la ligne à `stock_purchases` pour les rapports.
+- **Date pivot naturelle** : le code ne se déclenche qu'à la transition `status → completed and not was_completed_before`. Les complétions antérieures ne sont pas rejouées → comportement = « à partir d'aujourd'hui » demandé.
+
+**Tests** : lint Python propre. Test end-to-end curl validé :
+- Création expense « Cacahuetes grillees test » (qty=3, pu=500) → approved → completed
+- Fiche stock auto-créée : code `AUTO-77515F`, qty=3, prix=500, valeur=1500, cat='Non classé', trace `auto_created_from_expense=...`
+- Catégorie « Non classé » bien créée automatiquement
+
+---
 ## 24/04/2026 — Impression achats : police agrandie + bouton « Détail par achat » (DONE)
 
 **Demandes utilisateur** :
