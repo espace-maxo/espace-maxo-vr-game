@@ -1818,12 +1818,24 @@ export default function StockPage() {
                 (bulkConvertForm.category_id === "all" || p.category_id === bulkConvertForm.category_id)
               );
               const m = parseInt(bulkConvertForm.multiplier, 10) || 0;
+              if (affected.length === 0) {
+                return (
+                  <div className="bg-emerald-900/20 border border-emerald-500/40 rounded p-3 text-sm" data-testid="bulk-convert-empty-msg">
+                    <p className="text-emerald-300 font-medium flex items-center gap-2">
+                      ✅ Aucune conversion nécessaire
+                    </p>
+                    <p className="text-slate-400 text-xs mt-1">
+                      Aucun produit en <strong>{bulkConvertForm.from_unit}</strong>
+                      {bulkConvertForm.category_id !== "all" && <> dans la catégorie sélectionnée</>}.
+                      Changez de catégorie ou d'unité de départ ci-dessus si vous avez d'autres produits à convertir.
+                    </p>
+                  </div>
+                );
+              }
               return (
-                <div className={`border rounded p-3 text-sm ${affected.length > 0 ? "bg-violet-900/20 border-violet-500/40" : "bg-slate-800/40 border-slate-600/50"}`}>
-                  <p className={affected.length > 0 ? "text-violet-300 font-medium" : "text-slate-400"}>
-                    {affected.length === 0
-                      ? "Aucun produit ne correspond à ces critères."
-                      : `📦 ${affected.length} produit(s) seront convertis :`}
+                <div className="bg-violet-900/20 border border-violet-500/40 rounded p-3 text-sm">
+                  <p className="text-violet-300 font-medium">
+                    📦 {affected.length} produit(s) seront convertis :
                   </p>
                   {affected.slice(0, 6).map(p => (
                     <div key={p.id} className="text-xs text-slate-300 mt-1">
@@ -1841,7 +1853,15 @@ export default function StockPage() {
 
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setShowBulkConvertModal(false)} className="text-slate-400">Annuler</Button>
-              <Button onClick={submitBulkConvert} className="bg-violet-600 hover:bg-violet-700" data-testid="bulk-convert-submit">
+              <Button
+                onClick={submitBulkConvert}
+                disabled={products.filter(p =>
+                  (p.unit || "").toLowerCase() === bulkConvertForm.from_unit.toLowerCase() &&
+                  (bulkConvertForm.category_id === "all" || p.category_id === bulkConvertForm.category_id)
+                ).length === 0}
+                className="bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="bulk-convert-submit"
+              >
                 <Package className="w-4 h-4 mr-1" /> Convertir
               </Button>
             </div>
