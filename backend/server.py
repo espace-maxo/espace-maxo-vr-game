@@ -452,6 +452,7 @@ class CaisseProductCreate(BaseModel):
     unit: str = "unité"
     category: str = ""
     is_available: bool = True
+    stock_product_id: str = ""  # Optional link to stock_products for auto-decrement on sale
 
 class CaisseProduct(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -462,6 +463,7 @@ class CaisseProduct(BaseModel):
     unit: str = "unité"
     category: str = ""
     is_available: bool = True
+    stock_product_id: str = ""  # Optional link to stock_products
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Caisse Client Model

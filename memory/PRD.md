@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Caisse↔Stock : lien explicite pour décrément automatique (DONE)
+
+**Demande utilisateur** : permettre à chaque produit Caisse d'être lié à un produit Stock pour qu'1 vente = -1 décrément automatique dans le stock.
+
+**Backend** :
+- `server.py` : ajout du champ `stock_product_id` (string, default "") sur `CaisseProductCreate` + `CaisseProduct`.
+- `routers/invoices.py` : nouvelle logique prioritaire dans la validation de facture. Avant le match par recette ou par nom, vérifie si le produit Caisse a un `stock_product_id` renseigné → si oui, décrément direct du stock lié. Trace `stock_movements` avec `movement_type=sortie` et motif « Vente (lien direct) ».
+- `PUT /api/caisse/products/{id}` accepte déjà un dict → on lui envoie `{stock_product_id: "..."}` pour lier/délier.
+
+**Frontend** :
+- `ProductsTab.jsx` mis à jour : nouvelle prop `onLinkStock`. Chaque produit affiche une icône Link2/Link2Off (verte si lié, grise sinon) + badge Link2 à côté du nom si lié.
+- Nouveau composant `LinkStockModal.jsx` : modal de sélection avec barre de recherche (préfillée avec les 2 premiers mots du nom Caisse), liste filtrée des produits Stock, clic sur un produit → liaison, bouton *Délier* rouge si déjà lié.
+- Intégré dans `CaissePage.jsx` via `useState showLinkStockModal + linkStockTarget`. Callback `onLinked` rafraîchit le catalogue.
+
+**Test end-to-end** via curl :
+- Link caisse → stock OK, DB persiste, unlink OK.
+- Lint JS + Python propres.
+
+**Utilisation** : *Caisse → Gestion des produits* → cliquer sur l'icône chaîne (Link2Off grise) à droite d'un produit → sélectionner le produit stock correspondant → à chaque vente validée, le stock se décrémente automatiquement.
+
+---
 ## 24/04/2026 — Stock : conversion par lot + bouton individuel (DONE)
 
 **Demandes utilisateur consécutives** :

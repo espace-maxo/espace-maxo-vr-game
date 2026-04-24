@@ -41,6 +41,7 @@ import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
 import AnalyticsTab from "./caisse/components/AnalyticsTab";
 import ProductsTab from "./caisse/components/ProductsTab";
+import LinkStockModal from "./caisse/components/LinkStockModal";
 import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
@@ -253,6 +254,8 @@ const CaissePage = () => {
   const [viewInvoice, setViewInvoice] = useState(null);
   const [editInvoice, setEditInvoice] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showLinkStockModal, setShowLinkStockModal] = useState(false);
+  const [linkStockTarget, setLinkStockTarget] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
@@ -4998,6 +5001,10 @@ _Gérante - Espace Maxo_
                 setShowProductModal(true);
               }}
               onDeleteProduct={deleteProduct}
+              onLinkStock={(product) => {
+                setLinkStockTarget(product);
+                setShowLinkStockModal(true);
+              }}
             />
           </TabsContent>
 
@@ -5834,6 +5841,21 @@ _Gérante - Espace Maxo_
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Link Stock Modal */}
+      <LinkStockModal
+        open={showLinkStockModal}
+        onClose={() => { setShowLinkStockModal(false); setLinkStockTarget(null); }}
+        caisseProduct={linkStockTarget}
+        onLinked={async () => {
+          try {
+            const res = await axios.get(`${API}/caisse/products`);
+            const grouped = { bar: [], jardin: [], jeux: [] };
+            (res.data || []).forEach(p => { if (grouped[p.department]) grouped[p.department].push(p); });
+            setCatalog(grouped);
+          } catch (e) { /* silent */ }
+        }}
+      />
 
       {/* Client Modal */}
       <Dialog open={showClientModal} onOpenChange={setShowClientModal}>
