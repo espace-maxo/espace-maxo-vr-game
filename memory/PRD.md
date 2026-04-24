@@ -4,6 +4,34 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Stock : conversion par lot + bouton individuel (DONE)
+
+**Demandes utilisateur consécutives** :
+1. Convertir manuellement les boissons existantes de casier/pack vers bouteille.
+2. Ajouter un bouton « Convertir par lot » filtré par catégorie.
+
+**Backend** (`/app/backend/routers/stock.py`) :
+- `POST /api/stock/products/{id}/convert-unit` — conversion individuelle `{multiplier, new_unit}`.
+- `POST /api/stock/products/convert-unit-bulk` — conversion en masse `{category_id?, from_unit, multiplier, new_unit}` (toutes les occurrences matchantes).
+- Valeur comptable préservée. Trace `stock_movements` de type `conversion` pour audit.
+- Ajout de `import re` manquant (bug 500 corrigé).
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- **Bouton icône Package violet** dans chaque ligne produit (si unit ∈ {casier, pack, carton, bac, caisse, sac, bidon, pot, plateau, paquet, lot} + admin) → modal individuelle avec aperçu en direct.
+- **Bouton « Convertir par lot »** violet dans la barre d'actions en haut (admin uniquement).
+- Modal bulk avec :
+  - Select catégorie (ou « toutes »)
+  - Select unité de départ (`casier`, `pack`, `carton`, `bac`, `caisse`, `sac`, `bidon`, `pot`, `plateau`, `paquet`, `lot`)
+  - Défauts intelligents auto-remplis selon l'unité choisie (casier=24, pack=6, carton=12, sac=25kg, bidon=20L, …)
+  - Champ multiplicateur + nouvelle unité
+  - **Liste preview** violette montrant jusqu'à 6 produits affectés avec nouvelle qté calculée en live
+- Rafraîchissement auto après conversion.
+
+**Tests end-to-end validés** :
+- Individuel : `Soda tonic` 6 casier × 6 000 F → 144 bouteille × 250 F = 36 000 F ✅
+- Bulk : catégorie *Boissons non alcoolisées* + casier → bouteille × 24 → 3 produits convertis (Soda cola, Soda orange, Soda citron), valeurs préservées (0 / 90 000 / 66 000 F) ✅
+
+---
 ## 24/04/2026 — Stock : conversion manuelle d'unité (casier → bouteille) (DONE)
 
 **Demande utilisateur** : convertir manuellement les boissons existantes du stock qui sont en *casier/pack/carton* pour passer en *bouteille* (nombre de bouteilles × nombre de casiers).

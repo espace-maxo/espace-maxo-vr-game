@@ -95,6 +95,36 @@ export default function StockPage() {
   const [convertTarget, setConvertTarget] = useState(null);
   const [convertForm, setConvertForm] = useState({ multiplier: 24, new_unit: "bouteille" });
 
+  // Bulk unit conversion modal (convert all products with unit=X in category=Y)
+  const [showBulkConvertModal, setShowBulkConvertModal] = useState(false);
+  const [bulkConvertForm, setBulkConvertForm] = useState({
+    category_id: "all",
+    from_unit: "casier",
+    multiplier: 24,
+    new_unit: "bouteille",
+  });
+
+  const submitBulkConvert = async () => {
+    const m = parseInt(bulkConvertForm.multiplier, 10);
+    const nu = (bulkConvertForm.new_unit || "").trim();
+    const fu = (bulkConvertForm.from_unit || "").trim();
+    if (!m || m <= 0) { toast.error("Le multiplicateur doit être > 0"); return; }
+    if (!nu || !fu) { toast.error("Unités requises"); return; }
+    const payload = { from_unit: fu, multiplier: m, new_unit: nu };
+    if (bulkConvertForm.category_id && bulkConvertForm.category_id !== "all") {
+      payload.category_id = bulkConvertForm.category_id;
+    }
+    try {
+      const { data } = await axios.post(`${API}/stock/products/convert-unit-bulk`, payload);
+      toast.success(`${data.converted} produit(s) converti(s)`);
+      setShowBulkConvertModal(false);
+      fetchProducts();
+      fetchDashboard();
+    } catch (e) {
+      toast.error("Erreur lors de la conversion en lot");
+    }
+  };
+
   const openConvertUnit = (p) => {
     setConvertTarget(p);
     // Smart defaults by current unit
@@ -789,6 +819,12 @@ export default function StockPage() {
               <div className="flex gap-2">
                 <Button onClick={() => { setShowMovementModal(true); setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); }}
                   className="bg-blue-600 hover:bg-blue-700" data-testid="new-movement-btn"><ArrowUpDown className="w-4 h-4 mr-1" /> Mouvement</Button>
+                {isAdmin && (
+                  <Button onClick={() => setShowBulkConvertModal(true)}
+                    className="bg-violet-600 hover:bg-violet-700" data-testid="bulk-convert-btn" title="Convertir toutes les unités package d'une catégorie en unité interne">
+                    <Package className="w-4 h-4 mr-1" /> Convertir par lot
+                  </Button>
+                )}
                 <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" }); setShowProductModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-product-btn"><Plus className="w-4 h-4 mr-1" /> Nouveau Produit</Button>
               </div>
@@ -1712,6 +1748,103 @@ export default function StockPage() {
             </div>
             <div><Label className="text-slate-300 text-xs">Observation</Label><Textarea value={productForm.observation} onChange={e => setProductForm(p => ({...p, observation: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" rows={2} placeholder="Remarques..." /></div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveProduct}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Unit Conversion Modal */}
+      <Dialog open={showBulkConvertModal} onOpenChange={setShowBulkConvertModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-md" data-testid="bulk-convert-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2"><Package className="w-5 h-5 text-violet-400" /> Convertir par lot</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Convertit tous les produits d'une catégorie ayant l'unité sélectionnée. La valeur comptable est préservée (qté × prix inchangé).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-slate-300 text-xs">Catégorie</Label>
+                <Select value={bulkConvertForm.category_id} onValueChange={(v) => setBulkConvertForm({ ...bulkConvertForm, category_id: v })}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white" data-testid="bulk-convert-cat-select"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 max-h-[250px]">
+                    <SelectItem value="all" className="text-white">Toutes les catégories</SelectItem>
+                    {categories.map(c => <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-slate-300 text-xs">Unité actuelle à convertir *</Label>
+                <Select value={bulkConvertForm.from_unit} onValueChange={(v) => {
+                  // Smart defaults for multiplier when changing from_unit
+                  const defaults = { casier: 24, pack: 6, carton: 12, bac: 24, caisse: 24, sac: 25, bidon: 20, pot: 1 };
+                  const defaultsUnit = { sac: "kg", bidon: "litre" };
+                  setBulkConvertForm({
+                    ...bulkConvertForm,
+                    from_unit: v,
+                    multiplier: defaults[v] || bulkConvertForm.multiplier,
+                    new_unit: defaultsUnit[v] || "bouteille",
+                  });
+                }}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white" data-testid="bulk-convert-from-select"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {["casier","pack","carton","bac","caisse","sac","bidon","pot","plateau","paquet","lot"].map(u => (
+                      <SelectItem key={u} value={u} className="text-white">{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-slate-300 text-xs">Nombre par {bulkConvertForm.from_unit} *</Label>
+                <Input type="number" min="1" value={bulkConvertForm.multiplier}
+                  onChange={(e) => setBulkConvertForm({ ...bulkConvertForm, multiplier: e.target.value })}
+                  className="bg-slate-800 border-slate-700 text-white" data-testid="bulk-convert-multiplier" />
+              </div>
+              <div>
+                <Label className="text-slate-300 text-xs">Nouvelle unité *</Label>
+                <Input value={bulkConvertForm.new_unit}
+                  onChange={(e) => setBulkConvertForm({ ...bulkConvertForm, new_unit: e.target.value })}
+                  placeholder="bouteille, litre..." className="bg-slate-800 border-slate-700 text-white" data-testid="bulk-convert-new-unit" />
+              </div>
+            </div>
+
+            {/* Live preview: count of affected products */}
+            {(() => {
+              const affected = products.filter(p =>
+                (p.unit || "").toLowerCase() === bulkConvertForm.from_unit.toLowerCase() &&
+                (bulkConvertForm.category_id === "all" || p.category_id === bulkConvertForm.category_id)
+              );
+              const m = parseInt(bulkConvertForm.multiplier, 10) || 0;
+              return (
+                <div className={`border rounded p-3 text-sm ${affected.length > 0 ? "bg-violet-900/20 border-violet-500/40" : "bg-slate-800/40 border-slate-600/50"}`}>
+                  <p className={affected.length > 0 ? "text-violet-300 font-medium" : "text-slate-400"}>
+                    {affected.length === 0
+                      ? "Aucun produit ne correspond à ces critères."
+                      : `📦 ${affected.length} produit(s) seront convertis :`}
+                  </p>
+                  {affected.slice(0, 6).map(p => (
+                    <div key={p.id} className="text-xs text-slate-300 mt-1">
+                      <span className="font-mono text-slate-500">{p.code}</span> {p.name}
+                      <span className="text-slate-500"> : {p.quantity} {p.unit} → </span>
+                      <span className="text-emerald-300 font-medium">{p.quantity * m} {bulkConvertForm.new_unit}</span>
+                    </div>
+                  ))}
+                  {affected.length > 6 && (
+                    <div className="text-xs text-slate-500 mt-1">… et {affected.length - 6} autre(s)</div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowBulkConvertModal(false)} className="text-slate-400">Annuler</Button>
+              <Button onClick={submitBulkConvert} className="bg-violet-600 hover:bg-violet-700" data-testid="bulk-convert-submit">
+                <Package className="w-4 h-4 mr-1" /> Convertir
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
