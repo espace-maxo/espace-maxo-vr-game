@@ -1580,6 +1580,44 @@ const CaissePage = () => {
       autres: 'Autres'
     };
     
+    const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
+    const itemsBlock = (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0)
+      ? `
+        <div class="details">
+          <div class="details-title">Détail des articles (${expense.items.length})</div>
+          <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:9pt;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:5px;text-align:left;border-bottom:1px solid #ccc;">#</th>
+                <th style="padding:5px;text-align:left;border-bottom:1px solid #ccc;">Catégorie</th>
+                <th style="padding:5px;text-align:left;border-bottom:1px solid #ccc;">Description</th>
+                <th style="padding:5px;text-align:right;border-bottom:1px solid #ccc;">Qté</th>
+                <th style="padding:5px;text-align:right;border-bottom:1px solid #ccc;">PU</th>
+                <th style="padding:5px;text-align:right;border-bottom:1px solid #ccc;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${expense.items.map((it, idx) => `
+                <tr>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;">${idx + 1}</td>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;"><span style="background:${catColor(it.category)};color:white;padding:1px 6px;border-radius:8px;font-size:8pt;">${categoryLabels[it.category] || it.category}</span></td>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;">${it.description}</td>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;text-align:right;">${it.quantity}</td>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;text-align:right;">${formatPrice(it.unit_price)} F</td>
+                  <td style="padding:4px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">${formatPrice(it.amount)} F</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+      : (expense.quantity && expense.unit_price ? `
+        <div class="details">
+          <div class="details-title">Quantité & Prix</div>
+          <div>Qté ${expense.quantity} × ${formatPrice(expense.unit_price)} F</div>
+        </div>
+      ` : '');
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -1657,6 +1695,8 @@ const CaissePage = () => {
           </div>
           ` : ''}
 
+          ${itemsBlock}
+
           <div class="amount-box">
             <div class="amount-label">MONTANT APPROUVÉ</div>
             <div class="amount-value">${formatPrice(expense.amount)} F CFA</div>
@@ -1702,19 +1742,60 @@ const CaissePage = () => {
       autres: 'Autres'
     };
     
-    const itemsHtml = approved.map((expense, index) => `
-      <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${index + 1}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">
-          <span style="background: ${expense.category === 'cuisine' ? '#22c55e' : expense.category === 'bar' ? '#f97316' : expense.category === 'paiement' ? '#3b82f6' : '#64748b'}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
-            ${categoryLabels[expense.category] || expense.category}
-          </span>
-        </td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${expense.description}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${expense.supplier || '-'}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600;">${formatPrice(expense.amount)} F</td>
-      </tr>
-    `).join('');
+    const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
+
+    const itemsHtml = approved.map((expense, index) => {
+      const headerRow = `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${index + 1}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            <span style="background: ${catColor(expense.category)}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+              ${categoryLabels[expense.category] || expense.category}
+            </span>
+          </td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">
+            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:9pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
+          </td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; vertical-align: top;">${expense.supplier || '-'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600; vertical-align: top;">${formatPrice(expense.amount)} F</td>
+        </tr>
+      `;
+      // Expand sub-items for grouped lists
+      if (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0) {
+        const subRows = expense.items.map((it, sIdx) => `
+          <tr style="background: #fafafa;">
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #666;">${index + 1}.${sIdx + 1}</td>
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;">
+              <span style="background: ${catColor(it.category)}; opacity: 0.75; color: white; padding: 1px 6px; border-radius: 8px; font-size: 9pt;">
+                ${categoryLabels[it.category] || it.category}
+              </span>
+            </td>
+            <td style="padding: 4px 8px 4px 24px; border-bottom: 1px solid #f0f0f0; font-size: 9pt; color: #333;">
+              ↳ ${it.description}
+              <span style="color: #888; font-size: 8pt;"> — Qté ${it.quantity} × ${formatPrice(it.unit_price)} F</span>
+            </td>
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0;"></td>
+            <td style="padding: 4px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 9pt; color: #444;">${formatPrice(it.amount)} F</td>
+          </tr>
+        `).join('');
+        return headerRow + subRows;
+      }
+      // Single item: enrich with qty × PU when available
+      if (!expense.is_group && expense.quantity && expense.unit_price) {
+        const detailRow = `
+          <tr style="background: #fafafa;">
+            <td></td><td></td>
+            <td style="padding: 2px 8px 4px 24px; font-size: 9pt; color: #666; border-bottom: 1px solid #f0f0f0;">
+              ↳ Qté ${expense.quantity} × ${formatPrice(expense.unit_price)} F
+            </td>
+            <td style="border-bottom: 1px solid #f0f0f0;"></td>
+            <td style="border-bottom: 1px solid #f0f0f0;"></td>
+          </tr>
+        `;
+        return headerRow + detailRow;
+      }
+      return headerRow;
+    }).join('');
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -1808,16 +1889,30 @@ const CaissePage = () => {
     const rowsHtml = expenses.map((e, i) => {
       const catColor = e.category === 'cuisine' ? '#22c55e' : e.category === 'bar' ? '#f97316' : e.category === 'paiement' ? '#3b82f6' : '#64748b';
       const statusColor = e.status === 'approved' ? '#22c55e' : e.status === 'pending' ? '#f59e0b' : e.status === 'completed' ? '#64748b' : '#ef4444';
-      return '<tr style="border-bottom: 1px solid #eee;">' +
-        '<td style="padding: 8px; text-align: center;">' + (i + 1) + '</td>' +
-        '<td style="padding: 8px;"><span style="background: ' + catColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (categoryLabels[e.category] || e.category) + '</span></td>' +
-        '<td style="padding: 8px;">' + e.description + '</td>' +
-        '<td style="padding: 8px;">' + (e.supplier || '-') + '</td>' +
-        '<td style="padding: 8px; text-align: right; font-weight: 600;">' + formatPrice(e.amount) + ' F</td>' +
-        '<td style="padding: 8px;"><span style="background: ' + statusColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (statusLabels[e.status] || e.status) + '</span></td>' +
-        '<td style="padding: 8px; font-size: 11px; color: #666;">' + (e.requested_by || '-') + '</td>' +
-        '<td style="padding: 8px; font-size: 11px; color: #666;">' + (e.created_at?.slice(0, 10) || '-') + '</td>' +
+      const headerRow = '<tr style="border-bottom: 1px solid #eee;">' +
+        '<td style="padding: 8px; text-align: center; vertical-align: top;">' + (i + 1) + '</td>' +
+        '<td style="padding: 8px; vertical-align: top;"><span style="background: ' + catColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (categoryLabels[e.category] || e.category) + '</span></td>' +
+        '<td style="padding: 8px; vertical-align: top;">' + (e.is_group ? '<strong>📦 ' + e.description + '</strong> <span style="font-size:9pt;color:#666;">(' + (e.items?.length || 0) + ' art.)</span>' : e.description) + '</td>' +
+        '<td style="padding: 8px; vertical-align: top;">' + (e.supplier || '-') + '</td>' +
+        '<td style="padding: 8px; text-align: right; font-weight: 600; vertical-align: top;">' + formatPrice(e.amount) + ' F</td>' +
+        '<td style="padding: 8px; vertical-align: top;"><span style="background: ' + statusColor + '; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">' + (statusLabels[e.status] || e.status) + '</span></td>' +
+        '<td style="padding: 8px; font-size: 11px; color: #666; vertical-align: top;">' + (e.requested_by || '-') + '</td>' +
+        '<td style="padding: 8px; font-size: 11px; color: #666; vertical-align: top;">' + (e.created_at?.slice(0, 10) || '-') + '</td>' +
         '</tr>';
+      if (e.is_group && Array.isArray(e.items) && e.items.length > 0) {
+        const subs = e.items.map((it, sIdx) => (
+          '<tr style="background:#fafafa;border-bottom:1px solid #f3f3f3;">' +
+          '<td style="padding:3px 8px;text-align:right;font-size:9pt;color:#666;">' + (i + 1) + '.' + (sIdx + 1) + '</td>' +
+          '<td style="padding:3px 8px;"><span style="background:' + (it.category === 'cuisine' ? '#22c55e' : it.category === 'bar' ? '#f97316' : it.category === 'paiement' ? '#3b82f6' : '#64748b') + ';opacity:0.75;color:white;padding:1px 6px;border-radius:8px;font-size:9pt;">' + (categoryLabels[it.category] || it.category) + '</span></td>' +
+          '<td style="padding:3px 8px 3px 24px;font-size:9pt;color:#333;">↳ ' + it.description + ' <span style="color:#888;font-size:8pt;">— Qté ' + it.quantity + ' × ' + formatPrice(it.unit_price) + ' F</span></td>' +
+          '<td></td>' +
+          '<td style="padding:3px 8px;text-align:right;font-size:9pt;color:#444;">' + formatPrice(it.amount) + ' F</td>' +
+          '<td colspan="3"></td>' +
+          '</tr>'
+        )).join('');
+        return headerRow + subs;
+      }
+      return headerRow;
     }).join('');
 
     const html = '<!DOCTYPE html><html><head><title>Liste Complète des Demandes</title>' +
