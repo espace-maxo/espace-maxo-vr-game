@@ -4,6 +4,33 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Backfill sync Caisse→Stock + garde idempotente (DONE)
+
+**Demandes utilisateur** :
+1. Faire passer les achats du jour au stock.
+2. (Précédent) Auto-créer les produits manquants dans le stock.
+
+**Livraisons** :
+
+**1. Script de backfill one-shot** (`/app/scripts/backfill_today_expenses_to_stock.py`) :
+- Trouve les expenses `completed` du jour.
+- Pour chaque item, match fuzzy (exact/prefix/substring) avec `stock_products`.
+- Si match → `entree` + incrément qty/valeur.
+- Sinon → auto-création produit (code `AUTO-XXXXXX`, catégorie « Non classé » créée si absente) + `entree` lié.
+- Enregistre un `stock_purchases` synthétique avec `source=caisse` + `expense_id`.
+- **Idempotent** : skip si un `stock_purchases` existe déjà pour cet expense_id.
+
+**2. Exécution** sur la base actuelle :
+- 1 expense complété « Liste - Location du 04/04/2026 » (57 500 F, 4 items) traité.
+- 2 produits existants mis à jour : *Serviettes de table* +25, *Nappes jetables* +25.
+- 2 produits auto-créés : *Chaise* (100 u @ 150 F) et *Transport* (1 u @ 5 000 F).
+
+**3. Garde idempotente dans le backend** (`expenses.py`, PUT `/expenses/{id}`) :
+- Avant exécution du bloc de sync, vérifie s'il existe déjà un `stock_purchases` avec `source=caisse` et `expense_id=X`.
+- Si oui → log `already synced, skipping` sans rien écrire. Évite les doublons lors des hot-reloads ou retry HTTP.
+- Validé par test cycle `approved → completed → approved → completed` : les compteurs restent à 4/1/2.
+
+---
 ## 24/04/2026 — Caisse → Stock : auto-création des produits manquants à la complétion (DONE)
 
 **Demande utilisateur** : faire entrer automatiquement les achats validés dans le stock (quantité + valeur) à partir du 24/04/2026. Si le produit n'existe pas, le créer aussitôt avec sa fiche de stock correspondante.

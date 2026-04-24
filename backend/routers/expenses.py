@@ -287,187 +287,195 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         # === SYNC WITH STOCK MODULE (Achats Caisse → Entrées Stock) ===
         if update.status == "completed" and not was_completed_before:
             try:
-                updated_expense = await db.expenses.find_one({"id": expense_id})
-
-                if updated_expense.get("is_group") and updated_expense.get("items"):
-                    expense_items = updated_expense["items"]
-                else:
-                    expense_items = [{
-                        "description": updated_expense.get("description", ""),
-                        "quantity": updated_expense.get("quantity", 1),
-                        "unit_price": updated_expense.get("unit_price") or updated_expense.get("amount", 0),
-                        "amount": updated_expense.get("amount", 0),
-                        "category": updated_expense.get("category", ""),
-                    }]
-
-                stock_synced = 0
-                purchase_items_for_stock = []
-                now_iso = datetime.now(timezone.utc).isoformat()
-
-                for exp_item in expense_items:
-                    item_desc = exp_item.get("description", "").strip()
-                    item_qty = exp_item.get("quantity", 1) or 1
-                    item_price = exp_item.get("unit_price", 0) or 0
-
-                    if not item_desc:
-                        continue
-
-                    escaped = re.escape(item_desc)
-                    stock_product = await db.stock_products.find_one({
-                        "name": {"$regex": f"^{escaped}$", "$options": "i"},
-                        "is_active": True,
-                    })
-                    if not stock_product:
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": f"^{escaped}", "$options": "i"},
-                            "is_active": True,
-                        })
-                    if not stock_product:
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": escaped, "$options": "i"},
-                            "is_active": True,
-                        })
-
-                    if stock_product:
-                        old_qty = stock_product.get("quantity", 0)
-                        new_qty = old_qty + item_qty
-                        new_price = item_price if item_price > 0 else stock_product.get("purchase_price", 0)
-                        new_valeur = new_qty * new_price
-                        smin = stock_product.get("stock_min", 5)
-                        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-
-                        stock_mov = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": stock_product["id"],
-                            "product_name": stock_product["name"],
-                            "product_code": stock_product.get("code", ""),
-                            "movement_type": "entree",
-                            "quantity": item_qty,
-                            "previous_quantity": old_qty,
-                            "new_quantity": new_qty,
-                            "unit": stock_product.get("unit", ""),
-                            "unit_price": new_price,
-                            "total_value": item_qty * new_price,
-                            "reason": f"Achat Caisse - {updated_expense.get('supplier', 'N/A')}",
-                            "user_name": updated_expense.get("requested_by", "Caisse"),
-                            "expense_id": expense_id,
-                            "created_at": now_iso,
-                        }
-                        await db.stock_movements.insert_one(stock_mov)
-
-                        await db.stock_products.update_one(
-                            {"id": stock_product["id"]},
-                            {"$set": {
-                                "quantity": new_qty,
-                                "purchase_price": new_price,
-                                "valeur_stock": new_valeur,
-                                "statut": new_statut,
-                                "updated_at": now_iso,
-                            }}
-                        )
-                        purchase_items_for_stock.append({
-                            "product_id": stock_product["id"],
-                            "product_name": stock_product["name"],
-                            "quantity": item_qty,
-                            "unit_price": new_price,
-                            "unit": stock_product.get("unit", ""),
-                        })
-                        stock_synced += 1
-                        logger.info(f"Stock entree: {stock_product['name']} {old_qty} -> {new_qty} (expense {expense_id})")
-                    else:
-                        # Auto-create stock product (from 24/04/2026 onwards per user request)
-                        # Ensure "Non classé" category exists
-                        nonclass_cat = await db.stock_categories.find_one({
-                            "name": {"$regex": "^Non classé$", "$options": "i"}
-                        })
-                        if not nonclass_cat:
-                            nonclass_cat = {
-                                "id": str(uuid.uuid4()),
-                                "name": "Non classé",
-                                "description": "Catégorie par défaut pour les produits auto-créés depuis la Caisse",
-                                "color": "#64748b",
-                                "icon": "Package",
-                                "subcategories": [],
-                                "created_at": now_iso,
-                            }
-                            await db.stock_categories.insert_one(nonclass_cat)
-                            logger.info("Auto-created stock category 'Non classé' for Caisse sync")
-
-                        exp_unit = exp_item.get("unit") or "unite"
-                        new_product = {
-                            "id": str(uuid.uuid4()),
-                            "code": f"AUTO-{str(uuid.uuid4())[:6].upper()}",
-                            "name": item_desc,
-                            "category_id": nonclass_cat["id"],
-                            "subcategory": "",
-                            "unit": exp_unit,
-                            "quantity": item_qty,
-                            "stock_min": 5,
-                            "stock_max": max(100, item_qty * 4),
-                            "purchase_price": item_price,
-                            "valeur_stock": item_qty * item_price,
-                            "supplier_id": "",
-                            "storage_location": "",
-                            "is_active": True,
-                            "photo_url": "",
-                            "date_achat": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                            "date_peremption": "",
-                            "observation": f"Auto-créé depuis Achat Caisse ({updated_expense.get('supplier', 'N/A')})",
-                            "statut": "rupture" if item_qty <= 0 else ("faible" if item_qty <= 5 else "normal"),
-                            "auto_created_from_expense": expense_id,
-                            "created_at": now_iso,
-                            "updated_at": now_iso,
-                        }
-                        await db.stock_products.insert_one(new_product)
-                        logger.info(f"Auto-created stock product '{item_desc}' (qty={item_qty}, price={item_price}) from expense {expense_id}")
-
-                        # Movement linked to the new product
-                        linked_mov = {
-                            "id": str(uuid.uuid4()),
-                            "product_id": new_product["id"],
-                            "product_name": new_product["name"],
-                            "product_code": new_product["code"],
-                            "movement_type": "entree",
-                            "quantity": item_qty,
-                            "previous_quantity": 0,
-                            "new_quantity": item_qty,
-                            "unit": exp_unit,
-                            "unit_price": item_price,
-                            "total_value": item_qty * item_price,
-                            "reason": f"Achat Caisse (produit auto-créé) - {updated_expense.get('supplier', 'N/A')}",
-                            "user_name": updated_expense.get("requested_by", "Caisse"),
-                            "expense_id": expense_id,
-                            "created_at": now_iso,
-                        }
-                        await db.stock_movements.insert_one(linked_mov)
-                        purchase_items_for_stock.append({
-                            "product_id": new_product["id"],
-                            "product_name": new_product["name"],
-                            "quantity": item_qty,
-                            "unit_price": item_price,
-                            "unit": exp_unit,
-                        })
-                        stock_synced += 1
-
-                total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
-                stock_purchase = {
-                    "id": str(uuid.uuid4()),
-                    "supplier_id": "",
-                    "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
-                    "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                    "items": purchase_items_for_stock,
-                    "total_amount": total_amount,
-                    "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
-                    "user_name": updated_expense.get("requested_by", "Caisse"),
-                    "status": "validated",
+                # Idempotency guard: skip if this expense was already synced (e.g. on hot-reload replay)
+                already_synced = await db.stock_purchases.find_one({
                     "source": "caisse",
                     "expense_id": expense_id,
-                    "created_at": now_iso,
-                }
-                await db.stock_purchases.insert_one(stock_purchase)
-                stock_purchase.pop("_id", None)
+                })
+                if already_synced:
+                    logger.info(f"Expense {expense_id} already synced to stock, skipping")
+                else:
+                    updated_expense = await db.expenses.find_one({"id": expense_id})
 
-                logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
+                    if updated_expense.get("is_group") and updated_expense.get("items"):
+                        expense_items = updated_expense["items"]
+                    else:
+                        expense_items = [{
+                            "description": updated_expense.get("description", ""),
+                            "quantity": updated_expense.get("quantity", 1),
+                            "unit_price": updated_expense.get("unit_price") or updated_expense.get("amount", 0),
+                            "amount": updated_expense.get("amount", 0),
+                            "category": updated_expense.get("category", ""),
+                        }]
+    
+                    stock_synced = 0
+                    purchase_items_for_stock = []
+                    now_iso = datetime.now(timezone.utc).isoformat()
+    
+                    for exp_item in expense_items:
+                        item_desc = exp_item.get("description", "").strip()
+                        item_qty = exp_item.get("quantity", 1) or 1
+                        item_price = exp_item.get("unit_price", 0) or 0
+    
+                        if not item_desc:
+                            continue
+    
+                        escaped = re.escape(item_desc)
+                        stock_product = await db.stock_products.find_one({
+                            "name": {"$regex": f"^{escaped}$", "$options": "i"},
+                            "is_active": True,
+                        })
+                        if not stock_product:
+                            stock_product = await db.stock_products.find_one({
+                                "name": {"$regex": f"^{escaped}", "$options": "i"},
+                                "is_active": True,
+                            })
+                        if not stock_product:
+                            stock_product = await db.stock_products.find_one({
+                                "name": {"$regex": escaped, "$options": "i"},
+                                "is_active": True,
+                            })
+    
+                        if stock_product:
+                            old_qty = stock_product.get("quantity", 0)
+                            new_qty = old_qty + item_qty
+                            new_price = item_price if item_price > 0 else stock_product.get("purchase_price", 0)
+                            new_valeur = new_qty * new_price
+                            smin = stock_product.get("stock_min", 5)
+                            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+    
+                            stock_mov = {
+                                "id": str(uuid.uuid4()),
+                                "product_id": stock_product["id"],
+                                "product_name": stock_product["name"],
+                                "product_code": stock_product.get("code", ""),
+                                "movement_type": "entree",
+                                "quantity": item_qty,
+                                "previous_quantity": old_qty,
+                                "new_quantity": new_qty,
+                                "unit": stock_product.get("unit", ""),
+                                "unit_price": new_price,
+                                "total_value": item_qty * new_price,
+                                "reason": f"Achat Caisse - {updated_expense.get('supplier', 'N/A')}",
+                                "user_name": updated_expense.get("requested_by", "Caisse"),
+                                "expense_id": expense_id,
+                                "created_at": now_iso,
+                            }
+                            await db.stock_movements.insert_one(stock_mov)
+    
+                            await db.stock_products.update_one(
+                                {"id": stock_product["id"]},
+                                {"$set": {
+                                    "quantity": new_qty,
+                                    "purchase_price": new_price,
+                                    "valeur_stock": new_valeur,
+                                    "statut": new_statut,
+                                    "updated_at": now_iso,
+                                }}
+                            )
+                            purchase_items_for_stock.append({
+                                "product_id": stock_product["id"],
+                                "product_name": stock_product["name"],
+                                "quantity": item_qty,
+                                "unit_price": new_price,
+                                "unit": stock_product.get("unit", ""),
+                            })
+                            stock_synced += 1
+                            logger.info(f"Stock entree: {stock_product['name']} {old_qty} -> {new_qty} (expense {expense_id})")
+                        else:
+                            # Auto-create stock product (from 24/04/2026 onwards per user request)
+                            # Ensure "Non classé" category exists
+                            nonclass_cat = await db.stock_categories.find_one({
+                                "name": {"$regex": "^Non classé$", "$options": "i"}
+                            })
+                            if not nonclass_cat:
+                                nonclass_cat = {
+                                    "id": str(uuid.uuid4()),
+                                    "name": "Non classé",
+                                    "description": "Catégorie par défaut pour les produits auto-créés depuis la Caisse",
+                                    "color": "#64748b",
+                                    "icon": "Package",
+                                    "subcategories": [],
+                                    "created_at": now_iso,
+                                }
+                                await db.stock_categories.insert_one(nonclass_cat)
+                                logger.info("Auto-created stock category 'Non classé' for Caisse sync")
+    
+                            exp_unit = exp_item.get("unit") or "unite"
+                            new_product = {
+                                "id": str(uuid.uuid4()),
+                                "code": f"AUTO-{str(uuid.uuid4())[:6].upper()}",
+                                "name": item_desc,
+                                "category_id": nonclass_cat["id"],
+                                "subcategory": "",
+                                "unit": exp_unit,
+                                "quantity": item_qty,
+                                "stock_min": 5,
+                                "stock_max": max(100, item_qty * 4),
+                                "purchase_price": item_price,
+                                "valeur_stock": item_qty * item_price,
+                                "supplier_id": "",
+                                "storage_location": "",
+                                "is_active": True,
+                                "photo_url": "",
+                                "date_achat": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                                "date_peremption": "",
+                                "observation": f"Auto-créé depuis Achat Caisse ({updated_expense.get('supplier', 'N/A')})",
+                                "statut": "rupture" if item_qty <= 0 else ("faible" if item_qty <= 5 else "normal"),
+                                "auto_created_from_expense": expense_id,
+                                "created_at": now_iso,
+                                "updated_at": now_iso,
+                            }
+                            await db.stock_products.insert_one(new_product)
+                            logger.info(f"Auto-created stock product '{item_desc}' (qty={item_qty}, price={item_price}) from expense {expense_id}")
+    
+                            # Movement linked to the new product
+                            linked_mov = {
+                                "id": str(uuid.uuid4()),
+                                "product_id": new_product["id"],
+                                "product_name": new_product["name"],
+                                "product_code": new_product["code"],
+                                "movement_type": "entree",
+                                "quantity": item_qty,
+                                "previous_quantity": 0,
+                                "new_quantity": item_qty,
+                                "unit": exp_unit,
+                                "unit_price": item_price,
+                                "total_value": item_qty * item_price,
+                                "reason": f"Achat Caisse (produit auto-créé) - {updated_expense.get('supplier', 'N/A')}",
+                                "user_name": updated_expense.get("requested_by", "Caisse"),
+                                "expense_id": expense_id,
+                                "created_at": now_iso,
+                            }
+                            await db.stock_movements.insert_one(linked_mov)
+                            purchase_items_for_stock.append({
+                                "product_id": new_product["id"],
+                                "product_name": new_product["name"],
+                                "quantity": item_qty,
+                                "unit_price": item_price,
+                                "unit": exp_unit,
+                            })
+                            stock_synced += 1
+    
+                    total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
+                    stock_purchase = {
+                        "id": str(uuid.uuid4()),
+                        "supplier_id": "",
+                        "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
+                        "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "items": purchase_items_for_stock,
+                        "total_amount": total_amount,
+                        "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
+                        "user_name": updated_expense.get("requested_by", "Caisse"),
+                        "status": "validated",
+                        "source": "caisse",
+                        "expense_id": expense_id,
+                        "created_at": now_iso,
+                    }
+                    await db.stock_purchases.insert_one(stock_purchase)
+                    stock_purchase.pop("_id", None)
+    
+                    logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
             except Exception as stock_err:
                 logger.error(f"Error syncing expense to stock: {stock_err}")
 
