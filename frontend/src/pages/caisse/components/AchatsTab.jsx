@@ -896,7 +896,11 @@ const AchatsTab = ({ ctx }) => {
                               {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                                 <Button 
                                   size="sm"
-                                  onClick={() => updateExpense(expense.id, { status: "completed" })}
+                                  onClick={() => {
+                                    if (window.confirm(`Confirmez-vous avoir bien payé/réceptionné cet achat ?\n\n${expense.description}\nMontant : ${formatPrice(expense.amount)} F\n\nLe stock sera automatiquement mis à jour.`)) {
+                                      updateExpense(expense.id, { status: "completed" });
+                                    }
+                                  }}
                                   className="bg-emerald-600 hover:bg-emerald-700"
                                   data-testid={`mark-completed-${expense.id}`}
                                 >
