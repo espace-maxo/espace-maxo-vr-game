@@ -4,6 +4,33 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Sous-menu « Achats terminés » + Impression ticket 80mm + Fix détail articles A4 (DONE)
+
+**Demandes utilisateur** :
+1. L'impression des achats validés ne montrait que le résumé global, sans le détail des articles des listes groupées.
+2. Créer un **sous-menu dédié « Achats terminés »** avec option d'impression en **format ticket**.
+
+**Changements** :
+
+**1. Fix du détail des articles à l'impression** (`CaissePage.jsx`) :
+- `printAllApprovedExpenses` (bouton *Imprimer A4* sur carte APPROUVÉS) : chaque demande `is_group=true` génère désormais des sous-lignes `#.1`, `#.2`, … (fond gris clair) avec catégorie colorée, description, Qté × PU et montant. Badge 📦 + compteur sur la ligne mère. Items simples affichent aussi Qté × PU.
+- `printAllExpensesList` (A4 paysage — liste complète) : idem, sous-lignes détaillées.
+- `printExpensePDF` (bon A5 individuel) : nouveau tableau **« Détail des articles (N) »** (# / catégorie / description / Qté / PU / Total) inséré avant le montant approuvé, pour les demandes `is_group=true`.
+
+**2. Nouveau sous-onglet « Achats terminés »** (`AchatsTab.jsx` + `CaissePage.jsx`) :
+- 5ᵉ sous-onglet `achats-subtab-termines` (icône FileText, couleur slate) après *Achats validés* et avant *Rejetés*, avec badge compteur des `completed`.
+- Le sous-onglet `achats-subtab-valides` ne comptabilise désormais QUE les `approved` (plus les `completed`).
+- Nouvelle carte dédiée `completed-expenses-card` avec :
+  - Total agrégé affiché
+  - Bouton `print-completed-ticket-btn` → **Ticket 80 mm thermique** (fonction `printCompletedExpensesTicket` : titre « ACHATS TERMINES », sous-titre, date, articles détaillés pour `is_group`, total général, footer Espace Maxo)
+  - Bouton `print-completed-a4-btn` → **A4 signature-ready** (fonction `printAllCompletedExpenses` : en-tête logo, tableau avec colonne « Terminé le », total et 3 cadres signature Gérante/Admin/Comptable)
+  - Bouton **PDF** individuel par achat (via `printExpensePDF` qui bénéficie du fix détail articles)
+- Chaque expense affichée avec `completed-expense-<id>` ; sous-items visibles pour les listes groupées.
+- Empty state « Aucun achat terminé » si aucun `completed`.
+
+**Tests** : iteration_55 → **100% frontend** (Admin + Gérante). Tous les scénarios validés (empty state, completed avec sous-items, ticket 80mm via `window.open` + toast, A4 via `window.open`, décompte badges, non-régression autres sous-onglets). Lint propre sur les 2 fichiers modifiés.
+
+---
 ## 22/04/2026 — Compte courant : 3 modes de remboursement avancés (DONE)
 
 **Demande utilisateur** : prévoir des options de remboursement flexibles pour les avances en compte courant :
