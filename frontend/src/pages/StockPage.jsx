@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
@@ -187,6 +187,14 @@ export default function StockPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
+
+  // Products sorted so that items with a filled quantity or purchase_price appear first.
+  // "Filled" score: +2 if both quantity and price > 0, +1 if only one, 0 if empty.
+  // Array.prototype.sort is stable (ES2019+) so original order is kept within each score group.
+  const sortedProducts = useMemo(() => {
+    const score = (p) => (p.quantity > 0 ? 1 : 0) + (p.purchase_price > 0 ? 1 : 0);
+    return [...products].sort((a, b) => score(b) - score(a));
+  }, [products]);
 
   // Auto-seed if database is empty on first load
   useEffect(() => {
@@ -810,11 +818,11 @@ export default function StockPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                      {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={products.length > 0 && products.every(p => selectedItems.includes(p.id))} onChange={() => toggleSelectAll(products.map(p => p.id))} /></th>}
+                      {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={sortedProducts.length > 0 && sortedProducts.every(p => selectedItems.includes(p.id))} onChange={() => toggleSelectAll(sortedProducts.map(p => p.id))} /></th>}
                       <th className="p-3">Code</th><th className="p-3">Produit</th><th className="p-3">Categorie</th><th className="p-3">Sous-cat.</th><th className="p-3">Stock</th><th className="p-3">Min</th><th className="p-3">Unite</th><th className="p-3 text-right">Prix Achat</th><th className="p-3 text-right">Valeur</th><th className="p-3">Statut</th><th className="p-3">Lieu</th><th className="p-3"></th>
                     </tr></thead>
                     <tbody>
-                      {products.map(p => {
+                      {sortedProducts.map(p => {
                         const status = stockStatus(p);
                         return (
                           <tr key={p.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(p.id) ? 'bg-slate-800/50' : ''}`}>

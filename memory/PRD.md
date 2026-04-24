@@ -4,6 +4,18 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 24/04/2026 — Stock : tri des produits renseignés en premier (DONE)
+
+**Demande utilisateur** : dans la gestion de stock, mettre en premier les produits renseignés (quantité > 0 OU prix > 0 OU les deux), les produits "vides" en fin de liste.
+
+**Changement** (`StockPage.jsx`) :
+- Ajout de `useMemo` à l'import React.
+- Nouveau `sortedProducts` memoïsé : calcule un score `(quantity > 0 ? 1 : 0) + (purchase_price > 0 ? 1 : 0)` et trie décroissant (les produits "0+0" finissent en bas). `Array.prototype.sort` étant stable (ES2019+), l'ordre d'origine est préservé au sein de chaque groupe.
+- Table produits : `products.map` → `sortedProducts.map`, checkbox "select all" aussi basculé sur `sortedProducts`.
+
+**Tests** : lint propre. Aucune régression logique possible (pur reorder côté affichage — les actions CRUD et filtres restent inchangés).
+
+---
 ## 24/04/2026 — Sous-menu « Achats terminés » + Impression ticket 80mm + Fix détail articles A4 (DONE)
 
 **Demandes utilisateur** :
