@@ -154,6 +154,32 @@ const CurrentAccountsTab = () => {
     } catch (e) { toast.error("Erreur"); }
   };
 
+  // ---- Top-up ----
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [topUpAccount, setTopUpAccount] = useState(null);
+  const [topUpForm, setTopUpForm] = useState({ amount: "", label: "Recharge manuelle" });
+
+  const openTopUp = (acc) => {
+    setTopUpAccount(acc);
+    setTopUpForm({ amount: "", label: "Recharge manuelle" });
+    setShowTopUpModal(true);
+  };
+  const saveTopUp = async () => {
+    const amt = parseFloat(topUpForm.amount) || 0;
+    if (amt <= 0) return toast.error("Montant requis (> 0)");
+    try {
+      await axios.post(`${API}/current-accounts/${topUpAccount.id}/top-up`, {
+        amount: amt,
+        label: topUpForm.label || "Recharge manuelle",
+      });
+      toast.success(`Compte rechargé de ${formatPrice(amt)} F`);
+      setShowTopUpModal(false);
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
   // ---- Auto-deduction ----
   const runAutoDeduction = async () => {
     if (!confirm("Lancer le prélèvement automatique sur les recettes du jour ?")) return;
@@ -316,6 +342,10 @@ const CurrentAccountsTab = () => {
                         <DollarSign className="w-3 h-3 mr-1" /> Enregistrer un remboursement
                       </Button>
                     )}
+                    <Button size="sm" onClick={() => openTopUp(acc)}
+                      className="bg-amber-600 hover:bg-amber-700" data-testid={`topup-btn-${acc.id}`}>
+                      <Plus className="w-3 h-3 mr-1" /> Recharger
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setExpanded({ ...expanded, [acc.id]: !isExpanded })}
                       className="border-slate-600 text-slate-300 hover:bg-slate-700">
                       {isExpanded ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
@@ -389,6 +419,26 @@ const CurrentAccountsTab = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* Top-ups history (manual + auto from expense over-allocation) */}
+                      {(acc.top_ups || []).length > 0 && (
+                        <div>
+                          <div className="text-slate-300 text-xs font-medium mb-1 flex items-center gap-1">
+                            <Plus className="w-3 h-3 text-amber-400" /> Recharges ({(acc.top_ups || []).length})
+                          </div>
+                          <div className="bg-amber-900/15 border border-amber-500/20 rounded p-2 space-y-1" data-testid={`top-ups-list-${acc.id}`}>
+                            {(acc.top_ups || []).slice().reverse().map((t) => (
+                              <div key={t.id} className="flex justify-between items-center text-xs">
+                                <div className="text-slate-300">
+                                  <span className="text-amber-300 mr-2">+</span>
+                                  {(t.received_date || (t.created_at || '').slice(0,10))} — {t.label}
+                                </div>
+                                <span className="text-amber-300 font-medium">+{formatPrice(t.amount)} F</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {acc.notes && <div className="text-xs text-slate-400 italic">« {acc.notes} »</div>}
                     </div>
@@ -665,6 +715,59 @@ const CurrentAccountsTab = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ============== TOP-UP MODAL ============== */}
+      <Dialog open={showTopUpModal} onOpenChange={setShowTopUpModal}>
+        <DialogContent className="bg-slate-900 border-amber-500/40 text-white sm:max-w-md" data-testid="topup-modal">
+          <DialogHeader>
+            <DialogTitle className="text-amber-300">
+              ➕ Recharger « {topUpAccount?.name} »
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Augmenter le solde de l'avance promoteur. Le solde actuel passera de{" "}
+              <strong className="text-white">{formatPrice(topUpAccount?.total_advance || 0)} F</strong>{" "}
+              à{" "}
+              <strong className="text-amber-300">
+                {formatPrice((topUpAccount?.total_advance || 0) + (parseFloat(topUpForm.amount) || 0))} F
+              </strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label className="text-slate-300">Montant à recharger (F CFA)</Label>
+              <Input
+                type="number"
+                step="any"
+                value={topUpForm.amount}
+                onChange={(e) => setTopUpForm({ ...topUpForm, amount: e.target.value })}
+                placeholder="0"
+                className="bg-slate-700/50 border-slate-600 text-white"
+                data-testid="topup-amount-input"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-slate-300">Libellé (optionnel)</Label>
+              <Input
+                value={topUpForm.label}
+                onChange={(e) => setTopUpForm({ ...topUpForm, label: e.target.value })}
+                placeholder="Recharge manuelle"
+                className="bg-slate-700/50 border-slate-600 text-white"
+                data-testid="topup-label-input"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowTopUpModal(false)} className="border-slate-600 text-slate-300">
+                Annuler
+              </Button>
+              <Button onClick={saveTopUp} className="bg-amber-600 hover:bg-amber-700" data-testid="save-topup-btn">
+                <Plus className="w-4 h-4 mr-2" /> Recharger
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

@@ -286,6 +286,49 @@ async def add_repayment(account_id: str, data: RepaymentCreate):
         raise HTTPException(500, str(e))
 
 
+
+class TopUpBody(BaseModel):
+    amount: float
+    label: Optional[str] = None
+    received_date: Optional[str] = None  # YYYY-MM-DD
+
+
+@router.post("/current-accounts/{account_id}/top-up")
+async def top_up_account(account_id: str, data: TopUpBody):
+    """Manual top-up: increase total_advance by `amount` and record a top_ups[] entry."""
+    try:
+        if data.amount is None or float(data.amount) <= 0:
+            raise HTTPException(400, "Le montant doit être strictement positif")
+        acc = await db.current_accounts.find_one({"id": account_id}, {"_id": 0})
+        if not acc:
+            raise HTTPException(404, "Compte non trouvé")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        top_up = {
+            "id": str(uuid.uuid4()),
+            "amount": float(data.amount),
+            "label": (data.label or "Recharge manuelle"),
+            "received_date": data.received_date or today_iso,
+            "created_at": now_iso,
+        }
+        await db.current_accounts.update_one(
+            {"id": account_id},
+            {
+                "$inc": {"total_advance": float(data.amount)},
+                "$push": {"top_ups": top_up},
+            },
+        )
+        refreshed = await db.current_accounts.find_one({"id": account_id}, {"_id": 0})
+        return {"success": True, "account": refreshed, "top_up": top_up}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Top-up account error: {e}")
+        raise HTTPException(500, str(e))
+
+
+
+
 @router.delete("/current-accounts/{account_id}/repayments/{repayment_id}")
 async def delete_repayment(account_id: str, repayment_id: str):
     res = await db.current_accounts.update_one(
