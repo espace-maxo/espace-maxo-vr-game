@@ -254,6 +254,7 @@ const CaissePage = () => {
   const [viewInvoice, setViewInvoice] = useState(null);
   const [editInvoice, setEditInvoice] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [stockSuggestions, setStockSuggestions] = useState([]);
   const [showLinkStockModal, setShowLinkStockModal] = useState(false);
   const [linkStockTarget, setLinkStockTarget] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
@@ -737,6 +738,18 @@ const CaissePage = () => {
     });
     
     setCatalog(newCatalog);
+  };
+
+  // Lightweight refresh of the caisse products catalog (used after bulk auto-link)
+  const refreshCatalog = async () => {
+    try {
+      const r = await axios.get(`${API}/caisse/products`);
+      const dbProducts = r.data.products || [];
+      buildCatalogFromProducts(dbProducts);
+      setProducts(dbProducts);
+    } catch (e) {
+      console.error("refreshCatalog failed", e);
+    }
   };
 
   const fetchMonthlyStats = async () => {
@@ -5261,6 +5274,7 @@ _Gérante - Espace Maxo_
                 setShowProductModal(true);
               }}
               onDeleteProduct={deleteProduct}
+              onProductsRefresh={refreshCatalog}
               onLinkStock={(product) => {
                 setLinkStockTarget(product);
                 setShowLinkStockModal(true);
@@ -6067,7 +6081,67 @@ _Gérante - Espace Maxo_
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nom</Label>
-              <Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} className="bg-slate-700 border-slate-600" />
+              <Input
+                value={productForm.name}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setProductForm({ ...productForm, name: v });
+                  // Fetch stock suggestions on the fly (debounced via short timeout)
+                  if (!editProduct && v && v.trim().length >= 2 && !productForm.stock_product_id) {
+                    if (window._stockSuggestTimer) clearTimeout(window._stockSuggestTimer);
+                    window._stockSuggestTimer = setTimeout(async () => {
+                      try {
+                        const r = await axios.get(`${API}/caisse/products/stock-suggestions`, {
+                          params: { name: v, limit: 5 }
+                        });
+                        setStockSuggestions(r.data?.suggestions || []);
+                      } catch (err) {
+                        setStockSuggestions([]);
+                      }
+                    }, 250);
+                  } else {
+                    setStockSuggestions([]);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setStockSuggestions([]), 200)}
+                className="bg-slate-700 border-slate-600"
+                data-testid="product-name-input"
+              />
+              {!editProduct && stockSuggestions.length > 0 && !productForm.stock_product_id && (
+                <div className="bg-slate-900/80 border border-emerald-500/30 rounded p-2 space-y-1" data-testid="stock-suggestions-panel">
+                  <div className="text-[11px] text-emerald-300 font-semibold">
+                    💡 Lier ce produit à un produit Stock existant ?
+                  </div>
+                  {stockSuggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setProductForm({ ...productForm, stock_product_id: s.id, stock_product_name: s.name });
+                        setStockSuggestions([]);
+                        toast.success(`Produit lié à : ${s.name}`);
+                      }}
+                      className="w-full text-left px-2 py-1 rounded bg-slate-800 hover:bg-emerald-900/40 text-xs text-white flex justify-between items-center"
+                      data-testid={`suggest-stock-${s.id}`}
+                    >
+                      <span>📦 {s.name} <span className="text-slate-400">({s.unit}, qté {s.quantity})</span></span>
+                      <span className="text-emerald-400">{Math.round(s.score * 100)}%</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {productForm.stock_product_id && (
+                <div className="text-xs text-emerald-300 flex items-center gap-2">
+                  🔗 Lié au stock : {productForm.stock_product_name || productForm.stock_product_id}
+                  <button
+                    type="button"
+                    onClick={() => setProductForm({ ...productForm, stock_product_id: null, stock_product_name: null })}
+                    className="text-rose-400 hover:underline text-[11px]"
+                  >
+                    (délier)
+                  </button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -3255,6 +3255,154 @@ async def delete_caisse_product(product_id: str, modified_by: str = "", modified
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@api_router.post("/caisse/products/auto-link-to-stock")
+async def auto_link_caisse_products_to_stock(
+    threshold: float = 0.80,
+    dry_run: bool = False,
+):
+    """Auto-link caisse products to stock products by name similarity.
+
+    For every caisse product with no stock_product_id, find the best stock_product
+    whose name similarity (difflib SequenceMatcher) is >= `threshold`. If found,
+    set stock_product_id on the caisse product (unless dry_run=True).
+
+    Returns a report: linked, ambiguous (multiple high matches), no_match, already_linked.
+    """
+    from difflib import SequenceMatcher
+
+    def norm(s: str) -> str:
+        return (s or "").strip().lower()
+
+    try:
+        caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+        stock_products = await db.stock_products.find(
+            {"is_active": True}, {"_id": 0}
+        ).to_list(2000)
+
+        report = {
+            "scanned": len(caisse_products),
+            "already_linked": 0,
+            "linked": [],
+            "ambiguous": [],
+            "no_match": [],
+            "threshold": threshold,
+            "dry_run": dry_run,
+        }
+
+        for cp in caisse_products:
+            cp_name = norm(cp.get("name"))
+            if not cp_name:
+                continue
+            if cp.get("stock_product_id"):
+                report["already_linked"] += 1
+                continue
+
+            # Score every stock product
+            scores = []
+            for sp in stock_products:
+                ratio = SequenceMatcher(None, cp_name, norm(sp.get("name"))).ratio()
+                if ratio >= threshold:
+                    scores.append((ratio, sp))
+            scores.sort(key=lambda x: x[0], reverse=True)
+
+            if not scores:
+                report["no_match"].append({"caisse_id": cp["id"], "caisse_name": cp.get("name")})
+                continue
+
+            best_ratio, best_sp = scores[0]
+
+            # Mark as ambiguous if 2+ stock products have very high (>=0.95) score
+            high_matches = [s for s in scores if s[0] >= 0.95]
+            if len(high_matches) > 1 and abs(scores[0][0] - scores[1][0]) < 0.02:
+                report["ambiguous"].append({
+                    "caisse_id": cp["id"],
+                    "caisse_name": cp.get("name"),
+                    "candidates": [
+                        {"stock_id": s.get("id"), "stock_name": s.get("name"), "score": round(r, 3)}
+                        for r, s in high_matches[:5]
+                    ],
+                })
+                continue
+
+            entry = {
+                "caisse_id": cp["id"],
+                "caisse_name": cp.get("name"),
+                "stock_id": best_sp.get("id"),
+                "stock_name": best_sp.get("name"),
+                "score": round(best_ratio, 3),
+            }
+            if not dry_run:
+                await db.caisse_products.update_one(
+                    {"id": cp["id"]},
+                    {"$set": {
+                        "stock_product_id": best_sp["id"],
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+            report["linked"].append(entry)
+
+        report["linked_count"] = len(report["linked"])
+        report["ambiguous_count"] = len(report["ambiguous"])
+        report["no_match_count"] = len(report["no_match"])
+        return report
+    except Exception as e:
+        logger.error(f"Auto-link caisse products error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/caisse/products/stock-suggestions")
+async def stock_suggestions_for_caisse_product(
+    name: str,
+    limit: int = 5,
+    threshold: float = 0.40,
+):
+    """Return top stock products matching a candidate name (used for autocomplete on creation).
+
+    Scoring prioritizes substring/prefix matches over pure SequenceMatcher to give
+    relevant suggestions for short queries (e.g., 'poulet' should rank 'Poulet entier'
+    above 'Poulpe').
+    """
+    from difflib import SequenceMatcher
+
+    if not name or len(name.strip()) < 2:
+        return {"suggestions": []}
+    cand = name.strip().lower()
+    stock_products = await db.stock_products.find(
+        {"is_active": True}, {"_id": 0}
+    ).to_list(2000)
+    scored = []
+    for sp in stock_products:
+        sp_name = (sp.get("name") or "").strip().lower()
+        if not sp_name:
+            continue
+        ratio = SequenceMatcher(None, cand, sp_name).ratio()
+        boosted = ratio
+        if sp_name == cand:
+            boosted = 1.0
+        elif sp_name.startswith(cand):
+            boosted = max(ratio, 0.92)
+        elif cand in sp_name:
+            boosted = max(ratio, 0.85)
+        elif sp_name in cand:
+            boosted = max(ratio, 0.75)
+        if boosted >= threshold:
+            scored.append((boosted, ratio, sp))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return {
+        "suggestions": [
+            {
+                "id": sp.get("id"),
+                "name": sp.get("name"),
+                "unit": sp.get("unit"),
+                "quantity": sp.get("quantity"),
+                "score": round(boost, 3),
+            }
+            for boost, ratio, sp in scored[:limit]
+        ]
+    }
+
+
 @api_router.post("/caisse/products/init-default")
 async def init_default_products(products: List[dict] = Body(...)):
     """Initialize default products in database (one-time migration)"""
