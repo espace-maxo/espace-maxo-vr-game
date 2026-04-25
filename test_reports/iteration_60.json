@@ -1,0 +1,102 @@
+{
+  "summary": "Tested iteration 60 features: Mobile view improvements for Achats & Dépenses (390x844 viewport) and Toggle 'Liste d'origine / Liste corrigée' for admin_review expenses. All features verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_60.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AchatsTab.jsx lines 128-138: reviewViewMode state correctly manages toggle state per expense, with getReviewViewMode() providing role-based defaults (admin='corrected', manager='original')",
+    "AchatsTab.jsx lines 1126-1154: Toggle UI with data-testid='review-view-toggle-{expense.id}' renders correctly with '📋 Liste d'origine' and '✏️ Liste corrigée' buttons",
+    "AchatsTab.jsx lines 1157-1296: Admin editor only shows when !showOriginal (corrected view selected), correctly hidden in original view",
+    "AchatsTab.jsx lines 1299-1342: Read-only list shown to manager always, and to admin when 'original' is selected. Displays correct items based on showOriginal flag",
+    "AchatsTab.jsx lines 1173-1203: Mobile-friendly 2-row layout for admin editor items - Row 1: checkbox+index+description+delete, Row 2: category+qty+PU+total",
+    "AchatsTab.jsx lines 1312-1329: Read-only items use flex-col sm:flex-row for responsive layout",
+    "AchatsTab.jsx lines 1333-1339: Total label adapts: 'Total d'origine' vs 'Total corrigé' based on showOriginal flag",
+    "AchatsTab.jsx lines 920-949: Pending list items use flex-col sm:flex-row layout for mobile responsiveness",
+    "AchatsTab.jsx line 293: Sub-tabs container has overflow-x-auto class for horizontal scrolling on mobile"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Created test expense 'TEST mobile+toggle iter60' with 3 items (30000 F total). Moved to admin_review with corrections: Item B qty 10→15, Item C struck (motif: À reporter). Original amount: 30000 F, Corrected amount: 25000 F. Test data cleaned up after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 60 added: (1) Mobile improvements for Achats & Dépenses at 390x844 viewport - sub-tabs horizontally scrollable, pending list items use flex-col layout, admin editor uses 2-row layout per item. (2) Toggle 'Liste d'origine / Liste corrigée' for admin_review expenses - visible to both admin and gérante when expense has original_items snapshot. Admin default: 'Liste corrigée' (can edit), Gérante default: 'Liste d'origine' (read-only). Toggle switches between original snapshot and current corrected items. Totals adapt: 'Total d'origine' vs 'Total corrigé'. Struck items appear with line-through and red background in corrected view.",
+  "features_verified": {
+    "mobile_390x844": [
+      "Sub-tabs horizontally scrollable with overflow-x-auto - VERIFIED",
+      "Pending expenses card displays without major overflow - VERIFIED",
+      "Pending list items use flex-col layout on mobile - VERIFIED (class: 'flex flex-col gap-2')",
+      "Admin editor uses 2-row layout: Row 1 = checkbox+index+description+delete, Row 2 = category+qty+PU+total - VERIFIED",
+      "All inputs usable on mobile (no overflow, proper sizing) - VERIFIED",
+      "Admin review section displays correctly on mobile - VERIFIED"
+    ],
+    "toggle_original_corrected": [
+      "Toggle appears under header for admin_review expenses with original_items - VERIFIED (data-testid='review-view-toggle-{expense.id}')",
+      "Toggle buttons: '📋 Liste d'origine' and '✏️ Liste corrigée' - VERIFIED",
+      "Admin default view: 'Liste corrigée' selected (amber background) - VERIFIED",
+      "Gérante default view: 'Liste d'origine' selected (slate background) - VERIFIED",
+      "Admin in corrected view: Editor visible, can modify items - VERIFIED",
+      "Admin in original view: Editor hidden, read-only list shown - VERIFIED",
+      "Gérante in original view: Read-only list with original items - VERIFIED",
+      "Gérante in corrected view: Read-only list with corrected items - VERIFIED",
+      "Struck items in corrected view: line-through + red background - VERIFIED (found 4 elements with line-through, 1 container with red background)",
+      "Total adapts: 'Total d'origine' (30000 F) vs 'Total corrigé' (25000 F) - VERIFIED",
+      "Modified item (Item B qty 10→15) shows correctly in corrected view - VERIFIED"
+    ],
+    "regression": [
+      "First validation button ('Première validation') visible for pending expenses - VERIFIED",
+      "Admin editor inline editing (qty/PU/desc/category/strike) - VERIFIED",
+      "Strike reason dropdown with 'À reporter' option - VERIFIED",
+      "'Ajouter une ligne' button visible - VERIFIED",
+      "'Enregistrer modifications', 'Aperçu PDF', 'Envoyer à la gérante', 'Annuler validation' buttons visible - VERIFIED",
+      "Gérante sees '🔒 Lecture seule' badge - VERIFIED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Create grouped expense via API with 3 items (30000 F total) - SUCCESS",
+    "Move to admin_review with corrections (Item B qty 10→15, Item C struck) - SUCCESS",
+    "Login as Admin on mobile viewport (390x844) - SUCCESS",
+    "Navigate to Achats & Dépenses → Validation en cours - SUCCESS",
+    "Verify sub-tabs horizontally scrollable - SUCCESS",
+    "Verify admin_review card visible - SUCCESS",
+    "Verify toggle visible with both buttons - SUCCESS",
+    "Verify admin default is 'Liste corrigée' (amber background) - SUCCESS",
+    "Verify admin editor visible in corrected view - SUCCESS",
+    "Verify 2-row mobile layout for editor items - SUCCESS",
+    "Click 'Liste d'origine' - SUCCESS",
+    "Verify admin editor hidden in original view - SUCCESS",
+    "Verify read-only list visible in original view - SUCCESS",
+    "Click 'Liste corrigée' to switch back - SUCCESS",
+    "Verify admin editor visible again - SUCCESS",
+    "Login as Gérante on mobile viewport - SUCCESS",
+    "Navigate to Achats & Dépenses → Validation en cours - SUCCESS",
+    "Verify admin_review card visible for Gérante - SUCCESS",
+    "Verify toggle visible for Gérante - SUCCESS",
+    "Verify Gérante default is 'Liste d'origine' (slate background) - SUCCESS",
+    "Verify read-only list shows original items (Item B qty=10) - SUCCESS",
+    "Click 'Liste corrigée' - SUCCESS",
+    "Verify read-only list shows corrected items (Item B qty=15, Item C struck) - SUCCESS",
+    "Verify struck items have line-through and red styling - SUCCESS",
+    "Verify 'Total d'origine: 30000 F' in original view - SUCCESS",
+    "Verify 'Total corrigé: 25000 F' in corrected view - SUCCESS",
+    "Create pending expense for mobile layout testing - SUCCESS",
+    "Verify pending list items use flex-col layout on mobile - SUCCESS",
+    "Clean up test data - SUCCESS"
+  ]
+}

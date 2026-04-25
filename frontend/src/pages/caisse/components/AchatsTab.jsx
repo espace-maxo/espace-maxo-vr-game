@@ -125,6 +125,14 @@ const AchatsTab = ({ ctx }) => {
   // Shape: { [expenseId]: [ { ...item, struck, strike_reason, strike_note } ] }
   const [strikeEdits, setStrikeEdits] = React.useState({});
 
+  // Toggle which list to display for admin_review expenses: 'original' | 'corrected'.
+  // Defaults to 'corrected' for admin (their work-in-progress) and 'original' for manager.
+  const [reviewViewMode, setReviewViewMode] = React.useState({});
+  const getReviewViewMode = (expenseId, defaultMode) =>
+    reviewViewMode[expenseId] || defaultMode;
+  const setReviewViewModeFor = (expenseId, mode) =>
+    setReviewViewMode((prev) => ({ ...prev, [expenseId]: mode }));
+
   const getEditedItems = (expense) => {
     if (strikeEdits[expense.id]) return strikeEdits[expense.id];
     return (expense.items || []).map((it) => ({
@@ -909,8 +917,8 @@ const AchatsTab = ({ ctx }) => {
                                     }`}
                                     data-testid={`pending-item-${expense.id}-${idx}`}
                                   >
-                                    <div className="flex justify-between items-center gap-2">
-                                      <div className="flex items-center gap-2 flex-1">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
                                         {isAdmin && (
                                           <Checkbox
                                             checked={struck}
@@ -919,20 +927,20 @@ const AchatsTab = ({ ctx }) => {
                                               strike_reason: checked ? (item.strike_reason || 'pas_opportun') : '',
                                               strike_note: checked ? item.strike_note : '',
                                             })}
-                                            className="border-red-400 data-[state=checked]:bg-red-600"
+                                            className="border-red-400 data-[state=checked]:bg-red-600 shrink-0"
                                             data-testid={`strike-checkbox-${expense.id}-${idx}`}
                                           />
                                         )}
-                                        <span className={`text-slate-500 font-mono ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
-                                        <Badge className={`text-xs ${
+                                        <span className={`text-slate-500 font-mono shrink-0 ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <Badge className={`text-xs shrink-0 ${
                                           item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
                                           item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
                                           item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
                                           'bg-slate-500/20 text-slate-400'
                                         }`}>{item.category}</Badge>
-                                        <span className={`text-white font-medium ${struck ? 'line-through text-slate-400' : ''}`}>{item.description}</span>
+                                        <span className={`text-white font-medium truncate ${struck ? 'line-through text-slate-400' : ''}`}>{item.description}</span>
                                       </div>
-                                      <div className="text-right flex items-center gap-2">
+                                      <div className="text-right flex items-center gap-2 shrink-0 pl-7 sm:pl-0">
                                         <span className={`text-slate-400 text-xs ${struck ? 'line-through' : ''}`}>
                                           {item.quantity} × {formatPrice(item.unit_price)} F
                                         </span>
@@ -1077,11 +1085,15 @@ const AchatsTab = ({ ctx }) => {
                       // Manager sees the ORIGINAL snapshot (before admin started correcting)
                       const managerItems = expense.original_items || expense.items || [];
                       const managerAmount = expense.original_amount || expense.amount;
-                      const editedItems = isAdmin ? getEditedItems(expense) : managerItems;
-                      const keptTotal = isAdmin
-                        ? editedItems.reduce((s, it) => s + (it.struck ? 0 : (it.amount || 0)), 0)
-                        : managerAmount;
-                      const struckCount = isAdmin ? editedItems.filter(it => it.struck).length : 0;
+                      const correctedItems = isAdmin ? getEditedItems(expense) : (expense.items || []);
+                      const correctedAmount = correctedItems.reduce((s, it) => s + (it.struck ? 0 : (it.amount || 0)), 0);
+                      // Default view: admin sees their corrections, gérante sees the original
+                      const viewMode = getReviewViewMode(expense.id, isAdmin ? 'corrected' : 'original');
+                      const showOriginal = viewMode === 'original';
+                      const hasOriginalSnapshot = !!expense.original_items;
+                      const editedItems = isAdmin ? correctedItems : managerItems;
+                      const keptTotal = showOriginal ? managerAmount : correctedAmount;
+                      const struckCount = isAdmin ? correctedItems.filter(it => it.struck).length : 0;
                       return (
                         <div key={expense.id} className={`rounded-lg p-4 border ${isAdmin ? 'bg-amber-900/15 border-amber-500/30' : 'bg-slate-800/40 border-slate-600/40'}`}>
                           {/* Header */}
@@ -1111,8 +1123,38 @@ const AchatsTab = ({ ctx }) => {
                             </div>
                           </div>
 
-                          {/* === ADMIN: full inline editor === */}
-                          {isAdmin && expense.is_group && (
+                          {/* === Toggle: Liste d'origine / Liste corrigée === */}
+                          {expense.is_group && hasOriginalSnapshot && (
+                            <div className="mt-3 flex items-center gap-1 bg-slate-900/40 border border-slate-700 rounded p-1 w-fit" data-testid={`review-view-toggle-${expense.id}`}>
+                              <button
+                                type="button"
+                                onClick={() => setReviewViewModeFor(expense.id, 'original')}
+                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                  showOriginal
+                                    ? 'bg-slate-600 text-white font-semibold'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                                data-testid={`review-view-original-${expense.id}`}
+                              >
+                                📋 Liste d'origine
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setReviewViewModeFor(expense.id, 'corrected')}
+                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                  !showOriginal
+                                    ? 'bg-amber-600 text-white font-semibold'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                                data-testid={`review-view-corrected-${expense.id}`}
+                              >
+                                ✏️ Liste corrigée
+                              </button>
+                            </div>
+                          )}
+
+                          {/* === ADMIN: full inline editor (only when 'corrected' view) === */}
+                          {isAdmin && expense.is_group && !showOriginal && (
                             <div className="mt-3 bg-slate-900/40 rounded p-3 border border-amber-500/20" data-testid={`admin-review-editor-${expense.id}`}>
                               <p className="text-xs text-amber-200 mb-2 font-semibold">
                                 ✏️ Édition libre — vous pouvez modifier les quantités, prix, ajouter/retirer des lignes ou raturer.
@@ -1128,6 +1170,7 @@ const AchatsTab = ({ ctx }) => {
                                       }`}
                                       data-testid={`admin-review-item-${expense.id}-${idx}`}
                                     >
+                                      {/* MOBILE-FRIENDLY: row 1 = top controls; row 2 = numeric controls */}
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <Checkbox
                                           checked={struck}
@@ -1136,59 +1179,68 @@ const AchatsTab = ({ ctx }) => {
                                             strike_reason: checked ? (item.strike_reason || 'pas_opportun') : '',
                                             strike_note: checked ? item.strike_note : '',
                                           })}
-                                          className="border-red-400 data-[state=checked]:bg-red-600"
+                                          className="border-red-400 data-[state=checked]:bg-red-600 shrink-0"
                                           data-testid={`admin-review-strike-${expense.id}-${idx}`}
                                         />
-                                        <span className={`text-slate-500 font-mono text-xs ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <span className={`text-slate-500 font-mono text-xs shrink-0 ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <Input
+                                          value={item.description}
+                                          onChange={(e) => updateAdminReviewItem(expense, idx, { description: e.target.value })}
+                                          placeholder="Description"
+                                          className={`flex-1 min-w-[120px] h-8 bg-slate-900 border-slate-600 text-white text-sm ${struck ? 'line-through' : ''}`}
+                                          data-testid={`admin-review-desc-${expense.id}-${idx}`}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => removeAdminReviewItem(expense, idx)}
+                                          className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/20 shrink-0"
+                                          title="Supprimer la ligne"
+                                          data-testid={`admin-review-remove-${expense.id}-${idx}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-wrap pl-7">
                                         <select
                                           value={item.category}
                                           onChange={(e) => updateAdminReviewItem(expense, idx, { category: e.target.value })}
-                                          className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                                          className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white shrink-0"
                                         >
                                           <option value="cuisine">🍳 Cuisine</option>
                                           <option value="bar">🍹 Bar</option>
                                           <option value="paiement">💳 Paiement</option>
                                           <option value="autres">📦 Autres</option>
                                         </select>
-                                        <Input
-                                          value={item.description}
-                                          onChange={(e) => updateAdminReviewItem(expense, idx, { description: e.target.value })}
-                                          placeholder="Description"
-                                          className={`flex-1 min-w-[180px] h-8 bg-slate-900 border-slate-600 text-white text-sm ${struck ? 'line-through' : ''}`}
-                                          data-testid={`admin-review-desc-${expense.id}-${idx}`}
-                                        />
-                                        <Input
-                                          type="number"
-                                          step="any"
-                                          value={item.quantity}
-                                          onChange={(e) => updateAdminReviewItem(expense, idx, { quantity: e.target.value })}
-                                          placeholder="Qté"
-                                          className="w-20 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
-                                          data-testid={`admin-review-qty-${expense.id}-${idx}`}
-                                        />
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-slate-500 text-[10px]">Qté</span>
+                                          <Input
+                                            type="number"
+                                            step="any"
+                                            value={item.quantity}
+                                            onChange={(e) => updateAdminReviewItem(expense, idx, { quantity: e.target.value })}
+                                            placeholder="0"
+                                            className="w-16 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
+                                            data-testid={`admin-review-qty-${expense.id}-${idx}`}
+                                          />
+                                        </div>
                                         <span className="text-slate-500 text-xs">×</span>
-                                        <Input
-                                          type="number"
-                                          step="any"
-                                          value={item.unit_price}
-                                          onChange={(e) => updateAdminReviewItem(expense, idx, { unit_price: e.target.value })}
-                                          placeholder="PU"
-                                          className="w-24 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
-                                          data-testid={`admin-review-pu-${expense.id}-${idx}`}
-                                        />
-                                        <span className={`font-bold w-28 text-right text-sm ${struck ? 'line-through text-slate-500' : 'text-amber-400'}`}>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-slate-500 text-[10px]">PU</span>
+                                          <Input
+                                            type="number"
+                                            step="any"
+                                            value={item.unit_price}
+                                            onChange={(e) => updateAdminReviewItem(expense, idx, { unit_price: e.target.value })}
+                                            placeholder="0"
+                                            className="w-24 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
+                                            data-testid={`admin-review-pu-${expense.id}-${idx}`}
+                                          />
+                                        </div>
+                                        <span className="text-slate-500 text-xs">=</span>
+                                        <span className={`font-bold text-sm ml-auto ${struck ? 'line-through text-slate-500' : 'text-amber-400'}`}>
                                           {formatPrice((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0))} F
                                         </span>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => removeAdminReviewItem(expense, idx)}
-                                          className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/20"
-                                          title="Supprimer la ligne"
-                                          data-testid={`admin-review-remove-${expense.id}-${idx}`}
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </Button>
                                       </div>
                                       {struck && (
                                         <div className="flex items-center gap-2 pl-7 flex-wrap">
@@ -1243,27 +1295,48 @@ const AchatsTab = ({ ctx }) => {
                             </div>
                           )}
 
-                          {/* === MANAGER: read-only original list === */}
-                          {!isAdmin && expense.is_group && (
-                            <div className="mt-3 bg-slate-900/40 rounded p-3 border border-slate-600/40">
-                              <p className="text-xs text-slate-400 mb-2 italic">Liste d'origine (telle que soumise) :</p>
+                          {/* === READ-ONLY VIEW: shown to manager always, and to admin when 'original' is selected === */}
+                          {expense.is_group && (!isAdmin || showOriginal) && (
+                            <div className={`mt-3 rounded p-3 border ${showOriginal ? 'bg-slate-900/40 border-slate-600/40' : 'bg-amber-900/10 border-amber-500/30'}`}
+                                 data-testid={`review-readonly-list-${expense.id}`}>
+                              <p className={`text-xs mb-2 italic ${showOriginal ? 'text-slate-400' : 'text-amber-200'}`}>
+                                {showOriginal
+                                  ? "Liste d'origine (telle que soumise par la gérante)"
+                                  : "Liste corrigée par l'admin (en cours de validation)"}
+                                  :
+                              </p>
                               <div className="space-y-1">
-                                {managerItems.map((item, idx) => (
-                                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-800/40 rounded p-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-slate-500 font-mono text-xs">{idx + 1}.</span>
-                                      <span className="text-slate-200">{item.description}</span>
+                                {(showOriginal ? managerItems : (expense.items || [])).map((item, idx) => {
+                                  const struck = !!item.struck;
+                                  return (
+                                    <div key={idx} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-sm rounded p-2 ${
+                                      struck ? 'bg-red-900/15 border border-red-500/20 opacity-70' : 'bg-slate-800/40'
+                                    }`}>
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className={`text-slate-500 font-mono text-xs shrink-0 ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <Badge className={`text-[10px] shrink-0 ${
+                                          item.category === 'cuisine' ? 'bg-green-500/10 text-green-400' :
+                                          item.category === 'bar' ? 'bg-orange-500/10 text-orange-400' :
+                                          item.category === 'paiement' ? 'bg-blue-500/10 text-blue-400' :
+                                          'bg-slate-500/10 text-slate-400'
+                                        }`}>{item.category}</Badge>
+                                        <span className={`text-slate-200 truncate ${struck ? 'line-through text-slate-400' : ''}`}>{item.description}</span>
+                                      </div>
+                                      <div className="text-right text-xs shrink-0 pl-7 sm:pl-0">
+                                        <span className={`text-slate-400 ${struck ? 'line-through' : ''}`}>{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                        <span className={`font-bold ${struck ? 'line-through text-slate-500' : 'text-slate-200'}`}>{formatPrice(item.amount)} F</span>
+                                      </div>
                                     </div>
-                                    <div className="text-right text-xs">
-                                      <span className="text-slate-400">{item.quantity} × {formatPrice(item.unit_price)} = </span>
-                                      <span className="text-slate-200 font-bold">{formatPrice(item.amount)} F</span>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
-                              <div className="mt-2 pt-2 border-t border-slate-700 flex justify-end items-center gap-2">
-                                <span className="text-slate-400 text-sm">Total d'origine :</span>
-                                <span className="text-slate-200 font-bold">{formatPrice(managerAmount)} F</span>
+                              <div className="mt-2 pt-2 border-t border-slate-700 flex flex-wrap justify-end items-center gap-2">
+                                <span className="text-slate-400 text-sm">
+                                  {showOriginal ? "Total d'origine :" : "Total corrigé :"}
+                                </span>
+                                <span className={`font-bold ${showOriginal ? 'text-slate-200' : 'text-amber-300'}`}>
+                                  {formatPrice(showOriginal ? managerAmount : correctedAmount)} F
+                                </span>
                               </div>
                             </div>
                           )}
