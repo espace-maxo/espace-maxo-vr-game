@@ -4,6 +4,38 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Trace d'audit des corrections admin (DONE)
+
+**Demande utilisateur** : "trace d'audit" — afficher sur les dépenses approuvées un récapitulatif des modifications faites par l'admin, en comparant `original_items` (snapshot soumis par la gérante au passage admin_review) avec `items` (version finale).
+
+**Frontend Helper** (`AchatsTab.jsx`) :
+- `computeAuditTrail(expense)` retourne `{ added, removed, struck, modified, unchangedCount, hasChanges }`. Matching par description normalisée (lowercase + trim).
+- Détecte 4 types de changements : ＋Ajoutée, −Supprimée, 🚫 Rayée (avec motif), ✎ Modifiée (qté/PU avant→après en barré).
+
+**Frontend UI** (Vue "Achats validés") :
+- Bloc `<details>` "📜 Liste corrigée par {approved_by}" affiché uniquement si `hasChanges=true`.
+- Summary court : "+X ajoutée, −Y supprimée, Z rayée, W modifiée".
+- Détails au clic, color-coded : vert (ajoutée), rose (supprimée), rouge (rayée), bleu (modifiée).
+- **Motifs de rayage** affichés UNIQUEMENT pour l'admin (`showDetails` flag) — la gérante voit "Rayée : <description>" sans motif.
+
+**Frontend Print** (`CaissePage.jsx`) :
+- Helper `briefAudit(e)` calcule un résumé en COMPTES UNIQUEMENT (pas de motifs).
+- `printAllApprovedExpenses` (A4) : ligne italique orange "📜 Liste corrigée par admin : +X..., ..." sous la description du header.
+- `printApprovedExpensesDetailed` : encart italique orange sous la box du montant.
+- Respecte la règle initiale : "l'impression ne doit pas faire ressortir les motifs de rayage".
+
+**Bug fix mineur** (par testing agent) :
+- Ajout du champ `approved_by: Optional[str]` au modèle `ExpenseUpdate` (`/app/backend/routers/expenses.py` ligne 174). Avant le fix, l'`approved_by` envoyé par le front était ignoré.
+
+**Test end-to-end** :
+- Backend curl : 4 items soumis → +Pomme, −Oignon, Sucre rayé (motif a_reporter), Riz qté 10→15 → final amount=45000 F (vs original 50000 F). ✓
+- Testing agent (iter. 59) : 100% backend + 100% frontend, vérifications spécifiques :
+  - Admin voit motifs / Gérante ne voit pas motifs ✓
+  - Print A4/Détail affichent uniquement les compteurs (sans motifs) ✓
+  - Régression : badge 🚫 X ligne(s) rayée(s) toujours visible ✓
+
+
+---
 ## 25/04/2026 — Workflow à 2 étapes : Première validation puis envoi à la gérante (DONE)
 
 **Demande utilisateur** : "permettre une première validation qui reste dans le profil de l'administrateur qu'on peut encore modifier indéfiniment avant de l'envoyer à la gérante." — Choix : (1b+1c) Gérante voit la liste d'origine en lecture seule + badge "🔒 En cours de validation par l'admin"; (2c) Édition complète des lignes (qty, prix, ajout/suppression) + rayage; (3) Boutons simplifiés "Modifier" + "Envoyer", aperçu PDF avant envoi.
