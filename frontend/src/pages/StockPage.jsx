@@ -170,7 +170,7 @@ export default function StockPage() {
     if (!ipp || ipp <= 0) { toast.error("Unités par package > 0"); return; }
     if (pp < 0) { toast.error("Prix invalide"); return; }
     try {
-      await axios.post(`${API}/stock/products/${addPackageTarget.id}/add-package`, {
+      await axios.post(`${API}/products/${addPackageTarget.id}/add-package`, {
         package_qty: pq,
         package_price: pp,
         items_per_package: ipp,
@@ -196,7 +196,7 @@ export default function StockPage() {
       payload.category_id = bulkConvertForm.category_id;
     }
     try {
-      const { data } = await axios.post(`${API}/stock/products/convert-unit-bulk`, payload);
+      const { data } = await axios.post(`${API}/products/convert-unit-bulk`, payload);
       toast.success(`${data.converted} produit(s) converti(s)`);
       setShowBulkConvertModal(false);
       fetchProducts();
@@ -233,17 +233,19 @@ export default function StockPage() {
     if (!m || m <= 0) { toast.error("Le multiplicateur doit être > 0"); return; }
     if (!nu) { toast.error("La nouvelle unité est requise"); return; }
     try {
-      await axios.post(`${API}/stock/products/${convertTarget.id}/convert-unit`, { multiplier: m, new_unit: nu });
-      toast.success(`${convertTarget.name} converti en ${nu}`);
-      setShowConvertModal(false);
-      setConvertTarget(null);
-      fetchProducts();
-      fetchDashboard();
+      await axios.post(`${API}/products/${convertTarget.id}/convert-unit`, { multiplier: m, new_unit: nu });
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Erreur inconnue";
       toast.error(`Erreur lors de la conversion : ${detail}`);
       console.error("convert-unit failed", e?.response?.status, e?.response?.data);
+      return;
     }
+    // Success path — refresh views (safe: any refresh error is logged but not surfaced as conversion error)
+    toast.success(`${convertTarget.name} converti en ${nu}`);
+    setShowConvertModal(false);
+    setConvertTarget(null);
+    try { await fetchProducts(); } catch (err) { console.error("fetchProducts after convert", err); }
+    try { await fetchDashboard(); } catch (err) { console.error("fetchDashboard after convert", err); }
   };
 
   // Forms

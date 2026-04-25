@@ -4,6 +4,23 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Bug fix : URL double `/stock/stock/` dans StockPage.jsx (DONE)
+
+**Bug rapporté** : "ça affiche un message d'erreur" lors de la validation d'une conversion (📦) sur le produit Beaufort. Le toast disait "Erreur lors de la conversion".
+
+**Cause racine** : le constant `API` dans `/app/frontend/src/pages/StockPage.jsx` est défini comme `${REACT_APP_BACKEND_URL}/api/stock`. Mais 3 lignes appelaient `${API}/stock/products/...` → URL finale `/api/stock/stock/products/...` qui retourne **404 Not Found**. Les autres axios calls utilisaient correctement `${API}/products/...`.
+
+**Fix** :
+- Ligne 173 : `${API}/products/{id}/add-package` (bouton + d'ajout package)
+- Ligne 199 : `${API}/products/convert-unit-bulk` (conversion en lot)
+- Ligne 236 : `${API}/products/{id}/convert-unit` (bouton 📦 individuel)
+
+**Bonus** : amélioration du toast d'erreur pour remonter le détail backend (au lieu d'un message générique). Try/catch isolé pour ne pas surfacer un échec de `fetchProducts`/`fetchDashboard` post-conversion comme une erreur de conversion.
+
+**Test** : curl validé — `POST /api/stock/products/5bcde970.../convert-unit {multiplier:1,new_unit:'unite'}` retourne 200 OK. URL erronée `/api/stock/stock/products/...` retournait bien 404.
+
+
+---
 ## 25/04/2026 — Bug fix : Bouton 📦 (Conversion casier→bouteille) sur toutes les lignes (DONE)
 
 **Bug rapporté avec capture** : "Le bouton pour transformer les casiers en bouteilles n'est pas partout et se trouve au mauvais endroit".
