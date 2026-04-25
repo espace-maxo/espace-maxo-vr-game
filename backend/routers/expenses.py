@@ -166,6 +166,9 @@ class ExpenseUpdate(BaseModel):
     funded_by_account_id: Optional[str] = None
     funded_by_account_name: Optional[str] = None
     funded_affects_ca: Optional[bool] = None
+    is_paid: Optional[bool] = None
+    paid_at: Optional[str] = None
+    paid_by: Optional[str] = None
 
 
 # ==================== CRUD ====================

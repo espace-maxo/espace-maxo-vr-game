@@ -895,6 +895,33 @@ const AchatsTab = ({ ctx }) => {
                                 PDF
                               </Button>
                               {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                                <Button
+                                  size="sm"
+                                  variant={expense.is_paid ? "default" : "outline"}
+                                  onClick={() => {
+                                    const willPay = !expense.is_paid;
+                                    const msg = willPay
+                                      ? `Confirmer le paiement de :\n\n${expense.description}\nMontant : ${formatPrice(expense.amount)} F`
+                                      : `Marquer cet achat comme NON payé ?`;
+                                    if (window.confirm(msg)) {
+                                      updateExpense(expense.id, {
+                                        is_paid: willPay,
+                                        paid_at: willPay ? new Date().toISOString() : null,
+                                        paid_by: willPay ? (currentUser?.username || currentUser?.role || '') : null,
+                                      });
+                                    }
+                                  }}
+                                  className={expense.is_paid
+                                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                                    : "border-amber-500/50 text-amber-400 hover:bg-amber-500/20"}
+                                  data-testid={`mark-paid-${expense.id}`}
+                                  title={expense.is_paid ? `Payé le ${expense.paid_at?.slice(0,10) || '—'} par ${expense.paid_by || '—'}` : "Marquer comme payé"}
+                                >
+                                  <Wallet className="w-4 h-4 mr-1" />
+                                  {expense.is_paid ? "Payé ✓" : "Payé"}
+                                </Button>
+                              )}
+                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                                 <Button 
                                   size="sm"
                                   onClick={() => {
