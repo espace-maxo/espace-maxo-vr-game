@@ -287,6 +287,30 @@ export default function StockPage() {
     fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories();
   }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
 
+  // Enhanced refresh with loading state, last-refreshed timestamp, and toast feedback
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  const refreshAll = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchDashboard(), fetchProducts(), fetchCategories(), fetchSuppliers(),
+        fetchMovements(), fetchPurchases(), fetchUsers(), fetchRecipes(), fetchInventories(),
+      ]);
+      setLastRefresh(new Date());
+      toast.success("Stock actualisé", {
+        description: "Produits, catégories, mouvements, fournisseurs et fiches techniques rechargés.",
+        duration: 2500,
+      });
+    } catch (e) {
+      toast.error("Erreur lors de l'actualisation");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
 
@@ -719,7 +743,22 @@ export default function StockPage() {
                 {!seeded && (!dashboard || dashboard.total_products === 0) && (
                   <Button onClick={seed} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="seed-btn"><Plus className="w-4 h-4 mr-1" /> Charger donnees demo</Button>
                 )}
-                <Button variant="outline" className="border-slate-700 text-slate-300" onClick={fetchAll}><RefreshCw className="w-4 h-4 mr-1" /> Actualiser</Button>
+                <Button
+                  variant="outline"
+                  className="border-emerald-700/40 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:opacity-50"
+                  onClick={refreshAll}
+                  disabled={isRefreshing}
+                  title={lastRefresh ? `Dernière actualisation : ${lastRefresh.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : "Actualiser toutes les données"}
+                  data-testid="refresh-all-btn"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? "Actualisation..." : "Actualiser"}
+                  {lastRefresh && !isRefreshing && (
+                    <span className="ml-2 text-[10px] text-emerald-400/60 hidden sm:inline">
+                      ({lastRefresh.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})
+                    </span>
+                  )}
+                </Button>
               </div>
             </div>
 
