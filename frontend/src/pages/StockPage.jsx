@@ -20,6 +20,15 @@ import { Toaster } from "@/components/ui/sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
+// Accepte les nombres saisis avec virgule (FR) ou point. Retourne 0 si invalide.
+// Ex: parseDecimal("0,12") = 0.12, parseDecimal("1 500,5") = 1500.5
+const parseDecimal = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  const s = String(v).replace(/\s/g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
+
 const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","portion","bac","sac","bidon","pot","pack","unite","regime","botte","boite","plateau","paire","rame","cartouche","rouleau","bloc","lot","aerosol","douzaine","barquette","brique","plaquette","bombe","fagot","flacon","tablette"];
 const MOVEMENT_TYPES = [
   { value: "entree", label: "Entree", color: "emerald", icon: ArrowDown },
@@ -1569,7 +1578,7 @@ export default function StockPage() {
                             <td className="p-2 text-right text-slate-300 text-xs">{typeof item.theoretical_quantity === 'number' ? parseFloat(item.theoretical_quantity.toFixed(2)) : item.theoretical_quantity}</td>
                             <td className="p-2 text-center">
                               {activeInventory.status === 'en_cours' ? (
-                                <Input type="number" min="0" step="0.01"
+                                <Input type="text" inputMode="decimal" min="0" step="0.01"
                                   value={item.physical_quantity ?? ""}
                                   onChange={e => updateCount(item.product_id, e.target.value)}
                                   className="bg-slate-800 border-slate-700 text-white h-7 text-xs text-center w-24 mx-auto"
@@ -1821,12 +1830,12 @@ export default function StockPage() {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label className="text-slate-300 text-xs">Quantite</Label><Input type="number" value={productForm.quantity} onChange={e => setProductForm(p => ({...p, quantity: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Stock Min</Label><Input type="number" value={productForm.stock_min} onChange={e => setProductForm(p => ({...p, stock_min: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Stock Max</Label><Input type="number" value={productForm.stock_max} onChange={e => setProductForm(p => ({...p, stock_max: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Quantite</Label><Input type="text" inputMode="decimal" value={productForm.quantity} onChange={e => setProductForm(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Stock Min</Label><Input type="text" inputMode="decimal" value={productForm.stock_min} onChange={e => setProductForm(p => ({...p, stock_min: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Stock Max</Label><Input type="text" inputMode="decimal" value={productForm.stock_max} onChange={e => setProductForm(p => ({...p, stock_max: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><Input type="number" value={productForm.purchase_price} onChange={e => setProductForm(p => ({...p, purchase_price: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><Input type="text" inputMode="decimal" value={productForm.purchase_price} onChange={e => setProductForm(p => ({...p, purchase_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1862,19 +1871,19 @@ export default function StockPage() {
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className="text-slate-300 text-xs">Nb packages *</Label>
-                  <Input type="number" min="0" step="any" value={addPackageForm.package_qty}
+                  <Input type="text" inputMode="decimal" min="0" step="any" value={addPackageForm.package_qty}
                     onChange={(e) => setAddPackageForm({ ...addPackageForm, package_qty: e.target.value })}
                     className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-qty" autoFocus />
                 </div>
                 <div>
                   <Label className="text-slate-300 text-xs">Prix / package *</Label>
-                  <Input type="number" min="0" value={addPackageForm.package_price}
+                  <Input type="text" inputMode="decimal" min="0" value={addPackageForm.package_price}
                     onChange={(e) => setAddPackageForm({ ...addPackageForm, package_price: e.target.value })}
                     placeholder="ex: 7200" className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-price" />
                 </div>
                 <div>
                   <Label className="text-slate-300 text-xs">{addPackageTarget.unit}/package</Label>
-                  <Input type="number" min="1" value={addPackageForm.items_per_package}
+                  <Input type="text" inputMode="decimal" min="1" value={addPackageForm.items_per_package}
                     onChange={(e) => setAddPackageForm({ ...addPackageForm, items_per_package: e.target.value })}
                     className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-items" />
                 </div>
@@ -1958,7 +1967,7 @@ export default function StockPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-slate-300 text-xs">Nombre par {bulkConvertForm.from_unit} *</Label>
-                <Input type="number" min="1" value={bulkConvertForm.multiplier}
+                <Input type="text" inputMode="decimal" min="1" value={bulkConvertForm.multiplier}
                   onChange={(e) => setBulkConvertForm({ ...bulkConvertForm, multiplier: e.target.value })}
                   className="bg-slate-800 border-slate-700 text-white" data-testid="bulk-convert-multiplier" />
               </div>
@@ -2051,7 +2060,7 @@ export default function StockPage() {
                 <div>
                   <Label className="text-slate-300 text-xs">Nombre par {convertTarget.unit} *</Label>
                   <Input
-                    type="number" min="1"
+                    type="text" inputMode="decimal" min="1"
                     value={convertForm.multiplier}
                     onChange={(e) => setConvertForm({ ...convertForm, multiplier: e.target.value })}
                     className="bg-slate-800 border-slate-700 text-white"
@@ -2115,8 +2124,8 @@ export default function StockPage() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-slate-300 text-xs">Quantite *</Label><Input type="number" min="0" value={movementForm.quantity} onChange={e => setMovementForm(p => ({...p, quantity: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Prix unitaire</Label><Input type="number" min="0" value={movementForm.unit_price} onChange={e => setMovementForm(p => ({...p, unit_price: parseFloat(e.target.value)||0}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Quantite *</Label><Input type="text" inputMode="decimal" min="0" value={movementForm.quantity} onChange={e => setMovementForm(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Prix unitaire</Label><Input type="text" inputMode="decimal" min="0" value={movementForm.unit_price} onChange={e => setMovementForm(p => ({...p, unit_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
             </div>
             <div><Label className="text-slate-300 text-xs">Motif / Observation</Label><Textarea value={movementForm.reason} onChange={e => setMovementForm(p => ({...p, reason: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Raison du mouvement..." /></div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveMovement}><Save className="w-4 h-4 mr-1" /> Enregistrer</Button>
@@ -2146,8 +2155,8 @@ export default function StockPage() {
                   <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-8 text-xs"><SelectValue placeholder="Produit" /></SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700 max-h-[200px]">{products.map(p => <SelectItem key={p.id} value={p.id} className="text-white text-xs">{p.name}</SelectItem>)}</SelectContent>
                 </Select></div>
-                <Input type="number" min="0" value={purchaseItem.quantity || ""} onChange={e => setPurchaseItem(p => ({...p, quantity: parseFloat(e.target.value)||0}))} className="bg-slate-900 border-slate-700 text-white w-20 h-8 text-xs" placeholder="Qte" />
-                <Input type="number" min="0" value={purchaseItem.unit_price || ""} onChange={e => setPurchaseItem(p => ({...p, unit_price: parseFloat(e.target.value)||0}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Prix unit." />
+                <Input type="text" inputMode="decimal" min="0" value={purchaseItem.quantity || ""} onChange={e => setPurchaseItem(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-900 border-slate-700 text-white w-20 h-8 text-xs" placeholder="Qte" />
+                <Input type="text" inputMode="decimal" min="0" value={purchaseItem.unit_price || ""} onChange={e => setPurchaseItem(p => ({...p, unit_price: parseDecimal(e.target.value)}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Prix unit." />
                 <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700" onClick={addPurchaseItem}><Plus className="w-3 h-3" /></Button>
               </div>
               {purchaseForm.items.length > 0 && (
@@ -2242,7 +2251,7 @@ export default function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Prix de vente (FCFA)</Label>
-                <Input type="number" min="0" value={recipeForm.selling_price || ""} onChange={e => setRecipeForm(p => ({...p, selling_price: parseFloat(e.target.value) || 0}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Prix de vente en Caisse" /></div>
+                <Input type="text" inputMode="decimal" min="0" value={recipeForm.selling_price || ""} onChange={e => setRecipeForm(p => ({...p, selling_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Prix de vente en Caisse" /></div>
               <div><Label className="text-slate-300 text-xs">Notes</Label>
                 <Input value={recipeForm.notes} onChange={e => setRecipeForm(p => ({...p, notes: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Remarques..." /></div>
             </div>
@@ -2261,7 +2270,7 @@ export default function StockPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Input type="number" min="0" step="0.01" value={recipeIngredient.quantity || ""} onChange={e => setRecipeIngredient(p => ({...p, quantity: parseFloat(e.target.value) || 0}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Quantite" />
+                <Input type="text" inputMode="decimal" min="0" step="0.01" value={recipeIngredient.quantity || ""} onChange={e => setRecipeIngredient(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Quantite" />
                 <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700" onClick={addRecipeIngredient}><Plus className="w-3 h-3" /></Button>
               </div>
               {recipeForm.ingredients.length > 0 && (
