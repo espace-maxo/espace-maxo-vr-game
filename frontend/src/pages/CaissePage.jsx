@@ -1584,10 +1584,17 @@ const CaissePage = () => {
     };
     
     const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
-    const itemsBlock = (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0)
+    // Hide struck items from PDF preview (consistency with printed approved list)
+    const visibleItems = (expense.is_group && Array.isArray(expense.items))
+      ? expense.items.filter(it => !it.struck)
+      : (expense.items || []);
+    const visibleAmount = (expense.is_group && Array.isArray(expense.items))
+      ? visibleItems.reduce((s, it) => s + (it.amount || 0), 0) || expense.amount
+      : expense.amount;
+    const itemsBlock = (expense.is_group && visibleItems.length > 0)
       ? `
         <div class="details">
-          <div class="details-title">Détail des articles (${expense.items.length})</div>
+          <div class="details-title">Détail des articles (${visibleItems.length})</div>
           <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:9pt;">
             <thead>
               <tr style="background:#f3f4f6;">
@@ -1600,7 +1607,7 @@ const CaissePage = () => {
               </tr>
             </thead>
             <tbody>
-              ${expense.items.map((it, idx) => `
+              ${visibleItems.map((it, idx) => `
                 <tr>
                   <td style="padding:4px 5px;border-bottom:1px solid #eee;">${idx + 1}</td>
                   <td style="padding:4px 5px;border-bottom:1px solid #eee;"><span style="background:${catColor(it.category)};color:white;padding:1px 6px;border-radius:8px;font-size:8pt;">${categoryLabels[it.category] || it.category}</span></td>
@@ -1664,7 +1671,7 @@ const CaissePage = () => {
           </div>
 
           <div class="doc-title">
-            Bon d'Achat <span class="badge">✓ APPROUVÉ</span>
+            Bon d'Achat <span class="badge" style="background:${expense.status === 'admin_review' ? '#f59e0b' : '#22c55e'};">${expense.status === 'admin_review' ? '⏳ APERÇU (en cours de validation)' : '✓ APPROUVÉ'}</span>
           </div>
 
           <div class="info-grid">
@@ -1701,8 +1708,8 @@ const CaissePage = () => {
           ${itemsBlock}
 
           <div class="amount-box">
-            <div class="amount-label">MONTANT APPROUVÉ</div>
-            <div class="amount-value">${formatPrice(expense.amount)} F CFA</div>
+            <div class="amount-label">${expense.status === 'admin_review' ? 'MONTANT PROVISOIRE (corrigé)' : 'MONTANT APPROUVÉ'}</div>
+            <div class="amount-value">${formatPrice(visibleAmount)} F CFA</div>
           </div>
 
           <div class="signatures">

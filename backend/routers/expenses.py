@@ -311,7 +311,27 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                 else:
                     update_data[k] = v
 
-        if update.status == "approved":
+        if update.status == "admin_review":
+            # First validation by admin: snapshot the manager's original list (only once),
+            # so the manager can keep seeing the original list in read-only.
+            if not expense.get("original_items") and expense.get("is_group") and expense.get("items"):
+                update_data["original_items"] = expense.get("items")
+                update_data["original_amount"] = expense.get("amount")
+            update_data["admin_review_at"] = datetime.now(timezone.utc).isoformat()
+            # Recompute "working" amount excluding struck items, so admin sees the running total.
+            try:
+                items_for_total = update_data.get("items") or expense.get("items") or []
+                if items_for_total:
+                    kept_total = sum(
+                        float(it.get("amount") or 0)
+                        for it in items_for_total
+                        if not it.get("struck")
+                    )
+                    if kept_total > 0:
+                        update_data["amount"] = kept_total
+            except Exception as recalc_err:
+                logger.warning(f"Admin-review amount recompute failed: {recalc_err}")
+        elif update.status == "approved":
             update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
             # If grouped expense with items, recompute amount excluding struck items.
             # This guarantees the approved total matches what will actually be purchased.

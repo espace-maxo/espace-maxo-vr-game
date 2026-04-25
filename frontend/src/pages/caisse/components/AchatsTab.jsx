@@ -88,13 +88,13 @@ const AchatsTab = ({ ctx }) => {
     });
   };
 
-  const handleApprovePending = (expense) => {
+  const handleAdminFirstValidation = (expense) => {
     const adminAmountInput = document.getElementById(`admin-amount-${expense.id}`);
     const editedItems = getEditedItems(expense);
-    const payload = { status: "approved", approved_by: "Administrateur" };
+    // First validation: status -> admin_review (stays in admin's profile)
+    const payload = { status: "admin_review", approved_by: "Administrateur" };
 
     if (expense.is_group && editedItems.length > 0) {
-      // Persist struck flags on items; backend will recompute amount excluding struck lines.
       payload.items = editedItems.map((it) => ({
         category: it.category,
         description: it.description,
@@ -109,6 +109,82 @@ const AchatsTab = ({ ctx }) => {
       payload.amount = parseFloat(adminAmountInput.value) || expense.amount;
     }
     updateExpense(expense.id, payload);
+  };
+
+  const handleSendToManager = (expense) => {
+    if (!window.confirm(`Envoyer cette liste corrigée à la gérante pour achat ?\n\n${expense.description}`)) return;
+    const editedItems = getEditedItems(expense);
+    const payload = { status: "approved", approved_by: "Administrateur" };
+    if (expense.is_group && editedItems.length > 0) {
+      payload.items = editedItems.map((it) => ({
+        category: it.category,
+        description: it.description,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        amount: it.amount,
+        struck: !!it.struck,
+        strike_reason: it.struck ? (it.strike_reason || "autres") : null,
+        strike_note: it.struck ? (it.strike_note || "") : null,
+      }));
+    }
+    updateExpense(expense.id, payload);
+  };
+
+  const handleSaveAdminReviewEdits = (expense) => {
+    const editedItems = getEditedItems(expense);
+    if (!expense.is_group || editedItems.length === 0) return;
+    updateExpense(expense.id, {
+      status: "admin_review",
+      items: editedItems.map((it) => ({
+        category: it.category,
+        description: it.description,
+        quantity: parseFloat(it.quantity) || 0,
+        unit_price: parseFloat(it.unit_price) || 0,
+        amount: (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0),
+        struck: !!it.struck,
+        strike_reason: it.struck ? (it.strike_reason || "autres") : null,
+        strike_note: it.struck ? (it.strike_note || "") : null,
+      })),
+    });
+  };
+
+  const updateAdminReviewItem = (expense, idx, patch) => {
+    setStrikeEdits((prev) => {
+      const current = prev[expense.id] ? [...prev[expense.id]] : (expense.items || []).map((it) => ({ ...it }));
+      const next = { ...current[idx], ...patch };
+      if ("quantity" in patch || "unit_price" in patch) {
+        const q = parseFloat(next.quantity) || 0;
+        const p = parseFloat(next.unit_price) || 0;
+        next.amount = q * p;
+      }
+      current[idx] = next;
+      return { ...prev, [expense.id]: current };
+    });
+  };
+
+  const addAdminReviewItem = (expense) => {
+    setStrikeEdits((prev) => {
+      const current = prev[expense.id] ? [...prev[expense.id]] : (expense.items || []).map((it) => ({ ...it }));
+      current.push({
+        category: expense.category || "autres",
+        description: "",
+        quantity: 1,
+        unit_price: 0,
+        amount: 0,
+        struck: false,
+        strike_reason: "",
+        strike_note: "",
+      });
+      return { ...prev, [expense.id]: current };
+    });
+  };
+
+  const removeAdminReviewItem = (expense, idx) => {
+    setStrikeEdits((prev) => {
+      const current = prev[expense.id] ? [...prev[expense.id]] : (expense.items || []).map((it) => ({ ...it }));
+      current.splice(idx, 1);
+      return { ...prev, [expense.id]: current };
+    });
   };
 
   return (
@@ -157,7 +233,7 @@ const AchatsTab = ({ ctx }) => {
                 >
                   Validation en cours
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'pending').length}
+                    {expenses.filter(e => e.status === 'pending' || e.status === 'admin_review').length}
                   </Badge>
                 </button>
                 <button
@@ -866,28 +942,20 @@ const AchatsTab = ({ ctx }) => {
                           <div className="flex gap-2 flex-wrap">
                             <Button 
                               size="sm"
-                              onClick={() => handleApprovePending(expense)}
-                              className="bg-green-600 hover:bg-green-700"
-                              data-testid={`approve-btn-${expense.id}`}
+                              onClick={() => handleAdminFirstValidation(expense)}
+                              className="bg-amber-600 hover:bg-amber-700"
+                              data-testid={`first-validate-btn-${expense.id}`}
+                              title="Sauvegarde dans votre profil — vous pourrez encore modifier avant l'envoi à la gérante"
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
-                              Approuver
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openReviseModal(expense)}
-                              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-                              data-testid={`revise-btn-${expense.id}`}
-                            >
-                              <Edit2 className="w-4 h-4 mr-1" />
-                              Modifier & renvoyer
+                              Première validation
                             </Button>
                             <Button 
                               size="sm"
                               variant="outline"
                               onClick={() => updateExpense(expense.id, { status: "rejected" })}
                               className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                              data-testid={`reject-btn-${expense.id}`}
                             >
                               <X className="w-4 h-4 mr-1" />
                               Refuser
@@ -917,6 +985,288 @@ const AchatsTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
               )}
+
+              {/* ============================================================
+                   ADMIN REVIEW SECTION (status='admin_review')
+                   - Admin: full inline editing of items, PDF preview, send to manager
+                   - Manager: read-only with original list snapshot + locked banner
+                  ============================================================ */}
+              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'admin_review').length > 0 && (
+                <Card className={`bg-gradient-to-br ${currentUser?.role === 'admin' ? 'from-amber-900/30 to-orange-900/20 border-amber-500/50' : 'from-slate-900/40 to-slate-800/20 border-slate-600/50'}`} data-testid="admin-review-expenses-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className={`flex items-center gap-2 ${currentUser?.role === 'admin' ? 'text-amber-300' : 'text-slate-300'}`}>
+                      <Edit2 className="w-5 h-5" />
+                      {currentUser?.role === 'admin'
+                        ? 'EN COURS DE CORRECTION (votre profil)'
+                        : 'EN COURS DE VALIDATION PAR L\'ADMIN'}
+                      <Badge className={`ml-2 ${currentUser?.role === 'admin' ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-500/30 text-slate-300'}`}>
+                        {expenses.filter(e => e.status === 'admin_review').length}
+                      </Badge>
+                      {currentUser?.role !== 'admin' && (
+                        <Badge className="ml-auto bg-slate-700/40 text-slate-300 text-xs flex items-center gap-1">
+                          🔒 Lecture seule
+                        </Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {expenses.filter(e => e.status === 'admin_review').map(expense => {
+                      const isAdmin = currentUser?.role === 'admin';
+                      // Manager sees the ORIGINAL snapshot (before admin started correcting)
+                      const managerItems = expense.original_items || expense.items || [];
+                      const managerAmount = expense.original_amount || expense.amount;
+                      const editedItems = isAdmin ? getEditedItems(expense) : managerItems;
+                      const keptTotal = isAdmin
+                        ? editedItems.reduce((s, it) => s + (it.struck ? 0 : (it.amount || 0)), 0)
+                        : managerAmount;
+                      const struckCount = isAdmin ? editedItems.filter(it => it.struck).length : 0;
+                      return (
+                        <div key={expense.id} className={`rounded-lg p-4 border ${isAdmin ? 'bg-amber-900/15 border-amber-500/30' : 'bg-slate-800/40 border-slate-600/40'}`}>
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {expense.is_group ? (
+                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">
+                                    📦 Liste ({(isAdmin ? editedItems : managerItems).length} articles)
+                                  </Badge>
+                                ) : (
+                                  <Badge className="text-xs bg-slate-500/20 text-slate-400">{expense.category}</Badge>
+                                )}
+                                <span className="text-white font-bold">{expense.description}</span>
+                                {!isAdmin && (
+                                  <Badge className="text-xs bg-slate-700/40 text-slate-300 border border-slate-500/40 flex items-center gap-1">
+                                    🔒 En cours de validation par l'admin
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-slate-400 text-sm mt-1">
+                                Demandé par : {expense.requested_by} • {new Date(expense.created_at).toLocaleDateString('fr-FR')}
+                                {expense.admin_review_at && (
+                                  <> • <span className="text-amber-300">Validation initiale : {new Date(expense.admin_review_at).toLocaleString('fr-FR')}</span></>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* === ADMIN: full inline editor === */}
+                          {isAdmin && expense.is_group && (
+                            <div className="mt-3 bg-slate-900/40 rounded p-3 border border-amber-500/20" data-testid={`admin-review-editor-${expense.id}`}>
+                              <p className="text-xs text-amber-200 mb-2 font-semibold">
+                                ✏️ Édition libre — vous pouvez modifier les quantités, prix, ajouter/retirer des lignes ou raturer.
+                              </p>
+                              <div className="space-y-2">
+                                {editedItems.map((item, idx) => {
+                                  const struck = !!item.struck;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`flex flex-col gap-2 rounded p-2 transition-colors ${
+                                        struck ? 'bg-red-900/20 border border-red-500/30 opacity-70' : 'bg-slate-800/50 border border-slate-700'
+                                      }`}
+                                      data-testid={`admin-review-item-${expense.id}-${idx}`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <Checkbox
+                                          checked={struck}
+                                          onCheckedChange={(checked) => updateAdminReviewItem(expense, idx, {
+                                            struck: !!checked,
+                                            strike_reason: checked ? (item.strike_reason || 'pas_opportun') : '',
+                                            strike_note: checked ? item.strike_note : '',
+                                          })}
+                                          className="border-red-400 data-[state=checked]:bg-red-600"
+                                          data-testid={`admin-review-strike-${expense.id}-${idx}`}
+                                        />
+                                        <span className={`text-slate-500 font-mono text-xs ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <select
+                                          value={item.category}
+                                          onChange={(e) => updateAdminReviewItem(expense, idx, { category: e.target.value })}
+                                          className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                                        >
+                                          <option value="cuisine">🍳 Cuisine</option>
+                                          <option value="bar">🍹 Bar</option>
+                                          <option value="paiement">💳 Paiement</option>
+                                          <option value="autres">📦 Autres</option>
+                                        </select>
+                                        <Input
+                                          value={item.description}
+                                          onChange={(e) => updateAdminReviewItem(expense, idx, { description: e.target.value })}
+                                          placeholder="Description"
+                                          className={`flex-1 min-w-[180px] h-8 bg-slate-900 border-slate-600 text-white text-sm ${struck ? 'line-through' : ''}`}
+                                          data-testid={`admin-review-desc-${expense.id}-${idx}`}
+                                        />
+                                        <Input
+                                          type="number"
+                                          step="any"
+                                          value={item.quantity}
+                                          onChange={(e) => updateAdminReviewItem(expense, idx, { quantity: e.target.value })}
+                                          placeholder="Qté"
+                                          className="w-20 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
+                                          data-testid={`admin-review-qty-${expense.id}-${idx}`}
+                                        />
+                                        <span className="text-slate-500 text-xs">×</span>
+                                        <Input
+                                          type="number"
+                                          step="any"
+                                          value={item.unit_price}
+                                          onChange={(e) => updateAdminReviewItem(expense, idx, { unit_price: e.target.value })}
+                                          placeholder="PU"
+                                          className="w-24 h-8 bg-slate-900 border-slate-600 text-white text-sm text-right"
+                                          data-testid={`admin-review-pu-${expense.id}-${idx}`}
+                                        />
+                                        <span className={`font-bold w-28 text-right text-sm ${struck ? 'line-through text-slate-500' : 'text-amber-400'}`}>
+                                          {formatPrice((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0))} F
+                                        </span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => removeAdminReviewItem(expense, idx)}
+                                          className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/20"
+                                          title="Supprimer la ligne"
+                                          data-testid={`admin-review-remove-${expense.id}-${idx}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                      {struck && (
+                                        <div className="flex items-center gap-2 pl-7 flex-wrap">
+                                          <Ban className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                          <span className="text-[11px] text-red-300">Motif :</span>
+                                          <select
+                                            value={item.strike_reason || 'pas_opportun'}
+                                            onChange={(e) => updateAdminReviewItem(expense, idx, { strike_reason: e.target.value })}
+                                            className="bg-slate-900 border border-red-500/40 rounded px-2 py-1 text-xs text-red-200"
+                                          >
+                                            {STRIKE_REASONS.map((r) => (
+                                              <option key={r.value} value={r.value}>{r.label}</option>
+                                            ))}
+                                          </select>
+                                          {item.strike_reason === 'autres' && (
+                                            <Input
+                                              placeholder="Préciser…"
+                                              value={item.strike_note || ''}
+                                              onChange={(e) => updateAdminReviewItem(expense, idx, { strike_note: e.target.value })}
+                                              className="h-7 flex-1 min-w-[140px] bg-slate-900 border-red-500/40 text-xs text-red-200"
+                                            />
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-500/20 pt-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addAdminReviewItem(expense)}
+                                  className="border-amber-500/50 text-amber-300 hover:bg-amber-500/20 h-8"
+                                  data-testid={`admin-review-add-${expense.id}`}
+                                >
+                                  <Plus className="w-4 h-4 mr-1" />
+                                  Ajouter une ligne
+                                </Button>
+                                <div className="flex items-center gap-3">
+                                  {struckCount > 0 && (
+                                    <span className="text-[11px] text-red-300">
+                                      {struckCount} ligne{struckCount > 1 ? 's' : ''} rayée{struckCount > 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                  <span className="text-slate-300 text-sm">Total provisoire :</span>
+                                  <span className="text-amber-300 font-bold text-lg" data-testid={`admin-review-total-${expense.id}`}>
+                                    {formatPrice(keptTotal)} F
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* === MANAGER: read-only original list === */}
+                          {!isAdmin && expense.is_group && (
+                            <div className="mt-3 bg-slate-900/40 rounded p-3 border border-slate-600/40">
+                              <p className="text-xs text-slate-400 mb-2 italic">Liste d'origine (telle que soumise) :</p>
+                              <div className="space-y-1">
+                                {managerItems.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-800/40 rounded p-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-500 font-mono text-xs">{idx + 1}.</span>
+                                      <span className="text-slate-200">{item.description}</span>
+                                    </div>
+                                    <div className="text-right text-xs">
+                                      <span className="text-slate-400">{item.quantity} × {formatPrice(item.unit_price)} = </span>
+                                      <span className="text-slate-200 font-bold">{formatPrice(item.amount)} F</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-slate-700 flex justify-end items-center gap-2">
+                                <span className="text-slate-400 text-sm">Total d'origine :</span>
+                                <span className="text-slate-200 font-bold">{formatPrice(managerAmount)} F</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* === ACTIONS === */}
+                          {isAdmin && (
+                            <div className="mt-3 flex gap-2 flex-wrap">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveAdminReviewEdits(expense)}
+                                className="bg-slate-600 hover:bg-slate-700"
+                                data-testid={`admin-review-save-${expense.id}`}
+                              >
+                                <Edit2 className="w-4 h-4 mr-1" />
+                                Enregistrer modifications
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  // Build a temp expense reflecting current edits for the PDF preview.
+                                  const editedSnapshot = {
+                                    ...expense,
+                                    items: getEditedItems(expense).map((it) => ({
+                                      ...it,
+                                      amount: (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0),
+                                    })),
+                                  };
+                                  printExpensePDF(editedSnapshot);
+                                }}
+                                className="border-blue-500/50 text-blue-300 hover:bg-blue-500/20"
+                                data-testid={`admin-review-preview-${expense.id}`}
+                              >
+                                <FileText className="w-4 h-4 mr-1" />
+                                Aperçu PDF
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleSendToManager(expense)}
+                                className="bg-green-600 hover:bg-green-700"
+                                data-testid={`admin-review-send-${expense.id}`}
+                              >
+                                <Truck className="w-4 h-4 mr-1" />
+                                Envoyer à la gérante
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateExpense(expense.id, { status: "pending" })}
+                                className="border-purple-500/50 text-purple-300 hover:bg-purple-500/20"
+                                data-testid={`admin-review-back-${expense.id}`}
+                                title="Revenir à l'étape précédente (annule la première validation)"
+                              >
+                                <X className="w-4 h-4 mr-1" />
+                                Annuler validation
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
 
               {/* Approved expenses (ready for purchase) */}
               {achatsSubView === 'valides' && expenses.filter(e => e.status === 'approved').length > 0 && (

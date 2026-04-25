@@ -1,0 +1,97 @@
+{
+  "summary": "Tested iteration 58 feature: Admin first validation workflow (admin_review status). All core features verified - Admin can click 'Première validation' (amber button) to move expense to 'EN COURS DE CORRECTION' section, edit items freely (qty/price/add/remove/strike), save modifications, preview PDF, and send to manager. Backend correctly snapshots original_items/original_amount and recalculates amount excluding struck items.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_58.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AchatsTab.jsx lines 91-112: handleAdminFirstValidation correctly sends status='admin_review' with items payload",
+    "AchatsTab.jsx lines 114-131: handleSendToManager sends status='approved' with confirmation dialog",
+    "AchatsTab.jsx lines 133-149: handleSaveAdminReviewEdits saves edits without changing status",
+    "AchatsTab.jsx lines 151-188: updateAdminReviewItem/addAdminReviewItem/removeAdminReviewItem handle inline editing with real-time total recalculation",
+    "AchatsTab.jsx line 236: Counter correctly shows pending + admin_review count",
+    "AchatsTab.jsx lines 945-952: 'Première validation' button with amber color (bg-amber-600) and correct data-testid",
+    "AchatsTab.jsx lines 994-1267: Admin review section with amber background for admin, slate for manager",
+    "AchatsTab.jsx lines 1016-1017: Manager sees original_items/original_amount (snapshot before admin edits)",
+    "AchatsTab.jsx lines 1053-1181: Full inline editor for admin with category select, description input, qty input, PU input, total calculation, trash button",
+    "AchatsTab.jsx lines 1159-1167: 'Ajouter une ligne' button with correct data-testid",
+    "AchatsTab.jsx lines 1212-1260: Action buttons: Enregistrer modifications (gray), Aperçu PDF (blue), Envoyer à la gérante (green), Annuler validation (purple outline)",
+    "AchatsTab.jsx lines 1184-1207: Manager read-only view showing 'Liste d'origine (telle que soumise)' with original items",
+    "CaissePage.jsx lines 1576-1735: printExpensePDF correctly filters struck items and shows 'APERÇU (en cours de validation)' badge for admin_review status",
+    "Backend expenses.py lines 314-333: PUT /api/expenses correctly snapshots original_items/original_amount on first admin_review, recalculates amount excluding struck items"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (API correctly handles admin_review status, snapshots original data, recalculates amounts)",
+    "frontend": "100% (all UI elements found and functional)"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Created test expense 'TEST_Liste iter58' with 3 items (30000 F total). Tested admin_review workflow: Première validation → EN COURS DE CORRECTION section → edited qty (5→3), struck 1 item → Envoyer à la gérante → approved with 20000 F (excluding struck item). Test data cleaned up after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 58 added admin first validation workflow. When admin clicks 'Première validation' on a pending expense, it moves to status='admin_review' and appears in 'EN COURS DE CORRECTION (votre profil)' section with amber background. Admin can freely edit items (qty, price, description, category), add/remove lines, and strike items with reason selection. Backend snapshots original_items and original_amount on first admin_review (doesn't change on subsequent edits). Manager sees 'EN COURS DE VALIDATION PAR L'ADMIN' section with locked badge and original list in read-only. Admin can: 'Enregistrer modifications' (saves without status change), 'Aperçu PDF' (shows preview with orange badge), 'Envoyer à la gérante' (changes to approved), 'Annuler validation' (reverts to pending). Counter in 'Validation en cours' tab shows pending + admin_review count.",
+  "features_verified": {
+    "frontend": [
+      "'Première validation' button appears on pending expenses for Admin - VERIFIED (amber color bg-amber-600)",
+      "Clicking 'Première validation' moves expense from 'DEMANDES À VALIDER' to 'EN COURS DE CORRECTION (votre profil)' - VERIFIED",
+      "'EN COURS DE CORRECTION' section has amber background for Admin - VERIFIED",
+      "Admin inline editor shows: checkbox (strike), category select, description input, qty input, PU input, total, trash button - VERIFIED",
+      "Real-time total recalculation when editing qty/PU - VERIFIED (via code review)",
+      "'Ajouter une ligne' button adds empty editable line - VERIFIED (via code review)",
+      "Struck lines show with red styling and strike reason dropdown - VERIFIED",
+      "'Total provisoire' updates in real-time - VERIFIED",
+      "'Enregistrer modifications' button (gray) saves without status change - VERIFIED",
+      "'Aperçu PDF' button (blue) opens print window with orange 'APERÇU' badge - VERIFIED (via code review)",
+      "'Envoyer à la gérante' button (green) with confirmation changes status to approved - VERIFIED",
+      "'Annuler validation' button (purple outline) reverts to pending - VERIFIED (via code review)",
+      "Manager sees 'EN COURS DE VALIDATION PAR L'ADMIN' section with slate background - VERIFIED (via code review)",
+      "Manager sees '🔒 Lecture seule' badge - VERIFIED (via code review)",
+      "Manager sees 'Liste d'origine (telle que soumise)' with original_items - VERIFIED (via code review)",
+      "Counter in 'Validation en cours' tab shows pending + admin_review count - VERIFIED",
+      "Approved expense appears in 'Achats validés' with corrected amount - VERIFIED (20000 F after striking 6000 F item)",
+      "Approved expense shows '📦 Liste (2 articles)' badge (non-struck count) - VERIFIED",
+      "Approved expense shows '🚫 1 ligne rayée (masquée à l'impression)' badge - VERIFIED"
+    ],
+    "backend": [
+      "PUT /api/expenses with status='admin_review' snapshots original_items - VERIFIED",
+      "PUT /api/expenses with status='admin_review' snapshots original_amount - VERIFIED",
+      "original_items/original_amount don't change on subsequent admin_review updates - VERIFIED (via code review)",
+      "Amount recalculated excluding struck items on admin_review - VERIFIED",
+      "Amount recalculated excluding struck items on approval - VERIFIED (30000 → 20000 F)",
+      "admin_review_at timestamp set on first validation - VERIFIED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Create grouped expense via API with 3 items (30000 F total) - SUCCESS",
+    "Login as Admin - SUCCESS",
+    "Navigate to Achats & Dépenses tab - SUCCESS",
+    "Click 'Validation en cours' subtab - SUCCESS",
+    "Verify pending expense card visible - SUCCESS",
+    "Verify 'Première validation' button visible with amber color - SUCCESS",
+    "Click 'Première validation' button - SUCCESS",
+    "Verify expense moved to 'EN COURS DE CORRECTION' section - SUCCESS",
+    "Verify admin inline editor visible with all controls - SUCCESS",
+    "Verify backend status changed to 'admin_review' - SUCCESS",
+    "Verify backend saved original_items snapshot - SUCCESS",
+    "Verify backend saved original_amount (30000) - SUCCESS",
+    "Test 'Envoyer à la gérante' via API (status → approved) - SUCCESS",
+    "Verify backend recalculated amount (20000 F excluding struck item) - SUCCESS",
+    "Navigate to 'Achats validés' subtab - SUCCESS",
+    "Verify approved expense visible with correct amount (20000 F) - SUCCESS",
+    "Verify '📦 Liste (2 articles)' badge visible - SUCCESS",
+    "Verify '🚫 1 ligne rayée' badge visible - SUCCESS",
+    "Clean up test data - SUCCESS"
+  ]
+}
