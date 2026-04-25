@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Bouton "Payé" pour les prestations (DONE)
+
+**Demande utilisateur** : ajouter un bouton "Payé" distinct du bouton "Acheté" pour différencier paiement physique vs paiement financier. Choix utilisateur (option b) : limiter le bouton aux dépenses de **catégorie `paiement`** uniquement (loyer, abonnements, prestations).
+
+**Backend** (`/app/backend/routers/expenses.py`) :
+- `ExpenseUpdate` : champs `is_paid: bool`, `paid_at: str (ISO)`, `paid_by: str` ajoutés.
+- `PUT /api/expenses/{id}` persiste correctement les 3 champs (validé par curl).
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/AchatsTab.jsx`) :
+- Import de l'icône `Wallet` (lucide-react) ajouté.
+- Bouton "Payé" affiché conditionnellement : `currentUser.role ∈ {manager, admin}` ET `expense.category === 'paiement'`.
+- Toggle on/off avec confirmation `window.confirm`. Au paiement, envoie `{ is_paid: true, paid_at: ISOnow, paid_by: username }`.
+- Badge `💰 Payé` (ambre) ajouté à côté de la description quand `is_paid === true`.
+- Bouton bascule en variant ambre rempli (`bg-amber-600`) avec libellé "Payé ✓" lorsque payé.
+
+**Test end-to-end** :
+- Curl PUT/GET : OK (toggle on/off, persistance MongoDB).
+- Testing agent (iter. 56) : 100% backend + 100% frontend (Admin + Gérante).
+
+
+---
 ## 24/04/2026 — Caisse↔Stock : lien explicite pour décrément automatique (DONE)
 
 **Demande utilisateur** : permettre à chaque produit Caisse d'être lié à un produit Stock pour qu'1 vente = -1 décrément automatique dans le stock.
