@@ -3,12 +3,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
+import logging
 import uuid
 import random
 import re
 import bcrypt
 import io
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stock", tags=["stock"])
 db = None
 
@@ -1292,6 +1294,196 @@ async def seed_demo_recipes():
             r.pop("_id", None)
     
     return {"success": True, "message": f"{len(recipes)} fiche(s) technique(s) de demo creee(s)", "recipes": recipes}
+
+
+# ==================== AUTO-COMPOSE RECIPES ====================
+# Smart matching of dish names → ingredients, based on keyword recognition.
+# The portion sizes are conservative defaults intended for adjustment by the manager.
+
+# Common cooking keywords (lowercase, accent-stripped) → ingredient categories.
+# Each entry returns ingredient name patterns + a default portion in stock unit.
+_DISH_KEYWORD_RULES = [
+    # (keyword in dish name) -> [(stock product name regex, qty, unit_hint), ...]
+    # Proteins
+    ("poulet", [(r"poulet", 0.25, "kg"), (r"oignon", 0.05, "kg"), (r"tomate", 0.04, "kg"), (r"huile", 0.04, "litre"), (r"sel", 0.005, "kg")]),
+    ("poisson", [(r"poisson|tilapia|carpe|capitaine|maquereau", 0.3, "kg"), (r"oignon", 0.05, "kg"), (r"tomate", 0.05, "kg"), (r"huile", 0.04, "litre"), (r"piment|epice", 0.01, "kg"), (r"sel", 0.005, "kg")]),
+    ("viande", [(r"viande|boeuf|bovin", 0.2, "kg"), (r"oignon", 0.05, "kg"), (r"tomate", 0.04, "kg"), (r"huile", 0.04, "litre"), (r"sel", 0.005, "kg")]),
+    ("boeuf", [(r"viande|boeuf", 0.2, "kg"), (r"oignon", 0.05, "kg"), (r"tomate", 0.04, "kg"), (r"huile", 0.04, "litre")]),
+    ("agneau", [(r"agneau|mouton", 0.2, "kg"), (r"oignon", 0.05, "kg"), (r"epice|piment", 0.01, "kg")]),
+    ("crevette", [(r"crevette", 0.15, "kg"), (r"oignon", 0.04, "kg"), (r"tomate", 0.04, "kg"), (r"huile", 0.03, "litre")]),
+    ("samossa", [(r"farine|samossa", 0.05, "kg"), (r"viande|poulet", 0.06, "kg"), (r"oignon", 0.02, "kg"), (r"epice|piment", 0.005, "kg")]),
+    ("nem", [(r"nem|farine", 0.05, "kg"), (r"poulet|crevette|viande", 0.06, "kg"), (r"chou|carotte", 0.04, "kg")]),
+
+    # Bases / accompagnements
+    ("riz", [(r"^riz", 0.18, "kg"), (r"huile", 0.02, "litre"), (r"sel", 0.005, "kg")]),
+    ("frite", [(r"frite|pomme.*terre", 0.15, "kg"), (r"huile", 0.05, "litre"), (r"sel", 0.005, "kg")]),
+    ("pate", [(r"pate|spaghetti|macaroni", 0.12, "kg"), (r"tomate", 0.05, "kg"), (r"huile", 0.02, "litre")]),
+    ("attieke", [(r"attieke", 0.18, "kg"), (r"huile", 0.02, "litre")]),
+    ("foufou", [(r"foufou|igname|manioc", 0.2, "kg")]),
+    ("igname", [(r"igname", 0.2, "kg"), (r"huile", 0.02, "litre")]),
+    ("manioc", [(r"manioc|placali", 0.18, "kg")]),
+    ("haricot", [(r"haricot", 0.15, "kg"), (r"huile", 0.02, "litre")]),
+
+    # Salades / Entrées
+    ("salade", [(r"salade|laitue", 0.1, "kg"), (r"tomate", 0.05, "kg"), (r"oignon", 0.03, "kg"), (r"huile|vinaigre", 0.02, "litre"), (r"sel", 0.002, "kg")]),
+    ("crudite", [(r"carotte|tomate|laitue|concombre|chou", 0.12, "kg"), (r"huile|vinaigre", 0.02, "litre")]),
+    ("avocat", [(r"avocat", 0.1, "kg"), (r"laitue|salade", 0.05, "kg"), (r"tomate", 0.04, "kg")]),
+    ("thon", [(r"thon", 0.08, "boite"), (r"laitue|salade", 0.05, "kg"), (r"tomate", 0.04, "kg")]),
+    ("cesar", [(r"laitue|salade", 0.1, "kg"), (r"poulet", 0.08, "kg"), (r"parmesan|fromage", 0.02, "kg"), (r"croutons", 0.02, "kg")]),
+
+    # Sauces
+    ("sauce", [(r"sauce|tomate", 0.06, "kg"), (r"oignon", 0.04, "kg"), (r"huile", 0.03, "litre"), (r"piment", 0.005, "kg")]),
+    ("graine", [(r"graine|palme", 0.1, "kg"), (r"poisson|viande", 0.15, "kg"), (r"oignon", 0.04, "kg")]),
+    ("arachide", [(r"arachide|pate.*arachide", 0.08, "kg"), (r"viande|poisson", 0.15, "kg"), (r"oignon", 0.04, "kg")]),
+    ("gombo", [(r"gombo", 0.1, "kg"), (r"poisson|viande", 0.15, "kg"), (r"huile", 0.03, "litre")]),
+    ("tomate", [(r"tomate", 0.1, "kg"), (r"oignon", 0.04, "kg"), (r"huile", 0.03, "litre")]),
+    ("aubergine", [(r"aubergine", 0.12, "kg"), (r"oignon", 0.04, "kg"), (r"huile", 0.03, "litre")]),
+
+    # Boissons (contenant simple = 1 unité)
+    ("biere", [(r"biere|castel|flag|beaufort|33", 1, "bouteille")]),
+    ("coca", [(r"coca", 1, "bouteille")]),
+    ("fanta", [(r"fanta", 1, "bouteille")]),
+    ("sprite", [(r"sprite", 1, "bouteille")]),
+    ("eau", [(r"^eau", 1, "bouteille")]),
+    ("jus", [(r"jus", 1, "bouteille")]),
+    ("vin", [(r"vin", 1, "bouteille")]),
+    ("whisky", [(r"whisky", 1, "bouteille")]),
+    ("smoothie", [(r"banane|mangue|fraise|fruit", 0.15, "kg"), (r"sucre", 0.02, "kg"), (r"lait|yaourt", 0.1, "litre")]),
+]
+
+# Always-tiny extras that are systematically used.
+_DEFAULT_BASE = [(r"sel", 0.002, "kg")]
+
+
+def _strip_lower(s: str) -> str:
+    s = (s or "").strip().lower()
+    # Strip common French accents for matching
+    repl = {"é": "e", "è": "e", "ê": "e", "ë": "e", "à": "a", "â": "a",
+            "ô": "o", "î": "i", "ï": "i", "ç": "c", "ù": "u", "û": "u"}
+    for k, v in repl.items():
+        s = s.replace(k, v)
+    return s
+
+
+def _compose_ingredients_for_dish(dish_name: str, stock_products: list) -> list:
+    """Return a list of {product_id, product_name, quantity, unit} based on dish name keyword scan."""
+    import re
+    name_norm = _strip_lower(dish_name)
+    matched_rules = []
+    for keyword, rules in _DISH_KEYWORD_RULES:
+        if keyword in name_norm:
+            matched_rules.extend(rules)
+    # Always include base extras
+    matched_rules.extend(_DEFAULT_BASE)
+    # Deduplicate by pattern (keep first qty wins)
+    seen = set()
+    unique_rules = []
+    for pat, qty, unit_hint in matched_rules:
+        if pat in seen:
+            continue
+        seen.add(pat)
+        unique_rules.append((pat, qty, unit_hint))
+
+    # For each rule, find the best stock product matching the regex
+    ingredients = []
+    used_product_ids = set()
+    for pat, qty, unit_hint in unique_rules:
+        regex = re.compile(pat, re.IGNORECASE)
+        candidates = [p for p in stock_products if regex.search(_strip_lower(p.get("name", "")))]
+        # Prefer products whose unit matches unit_hint
+        candidates.sort(key=lambda p: (
+            0 if p.get("unit", "").lower() == unit_hint.lower() else 1,
+            -float(p.get("quantity", 0) or 0),  # prefer products in stock
+        ))
+        for c in candidates:
+            if c["id"] not in used_product_ids:
+                used_product_ids.add(c["id"])
+                ingredients.append({
+                    "product_id": c["id"],
+                    "product_name": c.get("name", ""),
+                    "quantity": qty,
+                    "unit": c.get("unit") or unit_hint,
+                })
+                break
+    return ingredients
+
+
+class AutoComposeBody(BaseModel):
+    only_unmatched: bool = True  # only generate for caisse products without a recipe yet
+    skip_dishless: bool = True   # skip products that match no keyword (drinks already in stock, services, etc.)
+    dry_run: bool = False
+    selling_price_default: float = 0
+    department_filter: Optional[str] = None  # e.g. 'salle_jardin' to only target dishes
+
+
+@router.post("/recipes/auto-compose")
+async def auto_compose_recipes(body: AutoComposeBody):
+    """Auto-generate recipes for caisse products by matching dish names to stock products.
+
+    Strategy:
+      - For each caisse product (filterable by department), strip-lowercase the name.
+      - Apply keyword rules to detect ingredient categories.
+      - Pick the best stock product for each rule (prefers matching unit & in-stock items).
+      - 1 portion = the conservative default qty in the rule.
+      - Save as a stock_recipe with caisse_product_name = caisse_product.name.
+    """
+    try:
+        caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+        if body.department_filter:
+            caisse_products = [p for p in caisse_products if p.get("department") == body.department_filter]
+        existing_recipes = await db.stock_recipes.find({}, {"_id": 0, "caisse_product_name": 1}).to_list(2000)
+        existing_names = {(r.get("caisse_product_name") or "").strip().lower() for r in existing_recipes}
+        stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)
+
+        report = {
+            "scanned": len(caisse_products),
+            "skipped_existing": 0,
+            "skipped_no_match": [],
+            "created": [],
+            "dry_run": body.dry_run,
+        }
+        new_recipes = []
+
+        for cp in caisse_products:
+            cp_name = (cp.get("name") or "").strip()
+            if not cp_name:
+                continue
+            if body.only_unmatched and cp_name.lower() in existing_names:
+                report["skipped_existing"] += 1
+                continue
+            ingredients = _compose_ingredients_for_dish(cp_name, stock_products)
+            if not ingredients and body.skip_dishless:
+                report["skipped_no_match"].append(cp_name)
+                continue
+            recipe = {
+                "id": str(uuid.uuid4()),
+                "name": cp_name,
+                "caisse_product_name": cp_name,
+                "selling_price": float(cp.get("price") or body.selling_price_default or 0),
+                "ingredients": ingredients,
+                "notes": "Recette générée automatiquement (1 portion). À ajuster selon vos pratiques.",
+                "auto_generated": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            new_recipes.append(recipe)
+            report["created"].append({
+                "name": cp_name,
+                "ingredients_count": len(ingredients),
+                "ingredients": [{"name": i["product_name"], "qty": i["quantity"], "unit": i["unit"]} for i in ingredients],
+            })
+
+        if new_recipes and not body.dry_run:
+            await db.stock_recipes.insert_many([{**r} for r in new_recipes])
+
+        report["created_count"] = len(report["created"])
+        report["skipped_no_match_count"] = len(report["skipped_no_match"])
+        return report
+    except Exception as e:
+        logger.error(f"Auto-compose recipes error: {e}")
+        raise HTTPException(500, str(e))
+
+
 
 # ==================== REPORTS / RAPPORTS ====================
 

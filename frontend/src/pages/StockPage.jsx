@@ -1424,7 +1424,39 @@ export default function StockPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-white">Fiches Techniques / Recettes</h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {isAdmin && (
+                  <Button
+                    onClick={async () => {
+                      if (!window.confirm(
+                        "Composer automatiquement des fiches techniques pour TOUS les plats Caisse non encore liés ?\n\n" +
+                        "L'algorithme analyse le nom de chaque plat (Riz, Poulet, Salade, Sauce, Boisson…), trouve les ingrédients correspondants dans le stock, et crée une fiche avec 1 portion par défaut.\n\n" +
+                        "✏️ Vous pourrez ensuite ajuster chaque fiche manuellement."
+                      )) return;
+                      try {
+                        const res = await axios.post(`${API}/recipes/auto-compose`, {
+                          only_unmatched: true,
+                          skip_dishless: true,
+                          dry_run: false,
+                        });
+                        toast.success(
+                          `${res.data.created_count} fiche(s) créée(s) automatiquement`,
+                          {
+                            description: `${res.data.skipped_existing} déjà existantes ignorées · ${res.data.skipped_no_match_count} sans correspondance (boissons, services...)`,
+                          }
+                        );
+                        fetchRecipes();
+                      } catch (e) {
+                        toast.error(e?.response?.data?.detail || "Erreur de composition automatique");
+                      }
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    data-testid="auto-compose-recipes-btn"
+                    title="Génère automatiquement des fiches techniques pour les plats Caisse non liés (1 portion par défaut, basée sur les mots-clés)"
+                  >
+                    <BookOpen className="w-4 h-4 mr-1" /> Composer auto
+                  </Button>
+                )}
                 {recipes.length === 0 && (
                   <Button variant="outline" className="border-slate-700 text-slate-300" onClick={seedDemoRecipes} data-testid="seed-recipes-btn">
                     Charger demo (Poulet braise)
