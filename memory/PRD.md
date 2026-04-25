@@ -4,6 +4,29 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Vue mobile améliorée + Toggle "Liste d'origine / Liste corrigée" (DONE)
+
+**Demandes utilisateur** : (1a) "améliore la vue sur le tel" pour la zone Achats & Dépenses entière, (2c) "permet aussi une vue de la demande modifiée" — toggle visible aux deux rôles (admin + gérante) sur les dépenses `admin_review`.
+
+**Frontend Mobile** (`AchatsTab.jsx`) :
+- Éditeur admin "EN COURS DE CORRECTION" : layout reorganisé en **2 sous-rangées** par ligne. Rangée 1 : checkbox + #idx + Description (flex-1) + bouton supprimer. Rangée 2 : select catégorie + Qté + × + PU + = + Total. Plus de débordement horizontal sur 390px.
+- Liste pending (Validation en cours) : items utilisent `flex-col sm:flex-row` (description d'abord, qté×PU à la ligne suivante en mobile).
+- `truncate` ajouté sur les descriptions longues; `shrink-0` sur badges/boutons fixes.
+
+**Frontend Toggle** :
+- Nouveau state `reviewViewMode[expenseId]` avec helpers `getReviewViewMode` / `setReviewViewModeFor`.
+- Defaults : Admin = "corrected" (édition active), Gérante = "original" (lecture seule).
+- UI : 2 boutons rond pill `📋 Liste d'origine` / `✏️ Liste corrigée` (data-testid `review-view-toggle-{id}`).
+- En mode "original" : éditeur admin masqué, vue lecture seule de `original_items` pour les deux rôles.
+- En mode "corrected" : Admin voit l'éditeur libre; Gérante voit `items` actuels (lecture seule) avec items rayés en rouge barré.
+- Total label adaptatif : "Total d'origine" (montant snapshot) ou "Total corrigé" (montant actuel).
+
+**Test end-to-end** :
+- Testing agent (iter. 60) : 100% frontend. 30 scénarios validés sur viewport 390x844 (Admin + Gérante).
+- Régressions vérifiées : Première validation, édition libre, Aperçu PDF, Envoyer à la gérante, audit trail.
+
+
+---
 ## 25/04/2026 — Trace d'audit des corrections admin (DONE)
 
 **Demande utilisateur** : "trace d'audit" — afficher sur les dépenses approuvées un récapitulatif des modifications faites par l'admin, en comparant `original_items` (snapshot soumis par la gérante au passage admin_review) avec `items` (version finale).
