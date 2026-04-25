@@ -461,6 +461,73 @@ async def convert_product_unit(product_id: str, data: ConvertUnitRequest):
     return {"success": True, "product": updated}
 
 
+class AddPackageRequest(BaseModel):
+    package_qty: float           # ex: 2 (casiers achetés)
+    package_price: float         # ex: 7200 F par casier
+    items_per_package: int       # ex: 24 bouteilles par casier
+    reason: str = ""             # optional note
+
+
+@router.post("/products/{product_id}/add-package")
+async def add_package_entry(product_id: str, data: AddPackageRequest):
+    """Ajoute une entrée en stock par package (casier/pack/...) : multiplie la qty
+    par items_per_package, divise le prix pour obtenir le PU à l'unité interne.
+    Met à jour le prix d'achat du produit avec le nouveau PU calculé. Trace un
+    stock_movements entree standard pour audit."""
+    if data.package_qty <= 0:
+        raise HTTPException(400, "Nombre de packages > 0 requis")
+    if data.items_per_package <= 0:
+        raise HTTPException(400, "Nombre d'unités par package > 0 requis")
+    if data.package_price < 0:
+        raise HTTPException(400, "Prix invalide")
+
+    product = await db.stock_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(404, "Produit non trouvé")
+
+    n_units = data.package_qty * data.items_per_package
+    unit_price = data.package_price / data.items_per_package if data.items_per_package else 0.0
+
+    old_qty = product.get("quantity", 0) or 0
+    new_qty = old_qty + n_units
+    new_valeur = new_qty * unit_price
+    smin = product.get("stock_min", 5)
+    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.stock_products.update_one(
+        {"id": product_id},
+        {"$set": {
+            "quantity": new_qty,
+            "purchase_price": unit_price,
+            "valeur_stock": new_valeur,
+            "statut": new_statut,
+            "updated_at": now_iso,
+            "date_achat": now_iso[:10],
+        }}
+    )
+
+    await db.stock_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "product_id": product_id,
+        "product_name": product.get("name", ""),
+        "product_code": product.get("code", ""),
+        "movement_type": "entree",
+        "quantity": n_units,
+        "previous_quantity": old_qty,
+        "new_quantity": new_qty,
+        "unit": product.get("unit", ""),
+        "unit_price": unit_price,
+        "total_value": data.package_qty * data.package_price,
+        "reason": data.reason or f"Entrée par package ({data.package_qty} × {data.items_per_package} @ {data.package_price} F)",
+        "user_name": "Admin",
+        "created_at": now_iso,
+    })
+
+    updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+    return {"success": True, "product": updated, "units_added": n_units, "new_unit_price": unit_price}
+
+
 class ConvertUnitBulkRequest(BaseModel):
     category_id: Optional[str] = None  # optional filter by category
     from_unit: str                      # e.g. "casier" — only convert products with this current unit

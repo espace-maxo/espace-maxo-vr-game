@@ -104,6 +104,42 @@ export default function StockPage() {
     new_unit: "bouteille",
   });
 
+  // Add package entry modal (quick package-based stock input from product row)
+  const [showAddPackageModal, setShowAddPackageModal] = useState(false);
+  const [addPackageTarget, setAddPackageTarget] = useState(null);
+  const [addPackageForm, setAddPackageForm] = useState({ package_qty: 1, package_price: 0, items_per_package: 24 });
+
+  const openAddPackage = (p) => {
+    setAddPackageTarget(p);
+    // Smart default for items_per_package: if stock_min is > 1 and seems like a package ref, use it
+    const smartItems = p.stock_min && p.stock_min >= 6 && p.stock_min <= 48 ? p.stock_min : 24;
+    setAddPackageForm({ package_qty: 1, package_price: 0, items_per_package: smartItems });
+    setShowAddPackageModal(true);
+  };
+
+  const submitAddPackage = async () => {
+    const pq = parseFloat(addPackageForm.package_qty);
+    const pp = parseFloat(addPackageForm.package_price);
+    const ipp = parseInt(addPackageForm.items_per_package, 10);
+    if (!pq || pq <= 0) { toast.error("Nombre de packages > 0"); return; }
+    if (!ipp || ipp <= 0) { toast.error("Unités par package > 0"); return; }
+    if (pp < 0) { toast.error("Prix invalide"); return; }
+    try {
+      await axios.post(`${API}/stock/products/${addPackageTarget.id}/add-package`, {
+        package_qty: pq,
+        package_price: pp,
+        items_per_package: ipp,
+      });
+      toast.success(`+${pq * ipp} ${addPackageTarget.unit} ajoutés à ${addPackageTarget.name}`);
+      setShowAddPackageModal(false);
+      setAddPackageTarget(null);
+      fetchProducts();
+      fetchDashboard();
+    } catch (e) {
+      toast.error("Erreur lors de l'ajout");
+    }
+  };
+
   const submitBulkConvert = async () => {
     const m = parseInt(bulkConvertForm.multiplier, 10);
     const nu = (bulkConvertForm.new_unit || "").trim();
@@ -1009,6 +1045,18 @@ export default function StockPage() {
                                 <div className="flex items-baseline gap-1.5">
                                   <span className={`font-bold text-base ${p.quantity <= 0 ? 'text-red-400' : p.quantity <= p.stock_min ? 'text-orange-400' : 'text-emerald-400'}`}>{p.quantity}</span>
                                   <span className="text-slate-500 text-xs">{p.unit}</span>
+                                  {isAdmin && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 p-0 text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
+                                      onClick={(e) => { e.stopPropagation(); openAddPackage(p); }}
+                                      title="Ajouter par package (casier, pack, carton...)"
+                                      data-testid={`add-pkg-${p.id}`}
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
                                   <span className="text-slate-600 text-[10px] ml-auto">min: {p.stock_min}</span>
                                 </div>
                                 <div className="h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
@@ -1749,6 +1797,78 @@ export default function StockPage() {
             <div><Label className="text-slate-300 text-xs">Observation</Label><Textarea value={productForm.observation} onChange={e => setProductForm(p => ({...p, observation: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" rows={2} placeholder="Remarques..." /></div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveProduct}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Package Modal — saisie rapide X casiers @ Y F → +N unités */}
+      <Dialog open={showAddPackageModal} onOpenChange={setShowAddPackageModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-md" data-testid="add-package-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-emerald-400" /> Ajouter par package
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {addPackageTarget ? (
+                <>Entrée rapide pour <strong className="text-white">{addPackageTarget.name}</strong> (unité actuelle : {addPackageTarget.unit}).</>
+              ) : "Ajouter une entrée par package"}
+            </DialogDescription>
+          </DialogHeader>
+          {addPackageTarget && (
+            <div className="space-y-4">
+              <div className="bg-slate-800/50 border border-slate-700 rounded p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-slate-400">Stock actuel</span><span className="text-white font-semibold">{addPackageTarget.quantity} {addPackageTarget.unit}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Prix actuel</span><span className="text-white font-semibold">{formatPrice(addPackageTarget.purchase_price)} F / {addPackageTarget.unit}</span></div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-slate-300 text-xs">Nb packages *</Label>
+                  <Input type="number" min="0" step="any" value={addPackageForm.package_qty}
+                    onChange={(e) => setAddPackageForm({ ...addPackageForm, package_qty: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-qty" autoFocus />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-xs">Prix / package *</Label>
+                  <Input type="number" min="0" value={addPackageForm.package_price}
+                    onChange={(e) => setAddPackageForm({ ...addPackageForm, package_price: e.target.value })}
+                    placeholder="ex: 7200" className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-price" />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-xs">{addPackageTarget.unit}/package</Label>
+                  <Input type="number" min="1" value={addPackageForm.items_per_package}
+                    onChange={(e) => setAddPackageForm({ ...addPackageForm, items_per_package: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-items" />
+                </div>
+              </div>
+
+              {(() => {
+                const pq = parseFloat(addPackageForm.package_qty) || 0;
+                const pp = parseFloat(addPackageForm.package_price) || 0;
+                const ipp = parseInt(addPackageForm.items_per_package, 10) || 0;
+                if (pq <= 0 || ipp <= 0) return null;
+                const addedUnits = pq * ipp;
+                const newQty = (addPackageTarget.quantity || 0) + addedUnits;
+                const newPrice = pp / ipp;
+                const totalSpent = pq * pp;
+                return (
+                  <div className="bg-emerald-900/20 border border-emerald-500/40 rounded p-3 text-sm space-y-1">
+                    <p className="text-emerald-300 font-medium mb-1">📦 Après ajout :</p>
+                    <div className="flex justify-between"><span className="text-slate-400">Unités ajoutées</span><span className="text-white font-bold">+{addedUnits} {addPackageTarget.unit}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Nouveau stock</span><span className="text-emerald-400 font-bold">{newQty} {addPackageTarget.unit}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Nouveau PU</span><span className="text-white font-bold">{formatPrice(newPrice)} F / {addPackageTarget.unit}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Total dépensé</span><span className="text-amber-400 font-bold">{formatPrice(totalSpent)} F</span></div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setShowAddPackageModal(false)} className="text-slate-400">Annuler</Button>
+                <Button onClick={submitAddPackage} className="bg-emerald-600 hover:bg-emerald-700" data-testid="add-pkg-submit">
+                  <Plus className="w-4 h-4 mr-1" /> Ajouter
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
