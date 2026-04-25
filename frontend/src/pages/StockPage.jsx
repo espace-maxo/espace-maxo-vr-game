@@ -118,6 +118,47 @@ export default function StockPage() {
   const [activeInventory, setActiveInventory] = useState(null);
   const [inventorySearch, setInventorySearch] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Sorties detail panel (dashboard)
+  const today_iso = new Date().toISOString().slice(0, 10);
+  const [showSortiesDetail, setShowSortiesDetail] = useState(false);
+  const [sortiesDetail, setSortiesDetail] = useState([]);
+  const [sortiesLoading, setSortiesLoading] = useState(false);
+  const [sortiesFilters, setSortiesFilters] = useState({
+    date_from: today_iso,
+    date_to: today_iso,
+    product_q: "",
+    motif: "all", // 'all' | 'sortie' | 'perte' | 'casse' | 'sale'
+  });
+
+  const fetchSortiesDetail = async () => {
+    setSortiesLoading(true);
+    try {
+      // Fetch each movement type and merge (backend filters one at a time)
+      const types = sortiesFilters.motif === "all"
+        ? ["sortie", "perte", "casse"]
+        : [sortiesFilters.motif];
+      const results = await Promise.all(
+        types.map((t) => axios.get(`${API}/movements`, {
+          params: {
+            movement_type: t,
+            date_from: sortiesFilters.date_from || undefined,
+            date_to: sortiesFilters.date_to || undefined,
+            limit: 500,
+          },
+        }))
+      );
+      let all = results.flatMap((r) => r.data.movements || []);
+      const q = (sortiesFilters.product_q || "").trim().toLowerCase();
+      if (q) all = all.filter((m) => (m.product_name || "").toLowerCase().includes(q));
+      all.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      setSortiesDetail(all);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur de chargement des sorties");
+    } finally {
+      setSortiesLoading(false);
+    }
+  };
   const [seeded, setSeeded] = useState(false);
 
   // Filters
@@ -827,19 +868,157 @@ export default function StockPage() {
                     { label: "Critiques", value: dashboard.critical_products, icon: AlertTriangle, color: "red" },
                     { label: "Valeur Stock", value: `${formatPrice(dashboard.total_value)} F`, icon: TrendingUp, color: "emerald", small: true },
                     { label: "Entrees Aujourd'hui", value: dashboard.entrees_today, icon: ArrowDown, color: "green" },
-                    { label: "Sorties Aujourd'hui", value: dashboard.sorties_today, icon: ArrowUp, color: "orange" },
+                    { label: "Sorties Aujourd'hui", value: dashboard.sorties_today, icon: ArrowUp, color: "orange",
+                      onClick: () => {
+                        const next = !showSortiesDetail;
+                        setShowSortiesDetail(next);
+                        if (next) fetchSortiesDetail();
+                      },
+                      testid: "sorties-today-card",
+                    },
                   ].map((c, i) => (
-                    <Card key={i} className="bg-slate-900/80 border-slate-800">
+                    <Card
+                      key={i}
+                      className={`bg-slate-900/80 border-slate-800 ${c.onClick ? 'cursor-pointer hover:border-orange-500/50 transition' : ''}`}
+                      onClick={c.onClick}
+                      data-testid={c.testid}
+                    >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-slate-400 text-xs">{c.label}</span>
                           <c.icon className={`w-4 h-4 text-${c.color}-400`} />
                         </div>
                         <p className={`${c.small ? 'text-lg' : 'text-2xl'} font-bold text-white`}>{c.value}</p>
+                        {c.onClick && (
+                          <p className="text-orange-300/70 text-[10px] mt-1">{showSortiesDetail ? "Masquer le détail" : "Cliquer pour le détail"}</p>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+
+                {/* === DÉTAIL DES SORTIES === */}
+                {showSortiesDetail && (
+                  <Card className="bg-slate-900/80 border-orange-500/30" data-testid="sorties-detail-panel">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <CardTitle className="text-orange-300 flex items-center gap-2">
+                          <ArrowUp className="w-4 h-4" /> Détail des sorties
+                        </CardTitle>
+                        <Button size="sm" variant="ghost" onClick={() => setShowSortiesDetail(false)} className="text-slate-400 hover:text-white">
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Filtres */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">Du</label>
+                          <Input type="date" value={sortiesFilters.date_from}
+                            onChange={(e) => setSortiesFilters({...sortiesFilters, date_from: e.target.value})}
+                            className="bg-slate-800 border-slate-700 text-white text-xs h-8" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Au</label>
+                          <Input type="date" value={sortiesFilters.date_to}
+                            onChange={(e) => setSortiesFilters({...sortiesFilters, date_to: e.target.value})}
+                            className="bg-slate-800 border-slate-700 text-white text-xs h-8" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Motif</label>
+                          <select value={sortiesFilters.motif}
+                            onChange={(e) => setSortiesFilters({...sortiesFilters, motif: e.target.value})}
+                            className="w-full bg-slate-800 border border-slate-700 rounded text-white text-xs h-8 px-2">
+                            <option value="all">Tous</option>
+                            <option value="sortie">Sortie / Vente</option>
+                            <option value="perte">Perte</option>
+                            <option value="casse">Casse</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="text-[10px] text-slate-400">Produit</label>
+                          <Input value={sortiesFilters.product_q}
+                            placeholder="Rechercher…"
+                            onChange={(e) => setSortiesFilters({...sortiesFilters, product_q: e.target.value})}
+                            className="bg-slate-800 border-slate-700 text-white text-xs h-8" />
+                        </div>
+                        <div className="flex items-end gap-1">
+                          <Button size="sm" onClick={fetchSortiesDetail} disabled={sortiesLoading}
+                            className="bg-orange-600 hover:bg-orange-700 h-8" data-testid="sorties-refresh-btn">
+                            <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sortiesLoading ? 'animate-spin' : ''}`} />
+                            Filtrer
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Récap */}
+                      <div className="flex items-center justify-between bg-orange-900/15 border border-orange-500/20 rounded p-2 flex-wrap gap-2">
+                        <div className="text-xs text-slate-300">
+                          <span className="text-orange-300 font-semibold">{sortiesDetail.length}</span> mouvement(s) ·
+                          <span className="text-orange-300 font-semibold mx-1">
+                            {sortiesDetail.reduce((s, m) => s + (m.quantity || 0), 0).toFixed(2)}
+                          </span> unités
+                        </div>
+                        <div className="text-xs text-slate-300">
+                          Valeur totale :
+                          <span className="text-orange-300 font-bold ml-1">
+                            {formatPrice(sortiesDetail.reduce((s, m) => s + (m.total_value || (m.quantity * m.unit_price) || 0), 0))} F
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tableau */}
+                      <div className="overflow-x-auto rounded border border-slate-800">
+                        <table className="w-full text-xs" data-testid="sorties-table">
+                          <thead className="bg-slate-800/50">
+                            <tr>
+                              <th className="text-left p-2 text-slate-400 font-medium">Date</th>
+                              <th className="text-left p-2 text-slate-400 font-medium">Produit</th>
+                              <th className="text-right p-2 text-slate-400 font-medium">Qté</th>
+                              <th className="text-left p-2 text-slate-400 font-medium">Motif</th>
+                              <th className="text-right p-2 text-slate-400 font-medium">PU</th>
+                              <th className="text-right p-2 text-slate-400 font-medium">Total</th>
+                              <th className="text-left p-2 text-slate-400 font-medium hidden md:table-cell">Réf / Utilisateur</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortiesDetail.length === 0 && (
+                              <tr><td colSpan={7} className="text-center text-slate-500 py-6">
+                                {sortiesLoading ? "Chargement…" : "Aucune sortie sur cette période"}
+                              </td></tr>
+                            )}
+                            {sortiesDetail.map((m) => (
+                              <tr key={m.id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                                <td className="p-2 text-slate-300 whitespace-nowrap">
+                                  {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="p-2 text-white">{m.product_name}</td>
+                                <td className="p-2 text-right text-orange-300 font-semibold">{m.quantity} {m.unit}</td>
+                                <td className="p-2">
+                                  <Badge className={`text-[10px] ${
+                                    m.movement_type === 'sortie' ? 'bg-red-500/20 text-red-300' :
+                                    m.movement_type === 'perte' ? 'bg-amber-500/20 text-amber-300' :
+                                    m.movement_type === 'casse' ? 'bg-rose-500/20 text-rose-300' :
+                                    'bg-slate-500/20 text-slate-300'
+                                  }`}>
+                                    {(m.reason || '').toLowerCase().includes('vente') ? '🛒 Vente' : MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}
+                                  </Badge>
+                                </td>
+                                <td className="p-2 text-right text-slate-300">{formatPrice(m.unit_price || 0)} F</td>
+                                <td className="p-2 text-right text-orange-200 font-bold">{formatPrice(m.total_value || (m.quantity * m.unit_price) || 0)} F</td>
+                                <td className="p-2 text-slate-500 hidden md:table-cell text-[11px]">
+                                  {m.reason && <div className="truncate max-w-[200px]" title={m.reason}>{m.reason}</div>}
+                                  {m.user_name && <div className="text-slate-600">par {m.user_name}</div>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Caisse Sales Card */}
                 {(dashboard.ventes_caisse_today > 0 || dashboard.ventes_caisse_value > 0) && (
