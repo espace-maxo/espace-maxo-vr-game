@@ -4,6 +4,20 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Bug fix : Création directe d'un nouveau compte courant (DONE)
+
+**Bug rapporté** : "le compte ne se créé pas automatiquement". Cause racine : dans iter. 61, le mode `create_new` n'était accessible qu'en sélectionnant un compte existant avec solde insuffisant. Si AUCUN compte n'existait, ou si tous les comptes avaient un solde suffisant, l'admin n'avait aucun moyen de déclencher le mode `create_new`. De plus, le dropdown était caché si `availableAccounts.length === 0`.
+
+**Fix** :
+- Frontend : ajout d'une option `__create_new__` directe dans le dropdown : `➕ Créer un nouveau compte courant (XXX F)` (en vert). Cliquer dessus déclenche `window.confirm` puis crée immédiatement un compte dédié sans dépendre d'un compte existant.
+- Frontend : retrait du gating `availableAccounts.length > 0` sur les deux dropdowns (validés + terminés). Le dropdown est désormais visible même sans compte existant, l'admin peut donc créer un compte directement depuis l'achat.
+
+**Test** :
+- Backend : curl validé (création compte 42000 F sans `account_id` passé). Iter. 61 pytest 11/11 toujours OK.
+- Testing agent (iter. 62) : 100% frontend. Vérifications : option visible dans les 2 vues, confirm message correct, toast OK, compte créé en base, allocation effectuée, annulation = no-op, régression du window.prompt 3-options OK.
+
+
+---
 ## 25/04/2026 — Imputation intelligente d'une dépense au compte courant (DONE)
 
 **Demande utilisateur** : "permettre de rattacher le paiement des achats déjà validés ou terminés au compte courant (le créer par la valeur si le compte courant n'est pas suffisant)" — Choix : (1c) dropdown sur validés ET terminés. (2b+2c+2d) 3 stratégies offertes à l'admin via prompt si solde insuffisant : top-up auto, création de compte dédié, allocation négative. (3a) label "Recharge auto pour <description>".
