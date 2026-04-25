@@ -1,0 +1,94 @@
+{
+  "summary": "Tested iteration 61 features: Smart expense allocation to current accounts with 3 modes (topup_existing, create_new, allow_negative). All backend API tests pass (11/11). Frontend UI tests verified: dropdown visible on validated AND completed expenses for Admin, window.prompt triggered for insufficient balance, correct toast notifications, account top-up with correct label format. Manager/Gérante correctly does NOT see the dropdown (admin-only feature).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_smart_allocation_iter61.py",
+    "/app/test_reports/pytest/smart_allocation_iter61_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend expenses.py lines 692-815: SmartAllocateBody model and POST /expenses/{id}/allocate-account-smart endpoint correctly implements 3 modes with proper validation",
+    "Backend expenses.py lines 761-786: topup_existing mode correctly calculates missing amount, increments total_advance, and adds top_ups[] entry with label 'Recharge auto pour <description>'",
+    "Backend expenses.py lines 728-754: create_new mode creates new account with total_advance = expense.amount and correct naming",
+    "Backend expenses.py lines 787-788: allow_negative mode performs allocation without top-up, allowing negative balance",
+    "Frontend CaissePage.jsx lines 1015-1076: allocateExpenseToAccount() correctly triggers window.prompt when balance < amount with 3 options",
+    "Frontend AchatsTab.jsx lines 1662-1684: Funding source dropdown for approved expenses with data-testid='funding-source-{expense.id}'",
+    "Frontend AchatsTab.jsx lines 1821-1844: Funding source dropdown for completed expenses with data-testid='funding-source-completed-{expense.id}'",
+    "Frontend AchatsTab.jsx line 1662 & 1822: Both dropdowns correctly gated by currentUser?.role === 'admin'"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_smart_allocation_iter61.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Created test expenses (50000 F) and test accounts (10000 F) for testing insufficient balance scenarios. All test data cleaned up after tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 61 added smart expense allocation feature. Key points: (1) New endpoint POST /api/expenses/{id}/allocate-account-smart with 3 modes: topup_existing (auto top-up account), create_new (create dedicated account), allow_negative (allow overdraft). (2) Frontend dropdown '💰 Payé depuis :' now visible on BOTH 'Achats validés' AND 'Achats terminés' views for Admin only. (3) When selecting account with insufficient balance, window.prompt appears with 3 options. (4) Top-up label format: 'Recharge auto pour <description>'. (5) Account top_ups[] array tracks all auto top-ups. (6) Old endpoint /api/expenses/{id}/allocate-account still works for sufficient balance cases (regression verified).",
+  "features_verified": {
+    "backend": [
+      "POST /api/expenses/{id}/allocate-account-smart with mode='topup_existing' - VERIFIED (account topped up from 10000 to 50000 F)",
+      "POST /api/expenses/{id}/allocate-account-smart with mode='create_new' - VERIFIED (new account created with expense amount)",
+      "POST /api/expenses/{id}/allocate-account-smart with mode='allow_negative' - VERIFIED (balance goes negative)",
+      "Top-up label format 'Recharge auto pour <description>' - VERIFIED",
+      "Account top_ups[] array updated with top-up entry - VERIFIED",
+      "Account total_advance correctly incremented - VERIFIED",
+      "balance_remaining = 0 after allocation - VERIFIED",
+      "Regression: Old /api/expenses/{id}/allocate-account endpoint works - VERIFIED",
+      "Validation: Invalid mode rejected with 400 - VERIFIED",
+      "Validation: Missing account_id for topup_existing rejected - VERIFIED",
+      "404 for non-existent expense - VERIFIED",
+      "404 for non-existent account - VERIFIED",
+      "Completed expenses can be allocated - VERIFIED"
+    ],
+    "frontend": [
+      "Dropdown '💰 Payé depuis :' visible on 'Achats validés' for Admin - VERIFIED",
+      "Dropdown '💰 Payé depuis :' visible on 'Achats terminés' for Admin - VERIFIED (data-testid='funding-source-completed-{id}')",
+      "Dropdown NOT visible for Manager/Gérante - VERIFIED (0 dropdowns found)",
+      "window.prompt triggered when selecting account with insufficient balance - VERIFIED",
+      "Prompt message contains account name, balance, missing amount, and 3 options - VERIFIED",
+      "Option 1 (topup_existing) works correctly - VERIFIED",
+      "Toast notification 'Compte rechargé de X F et dépense imputée.' - VERIFIED",
+      "Account balance updated in dropdown after allocation - VERIFIED",
+      "'imputé' badge appears after allocation - VERIFIED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Backend: test_topup_existing_insufficient_balance - PASSED",
+    "Backend: test_topup_existing_sufficient_balance - PASSED",
+    "Backend: test_create_new_account - PASSED",
+    "Backend: test_allow_negative_overdraft - PASSED",
+    "Backend: test_regression_old_allocate_endpoint - PASSED",
+    "Backend: test_invalid_mode_rejected - PASSED",
+    "Backend: test_missing_account_id_for_topup - PASSED",
+    "Backend: test_expense_not_found - PASSED",
+    "Backend: test_account_not_found - PASSED",
+    "Backend: test_topup_label_contains_description - PASSED",
+    "Backend: test_allocate_completed_expense - PASSED",
+    "Frontend: Admin login and navigate to Achats validés - SUCCESS",
+    "Frontend: Verify dropdown visible for approved expense - SUCCESS",
+    "Frontend: Select account with insufficient balance - SUCCESS",
+    "Frontend: Verify window.prompt triggered with correct message - SUCCESS",
+    "Frontend: Respond with '1' (topup_existing) - SUCCESS",
+    "Frontend: Verify toast notification - SUCCESS",
+    "Frontend: Verify account topped up correctly - SUCCESS",
+    "Frontend: Admin navigate to Achats terminés - SUCCESS",
+    "Frontend: Verify dropdown visible for completed expense - SUCCESS",
+    "Frontend: Manager login - SUCCESS",
+    "Frontend: Verify dropdown NOT visible for Manager - SUCCESS"
+  ]
+}

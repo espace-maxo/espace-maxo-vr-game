@@ -1017,15 +1017,57 @@ const CaissePage = () => {
       if (!accountId) {
         await axios.delete(`${API}/expenses/${expense.id}/allocate-account`);
         toast.success("Compte courant détaché");
-      } else {
-        const acc = availableAccounts.find((a) => a.id === accountId);
+        fetchExpenses();
+        fetchAvailableAccounts();
+        return;
+      }
+      const acc = availableAccounts.find((a) => a.id === accountId);
+      const expAmount = parseFloat(expense.amount) || 0;
+      const balance = parseFloat(acc?.balance_available) || 0;
+      // If selected account has enough balance, perform standard allocation.
+      if (balance >= expAmount) {
         await axios.post(`${API}/expenses/${expense.id}/allocate-account`, {
           account_id: accountId,
           account_name: acc?.name || "",
           affects_ca: affectsCA,
         });
         toast.success(`Dépense imputée sur : ${acc?.name || ""}`);
+        fetchExpenses();
+        fetchAvailableAccounts();
+        return;
       }
+      // Insufficient balance — ask admin which strategy to use.
+      const missing = expAmount - balance;
+      const choice = window.prompt(
+        `⚠ Le compte "${acc?.name || ''}" n'a que ${formatPrice(balance)} F disponible.\n` +
+        `Il manque ${formatPrice(missing)} F pour couvrir cet achat de ${formatPrice(expAmount)} F.\n\n` +
+        `Choisissez votre stratégie en tapant le numéro :\n` +
+        `1 — Recharger ce compte de ${formatPrice(missing)} F automatiquement\n` +
+        `2 — Créer un NOUVEAU compte courant dédié de ${formatPrice(expAmount)} F\n` +
+        `3 — Imputer quand même (le compte ira en négatif)\n` +
+        `(annuler pour ne rien faire)`,
+        "1"
+      );
+      if (!choice) return;
+      let mode = null;
+      if (choice.trim() === "1") mode = "topup_existing";
+      else if (choice.trim() === "2") mode = "create_new";
+      else if (choice.trim() === "3") mode = "allow_negative";
+      else {
+        toast.error("Choix invalide.");
+        return;
+      }
+      const body = { mode, affects_ca: affectsCA };
+      if (mode === "create_new") {
+        body.new_account_name = `Recharge auto pour ${(expense.description || '').slice(0, 80)}`;
+      } else {
+        body.account_id = accountId;
+      }
+      const res = await axios.post(`${API}/expenses/${expense.id}/allocate-account-smart`, body);
+      const topUp = res.data?.topped_up_amount || 0;
+      if (mode === "topup_existing") toast.success(`Compte rechargé de ${formatPrice(topUp)} F et dépense imputée.`);
+      else if (mode === "create_new") toast.success(`Nouveau compte créé (${formatPrice(expAmount)} F) et dépense imputée.`);
+      else toast.success(`Dépense imputée — le compte est en découvert.`);
       fetchExpenses();
       fetchAvailableAccounts();
     } catch (e) {

@@ -689,6 +689,132 @@ async def allocate_expense_to_current_account(expense_id: str, body: AllocateExp
         raise HTTPException(500, str(e))
 
 
+# ==================== SMART ALLOCATE (handles insufficient balance) ====================
+
+class SmartAllocateBody(BaseModel):
+    account_id: Optional[str] = None  # required for 'topup_existing' & 'allow_negative'
+    new_account_name: Optional[str] = None  # used for 'create_new'
+    mode: str  # 'topup_existing' | 'create_new' | 'allow_negative'
+    affects_ca: Optional[bool] = True
+
+
+@router.post("/expenses/{expense_id}/allocate-account-smart")
+async def smart_allocate_expense_to_account(expense_id: str, body: SmartAllocateBody):
+    """Smart-allocate an approved/completed expense to a current account.
+
+    Modes when the chosen account does NOT have enough balance:
+      - 'topup_existing': bumps the account's `total_advance` by the missing amount
+        and records a top_up entry "Recharge auto pour {description}".
+      - 'create_new': creates a fresh dedicated current account with total_advance =
+        expense.amount, named "Recharge auto pour {description}".
+      - 'allow_negative': just performs the allocation; the account balance can go
+        negative (records a debt against the account).
+    """
+    try:
+        if body.mode not in ("topup_existing", "create_new", "allow_negative"):
+            raise HTTPException(400, "Mode invalide")
+
+        expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        if not expense:
+            raise HTTPException(404, "Dépense non trouvée")
+        amount = float(expense.get("amount") or 0)
+        description = (expense.get("description") or "").strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        target_account_id = body.account_id
+        topped_up_amount = 0.0
+        created_account = None
+
+        if body.mode == "create_new":
+            label = (body.new_account_name or f"Recharge auto pour {description[:80]}").strip()
+            new_account = {
+                "id": str(uuid.uuid4()),
+                "name": label or "Recharge auto",
+                "total_advance": amount,
+                "received_date": today_iso,
+                "description": f"Compte créé automatiquement pour financer : {description}"[:240],
+                "notes": "",
+                "schedule": [],
+                "repayments": [],
+                "top_ups": [{
+                    "id": str(uuid.uuid4()),
+                    "amount": amount,
+                    "label": f"Recharge auto pour {description[:80]}",
+                    "expense_id": expense_id,
+                    "created_at": now_iso,
+                }],
+                "is_closed": False,
+                "auto_top_up": True,
+                "created_at": now_iso,
+            }
+            await db.current_accounts.insert_one(new_account.copy())
+            target_account_id = new_account["id"]
+            created_account = {**new_account}
+            created_account.pop("_id", None)
+            topped_up_amount = amount
+        else:
+            if not target_account_id:
+                raise HTTPException(400, "account_id requis")
+            account = await db.current_accounts.find_one({"id": target_account_id}, {"_id": 0})
+            if not account:
+                raise HTTPException(404, "Compte courant non trouvé")
+            if body.mode == "topup_existing":
+                # Compute current available balance (excluding this expense if already allocated)
+                repayments = account.get("repayments") or []
+                allocated_for_self = sum(
+                    float(r.get("amount") or 0)
+                    for r in repayments
+                    if r.get("reference") == f"EXP-{expense_id}"
+                )
+                total_repaid = sum(float(r.get("amount") or 0) for r in repayments) - allocated_for_self
+                balance_available = float(account.get("total_advance") or 0) - total_repaid
+                missing = max(0.0, amount - balance_available)
+                if missing > 0:
+                    await db.current_accounts.update_one(
+                        {"id": target_account_id},
+                        {
+                            "$inc": {"total_advance": missing},
+                            "$push": {"top_ups": {
+                                "id": str(uuid.uuid4()),
+                                "amount": missing,
+                                "label": f"Recharge auto pour {description[:80]}",
+                                "expense_id": expense_id,
+                                "created_at": now_iso,
+                            }},
+                        },
+                    )
+                    topped_up_amount = missing
+            # 'allow_negative' falls through with no top-up
+
+        # Persist the funding link on the expense
+        target_account = await db.current_accounts.find_one({"id": target_account_id}, {"_id": 0})
+        await db.expenses.update_one(
+            {"id": expense_id},
+            {"$set": {
+                "funded_by_account_id": target_account_id,
+                "funded_by_account_name": (target_account or {}).get("name"),
+                "funded_affects_ca": bool(body.affects_ca) if body.affects_ca is not None else True,
+                "updated_at": now_iso,
+            }},
+        )
+        refreshed = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        await _allocate_expense_to_account(refreshed, target_account_id)
+
+        return {
+            "success": True,
+            "expense": refreshed,
+            "account_id": target_account_id,
+            "topped_up_amount": topped_up_amount,
+            "mode": body.mode,
+            "created_account": created_account,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Smart-allocate expense error: {e}")
+        raise HTTPException(500, str(e))
+
+
 @router.delete("/expenses/{expense_id}/allocate-account")
 async def unallocate_expense_from_current_account(expense_id: str):
     """Remove the funding-source link for an expense (restores default = recettes)."""
