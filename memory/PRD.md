@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Détail des sorties sur le tableau de bord Stock (DONE)
+
+**Demande utilisateur** : "fais moi le détail de la liste des sorties sur le tableau de bord". Choix : (1) tableau détaillé avec Date / Produit / Qté / Motif / Montant + filtres période/produit.
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- KPI card **"Sorties Aujourd'hui"** désormais cliquable (data-testid `sorties-today-card`) avec texte d'aide "⤵ Cliquer pour le détail" / "Masquer le détail".
+- Panneau **"Détail des sorties"** (data-testid `sorties-detail-panel`) s'ouvre au clic, sous les KPIs, contenant :
+  - **Filtres** : Du (date), Au (date), Motif (Tous / Sortie-Vente / Perte / Casse), Produit (recherche client-side)
+  - **Bouton "Filtrer"** (data-testid `sorties-refresh-btn`)
+  - **Récap** : X mouvement(s) · Y unités · Valeur totale Z F
+  - **Tableau** (data-testid `sorties-table`) avec colonnes Date / Produit / Qté / Motif / PU / Total / Réf-Utilisateur
+- Badges colorés par motif : sortie=rouge, perte=ambre, casse=rose, 🛒 Vente si reason contient "Vente"
+- État défaut : Du=Au=aujourd'hui, Motif=Tous
+
+**Test end-to-end** :
+- Backend : GET `/api/stock/movements?movement_type=sortie&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&limit=500` validé via curl (5 sorties retournées avec product_name, quantity, unit, unit_price, total_value, reason).
+- Testing agent (iter. 67) : 100% frontend. Toutes les fonctionnalités vérifiées (clic, filtres, récap, badges, toggle, fermeture, régression).
+
+
+---
 ## 25/04/2026 — Liaison ventes → stock (auto-link, badge, filtre, autocomplete) (DONE)
 
 **Demande utilisateur** : "LIER les ventes au stock". État initial : la mécanique de décrémentation auto via `stock_product_id` existait déjà mais 0/81 produits étaient liés. Choix utilisateur : (1b) liaison auto silencieuse pour matches >= 80%, (2a) badge + filtre, (3a) autocomplete création.
