@@ -28,6 +28,68 @@ const STRIKE_REASONS = [
   { value: "autres", label: "Autres" },
 ];
 
+const STRIKE_LABEL = STRIKE_REASONS.reduce((acc, r) => ({ ...acc, [r.value]: r.label }), {});
+
+/**
+ * Compare original_items (manager's submission snapshot) with current items
+ * (final corrected version) and return a structured audit trail.
+ *
+ * Returns: { added[], removed[], modified[], struck[], unchangedCount, hasChanges }
+ *
+ * Matching is done by normalized description (lowercase + trimmed). When an item's
+ * description was edited by admin, we treat it as removed+added pair.
+ */
+const computeAuditTrail = (expense) => {
+  const originals = expense?.original_items || [];
+  const finals = expense?.items || [];
+  if (!expense?.original_items) {
+    return { added: [], removed: [], modified: [], struck: [], unchangedCount: 0, hasChanges: false };
+  }
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const finalsByDesc = new Map();
+  finals.forEach((it, i) => {
+    const k = norm(it.description);
+    if (!finalsByDesc.has(k)) finalsByDesc.set(k, []);
+    finalsByDesc.get(k).push({ ...it, _i: i });
+  });
+  const added = [];
+  const removed = [];
+  const modified = [];
+  const struck = [];
+  let unchangedCount = 0;
+
+  const matchedFinalIdx = new Set();
+  originals.forEach((orig) => {
+    const k = norm(orig.description);
+    const candidates = finalsByDesc.get(k) || [];
+    const match = candidates.find((c) => !matchedFinalIdx.has(c._i));
+    if (!match) {
+      removed.push(orig);
+      return;
+    }
+    matchedFinalIdx.add(match._i);
+    if (match.struck) {
+      struck.push({ ...match, original: orig });
+      return;
+    }
+    const qtyChanged = Number(match.quantity) !== Number(orig.quantity);
+    const puChanged = Number(match.unit_price) !== Number(orig.unit_price);
+    if (qtyChanged || puChanged) {
+      modified.push({ original: orig, current: match, qtyChanged, puChanged });
+    } else {
+      unchangedCount += 1;
+    }
+  });
+  finals.forEach((it, i) => {
+    if (!matchedFinalIdx.has(i)) {
+      // New line added by admin (not present in originals)
+      if (!it.struck) added.push(it);
+    }
+  });
+  const hasChanges = added.length > 0 || removed.length > 0 || modified.length > 0 || struck.length > 0;
+  return { added, removed, modified, struck, unchangedCount, hasChanges };
+};
+
 const AchatsTab = ({ ctx }) => {
   const {
     currentUser,
@@ -1360,6 +1422,72 @@ const AchatsTab = ({ ctx }) => {
                               {expense.supplier && <p className="text-slate-500 text-sm">Fournisseur: {expense.supplier}</p>}
                               {expense.planned_date && <p className="text-slate-500 text-sm">Prévu le: {expense.planned_date}</p>}
                               <p className="text-slate-500 text-xs">Approuvé par: {expense.approved_by}</p>
+                              {/* === Trace d'audit (corrections admin) === */}
+                              {expense.is_group && expense.original_items && (() => {
+                                const audit = computeAuditTrail(expense);
+                                if (!audit.hasChanges) return null;
+                                const showDetails = currentUser?.role === 'admin';
+                                return (
+                                  <details className="mt-2 bg-slate-800/40 border border-slate-600/40 rounded p-2" data-testid={`audit-trail-${expense.id}`}>
+                                    <summary className="cursor-pointer text-xs text-amber-200 font-semibold flex items-center gap-2">
+                                      📜 Liste corrigée par {expense.approved_by || 'Admin'}
+                                      <span className="text-slate-400 font-normal">
+                                        ({audit.added.length > 0 && `+${audit.added.length} ajoutée${audit.added.length > 1 ? 's' : ''}`}
+                                        {audit.removed.length > 0 && (audit.added.length ? ', ' : '') + `−${audit.removed.length} supprimée${audit.removed.length > 1 ? 's' : ''}`}
+                                        {audit.struck.length > 0 && ((audit.added.length || audit.removed.length) ? ', ' : '') + `${audit.struck.length} rayée${audit.struck.length > 1 ? 's' : ''}`}
+                                        {audit.modified.length > 0 && ((audit.added.length || audit.removed.length || audit.struck.length) ? ', ' : '') + `${audit.modified.length} modifiée${audit.modified.length > 1 ? 's' : ''}`})
+                                      </span>
+                                    </summary>
+                                    <div className="mt-2 space-y-1.5 text-xs">
+                                      {audit.added.map((it, i) => (
+                                        <div key={`a-${i}`} className="flex items-start gap-2 bg-emerald-900/20 border border-emerald-500/30 rounded px-2 py-1">
+                                          <span className="text-emerald-400 font-bold shrink-0">＋</span>
+                                          <span className="text-emerald-200">
+                                            <strong>Ajoutée :</strong> {it.description}
+                                            <span className="text-slate-400"> — {it.quantity} × {formatPrice(it.unit_price)} F = {formatPrice(it.amount)} F</span>
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {audit.removed.map((it, i) => (
+                                        <div key={`r-${i}`} className="flex items-start gap-2 bg-rose-900/20 border border-rose-500/30 rounded px-2 py-1">
+                                          <span className="text-rose-400 font-bold shrink-0">−</span>
+                                          <span className="text-rose-200">
+                                            <strong>Supprimée :</strong> {it.description}
+                                            <span className="text-slate-400"> — {it.quantity} × {formatPrice(it.unit_price)} F = {formatPrice(it.amount)} F</span>
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {audit.struck.map((it, i) => (
+                                        <div key={`s-${i}`} className="flex items-start gap-2 bg-red-900/20 border border-red-500/30 rounded px-2 py-1">
+                                          <span className="text-red-400 font-bold shrink-0">🚫</span>
+                                          <span className="text-red-200">
+                                            <strong>Rayée :</strong> {it.description}
+                                            {showDetails && (
+                                              <span className="text-slate-400"> — motif : <em>{STRIKE_LABEL[it.strike_reason] || it.strike_reason || '—'}</em>{it.strike_note ? ` (${it.strike_note})` : ''}</span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {audit.modified.map((m, i) => (
+                                        <div key={`m-${i}`} className="flex items-start gap-2 bg-blue-900/20 border border-blue-500/30 rounded px-2 py-1">
+                                          <span className="text-blue-400 font-bold shrink-0">✎</span>
+                                          <span className="text-blue-200">
+                                            <strong>Modifiée :</strong> {m.current.description}
+                                            <span className="text-slate-400"> — </span>
+                                            {m.qtyChanged && (
+                                              <span className="text-slate-300">qté <s className="text-slate-500">{m.original.quantity}</s> → <strong>{m.current.quantity}</strong></span>
+                                            )}
+                                            {m.qtyChanged && m.puChanged && <span className="text-slate-500"> · </span>}
+                                            {m.puChanged && (
+                                              <span className="text-slate-300">PU <s className="text-slate-500">{formatPrice(m.original.unit_price)} F</s> → <strong>{formatPrice(m.current.unit_price)} F</strong></span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+                                );
+                              })()}
                               {/* Badges d'analyse admin (doublons, stock, trésorerie) */}
                               {currentUser?.role === 'admin' && expenseAnalyses[expense.id] && (
                                 <div className="mt-2">

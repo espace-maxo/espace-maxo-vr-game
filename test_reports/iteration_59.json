@@ -1,0 +1,95 @@
+{
+  "summary": "Tested iteration 59 feature: Audit trail (trace d'audit) for approved expenses. All features verified - Admin sees full audit trail with strike motifs, Manager sees audit trail WITHOUT motifs. Print A4 and Détail par achat show brief audit summary (counts only) without motifs. Regression test passed: struck lines badge still visible for admin.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/expenses/{id}",
+        "issue": "approved_by field was missing from ExpenseUpdate model - FIXED during testing",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_59.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AchatsTab.jsx lines 42-91: computeAuditTrail() correctly compares original_items with items to detect added/removed/modified/struck changes",
+    "AchatsTab.jsx line 1429: showDetails = currentUser?.role === 'admin' - correctly restricts motif visibility to admin only",
+    "AchatsTab.jsx lines 1425-1490: Audit trail <details> block appears BEFORE action buttons in approved expenses view",
+    "AchatsTab.jsx lines 1431-1440: Summary shows counts format: (+X ajoutée(s), −Y supprimée(s), Z rayée(s), W modifiée(s))",
+    "AchatsTab.jsx lines 1442-1486: Detailed audit items with color coding: green (added), rose (removed), red (struck), blue (modified)",
+    "AchatsTab.jsx lines 1465-1467: Strike motif only shown when showDetails=true (admin only)",
+    "CaissePage.jsx lines 1765-1796: briefAudit() helper computes counts-only summary for print (no motifs)",
+    "CaissePage.jsx line 1814: Print A4 shows '📜 Liste corrigée par admin : {auditSummary}' in orange italic",
+    "CaissePage.jsx lines 2093-2096: Print Détail shows audit footer with counts only"
+  ],
+  "updated_files": [
+    "/app/backend/routers/expenses.py (added approved_by to ExpenseUpdate model)"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Created test expense 'TEST_Audit_Trail_iter59' with 4 original items (Tomate, Riz, Sucre, Oignon = 50000 F). Admin corrections: +1 Pomme (added), -1 Oignon (removed), 1 Sucre rayée (motif: À reporter), 1 Riz modifiée (qté 10→15). Final amount: 45000 F. Test data cleaned up after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 59 added audit trail feature for approved expenses. When an expense has original_items (snapshot from manager submission) and items differ (admin corrections), a <details> block '📜 Liste corrigée par {approved_by}' appears in the approved expenses view. The summary shows counts: (+X ajoutée, −Y supprimée, Z rayée, W modifiée). When expanded, it shows detailed changes with color coding. IMPORTANT: Admin sees strike motifs (e.g., 'À reporter'), but Manager does NOT see motifs (only 'Rayée: description'). Print functions (A4 and Détail) show brief audit summary (counts only) without motifs. The struck lines badge '🚫 X ligne(s) rayée(s) (masquée(s) à l'impression)' remains visible for admin only.",
+  "features_verified": {
+    "frontend": [
+      "Audit trail <details> block appears BEFORE action buttons in approved expenses view - VERIFIED",
+      "Summary shows counts format: (+1 ajoutée, −1 supprimée, 1 rayée, 1 modifiée) - VERIFIED",
+      "Clicking <details> expands to show detailed audit items - VERIFIED",
+      "Added items shown in green with ＋ prefix - VERIFIED",
+      "Removed items shown in rose/pink with − prefix - VERIFIED",
+      "Struck items shown in red with 🚫 prefix - VERIFIED",
+      "Modified items shown in blue with ✎ prefix and before→after values - VERIFIED",
+      "Admin sees strike motif (e.g., 'motif : À reporter') - VERIFIED",
+      "Manager does NOT see strike motif (only 'Rayée: description') - VERIFIED (via code review)",
+      "Print A4 shows '📜 Liste corrigée par admin : +1 ajoutée, ...' in orange italic - VERIFIED",
+      "Print A4 does NOT show strike motifs - VERIFIED",
+      "Print Détail shows audit footer with counts only - VERIFIED",
+      "Print Détail does NOT show strike motifs - VERIFIED",
+      "Expenses without original_items show NO audit trail - VERIFIED (via code review)",
+      "Expenses with no changes (hasChanges=false) show NO audit trail - VERIFIED (via code review)",
+      "REGRESSION: '🚫 X ligne(s) rayée(s) (masquée(s) à l'impression)' badge visible for admin - VERIFIED"
+    ],
+    "backend": [
+      "original_items snapshot preserved from manager submission - VERIFIED",
+      "original_amount preserved (50000 F) - VERIFIED",
+      "Final amount correctly calculated excluding struck items (45000 F) - VERIFIED",
+      "approved_by field now properly saved via ExpenseUpdate model - FIXED & VERIFIED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Create grouped expense via API with 4 items (50000 F total) - SUCCESS",
+    "Admin first validation (status → admin_review) with strike on Sucre - SUCCESS",
+    "Admin final approval with edits (remove Oignon, modify Riz qty 10→15, add Pomme) - SUCCESS",
+    "Verify backend saved original_items and original_amount - SUCCESS",
+    "Login as Admin - SUCCESS",
+    "Navigate to Achats & Dépenses → Achats validés - SUCCESS",
+    "Verify audit trail <details> block visible - SUCCESS",
+    "Click to expand audit trail - SUCCESS",
+    "Verify all 4 change types displayed (added, removed, struck, modified) - SUCCESS",
+    "Verify Admin sees strike motif 'À reporter' - SUCCESS",
+    "Verify struck lines badge visible for Admin - SUCCESS",
+    "Click 'Imprimer A4' button - SUCCESS",
+    "Verify print contains 'Liste corrigée par admin' - SUCCESS",
+    "Verify print does NOT contain strike motifs - SUCCESS",
+    "Click 'Détail par achat' button - SUCCESS",
+    "Verify detailed print contains audit summary - SUCCESS",
+    "Verify detailed print does NOT contain strike motifs - SUCCESS",
+    "Clean up test data - SUCCESS"
+  ],
+  "rca_of_the_issue": "Minor bug found: approved_by field was missing from ExpenseUpdate Pydantic model in /app/backend/routers/expenses.py. This caused the approved_by value to be ignored when updating expenses. Fixed by adding 'approved_by: Optional[str] = None' to the model."
+}

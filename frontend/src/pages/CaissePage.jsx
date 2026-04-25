@@ -1762,11 +1762,45 @@ const CaissePage = () => {
     
     const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
 
+    // Compute brief audit summary (counts only — struck motifs deliberately excluded from print)
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const briefAudit = (e) => {
+      if (!e.is_group || !e.original_items) return null;
+      const finals = e.items || [];
+      const finalsByDesc = new Map();
+      finals.forEach((it, i) => {
+        const k = norm(it.description);
+        if (!finalsByDesc.has(k)) finalsByDesc.set(k, []);
+        finalsByDesc.get(k).push({ ...it, _i: i });
+      });
+      let added = 0, removed = 0, struck = 0, modified = 0;
+      const matched = new Set();
+      e.original_items.forEach((orig) => {
+        const k = norm(orig.description);
+        const cands = finalsByDesc.get(k) || [];
+        const m = cands.find((c) => !matched.has(c._i));
+        if (!m) { removed += 1; return; }
+        matched.add(m._i);
+        if (m.struck) { struck += 1; return; }
+        if (Number(m.quantity) !== Number(orig.quantity) || Number(m.unit_price) !== Number(orig.unit_price)) modified += 1;
+      });
+      finals.forEach((it, i) => { if (!matched.has(i) && !it.struck) added += 1; });
+      const total = added + removed + struck + modified;
+      if (total === 0) return null;
+      const parts = [];
+      if (added) parts.push(`+${added} ajoutée${added > 1 ? 's' : ''}`);
+      if (removed) parts.push(`−${removed} supprimée${removed > 1 ? 's' : ''}`);
+      if (struck) parts.push(`${struck} rayée${struck > 1 ? 's' : ''}`);
+      if (modified) parts.push(`${modified} modifiée${modified > 1 ? 's' : ''}`);
+      return parts.join(', ');
+    };
+
     const itemsHtml = approved.map((expense, index) => {
       const visibleItems = (expense.is_group && Array.isArray(expense.items))
         ? expense.items.filter(it => !it.struck)
         : (expense.items || []);
       const headerAmount = expenseAmount(expense);
+      const auditSummary = briefAudit(expense);
       const headerRow = `
         <tr>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${index + 1}</td>
@@ -1777,6 +1811,7 @@ const CaissePage = () => {
           </td>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12pt;">
             ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:10pt;color:#666;">(' + visibleItems.length + ' articles)</span>' : expense.description}
+            ${auditSummary ? `<div style="margin-top:4px;font-size:9pt;color:#92400e;font-style:italic;">📜 Liste corrigée par admin : ${auditSummary}</div>` : ''}
           </td>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${expense.supplier || '-'}</td>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; vertical-align: top; font-size: 12pt;">${formatPrice(headerAmount)} F</td>
@@ -1912,6 +1947,39 @@ const CaissePage = () => {
     const categoryLabels = { cuisine: 'Cuisine', bar: 'Bar', paiement: 'Paiement', autres: 'Autres' };
     const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
 
+    // Brief audit summary (counts only) — used as a small footer note per page.
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const briefAudit = (e) => {
+      if (!e.is_group || !e.original_items) return null;
+      const finals = e.items || [];
+      const finalsByDesc = new Map();
+      finals.forEach((it, i) => {
+        const k = norm(it.description);
+        if (!finalsByDesc.has(k)) finalsByDesc.set(k, []);
+        finalsByDesc.get(k).push({ ...it, _i: i });
+      });
+      let added = 0, removed = 0, struck = 0, modified = 0;
+      const matched = new Set();
+      e.original_items.forEach((orig) => {
+        const k = norm(orig.description);
+        const cands = finalsByDesc.get(k) || [];
+        const m = cands.find((c) => !matched.has(c._i));
+        if (!m) { removed += 1; return; }
+        matched.add(m._i);
+        if (m.struck) { struck += 1; return; }
+        if (Number(m.quantity) !== Number(orig.quantity) || Number(m.unit_price) !== Number(orig.unit_price)) modified += 1;
+      });
+      finals.forEach((it, i) => { if (!matched.has(i) && !it.struck) added += 1; });
+      const total = added + removed + struck + modified;
+      if (total === 0) return null;
+      const parts = [];
+      if (added) parts.push(`+${added} ajoutée${added > 1 ? 's' : ''}`);
+      if (removed) parts.push(`−${removed} supprimée${removed > 1 ? 's' : ''}`);
+      if (struck) parts.push(`${struck} rayée${struck > 1 ? 's' : ''}`);
+      if (modified) parts.push(`${modified} modifiée${modified > 1 ? 's' : ''}`);
+      return parts.join(', ');
+    };
+
     const pagesHtml = approved.map((e, idx) => {
       // Hide struck items from the printed approved list (per user requirement).
       const visibleItems = (e.is_group && Array.isArray(e.items))
@@ -2021,6 +2089,11 @@ const CaissePage = () => {
             <div class="amount-label">MONTANT TOTAL APPROUVÉ</div>
             <div class="amount-value">${formatPrice(visibleAmount)} F CFA</div>
           </div>
+
+          ${(() => { const a = briefAudit(e); return a ? `
+            <div style="margin-top:10px;padding:8px 12px;border-left:3px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:9pt;font-style:italic;">
+              📜 Liste corrigée par ${e.approved_by || 'Admin'} : ${a}.
+            </div>` : ''; })()}
 
           <div class="signatures">
             <div class="signature-box">

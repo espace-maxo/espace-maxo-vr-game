@@ -171,6 +171,7 @@ class ExpenseUpdate(BaseModel):
     is_paid: Optional[bool] = None
     paid_at: Optional[str] = None
     paid_by: Optional[str] = None
+    approved_by: Optional[str] = None
 
 
 # ==================== CRUD ====================
