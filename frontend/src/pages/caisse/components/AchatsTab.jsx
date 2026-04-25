@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   ShoppingCart, Plus, Eye, CheckCircle, AlertCircle, Edit2, Trash2,
-  FileText, Printer, Receipt, Calendar, X, Truck,
+  FileText, Printer, Receipt, Calendar, X, Truck, Wallet,
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
 
@@ -851,6 +851,11 @@ const AchatsTab = ({ ctx }) => {
                                   }`}>{expense.category}</Badge>
                                 )}
                                 <span className="text-white font-medium">{expense.description}</span>
+                                {expense.category === 'paiement' && expense.is_paid && (
+                                  <Badge className="text-xs bg-amber-500/30 text-amber-300 border border-amber-500/50" data-testid={`paid-badge-${expense.id}`}>
+                                    💰 Payé
+                                  </Badge>
+                                )}
                               </div>
                               {/* Show quantity and unit price for single items */}
                               {!expense.is_group && (
@@ -894,7 +899,7 @@ const AchatsTab = ({ ctx }) => {
                                 <Printer className="w-4 h-4 mr-1" />
                                 PDF
                               </Button>
-                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && expense.category === 'paiement' && (
                                 <Button
                                   size="sm"
                                   variant={expense.is_paid ? "default" : "outline"}
@@ -902,7 +907,7 @@ const AchatsTab = ({ ctx }) => {
                                     const willPay = !expense.is_paid;
                                     const msg = willPay
                                       ? `Confirmer le paiement de :\n\n${expense.description}\nMontant : ${formatPrice(expense.amount)} F`
-                                      : `Marquer cet achat comme NON payé ?`;
+                                      : `Marquer cette prestation comme NON payée ?`;
                                     if (window.confirm(msg)) {
                                       updateExpense(expense.id, {
                                         is_paid: willPay,
@@ -915,7 +920,7 @@ const AchatsTab = ({ ctx }) => {
                                     ? "bg-amber-600 hover:bg-amber-700 text-white"
                                     : "border-amber-500/50 text-amber-400 hover:bg-amber-500/20"}
                                   data-testid={`mark-paid-${expense.id}`}
-                                  title={expense.is_paid ? `Payé le ${expense.paid_at?.slice(0,10) || '—'} par ${expense.paid_by || '—'}` : "Marquer comme payé"}
+                                  title={expense.is_paid ? `Payé le ${expense.paid_at?.slice(0,10) || '—'} par ${expense.paid_by || '—'}` : "Marquer la prestation comme payée"}
                                 >
                                   <Wallet className="w-4 h-4 mr-1" />
                                   {expense.is_paid ? "Payé ✓" : "Payé"}
