@@ -646,6 +646,39 @@ async def unassign_expenses_bulk(ids: List[str] = Body(..., embed=True)):
     return {"success": True, "modified": result.modified_count}
 
 
+@router.post("/expenses/exclude-from-week-bulk")
+async def exclude_expenses_from_week_bulk(
+    ids: List[str] = Body(...),
+    week_start: str = Body(...),
+):
+    """Hide expenses from a specific week's report WITHOUT deleting them from the global expense list.
+    The expense remains intact (any 'assigned_week' is preserved); we just push the
+    week_start into excluded_from_weeks[]. The /reports/weekly endpoint filters this out.
+    """
+    if not week_start:
+        raise HTTPException(400, "week_start requis")
+    result = await db.expenses.update_many(
+        {"id": {"$in": ids}},
+        {"$addToSet": {"excluded_from_weeks": week_start}},
+    )
+    return {"success": True, "modified": result.modified_count}
+
+
+@router.post("/expenses/include-in-week-bulk")
+async def include_expenses_in_week_bulk(
+    ids: List[str] = Body(...),
+    week_start: str = Body(...),
+):
+    """Reverse exclusion: re-include expenses in the given week's report."""
+    if not week_start:
+        raise HTTPException(400, "week_start requis")
+    result = await db.expenses.update_many(
+        {"id": {"$in": ids}},
+        {"$pull": {"excluded_from_weeks": week_start}},
+    )
+    return {"success": True, "modified": result.modified_count}
+
+
 
 # ==================== ALLOCATE EXPENSE TO CURRENT ACCOUNT ====================
 

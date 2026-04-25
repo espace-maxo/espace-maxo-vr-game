@@ -1,0 +1,85 @@
+{
+  "summary": "Iteration 64 bug fix testing complete. The new exclude-from-week mechanism works correctly: expenses/invoices can be hidden from weekly reports without being deleted from the global list. All 10 backend tests pass. Frontend UI flow verified: checkbox selection, 'Retirer de cette semaine' button, confirmation dialog, toast notification, and report refresh all work as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "HebdoReport table",
+        "issues": ["Console warnings about HTML nesting: '<tr> cannot be child of <span>' and '<span> cannot be child of <tbody>'. These are React hydration warnings but don't affect functionality."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_exclude_from_week_iter64.py",
+    "/app/test_reports/pytest/exclude_from_week_iter64_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend expenses.py lines 649-679: New exclude-from-week-bulk and include-in-week-bulk endpoints correctly use $addToSet and $pull for idempotent operations",
+    "Backend invoices.py lines 618-645: Same endpoints implemented for invoices",
+    "Backend server.py lines 4787-4855: Weekly report correctly filters using not_excluded_filter with $nin operator",
+    "Frontend HebdoReport.jsx lines 119-136: removeFromWeek() correctly calls exclude-from-week-bulk with week_start parameter and shows proper confirmation message"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_exclude_from_week_iter64.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"}
+  },
+  "seed_data_creation": "Created test expense TEST_ITER64_UI_Expense_for_removal (12345 F) for UI testing. Cleaned up after tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 64 fixed the bug where removing purchases from weekly reports was deleting them from the global list. New mechanism: excluded_from_weeks[] array. Key endpoints: POST /api/expenses/exclude-from-week-bulk (adds week to array), POST /api/expenses/include-in-week-bulk (removes week from array). Same for invoices. GET /api/reports/weekly now filters items where excluded_from_weeks contains the week_start. Frontend 'Retirer de cette semaine' button in Point Hebdomadaire uses the new exclude endpoint.",
+  "features_verified": {
+    "backend": [
+      "POST /api/expenses/exclude-from-week-bulk - adds week_start to excluded_from_weeks[] (idempotent via $addToSet) - VERIFIED",
+      "POST /api/expenses/include-in-week-bulk - removes week_start from excluded_from_weeks[] (via $pull) - VERIFIED",
+      "POST /api/invoices/exclude-from-week-bulk - same for invoices - VERIFIED",
+      "POST /api/invoices/include-in-week-bulk - same for invoices - VERIFIED",
+      "GET /api/reports/weekly - filters out items with excluded_from_weeks containing week_start - VERIFIED",
+      "GET /api/expenses - still returns excluded items (not deleted) - VERIFIED",
+      "Bulk operations work for multiple items - VERIFIED",
+      "Empty week_start rejected with 400 error - VERIFIED"
+    ],
+    "frontend": [
+      "Admin login and navigate to Hebdo tab - VERIFIED",
+      "Expense appears in weekly report when status=completed - VERIFIED",
+      "Expand day row to see expense details with checkbox - VERIFIED",
+      "Select expense checkbox shows action bar with 'Retirer de cette semaine' button - VERIFIED",
+      "Confirmation dialog shows correct message about item remaining in global list - VERIFIED",
+      "Toast notification '1 element(s) retire(s) de la semaine' appears - VERIFIED",
+      "Weekly report refreshes and expense disappears from report - VERIFIED",
+      "Expense still visible in 'Achats terminés' (global list) - VERIFIED",
+      "Doublons button works (regression) - VERIFIED",
+      "Rattacher button works (regression) - VERIFIED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Backend: test_exclude_expense_from_week_adds_to_array - PASSED",
+    "Backend: test_exclude_is_idempotent - PASSED",
+    "Backend: test_include_expense_in_week_removes_from_array - PASSED",
+    "Backend: test_exclude_requires_week_start - PASSED",
+    "Backend: test_exclude_invoice_from_week - PASSED",
+    "Backend: test_include_invoice_in_week - PASSED",
+    "Backend: test_excluded_expense_not_in_weekly_report - PASSED",
+    "Backend: test_excluded_invoice_not_in_weekly_report - PASSED",
+    "Backend: test_reinclusion_restores_in_weekly_report - PASSED",
+    "Backend: test_bulk_exclude_multiple_expenses - PASSED",
+    "Frontend: E2E flow - create expense, exclude from week, verify in global list - SUCCESS"
+  ],
+  "bug_fix_verification": {
+    "original_bug": "la suppression des achats des points hebdomadaires ne fonctionne pas. NB : cette suppression ne doit pas entrainer la disparition des achats de la liste des achats",
+    "root_cause": "Old endpoint /api/expenses/unassign-week-bulk did $unset on 'assigned_week', but expense was re-included in weekly report because its created_at/completed_at naturally fell within the week",
+    "fix_implemented": "New mechanism using excluded_from_weeks[] array. Exclude adds week_start to array, include removes it. Weekly report filters out items where excluded_from_weeks contains the week_start.",
+    "verification_result": "FIXED - Expense removed from weekly report but still exists in global list"
+  }
+}

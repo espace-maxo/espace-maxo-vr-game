@@ -118,14 +118,15 @@ const HebdoReport = ({
 
   const removeFromWeek = async () => {
     if (transferItems.length === 0) { toast.error("Selectionnez des elements"); return; }
-    if (!window.confirm(`Retirer ${transferItems.length} element(s) de cette semaine ?`)) return;
+    if (!window.confirm(`Retirer ${transferItems.length} element(s) de cette semaine ?\n\n(L'achat reste disponible dans la liste des achats — il est juste masqué de ce point hebdomadaire.)`)) return;
     try {
+      const payload = { ids: transferItems, week_start: weekStartDate };
       if (transferType === "sales") {
-        await axios.post(`${API}/invoices/unassign-week-bulk`, { ids: transferItems });
+        await axios.post(`${API}/invoices/exclude-from-week-bulk`, payload);
       } else {
-        await axios.post(`${API}/expenses/unassign-week-bulk`, { ids: transferItems });
+        await axios.post(`${API}/expenses/exclude-from-week-bulk`, payload);
       }
-      toast.success(`${transferItems.length} element(s) retire(s)`);
+      toast.success(`${transferItems.length} element(s) retire(s) de la semaine`);
       setTransferItems([]);
       setExpandedDay(null);
       if (refreshWeekly) refreshWeekly();

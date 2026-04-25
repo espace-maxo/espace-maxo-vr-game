@@ -4784,6 +4784,11 @@ async def get_weekly_report(week_start: Optional[str] = None):
         
         # Get validated invoices (sales) for the week
         # Strategy: 2 queries then merge
+        # Common filter: exclude invoices/expenses explicitly excluded from this week.
+        not_excluded_filter = {"$or": [
+            {"excluded_from_weeks": {"$exists": False}},
+            {"excluded_from_weeks": {"$nin": [start_str]}},
+        ]}
         # 1. Invoices in date range that are NOT assigned to another week
         invoices_by_date = await db.invoices.find({
             "validation_status": "validated",
@@ -4793,13 +4798,15 @@ async def get_weekly_report(week_start: Optional[str] = None):
                 {"assigned_week": None},
                 {"assigned_week": ""},
                 {"assigned_week": start_str}
-            ]
+            ],
+            "$and": [not_excluded_filter],
         }, {"_id": 0}).to_list(1000)
         
         # 2. Invoices explicitly assigned to this week (from any date)
         invoices_assigned = await db.invoices.find({
             "validation_status": "validated",
-            "assigned_week": start_str
+            "assigned_week": start_str,
+            "$and": [not_excluded_filter],
         }, {"_id": 0}).to_list(1000)
         
         # Merge and deduplicate
@@ -4826,13 +4833,15 @@ async def get_weekly_report(week_start: Optional[str] = None):
                     {"assigned_week": None},
                     {"assigned_week": ""},
                     {"assigned_week": start_str}
-                ]}
+                ]},
+                not_excluded_filter,
             ]
         }, {"_id": 0}).to_list(500)
         
         # 2. Expenses explicitly assigned to this week
         expenses_assigned = await db.expenses.find({
-            "assigned_week": start_str
+            "assigned_week": start_str,
+            "$and": [not_excluded_filter],
         }, {"_id": 0}).to_list(500)
         
         # Merge and deduplicate

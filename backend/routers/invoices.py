@@ -613,3 +613,34 @@ async def unassign_invoices_bulk(ids: List[str] = Body(..., embed=True)):
     """Remove week assignment from invoices (they return to their original date)"""
     result = await db.invoices.update_many({"id": {"$in": ids}}, {"$unset": {"assigned_week": ""}})
     return {"success": True, "modified": result.modified_count}
+
+
+@router.post("/invoices/exclude-from-week-bulk")
+async def exclude_invoices_from_week_bulk(
+    ids: List[str] = Body(...),
+    week_start: str = Body(...),
+):
+    """Hide invoices from a specific week's report WITHOUT deleting/unassigning them."""
+    if not week_start:
+        raise HTTPException(400, "week_start requis")
+    result = await db.invoices.update_many(
+        {"id": {"$in": ids}},
+        {"$addToSet": {"excluded_from_weeks": week_start}},
+    )
+    return {"success": True, "modified": result.modified_count}
+
+
+@router.post("/invoices/include-in-week-bulk")
+async def include_invoices_in_week_bulk(
+    ids: List[str] = Body(...),
+    week_start: str = Body(...),
+):
+    """Reverse exclusion."""
+    if not week_start:
+        raise HTTPException(400, "week_start requis")
+    result = await db.invoices.update_many(
+        {"id": {"$in": ids}},
+        {"$pull": {"excluded_from_weeks": week_start}},
+    )
+    return {"success": True, "modified": result.modified_count}
+
