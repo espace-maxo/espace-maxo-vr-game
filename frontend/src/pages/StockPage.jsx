@@ -211,10 +211,17 @@ export default function StockPage() {
     // Smart defaults by current unit
     const u = (p.unit || "").toLowerCase();
     let m = 24, nu = "bouteille";
-    if (u === "pack") m = 6;
-    else if (u === "carton") m = 12;
+    if (u === "casier" || u === "caisse") { m = 24; nu = "bouteille"; }
+    else if (u === "pack") { m = 6; nu = "bouteille"; }
+    else if (u === "carton") { m = 12; nu = "bouteille"; }
     else if (u === "sac") { m = 25; nu = "kg"; }
     else if (u === "bidon") { m = 20; nu = "litre"; }
+    else if (u === "lot") { m = 12; nu = "unite"; }
+    else if (u === "paquet" || u === "plateau" || u === "bac") { m = 12; nu = "unite"; }
+    else if (u === "boite" || u === "barquette") { m = 6; nu = "unite"; }
+    else if (u === "pot") { m = 1; nu = "kg"; }
+    else if (u === "douzaine") { m = 12; nu = "unite"; }
+    else { m = 1; nu = "unite"; }  // generic fallback for unit, bouteille, kg, etc.
     setConvertForm({ multiplier: m, new_unit: nu });
     setShowConvertModal(true);
   };
@@ -1141,6 +1148,18 @@ export default function StockPage() {
                                       <Plus className="w-3.5 h-3.5" />
                                     </Button>
                                   )}
+                                  {isAdmin && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 p-0 text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
+                                      onClick={(e) => { e.stopPropagation(); openConvertUnit(p); }}
+                                      title="Convertir en unité interne (ex: casier → bouteille, lot → unité…)"
+                                      data-testid={`convert-unit-${p.id}`}
+                                    >
+                                      <Package className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
                                   <span className="text-slate-600 text-[10px] ml-auto">min: {p.stock_min}</span>
                                 </div>
                                 <div className="h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
@@ -1163,11 +1182,6 @@ export default function StockPage() {
                             <td className="p-3">
                               <div className="flex gap-1">
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10" onClick={() => openEditProduct(p)} title="Modifier"><Edit2 className="w-3.5 h-3.5" /></Button>
-                                {isAdmin && ['casier','pack','carton','bac','caisse','sac','bidon','pot','plateau','paquet','lot'].includes((p.unit||'').toLowerCase()) && (
-                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-violet-400 hover:bg-violet-500/10" onClick={() => openConvertUnit(p)} title="Convertir en unité interne (ex: casier → bouteille)" data-testid={`convert-unit-${p.id}`}>
-                                    <Package className="w-3.5 h-3.5" />
-                                  </Button>
-                                )}
                                 {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10" onClick={() => resetSingleProduct(p.id)} title="RAZ quantité"><RefreshCw className="w-3.5 h-3.5" /></Button>}
                                 {isAdmin && p.purchase_price > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => resetSinglePrice(p.id)} title="RAZ prix"><X className="w-3.5 h-3.5" /></Button>}
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10" onClick={() => deleteProduct(p.id)} title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></Button>
