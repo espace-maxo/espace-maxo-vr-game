@@ -4,6 +4,34 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Workflow à 2 étapes : Première validation puis envoi à la gérante (DONE)
+
+**Demande utilisateur** : "permettre une première validation qui reste dans le profil de l'administrateur qu'on peut encore modifier indéfiniment avant de l'envoyer à la gérante." — Choix : (1b+1c) Gérante voit la liste d'origine en lecture seule + badge "🔒 En cours de validation par l'admin"; (2c) Édition complète des lignes (qty, prix, ajout/suppression) + rayage; (3) Boutons simplifiés "Modifier" + "Envoyer", aperçu PDF avant envoi.
+
+**Backend** (`/app/backend/routers/expenses.py`) :
+- Nouveau status accepté : `admin_review` (intermédiaire entre `pending` et `approved`).
+- Au passage `pending → admin_review` (PREMIÈRE FOIS uniquement), snapshot des `original_items` + `original_amount` (la gérante continuera de voir l'original). Les modifications ultérieures n'écrasent jamais ce snapshot.
+- À chaque modification en `admin_review`, recompute `amount` = somme des items non-rayés.
+- Au passage final `approved`, recompute `amount` une dernière fois et set `approved_at`.
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/AchatsTab.jsx`) :
+- Bouton "Approuver" sur les pending → renommé **"Première validation"** (ambre, `bg-amber-600`).
+- Nouvelle section admin-only "EN COURS DE CORRECTION (votre profil)" affichée dans le sub-tab "Validation en cours".
+- Éditeur inline complet par ligne : Checkbox rayage / Select catégorie / Input description / Input qté / Input PU / Total auto-calculé / Trash supprimer + bouton "Ajouter une ligne".
+- Pour les lignes rayées : Select motif (Pas opportun/À reporter/À abandonner/Autres) + champ libre si Autres.
+- Boutons d'action : "Enregistrer modifications" (gris), **"Aperçu PDF"** (bleu — ouvre `printExpensePDF` avec snapshot édité), **"Envoyer à la gérante"** (vert, confirmation), "Annuler validation" (violet, retour à pending).
+- Vue Gérante de l'admin_review : section "EN COURS DE VALIDATION PAR L'ADMIN" (fond ardoise) avec `original_items` en lecture seule + badge `🔒 En cours de validation par l'admin`.
+- Compteur du sub-tab "Validation en cours" inclut désormais `pending + admin_review`.
+
+**Frontend Print** (`/app/frontend/src/pages/CaissePage.jsx`) :
+- `printExpensePDF` filtre les items struck (consistance) et affiche un badge `⏳ APERÇU (en cours de validation)` au lieu de `✓ APPROUVÉ` quand `status === 'admin_review'`.
+
+**Test end-to-end** :
+- Backend curl : 50000 → admin_review (Sucre rayé) 40000 → modif Riz qty 48000 → approved 48000. `original_amount=50000` préservé. ✓
+- Testing agent (iter. 58) : 100% frontend + 100% backend, scénario complet validé (Première validation → édition → envoi → vue Gérante).
+
+
+---
 ## 25/04/2026 — Rayage des lignes en validation par l'admin (DONE)
 
 **Demande utilisateur** : "permettre à l'administrateur de cocher dans les achats en cours de validation des lignes à rayer avec des observations à cocher (pas opportun, à reporter, à abandonner, autres). Mais l'impression de la liste approuvée ne doit pas faire ressortir ces mentions."
