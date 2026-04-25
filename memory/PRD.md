@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Composition automatique de fiches techniques (DONE)
+
+**Demande utilisateur** : "compose moi des fiches de recettes en te basant sur une portion de chaque ingrédient pour pouvoir décrémenter le stock". Implémenté un moteur de génération automatique par analyse du nom du plat.
+
+**Backend** (`/app/backend/routers/stock.py`) :
+- Constante `_DISH_KEYWORD_RULES` : table de 35+ règles mappant un mot-clé (poulet, riz, salade, sauce, biere, etc.) vers une liste d'ingrédients avec quantité par défaut. Ex : "poulet" → blanc de poulet 0.25 kg + oignon 0.05 kg + tomate 0.04 kg + huile 0.04 L + sel 0.005 kg.
+- Fonction `_compose_ingredients_for_dish(dish_name, stock_products)` : applique toutes les règles dont le mot-clé apparaît dans le nom du plat, sélectionne le meilleur produit Stock pour chaque ingrédient (préfère même unité + en stock), retourne la liste {product_id, product_name, quantity, unit}.
+- Endpoint `POST /api/stock/recipes/auto-compose` avec `{only_unmatched, skip_dishless, dry_run, department_filter, selling_price_default}`. Retourne rapport `{scanned, skipped_existing, created, skipped_no_match, created_count}`.
+- Intégration `logging` (logger ajouté).
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- Bouton **"Composer auto"** (ambre, BookOpen icon, admin-only, `data-testid="auto-compose-recipes-btn"`) sur l'onglet **Fiches Techniques**.
+- Confirmation explicative : "L'algorithme analyse le nom de chaque plat… 1 portion par défaut… Vous pourrez ensuite ajuster chaque fiche manuellement."
+- Toast détaillé : "X fiche(s) créée(s) · Y déjà existantes ignorées · Z sans correspondance".
+
+**Résultat sur le terrain** :
+- 83 fiches générées du premier coup pour les 85 produits Caisse (2 fiches existantes préservées). Total 85 recettes en base.
+- Décrément stock automatique au fil des ventes : déjà câblé dans `invoices.py` lignes 307-350 (recipe matching par `caisse_product_name`).
+
+**Test end-to-end** :
+- Backend : 11/11 tests pytest dans `/app/backend/tests/test_auto_compose_recipes_iter68.py`. Curl validé : Salade niçoise → 5 ingrédients pertinents, Samossas Poulet → 8 ingrédients, etc.
+- Testing agent (iter. 68) : 100% backend + 100% frontend. Vérifications : keyword matching, dry_run, only_unmatched, skip_dishless, department_filter, frontend bouton admin-only, régression recettes existantes.
+
+
+---
 ## 25/04/2026 — Détail des sorties sur le tableau de bord Stock (DONE)
 
 **Demande utilisateur** : "fais moi le détail de la liste des sorties sur le tableau de bord". Choix : (1) tableau détaillé avec Date / Produit / Qté / Motif / Montant + filtres période/produit.
