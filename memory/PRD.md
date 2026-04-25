@@ -4,6 +4,24 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Bug fix : Bouton 📦 (Conversion casier→bouteille) sur toutes les lignes (DONE)
+
+**Bug rapporté avec capture** : "Le bouton pour transformer les casiers en bouteilles n'est pas partout et se trouve au mauvais endroit".
+
+**Cause** : 
+1. Le bouton 📦 (Package icon) n'apparaissait que pour 11 unités prédéfinies (casier/pack/carton/sac/bidon/pot/plateau/paquet/lot/bac/caisse). Les produits 'unite', 'bouteille', 'kg' n'avaient pas le bouton.
+2. Le bouton était dans la colonne ACTIONS (loin du bouton + d'ajout de package qui est dans la colonne STOCK).
+
+**Fix** (`/app/frontend/src/pages/StockPage.jsx`) :
+- Bouton 📦 désormais affiché sur **TOUTES les lignes admin**, sans filtre d'unité.
+- Bouton 📦 **déplacé dans la colonne STOCK**, immédiatement à côté du bouton vert "+" (les deux actions de packaging groupées).
+- Smart defaults étendus dans `openConvertUnit()` pour couvrir tous les types : casier→24/bouteille, pack→6/bouteille, carton→12/bouteille, sac→25/kg, bidon→20/litre, lot→12/unite, paquet→12/unite, boite→6/unite, pot→1/kg, douzaine→12/unite, fallback générique→1/unite.
+
+**Test end-to-end** :
+- Testing agent (iter. 65) : 100% frontend. Vérifié : bouton 📦 visible sur toutes lignes (unite, bouteille, kg, casier, lot, etc.), placé dans STOCK column, absent de ACTIONS, admin-only, smart defaults corrects.
+
+
+---
 ## 25/04/2026 — Bug fix : Suppression d'achats du point hebdomadaire (DONE)
 
 **Bug rapporté** : "la suppression des achats des points hebdomadaires ne fonctionne pas. NB : cette suppression ne doit pas entrainer la disparition des achats de la liste des achats".
