@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Imputation intelligente d'une dépense au compte courant (DONE)
+
+**Demande utilisateur** : "permettre de rattacher le paiement des achats déjà validés ou terminés au compte courant (le créer par la valeur si le compte courant n'est pas suffisant)" — Choix : (1c) dropdown sur validés ET terminés. (2b+2c+2d) 3 stratégies offertes à l'admin via prompt si solde insuffisant : top-up auto, création de compte dédié, allocation négative. (3a) label "Recharge auto pour <description>".
+
+**Backend** (`/app/backend/routers/expenses.py`) :
+- Nouveau modèle `SmartAllocateBody { account_id?, new_account_name?, mode, affects_ca? }`.
+- Nouveau endpoint `POST /api/expenses/{id}/allocate-account-smart`.
+- Mode `topup_existing` : calcule le manque, incrémente `total_advance` du compte, push une entrée `top_ups[]` avec `{ id, amount, label="Recharge auto pour…", expense_id, created_at }`.
+- Mode `create_new` : crée un nouveau compte courant dédié avec `total_advance = expense.amount`, name = "Recharge auto pour <description>", flag `auto_top_up=true`.
+- Mode `allow_negative` : alloue sans top-up (balance négative tolérée).
+- L'ancien endpoint `POST /api/expenses/{id}/allocate-account` reste fonctionnel pour les cas avec solde suffisant.
+
+**Frontend** (`/app/frontend/src/pages/CaissePage.jsx`) :
+- `allocateExpenseToAccount(expense, accountId, affectsCA)` étendu : compare `acc.balance_available` vs `expense.amount`. Si suffisant → POST allocate-account standard. Sinon → `window.prompt` avec 3 choix numérotés (1/2/3) → POST allocate-account-smart avec mode correspondant.
+- Toast adapté au mode utilisé.
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/AchatsTab.jsx`) :
+- Dropdown "💰 Payé depuis :" ajouté sur la vue **Achats terminés** (admin only, `data-testid="funding-source-completed-{id}"`). Le dropdown sur les Achats validés existait déjà.
+
+**Test end-to-end** :
+- Backend : 11/11 tests pytest dans `/app/backend/tests/test_smart_allocation_iter61.py` (créé par testing agent). Validé via curl : 10000 → 50000 (top-up de 40000), création compte 80000 F dédié, allocation négative.
+- Testing agent (iter. 61) : 100% backend + 100% frontend (Admin voit le dropdown sur validés et terminés, Gérante ne voit rien, prompt fonctionne, toast OK).
+
+
+---
 ## 25/04/2026 — Vue mobile améliorée + Toggle "Liste d'origine / Liste corrigée" (DONE)
 
 **Demandes utilisateur** : (1a) "améliore la vue sur le tel" pour la zone Achats & Dépenses entière, (2c) "permet aussi une vue de la demande modifiée" — toggle visible aux deux rôles (admin + gérante) sur les dépenses `admin_review`.
