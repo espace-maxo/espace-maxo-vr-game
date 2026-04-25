@@ -4,6 +4,30 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Liaison ventes → stock (auto-link, badge, filtre, autocomplete) (DONE)
+
+**Demande utilisateur** : "LIER les ventes au stock". État initial : la mécanique de décrémentation auto via `stock_product_id` existait déjà mais 0/81 produits étaient liés. Choix utilisateur : (1b) liaison auto silencieuse pour matches >= 80%, (2a) badge + filtre, (3a) autocomplete création.
+
+**Backend** (`/app/backend/server.py`) :
+- `POST /api/caisse/products/auto-link-to-stock?threshold=0.80&dry_run=false` : scanne tous les caisse products non liés, pour chacun calcule la similarité `difflib.SequenceMatcher` vs chaque stock product actif, prend le meilleur match >= seuil. Détecte ambiguïtés (2+ matches >= 0.95 trop proches). Retourne rapport `{scanned, already_linked, linked[], ambiguous[], no_match[], threshold, dry_run}`.
+- `GET /api/caisse/products/stock-suggestions?name=X&limit=5&threshold=0.40` : autocomplete avec **scoring boosté** — exact=1.0, prefix=0.92, contains=0.85, inverse-contains=0.75. Évite le bruit pour requêtes courtes ('poulet' → 'Poulet entier' au lieu de 'Poulpe').
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/ProductsTab.jsx`) :
+- Badge `X/Y liés au stock` (ambre si <100%, vert sinon).
+- Badge cliquable `Voir uniquement les X non liés` qui filtre la vue.
+- Bouton **"🔗 Lier automatiquement"** (admin/manager only) qui appelle l'endpoint avec confirmation, affiche un toast détaillé avec les compteurs et rafraîchit le catalog.
+
+**Frontend** (`/app/frontend/src/pages/CaissePage.jsx`) :
+- Modal Création produit : autocomplete sur le champ Nom (debounce 250ms, >= 2 caractères). Panneau "💡 Lier ce produit à un produit Stock existant ?" avec jusqu'à 5 suggestions cliquables (% similarité affiché).
+- Cliquer une suggestion pré-remplit `stock_product_id`. Affichage `🔗 Lié au stock : <nom>` + bouton (délier).
+- Helper `refreshCatalog()` ajouté pour rafraîchissement après auto-link.
+
+**Test end-to-end** :
+- Backend : 11/11 tests pytest dans `/app/backend/tests/test_stock_link_iter66.py`. Auto-link a effectivement créé 3 liens (Poulet Bicyclette Complet→Poulet bicyclette 0.81, Riz blanc→Riz blanc 1.0, Frite surgelée→Frites surgelees 0.867). État : 4/83 produits liés.
+- Testing agent (iter. 66) : 100% backend + 100% frontend. Vérifié : badge, filtre, bouton auto-link, autocomplete, (délier), régression LinkStockModal manuel.
+
+
+---
 ## 25/04/2026 — Bug fix : URL double `/stock/stock/` dans StockPage.jsx (DONE)
 
 **Bug rapporté** : "ça affiche un message d'erreur" lors de la validation d'une conversion (📦) sur le produit Beaufort. Le toast disait "Erreur lors de la conversion".
