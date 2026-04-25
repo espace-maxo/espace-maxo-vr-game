@@ -1736,7 +1736,15 @@ const CaissePage = () => {
     }
 
     const printWindow = window.open('', '_blank', 'width=800,height=600');
-    const total = approved.reduce((sum, e) => sum + e.amount, 0);
+    // Helper: keep only non-struck items for grouped expenses
+    const keptItems = (e) => (e.items || []).filter(it => !it.struck);
+    const expenseAmount = (e) => {
+      if (e.is_group && Array.isArray(e.items)) {
+        return keptItems(e).reduce((s, it) => s + (it.amount || 0), 0) || e.amount;
+      }
+      return e.amount;
+    };
+    const total = approved.reduce((sum, e) => sum + expenseAmount(e), 0);
     
     const categoryLabels = {
       cuisine: 'Cuisine',
@@ -1748,6 +1756,10 @@ const CaissePage = () => {
     const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
 
     const itemsHtml = approved.map((expense, index) => {
+      const visibleItems = (expense.is_group && Array.isArray(expense.items))
+        ? expense.items.filter(it => !it.struck)
+        : (expense.items || []);
+      const headerAmount = expenseAmount(expense);
       const headerRow = `
         <tr>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${index + 1}</td>
@@ -1757,15 +1769,16 @@ const CaissePage = () => {
             </span>
           </td>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12pt;">
-            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:10pt;color:#666;">(' + (expense.items?.length || 0) + ' articles)</span>' : expense.description}
+            ${expense.is_group ? '<strong>📦 ' + expense.description + '</strong> <span style="font-size:10pt;color:#666;">(' + visibleItems.length + ' articles)</span>' : expense.description}
           </td>
           <td style="padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11pt;">${expense.supplier || '-'}</td>
-          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; vertical-align: top; font-size: 12pt;">${formatPrice(expense.amount)} F</td>
+          <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: 700; vertical-align: top; font-size: 12pt;">${formatPrice(headerAmount)} F</td>
         </tr>
       `;
-      // Expand sub-items for grouped lists
-      if (expense.is_group && Array.isArray(expense.items) && expense.items.length > 0) {
-        const subRows = expense.items.map((it, sIdx) => `
+      // Expand sub-items for grouped lists (only non-struck items shown — struck items
+      // and their reasons are intentionally hidden from the printed approved list)
+      if (expense.is_group && visibleItems.length > 0) {
+        const subRows = visibleItems.map((it, sIdx) => `
           <tr style="background: #fafafa;">
             <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 10pt; color: #666;">${index + 1}.${sIdx + 1}</td>
             <td style="padding: 6px 8px; border-bottom: 1px solid #f0f0f0;">
@@ -1893,7 +1906,14 @@ const CaissePage = () => {
     const catColor = (c) => c === 'cuisine' ? '#22c55e' : c === 'bar' ? '#f97316' : c === 'paiement' ? '#3b82f6' : '#64748b';
 
     const pagesHtml = approved.map((e, idx) => {
-      const itemsTable = (e.is_group && Array.isArray(e.items) && e.items.length > 0)
+      // Hide struck items from the printed approved list (per user requirement).
+      const visibleItems = (e.is_group && Array.isArray(e.items))
+        ? e.items.filter((it) => !it.struck)
+        : (e.items || []);
+      const visibleAmount = (e.is_group && Array.isArray(e.items))
+        ? visibleItems.reduce((s, it) => s + (it.amount || 0), 0) || e.amount
+        : e.amount;
+      const itemsTable = (e.is_group && visibleItems.length > 0)
         ? `
           <table class="items-table">
             <thead>
@@ -1907,7 +1927,7 @@ const CaissePage = () => {
               </tr>
             </thead>
             <tbody>
-              ${e.items.map((it, i) => `
+              ${visibleItems.map((it, i) => `
                 <tr>
                   <td>${i + 1}</td>
                   <td><span class="cat-badge" style="background:${catColor(it.category)}">${categoryLabels[it.category] || it.category}</span></td>
@@ -1979,7 +1999,7 @@ const CaissePage = () => {
             </div>
             <div class="meta-box">
               <div class="meta-label">Type</div>
-              <div class="meta-value">${e.is_group ? '📦 Liste (' + (e.items?.length || 0) + ' articles)' : 'Achat unique'}</div>
+              <div class="meta-value">${e.is_group ? '📦 Liste (' + visibleItems.length + ' articles)' : 'Achat unique'}</div>
             </div>
           </div>
 
@@ -1992,7 +2012,7 @@ const CaissePage = () => {
 
           <div class="amount-box">
             <div class="amount-label">MONTANT TOTAL APPROUVÉ</div>
-            <div class="amount-value">${formatPrice(e.amount)} F CFA</div>
+            <div class="amount-value">${formatPrice(visibleAmount)} F CFA</div>
           </div>
 
           <div class="signatures">

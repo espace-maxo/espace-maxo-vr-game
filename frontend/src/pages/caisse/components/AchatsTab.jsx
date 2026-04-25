@@ -14,11 +14,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ShoppingCart, Plus, Eye, CheckCircle, AlertCircle, Edit2, Trash2,
-  FileText, Printer, Receipt, Calendar, X, Truck, Wallet,
+  FileText, Printer, Receipt, Calendar, X, Truck, Wallet, Ban,
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
+
+const STRIKE_REASONS = [
+  { value: "pas_opportun", label: "Pas opportun" },
+  { value: "a_reporter", label: "À reporter" },
+  { value: "a_abandonner", label: "À abandonner" },
+  { value: "autres", label: "Autres" },
+];
 
 const AchatsTab = ({ ctx }) => {
   const {
@@ -50,6 +58,59 @@ const AchatsTab = ({ ctx }) => {
     availableAccounts,
     allocateExpenseToAccount,
   } = ctx;
+
+  // Local state for "rayer une ligne" edits per pending grouped expense.
+  // Shape: { [expenseId]: [ { ...item, struck, strike_reason, strike_note } ] }
+  const [strikeEdits, setStrikeEdits] = React.useState({});
+
+  const getEditedItems = (expense) => {
+    if (strikeEdits[expense.id]) return strikeEdits[expense.id];
+    return (expense.items || []).map((it) => ({
+      ...it,
+      struck: !!it.struck,
+      strike_reason: it.strike_reason || "",
+      strike_note: it.strike_note || "",
+    }));
+  };
+
+  const updateStrikeItem = (expenseId, idx, patch) => {
+    setStrikeEdits((prev) => {
+      const current = prev[expenseId] ? [...prev[expenseId]] : (
+        (expenses.find((e) => e.id === expenseId)?.items || []).map((it) => ({
+          ...it,
+          struck: !!it.struck,
+          strike_reason: it.strike_reason || "",
+          strike_note: it.strike_note || "",
+        }))
+      );
+      current[idx] = { ...current[idx], ...patch };
+      return { ...prev, [expenseId]: current };
+    });
+  };
+
+  const handleApprovePending = (expense) => {
+    const adminAmountInput = document.getElementById(`admin-amount-${expense.id}`);
+    const editedItems = getEditedItems(expense);
+    const payload = { status: "approved", approved_by: "Administrateur" };
+
+    if (expense.is_group && editedItems.length > 0) {
+      // Persist struck flags on items; backend will recompute amount excluding struck lines.
+      payload.items = editedItems.map((it) => ({
+        category: it.category,
+        description: it.description,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        amount: it.amount,
+        struck: !!it.struck,
+        strike_reason: it.struck ? (it.strike_reason || "autres") : null,
+        strike_note: it.struck ? (it.strike_note || "") : null,
+      }));
+    } else if (adminAmountInput) {
+      payload.amount = parseFloat(adminAmountInput.value) || expense.amount;
+    }
+    updateExpense(expense.id, payload);
+  };
+
   return (
             <div className="space-y-4">
               {/* Header */}
@@ -680,37 +741,108 @@ const AchatsTab = ({ ctx }) => {
                             </div>
                           </div>
                           {/* Show sub-items for grouped lists */}
-                          {expense.is_group && expense.items && expense.items.length > 0 && (
-                            <div className="bg-slate-800/50 rounded p-3 border border-slate-700">
-                              <p className="text-xs text-slate-400 mb-2 font-semibold">📋 Détails de la liste:</p>
+                          {expense.is_group && expense.items && expense.items.length > 0 && (() => {
+                            const isAdmin = currentUser?.role === 'admin';
+                            const editedItems = isAdmin ? getEditedItems(expense) : expense.items;
+                            const keptTotal = editedItems.reduce(
+                              (s, it) => s + (it.struck ? 0 : (it.amount || 0)), 0
+                            );
+                            const struckCount = editedItems.filter((it) => it.struck).length;
+                            return (
+                            <div className="bg-slate-800/50 rounded p-3 border border-slate-700" data-testid={`pending-items-${expense.id}`}>
+                              <p className="text-xs text-slate-400 mb-2 font-semibold flex items-center gap-2">
+                                📋 Détails de la liste
+                                {isAdmin && (
+                                  <span className="text-[10px] text-slate-500 font-normal italic">
+                                    — cochez les lignes à rayer puis approuvez
+                                  </span>
+                                )}
+                              </p>
                               <div className="space-y-2">
-                                {expense.items.map((item, idx) => (
-                                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-900/30 rounded p-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-slate-500 font-mono">{idx + 1}.</span>
-                                      <Badge className={`text-xs ${
-                                        item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
-                                        item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
-                                        item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
-                                        'bg-slate-500/20 text-slate-400'
-                                      }`}>{item.category}</Badge>
-                                      <span className="text-white font-medium">{item.description}</span>
+                                {editedItems.map((item, idx) => {
+                                  const struck = !!item.struck;
+                                  return (
+                                  <div
+                                    key={idx}
+                                    className={`flex flex-col gap-2 text-sm rounded p-2 transition-colors ${
+                                      struck
+                                        ? 'bg-red-900/20 border border-red-500/30 opacity-60'
+                                        : 'bg-slate-900/30'
+                                    }`}
+                                    data-testid={`pending-item-${expense.id}-${idx}`}
+                                  >
+                                    <div className="flex justify-between items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        {isAdmin && (
+                                          <Checkbox
+                                            checked={struck}
+                                            onCheckedChange={(checked) => updateStrikeItem(expense.id, idx, {
+                                              struck: !!checked,
+                                              strike_reason: checked ? (item.strike_reason || 'pas_opportun') : '',
+                                              strike_note: checked ? item.strike_note : '',
+                                            })}
+                                            className="border-red-400 data-[state=checked]:bg-red-600"
+                                            data-testid={`strike-checkbox-${expense.id}-${idx}`}
+                                          />
+                                        )}
+                                        <span className={`text-slate-500 font-mono ${struck ? 'line-through' : ''}`}>{idx + 1}.</span>
+                                        <Badge className={`text-xs ${
+                                          item.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                          item.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                          item.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                          'bg-slate-500/20 text-slate-400'
+                                        }`}>{item.category}</Badge>
+                                        <span className={`text-white font-medium ${struck ? 'line-through text-slate-400' : ''}`}>{item.description}</span>
+                                      </div>
+                                      <div className="text-right flex items-center gap-2">
+                                        <span className={`text-slate-400 text-xs ${struck ? 'line-through' : ''}`}>
+                                          {item.quantity} × {formatPrice(item.unit_price)} F
+                                        </span>
+                                        <span className={`font-bold ${struck ? 'line-through text-slate-500' : 'text-amber-400'}`}>{formatPrice(item.amount)} F</span>
+                                      </div>
                                     </div>
-                                    <div className="text-right flex items-center gap-2">
-                                      <span className="text-slate-400 text-xs">
-                                        {item.quantity} × {formatPrice(item.unit_price)} F
-                                      </span>
-                                      <span className="text-amber-400 font-bold">{formatPrice(item.amount)} F</span>
-                                    </div>
+                                    {/* Strike reason controls (admin + struck) */}
+                                    {isAdmin && struck && (
+                                      <div className="flex items-center gap-2 pl-7 flex-wrap">
+                                        <Ban className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                        <span className="text-[11px] text-red-300">Motif :</span>
+                                        <select
+                                          value={item.strike_reason || 'pas_opportun'}
+                                          onChange={(e) => updateStrikeItem(expense.id, idx, { strike_reason: e.target.value })}
+                                          className="bg-slate-800 border border-red-500/40 rounded px-2 py-1 text-xs text-red-200"
+                                          data-testid={`strike-reason-${expense.id}-${idx}`}
+                                        >
+                                          {STRIKE_REASONS.map((r) => (
+                                            <option key={r.value} value={r.value}>{r.label}</option>
+                                          ))}
+                                        </select>
+                                        {item.strike_reason === 'autres' && (
+                                          <Input
+                                            placeholder="Préciser…"
+                                            value={item.strike_note || ''}
+                                            onChange={(e) => updateStrikeItem(expense.id, idx, { strike_note: e.target.value })}
+                                            className="h-7 flex-1 min-w-[140px] bg-slate-800 border-red-500/40 text-xs text-red-200"
+                                            data-testid={`strike-note-${expense.id}-${idx}`}
+                                          />
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
-                              <div className="border-t border-slate-700 mt-2 pt-2 flex justify-end">
-                                <span className="text-slate-400">Total liste:</span>
-                                <span className="text-amber-400 font-bold ml-2">{formatPrice(expense.amount)} F</span>
+                              <div className="border-t border-slate-700 mt-2 pt-2 flex justify-end items-center gap-3">
+                                {isAdmin && struckCount > 0 && (
+                                  <span className="text-[11px] text-red-300">
+                                    {struckCount} ligne{struckCount > 1 ? 's' : ''} rayée{struckCount > 1 ? 's' : ''} — total recalculé
+                                  </span>
+                                )}
+                                <span className="text-slate-400">Total {isAdmin && struckCount > 0 ? 'à approuver' : 'liste'} :</span>
+                                <span className="text-amber-400 font-bold ml-2" data-testid={`pending-kept-total-${expense.id}`}>{formatPrice(keptTotal)} F</span>
                               </div>
                             </div>
-                          )}
+                            );
+                          })()}
                           {/* Admin: Montant modifiable directement */}
                           {currentUser?.role === 'admin' && (
                           <>
@@ -734,11 +866,9 @@ const AchatsTab = ({ ctx }) => {
                           <div className="flex gap-2 flex-wrap">
                             <Button 
                               size="sm"
-                              onClick={() => {
-                                const newAmount = parseFloat(document.getElementById(`admin-amount-${expense.id}`)?.value) || expense.amount;
-                                updateExpense(expense.id, { status: "approved", approved_by: "Administrateur", amount: newAmount });
-                              }}
+                              onClick={() => handleApprovePending(expense)}
                               className="bg-green-600 hover:bg-green-700"
+                              data-testid={`approve-btn-${expense.id}`}
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Approuver
@@ -840,9 +970,20 @@ const AchatsTab = ({ ctx }) => {
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                {expense.is_group ? (
-                                  <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
-                                ) : (
+                                {expense.is_group ? (() => {
+                                  const visible = (expense.items || []).filter(it => !it.struck).length;
+                                  const struck = (expense.items || []).filter(it => it.struck).length;
+                                  return (
+                                    <>
+                                      <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({visible} articles)</Badge>
+                                      {struck > 0 && currentUser?.role === 'admin' && (
+                                        <Badge className="text-xs bg-red-500/20 text-red-300 border border-red-500/40" data-testid={`struck-count-${expense.id}`}>
+                                          🚫 {struck} ligne{struck > 1 ? 's' : ''} rayée{struck > 1 ? 's' : ''} (masquée{struck > 1 ? 's' : ''} à l'impression)
+                                        </Badge>
+                                      )}
+                                    </>
+                                  );
+                                })() : (
                                   <Badge className={`text-xs ${
                                     expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
                                     expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :

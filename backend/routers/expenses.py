@@ -128,6 +128,8 @@ class ExpenseItem(BaseModel):
     quantity: float = 1
     unit_price: float
     amount: float
+    struck: Optional[bool] = False
+    strike_reason: Optional[str] = None
 
 
 class ExpenseCreate(BaseModel):
@@ -311,6 +313,22 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
 
         if update.status == "approved":
             update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+            # If grouped expense with items, recompute amount excluding struck items.
+            # This guarantees the approved total matches what will actually be purchased.
+            try:
+                items_for_total = update_data.get("items")
+                if items_for_total is None and expense.get("is_group"):
+                    items_for_total = expense.get("items") or []
+                if items_for_total:
+                    kept_total = sum(
+                        float(it.get("amount") or 0)
+                        for it in items_for_total
+                        if not it.get("struck")
+                    )
+                    if kept_total > 0:
+                        update_data["amount"] = kept_total
+            except Exception as recalc_err:
+                logger.warning(f"Approval amount recompute failed: {recalc_err}")
         elif update.status == "completed":
             update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -363,6 +381,9 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                     now_iso = datetime.now(timezone.utc).isoformat()
     
                     for exp_item in expense_items:
+                        # Skip lines marked as struck (rejected during admin validation)
+                        if exp_item.get("struck"):
+                            continue
                         item_desc = exp_item.get("description", "").strip()
                         item_qty = exp_item.get("quantity", 1) or 1
                         item_price = exp_item.get("unit_price", 0) or 0
