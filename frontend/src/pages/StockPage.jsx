@@ -240,7 +240,9 @@ export default function StockPage() {
       fetchProducts();
       fetchDashboard();
     } catch (e) {
-      toast.error("Erreur lors de la conversion");
+      const detail = e?.response?.data?.detail || e?.message || "Erreur inconnue";
+      toast.error(`Erreur lors de la conversion : ${detail}`);
+      console.error("convert-unit failed", e?.response?.status, e?.response?.data);
     }
   };
 
