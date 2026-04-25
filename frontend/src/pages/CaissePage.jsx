@@ -1014,6 +1014,27 @@ const CaissePage = () => {
 
   const allocateExpenseToAccount = async (expense, accountId, affectsCA = true) => {
     try {
+      // Special sentinel value to directly create a new dedicated account
+      if (accountId === "__create_new__") {
+        const expAmount = parseFloat(expense.amount) || 0;
+        const ok = window.confirm(
+          `Créer un NOUVEAU compte courant dédié de ${formatPrice(expAmount)} F pour cet achat ?\n\n` +
+          `Nom : "Recharge auto pour ${(expense.description || '').slice(0, 60)}"\n` +
+          `Solde initial : ${formatPrice(expAmount)} F`
+        );
+        if (!ok) return;
+        const res = await axios.post(`${API}/expenses/${expense.id}/allocate-account-smart`, {
+          mode: "create_new",
+          new_account_name: `Recharge auto pour ${(expense.description || '').slice(0, 80)}`,
+          affects_ca: affectsCA,
+        });
+        if (res.data?.success) {
+          toast.success(`Nouveau compte créé (${formatPrice(expAmount)} F) et dépense imputée.`);
+        }
+        fetchExpenses();
+        fetchAvailableAccounts();
+        return;
+      }
       if (!accountId) {
         await axios.delete(`${API}/expenses/${expense.id}/allocate-account`);
         toast.success("Compte courant détaché");
