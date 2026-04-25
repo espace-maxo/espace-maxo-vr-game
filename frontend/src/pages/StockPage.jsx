@@ -29,6 +29,42 @@ const parseDecimal = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
+// Composant input décimal qui maintient son texte interne (permet de taper "0,12"
+// sans que React n'efface la virgule pendant la frappe). Émet un nombre via onChange.
+const DecimalInput = React.forwardRef(({ value, onChange, ...rest }, ref) => {
+  const [text, setText] = React.useState(() => {
+    if (value === undefined || value === null || value === 0 || value === "") return "";
+    return String(value).replace(".", ",");
+  });
+  // Sync from outside when the parent resets the value (e.g., form reset)
+  React.useEffect(() => {
+    const cur = parseDecimal(text);
+    if (cur !== Number(value || 0)) {
+      if (value === undefined || value === null || value === 0 || value === "") {
+        setText("");
+      } else {
+        setText(String(value).replace(".", ","));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <Input
+      ref={ref}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (raw !== "" && !/^[0-9]*[.,]?[0-9]*$/.test(raw)) return;
+        setText(raw);
+        onChange?.(parseDecimal(raw));
+      }}
+      {...rest}
+    />
+  );
+});
+
 const UNITS = ["kg","g","litre","ml","bouteille","casier","carton","sachet","paquet","piece","portion","bac","sac","bidon","pot","pack","unite","regime","botte","boite","plateau","paire","rame","cartouche","rouleau","bloc","lot","aerosol","douzaine","barquette","brique","plaquette","bombe","fagot","flacon","tablette"];
 const MOVEMENT_TYPES = [
   { value: "entree", label: "Entree", color: "emerald", icon: ArrowDown },
@@ -1830,12 +1866,12 @@ export default function StockPage() {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label className="text-slate-300 text-xs">Quantite</Label><Input type="text" inputMode="decimal" value={productForm.quantity} onChange={e => setProductForm(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Stock Min</Label><Input type="text" inputMode="decimal" value={productForm.stock_min} onChange={e => setProductForm(p => ({...p, stock_min: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Stock Max</Label><Input type="text" inputMode="decimal" value={productForm.stock_max} onChange={e => setProductForm(p => ({...p, stock_max: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Quantite</Label><DecimalInput value={productForm.quantity} onChange={(n) => setProductForm(p => ({...p, quantity: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Stock Min</Label><DecimalInput value={productForm.stock_min} onChange={(n) => setProductForm(p => ({...p, stock_min: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Stock Max</Label><DecimalInput value={productForm.stock_max} onChange={(n) => setProductForm(p => ({...p, stock_max: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><Input type="text" inputMode="decimal" value={productForm.purchase_price} onChange={e => setProductForm(p => ({...p, purchase_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><DecimalInput value={productForm.purchase_price} onChange={(n) => setProductForm(p => ({...p, purchase_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1871,20 +1907,20 @@ export default function StockPage() {
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className="text-slate-300 text-xs">Nb packages *</Label>
-                  <Input type="text" inputMode="decimal" min="0" step="any" value={addPackageForm.package_qty}
-                    onChange={(e) => setAddPackageForm({ ...addPackageForm, package_qty: e.target.value })}
+                  <DecimalInput value={addPackageForm.package_qty}
+                    onChange={(n) => setAddPackageForm({ ...addPackageForm, package_qty: n })}
                     className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-qty" autoFocus />
                 </div>
                 <div>
                   <Label className="text-slate-300 text-xs">Prix / package *</Label>
-                  <Input type="text" inputMode="decimal" min="0" value={addPackageForm.package_price}
-                    onChange={(e) => setAddPackageForm({ ...addPackageForm, package_price: e.target.value })}
+                  <DecimalInput value={addPackageForm.package_price}
+                    onChange={(n) => setAddPackageForm({ ...addPackageForm, package_price: n })}
                     placeholder="ex: 7200" className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-price" />
                 </div>
                 <div>
                   <Label className="text-slate-300 text-xs">{addPackageTarget.unit}/package</Label>
-                  <Input type="text" inputMode="decimal" min="1" value={addPackageForm.items_per_package}
-                    onChange={(e) => setAddPackageForm({ ...addPackageForm, items_per_package: e.target.value })}
+                  <DecimalInput value={addPackageForm.items_per_package}
+                    onChange={(n) => setAddPackageForm({ ...addPackageForm, items_per_package: n })}
                     className="bg-slate-800 border-slate-700 text-white" data-testid="add-pkg-items" />
                 </div>
               </div>
@@ -2124,8 +2160,8 @@ export default function StockPage() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-slate-300 text-xs">Quantite *</Label><Input type="text" inputMode="decimal" min="0" value={movementForm.quantity} onChange={e => setMovementForm(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Prix unitaire</Label><Input type="text" inputMode="decimal" min="0" value={movementForm.unit_price} onChange={e => setMovementForm(p => ({...p, unit_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Quantite *</Label><DecimalInput value={movementForm.quantity} onChange={(n) => setMovementForm(p => ({...p, quantity: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Prix unitaire</Label><DecimalInput value={movementForm.unit_price} onChange={(n) => setMovementForm(p => ({...p, unit_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
             </div>
             <div><Label className="text-slate-300 text-xs">Motif / Observation</Label><Textarea value={movementForm.reason} onChange={e => setMovementForm(p => ({...p, reason: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Raison du mouvement..." /></div>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveMovement}><Save className="w-4 h-4 mr-1" /> Enregistrer</Button>
