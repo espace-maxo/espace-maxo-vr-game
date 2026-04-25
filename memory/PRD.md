@@ -4,6 +4,32 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Rayage des lignes en validation par l'admin (DONE)
+
+**Demande utilisateur** : "permettre à l'administrateur de cocher dans les achats en cours de validation des lignes à rayer avec des observations à cocher (pas opportun, à reporter, à abandonner, autres). Mais l'impression de la liste approuvée ne doit pas faire ressortir ces mentions."
+
+**Backend** (`/app/backend/routers/expenses.py`) :
+- `ExpenseItem` étendu : `struck: bool = False`, `strike_reason: Optional[str]`.
+- `PUT /api/expenses/{id}` lors de l'approbation d'une dépense groupée recalcule automatiquement `amount` = somme des items non-rayés. Les items rayés restent stockés (traçabilité) avec leur motif.
+- Sync stock (`status="completed"`) ignore les items struck (pas d'entrée stock pour les lignes abandonnées).
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/AchatsTab.jsx`) :
+- Constante `STRIKE_REASONS` : "Pas opportun", "À reporter", "À abandonner", "Autres".
+- `useState(strikeEdits)` : édits locaux par dépense en attente.
+- Pour chaque item d'une dépense groupée pendante (admin uniquement) : Checkbox rouge + `<select>` motif + champ texte libre si "Autres".
+- Style ligne rayée : `line-through` + fond rouge transparent + opacité 0.6.
+- "Total à approuver" recalculé en temps réel + message "X ligne(s) rayée(s) — total recalculé".
+- Vue approuvée : badge `📦 Liste (X articles)` n'affiche que le compte des items non-rayés, plus badge admin-only `🚫 X ligne(s) rayée(s) (masquée(s) à l'impression)`.
+
+**Frontend Print** (`/app/frontend/src/pages/CaissePage.jsx`) :
+- `printAllApprovedExpenses` (A4) et `printApprovedExpensesDetailed` (1 page/achat) filtrent les items struck. Aucun motif ni mention de rayage n'apparaît à l'impression. Total et compte d'articles recalculés.
+
+**Test end-to-end** :
+- Backend curl : 30000 F initial, 1 ligne rayée à 6000 F → amount approuvé = 24000 F ✓.
+- Testing agent (iter. 57) : 100% frontend + 100% backend, 28 scénarios validés (Admin + Gérante + impressions A4/Détail).
+
+
+---
 ## 25/04/2026 — Bouton "Payé" pour les prestations (DONE)
 
 **Demande utilisateur** : ajouter un bouton "Payé" distinct du bouton "Acheté" pour différencier paiement physique vs paiement financier. Choix utilisateur (option b) : limiter le bouton aux dépenses de **catégorie `paiement`** uniquement (loyer, abonnements, prestations).
