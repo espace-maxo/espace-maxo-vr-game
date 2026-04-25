@@ -4,6 +4,25 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Recharge manuelle des comptes courants (DONE)
+
+**Demande utilisateur** : "oui" en réponse à la suggestion "ajouter un bouton 'Recharger' sur la page de détail d'un compte courant pour top-up en une étape sans passer par un achat".
+
+**Backend** (`/app/backend/routers/current_accounts.py`) :
+- Nouveau modèle `TopUpBody { amount, label?, received_date? }`.
+- Nouveau endpoint `POST /api/current-accounts/{id}/top-up` : valide montant > 0, incrémente `total_advance`, push une entrée dans `top_ups[]`.
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/CurrentAccountsTab.jsx`) :
+- Nouveau bouton **"➕ Recharger"** (ambre, `data-testid="topup-btn-{id}"`) à côté du bouton Remboursement sur chaque compte (visible même si entièrement remboursé — utile pour relancer).
+- Modal **TOP-UP** (autoFocus sur montant) avec **calcul live** du solde après recharge.
+- Nouvelle section **"Recharges"** dans le panneau Détails (fond ambre) listant tous les `top_ups[]` (recharges manuelles + recharges auto issues de l'allocation intelligente d'iter. 61).
+
+**Test end-to-end** :
+- Backend : 9/9 tests pytest dans `/app/backend/tests/test_topup_iter63.py`. Curl validé : 5000 → 20000 après recharge 15000, label persisté, montant négatif rejeté avec 400.
+- Testing agent (iter. 63) : 100% backend + 100% frontend. Vérifié : bouton sur tous comptes (y compris fully repaid), validation zéro/négatif, modal live preview, section Détails, régression OK.
+
+
+---
 ## 25/04/2026 — Bug fix : Création directe d'un nouveau compte courant (DONE)
 
 **Bug rapporté** : "le compte ne se créé pas automatiquement". Cause racine : dans iter. 61, le mode `create_new` n'était accessible qu'en sélectionnant un compte existant avec solde insuffisant. Si AUCUN compte n'existait, ou si tous les comptes avaient un solde suffisant, l'admin n'avait aucun moyen de déclencher le mode `create_new`. De plus, le dropdown était caché si `availableAccounts.length === 0`.
