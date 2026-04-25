@@ -4,6 +4,23 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Bug fix : Suppression d'achats du point hebdomadaire (DONE)
+
+**Bug rapporté** : "la suppression des achats des points hebdomadaires ne fonctionne pas. NB : cette suppression ne doit pas entrainer la disparition des achats de la liste des achats".
+
+**Cause racine** : l'ancien endpoint `unassign-week-bulk` faisait un `$unset` sur `assigned_week`. Mais comme la dépense avait un `created_at`/`completed_at` dans la semaine en cours, la query du rapport hebdo la **réincluait automatiquement par date**. → Le bouton "Retirer" ne semblait avoir aucun effet visible.
+
+**Fix** : nouveau mécanisme d'exclusion via un champ array `excluded_from_weeks: [str]`.
+- Backend : nouveaux endpoints `POST /api/expenses/exclude-from-week-bulk` et `/include-in-week-bulk` (idempotent via `$addToSet` / `$pull`). Identiques pour `/invoices/`.
+- Backend : `GET /api/reports/weekly` ajoute un filtre `not_excluded_filter` (`excluded_from_weeks: {$nin: [start_str]}`) à toutes les queries invoices et expenses.
+- Frontend : `HebdoReport.jsx` `removeFromWeek()` appelle désormais `exclude-from-week-bulk` avec `week_start`. Confirmation explicite : "L'achat reste disponible dans la liste des achats — il est juste masqué de ce point hebdomadaire."
+
+**Test end-to-end** :
+- Backend : 10/10 tests pytest dans `/app/backend/tests/test_exclude_from_week_iter64.py`. Curl validé : avant=12345 F, après exclude=0 F dans le rapport, mais `GET /api/expenses` retourne toujours la dépense avec `excluded_from_weeks=['2026-04-20']`.
+- Testing agent (iter. 64) : 100% backend + 100% frontend (sélection cases, bouton, confirm message, toast, refresh, présence dans liste globale après exclusion).
+
+
+---
 ## 25/04/2026 — Recharge manuelle des comptes courants (DONE)
 
 **Demande utilisateur** : "oui" en réponse à la suggestion "ajouter un bouton 'Recharger' sur la page de détail d'un compte courant pour top-up en une étape sans passer par un achat".
