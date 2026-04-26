@@ -238,6 +238,40 @@ const CurrentAccountsTab = () => {
     }
   };
 
+  // Quick "Marquer payé" sur la carte du compte. Logique :
+  //  1) S'il existe une échéance non-payée → on la marque payée (utilise mark-paid)
+  //  2) Sinon, on enregistre un remboursement direct avec montant proposé
+  //     (repayment_fixed_amount si défini, sinon balance_remaining)
+  const quickMarkPaid = async (acc) => {
+    const nextSched = (acc.schedule || []).find((s) => !s.paid);
+    if (nextSched) {
+      return markScheduleAsPaid(acc.id, nextSched);
+    }
+    const fixedAmt = parseFloat(acc.repayment_fixed_amount) || 0;
+    const remaining = parseFloat(acc.balance_remaining) || 0;
+    const proposed = fixedAmt > 0 && fixedAmt <= remaining ? fixedAmt : remaining;
+    if (proposed <= 0) {
+      return toast.error("Aucun montant à rembourser (compte déjà soldé)");
+    }
+    if (!window.confirm(
+      `Enregistrer un remboursement de ${formatPrice(proposed)} F pour "${acc.name}" ?\n\n` +
+      `(Montant ${fixedAmt > 0 ? "basé sur la planification fixe" : "= solde restant"})`
+    )) return;
+    try {
+      await axios.post(`${API}/current-accounts/${acc.id}/repayments`, {
+        repayment_date: new Date().toISOString().slice(0, 10),
+        amount: proposed,
+        method: "cash",
+        reference: "Marqué payé",
+        notes: "",
+      });
+      toast.success(`Remboursement de ${formatPrice(proposed)} F enregistré`);
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
   // ---- Auto-deduction ----
   const runAutoDeduction = async () => {
     if (!confirm("Lancer le prélèvement automatique sur les recettes du jour ?")) return;
@@ -394,6 +428,12 @@ const CurrentAccountsTab = () => {
 
                   {/* Actions */}
                   <div className="flex gap-2 flex-wrap">
+                    {!isFull && (
+                      <Button size="sm" onClick={() => quickMarkPaid(acc)}
+                        className="bg-blue-600 hover:bg-blue-700" data-testid={`quick-mark-paid-${acc.id}`}>
+                        <CheckCircle className="w-3 h-3 mr-1" /> Marquer payé
+                      </Button>
+                    )}
                     {!isFull && (
                       <Button size="sm" onClick={() => openRepay(acc)}
                         className="bg-emerald-600 hover:bg-emerald-700" data-testid={`repay-btn-${acc.id}`}>
