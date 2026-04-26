@@ -28,6 +28,7 @@ def set_db(database):
 
 
 class ScheduleEntry(BaseModel):
+    id: Optional[str] = None  # Preserved on update; auto-generated on create
     label: Optional[str] = ""
     due_date: str  # YYYY-MM-DD
     expected_amount: float

@@ -104,6 +104,7 @@ const CurrentAccountsTab = () => {
       repayment_fixed_period: accountForm.repayment_fixed_amount ? accountForm.repayment_fixed_period : null,
       repayment_fixed_start_date: accountForm.repayment_fixed_amount ? (accountForm.repayment_fixed_start_date || null) : null,
       schedule: accountSched.map((s) => ({
+        ...(s.id ? { id: s.id } : {}),
         label: s.label || "",
         due_date: s.due_date,
         expected_amount: parseFloat(s.expected_amount) || 0,
