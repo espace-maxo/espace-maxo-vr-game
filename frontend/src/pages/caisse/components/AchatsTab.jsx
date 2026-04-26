@@ -422,7 +422,7 @@ const AchatsTab = ({ ctx }) => {
                 </Button>
               </div>
 
-              {/* ALERT: Expense ratio > 40% */}
+              {/* ALERT: Expense ratio > 40% (gardée car critique) */}
               {currentUser?.role === 'admin' && expenseRatioAlert?.isOverLimit && (
                 <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/30 border-red-500/70 animate-pulse" data-testid="expense-ratio-alert">
                   <CardContent className="py-4">
@@ -444,58 +444,81 @@ const AchatsTab = ({ ctx }) => {
                 </Card>
               )}
 
-              {/* Ratio indicator (non-alert) */}
-              {currentUser?.role === 'admin' && expenseRatioAlert && !expenseRatioAlert.isOverLimit && (
-                <div className="flex items-center gap-2 text-sm bg-slate-800/30 rounded-lg p-2" data-testid="expense-ratio-ok">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-slate-400">Ratio Dépenses/CA (semaine): </span>
-                  <span className="text-green-400 font-bold">{expenseRatioAlert.ratio}%</span>
-                  <span className="text-slate-500">(seuil: 40%)</span>
-                </div>
-              )}
+              {/* === KPI Cards aérées (regroupement par état) === */}
+              {expenses.length > 0 && (() => {
+                const sumBy = (statuses) => expenses
+                  .filter(e => statuses.includes(e.status))
+                  .reduce((s, e) => s + (e.amount || 0), 0);
+                const cntBy = (statuses) => expenses.filter(e => statuses.includes(e.status)).length;
+                const aTraiterAmount = sumBy(['pending', 'admin_review', 'revision_requested']);
+                const aTraiterCount = cntBy(['pending', 'admin_review', 'revision_requested']);
+                const validesAmount = sumBy(['approved', 'completed']);
+                const validesCount = cntBy(['approved', 'completed']);
+                const totalAmount = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+                const isAdmin = currentUser?.role === 'admin';
 
-              {/* Summary stats */}
-              <div className="flex items-center gap-2 text-sm text-slate-400 flex-wrap">
-                <span>Total: <span className="text-white font-bold">{expenses.length}</span> demandes</span>
-                <span>•</span>
-                <span className="text-amber-400">{expenses.filter(e => e.status === 'pending').length} en attente</span>
-                <span>•</span>
-                <span className="text-orange-400">{expenses.filter(e => e.status === 'revision_requested').length} à réviser</span>
-                <span>•</span>
-                <span className="text-green-400">{expenses.filter(e => e.status === 'approved').length} approuvées</span>
-                <span>•</span>
-                <span className="text-slate-500">{expenses.filter(e => e.status === 'completed').length} terminées</span>
-              </div>
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="achats-kpi-cards">
+                    {/* À TRAITER */}
+                    <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/40">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-amber-300/80 text-xs uppercase tracking-wider font-medium">À traiter</p>
+                            <p className="text-amber-300 font-bold text-2xl mt-1" data-testid="kpi-a-traiter-amount">
+                              {formatPrice(aTraiterAmount)} <span className="text-base text-amber-400/70">F</span>
+                            </p>
+                            <p className="text-slate-400 text-xs mt-1">{aTraiterCount} demande{aTraiterCount > 1 ? 's' : ''}</p>
+                          </div>
+                          <AlertCircle className="w-7 h-7 text-amber-400/60 flex-shrink-0" />
+                        </div>
+                      </CardContent>
+                    </Card>
 
-              {/* Summary card with totals */}
-              {expenses.length > 0 && (
-                <Card className="bg-slate-800/30 border-slate-700">
-                  <CardContent className="py-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-                      <div>
-                        <p className="text-slate-500 text-xs">En attente</p>
-                        <p className="text-amber-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'pending').reduce((sum, e) => sum + e.amount, 0))} F</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 text-xs">À réviser</p>
-                        <p className="text-orange-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'revision_requested').reduce((sum, e) => sum + e.amount, 0))} F</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 text-xs">Approuvées</p>
-                        <p className="text-green-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500 text-xs">Terminées</p>
-                        <p className="text-slate-400 font-bold">{formatPrice(expenses.filter(e => e.status === 'completed').reduce((sum, e) => sum + e.amount, 0))} F</p>
-                      </div>
-                      <div className="border-l border-slate-700 pl-4">
-                        <p className="text-slate-500 text-xs">TOTAL GÉNÉRAL</p>
-                        <p className="text-white font-bold text-lg">{formatPrice(expenses.reduce((sum, e) => sum + e.amount, 0))} F</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                    {/* VALIDÉS */}
+                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/40">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-green-300/80 text-xs uppercase tracking-wider font-medium">Validés &amp; terminés</p>
+                            <p className="text-green-300 font-bold text-2xl mt-1" data-testid="kpi-valides-amount">
+                              {formatPrice(validesAmount)} <span className="text-base text-green-400/70">F</span>
+                            </p>
+                            <p className="text-slate-400 text-xs mt-1">{validesCount} demande{validesCount > 1 ? 's' : ''}</p>
+                          </div>
+                          <CheckCircle className="w-7 h-7 text-green-400/60 flex-shrink-0" />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* TOTAL GÉNÉRAL + Ratio (admin uniquement) */}
+                    <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/40">
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-purple-300/80 text-xs uppercase tracking-wider font-medium">Total général</p>
+                            <p className="text-white font-bold text-2xl mt-1" data-testid="kpi-total-amount">
+                              {formatPrice(totalAmount)} <span className="text-base text-purple-400/70">F</span>
+                            </p>
+                            {isAdmin && expenseRatioAlert ? (
+                              <p
+                                className={`text-xs mt-1 ${expenseRatioAlert.isOverLimit ? 'text-red-400' : 'text-green-400'}`}
+                                data-testid="expense-ratio-ok"
+                              >
+                                Ratio Dép./CA semaine : <span className="font-bold">{expenseRatioAlert.ratio}%</span>
+                                <span className="text-slate-500"> (seuil 40%)</span>
+                              </p>
+                            ) : (
+                              <p className="text-slate-400 text-xs mt-1">{expenses.length} demande{expenses.length > 1 ? 's' : ''}</p>
+                            )}
+                          </div>
+                          <Wallet className="w-7 h-7 text-purple-400/60 flex-shrink-0" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
 
               {/* FULL DETAIL VIEW - All expenses */}
               {showAllExpenses && expenses.length > 0 && (
