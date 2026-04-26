@@ -4,7 +4,8 @@ import {
   Package, BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
-  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare
+  RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
+  Activity, Link2, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,7 @@ const MOVEMENT_TYPES = [
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
+  { id: "destock_live", label: "Déstockage live", icon: Activity },
   { id: "products", label: "Produits", icon: Package },
   { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
@@ -118,6 +120,32 @@ export default function StockPage() {
   const [activeInventory, setActiveInventory] = useState(null);
   const [inventorySearch, setInventorySearch] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Déstockage live dashboard
+  const [destockLive, setDestockLive] = useState(null);
+  const [destockLiveLoading, setDestockLiveLoading] = useState(false);
+  const fetchDestockLive = useCallback(async () => {
+    setDestockLiveLoading(true);
+    try {
+      const r = await axios.get(`${API}/destock-live`, { params: { limit: 30 } });
+      setDestockLive(r.data);
+    } catch (e) {
+      toast.error("Erreur de chargement du dashboard live");
+    } finally {
+      setDestockLiveLoading(false);
+    }
+  }, []);
+  const runSmartLink = async () => {
+    if (!window.confirm("Lier automatiquement les produits Caisse non liés au Stock par mots-clés (poulet, poisson, frite, riz, etc.) ?")) return;
+    try {
+      const baseApi = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
+      const { data } = await axios.post(`${baseApi}/caisse/products/smart-link-to-stock`);
+      toast.success(`✓ ${data.linked_count} liaisons créées (${data.no_match_count} sans correspondance)`);
+      fetchDestockLive();
+    } catch (e) {
+      toast.error("Erreur lors de la liaison automatique");
+    }
+  };
 
   // Sorties detail panel (dashboard)
   const today_iso = new Date().toISOString().slice(0, 10);
@@ -410,6 +438,11 @@ export default function StockPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchProducts(); }, [searchQuery, filterCategory, filterAlert, fetchProducts]);
+  // Auto-fetch destockage live when entering the tab
+  useEffect(() => {
+    if (activeSection === "destock_live" && !destockLive) fetchDestockLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
 
   // Products sorted so that items with a filled quantity or purchase_price appear first.
   // "Filled" score: +2 if both quantity and price > 0, +1 if only one, 0 if empty.
@@ -1103,6 +1136,172 @@ export default function StockPage() {
                             <div className="flex items-center gap-3">
                               <span className="text-slate-400">{m.quantity} {m.unit}</span>
                               <span className="text-slate-600 text-xs">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* DÉSTOCKAGE LIVE */}
+        {activeSection === "destock_live" && (
+          <div className="space-y-4" data-testid="destock-live-tab">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Activity className="w-6 h-6 text-cyan-400" />
+                  Déstockage Live
+                </h2>
+                <p className="text-slate-500 text-sm mt-0.5">
+                  Visibilité temps réel sur les ventes qui déstockent automatiquement le stock
+                </p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={fetchDestockLive} variant="outline"
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  disabled={destockLiveLoading} data-testid="destock-refresh-btn">
+                  <RefreshCw className={`w-4 h-4 mr-1 ${destockLiveLoading ? 'animate-spin' : ''}`} />
+                  Actualiser
+                </Button>
+                <Button onClick={runSmartLink} className="bg-amber-600 hover:bg-amber-700"
+                  data-testid="destock-smart-link-btn">
+                  <Zap className="w-4 h-4 mr-1" /> Lier produits non liés
+                </Button>
+              </div>
+            </div>
+
+            {destockLive && (
+              <>
+                {/* Summary KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="destock-kpis">
+                  <Card className="bg-emerald-900/20 border-emerald-500/40">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-emerald-300/80 text-xs uppercase tracking-wider">Liés au stock</p>
+                          <p className="text-emerald-300 font-bold text-3xl mt-1">
+                            {destockLive.summary.linked_count}
+                            <span className="text-base text-emerald-400/70">/{destockLive.summary.total_caisse_products}</span>
+                          </p>
+                        </div>
+                        <Link2 className="w-8 h-8 text-emerald-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-rose-900/20 border-rose-500/40">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-rose-300/80 text-xs uppercase tracking-wider">Non liés (≠ déstockent)</p>
+                          <p className="text-rose-300 font-bold text-3xl mt-1">{destockLive.summary.unlinked_count}</p>
+                        </div>
+                        <AlertTriangle className="w-8 h-8 text-rose-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-cyan-900/20 border-cyan-500/40">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-cyan-300/80 text-xs uppercase tracking-wider">Sorties auto récentes</p>
+                          <p className="text-cyan-300 font-bold text-3xl mt-1">{destockLive.summary.recent_sales_count}</p>
+                        </div>
+                        <Activity className="w-8 h-8 text-cyan-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-amber-900/20 border-amber-500/40">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-amber-300/80 text-xs uppercase tracking-wider">Liés sans vente 30j</p>
+                          <p className="text-amber-300 font-bold text-3xl mt-1">{destockLive.summary.linked_no_sales_count}</p>
+                        </div>
+                        <TrendingDown className="w-8 h-8 text-amber-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent sales table */}
+                <Card className="bg-slate-800/50 border-slate-700" data-testid="destock-recent-sales">
+                  <CardHeader>
+                    <CardTitle className="text-cyan-400 flex items-center gap-2">
+                      <Activity className="w-5 h-5" /> Sorties auto-déstockées (récentes)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {destockLive.recent_sales.length === 0 ? (
+                      <p className="text-slate-500 text-sm italic text-center py-4">
+                        Aucune sortie auto enregistrée. Les ventes validées (statut "validated") déstockeront ici.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-slate-400 border-b border-slate-700">
+                              <th className="p-2">Date</th>
+                              <th className="p-2">Produit Stock</th>
+                              <th className="p-2 text-right">Quantité</th>
+                              <th className="p-2">Type</th>
+                              <th className="p-2">Facture</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {destockLive.recent_sales.map((m) => {
+                              const reason = m.reason || "";
+                              const isDirect = reason.includes("lien direct");
+                              const isRecipe = reason.includes("Recette");
+                              const factureMatch = reason.match(/Facture (\S+)/);
+                              return (
+                                <tr key={m.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                                  <td className="p-2 text-slate-300 text-xs">{m.created_at?.slice(0, 16).replace("T", " ")}</td>
+                                  <td className="p-2 text-white font-medium">{m.product_name}</td>
+                                  <td className="p-2 text-right text-rose-300 font-bold">-{m.quantity} {m.unit}</td>
+                                  <td className="p-2">
+                                    {isDirect && <Badge className="bg-emerald-500/20 text-emerald-300">Lien direct</Badge>}
+                                    {isRecipe && <Badge className="bg-purple-500/20 text-purple-300">Recette</Badge>}
+                                    {!isDirect && !isRecipe && <Badge className="bg-slate-500/20 text-slate-300">Autre</Badge>}
+                                  </td>
+                                  <td className="p-2 text-cyan-400 text-xs">{factureMatch ? factureMatch[1] : "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Unlinked caisse products */}
+                {destockLive.unlinked_caisse_products.length > 0 && (
+                  <Card className="bg-rose-900/10 border-rose-500/30" data-testid="destock-unlinked">
+                    <CardHeader>
+                      <CardTitle className="text-rose-300 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5" />
+                        Produits Caisse non liés ({destockLive.unlinked_caisse_products.length})
+                      </CardTitle>
+                      <p className="text-slate-400 text-xs mt-1">
+                        Ces produits ne déstockent jamais. Cliquez sur "Lier produits non liés" en haut pour tenter une liaison automatique par mot-clé,
+                        ou liez-les manuellement depuis l'onglet Caisse → Produits.
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {destockLive.unlinked_caisse_products.map((cp) => (
+                          <div key={cp.id} className="bg-slate-800/50 rounded p-2 text-xs">
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white truncate font-medium">{cp.name}</p>
+                                <p className="text-slate-500">{cp.category || "Sans catégorie"}</p>
+                              </div>
+                              <span className="text-slate-400">{formatPrice(cp.price)} F</span>
                             </div>
                           </div>
                         ))}

@@ -326,6 +326,79 @@ async def get_movements(product_id: str = None, movement_type: str = None, date_
     movements = await db.stock_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return {"movements": movements}
 
+
+@router.get("/destock-live")
+async def destock_live_dashboard(limit: int = 50):
+    """Live deduction dashboard.
+
+    Returns:
+      - recent_sales: last `limit` stock movements that originated from a sale
+        (movement.invoice_id present). Joined with caisse product name when available.
+      - linked_count, total_caisse_count: ratio of linked caisse products.
+      - unlinked_caisse_products: caisse products with NO stock_product_id (they
+        never destock, the user can link them in Produits Caisse).
+      - linked_no_sales: caisse products linked but with no sale in the last 30
+        days (suspected misconfig OR slow-mover).
+    """
+    now = datetime.now(timezone.utc)
+    cutoff_iso = (now - timedelta(days=30)).isoformat()
+
+    # Recent sales (movements tied to invoices)
+    recent_sales = await db.stock_movements.find(
+        {"invoice_id": {"$exists": True, "$ne": None}, "movement_type": "sortie"},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(limit)
+
+    # Caisse products linkage state
+    caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+    total_caisse = len(caisse_products)
+    linked = [cp for cp in caisse_products if cp.get("stock_product_id")]
+    unlinked = [cp for cp in caisse_products if not cp.get("stock_product_id")]
+
+    # For linked products, find last sale movement (using caisse_product_id)
+    sales_by_caisse_id = {}
+    movs_with_caisse = await db.stock_movements.find(
+        {"caisse_product_id": {"$exists": True, "$ne": None}, "movement_type": "sortie"},
+        {"_id": 0, "caisse_product_id": 1, "created_at": 1, "quantity": 1},
+    ).sort("created_at", -1).to_list(5000)
+    for m in movs_with_caisse:
+        cp_id = m.get("caisse_product_id")
+        if cp_id and cp_id not in sales_by_caisse_id:
+            sales_by_caisse_id[cp_id] = m.get("created_at")
+
+    linked_no_sales = []
+    linked_with_sales = []
+    for cp in linked:
+        last_sale = sales_by_caisse_id.get(cp.get("id"))
+        info = {
+            "id": cp.get("id"),
+            "name": cp.get("name"),
+            "category": cp.get("category"),
+            "stock_product_id": cp.get("stock_product_id"),
+            "last_sale_at": last_sale,
+        }
+        if not last_sale or last_sale < cutoff_iso:
+            linked_no_sales.append(info)
+        else:
+            linked_with_sales.append(info)
+
+    return {
+        "recent_sales": recent_sales,
+        "summary": {
+            "total_caisse_products": total_caisse,
+            "linked_count": len(linked),
+            "unlinked_count": len(unlinked),
+            "linked_no_sales_count": len(linked_no_sales),
+            "linked_with_recent_sales_count": len(linked_with_sales),
+            "recent_sales_count": len(recent_sales),
+        },
+        "unlinked_caisse_products": [
+            {"id": cp.get("id"), "name": cp.get("name"), "category": cp.get("category"), "price": cp.get("price")}
+            for cp in unlinked
+        ],
+        "linked_no_sales": linked_no_sales,
+    }
+
 @router.post("/movements")
 async def create_movement(data: StockMovementCreate):
     product = await db.stock_products.find_one({"id": data.product_id})
