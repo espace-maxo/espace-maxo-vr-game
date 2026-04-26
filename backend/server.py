@@ -3351,6 +3351,136 @@ async def auto_link_caisse_products_to_stock(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.post("/caisse/products/smart-link-to-stock")
+async def smart_link_caisse_products_to_stock(dry_run: bool = False):
+    """Smart linking using a keyword dictionary tailored for the menu.
+
+    Strategy:
+    1) Build keyword rules (caisse keyword -> preferred stock name fragments).
+    2) For each unlinked caisse product, find a matching rule.
+    3) If a rule matches, find the best stock product whose name contains the
+       preferred stock fragment (case-insensitive). Pick the shortest match
+       so generic items (e.g., "Poulet entier") win over qualifiers.
+    4) Skip when no rule matches OR no stock product is found.
+    """
+    # Ordered: more specific first.
+    RULES = [
+        # (caisse keyword, list of candidate stock fragments — first found wins)
+        ("poulet bicyclette", ["poulet bicyclette"]),
+        ("poulet chair", ["poulet de chair", "poulet entier"]),
+        ("poulet", ["poulet entier", "poulet de chair"]),
+        ("aileron", ["ailes de poulet", "ailerons"]),
+        ("filet de boeuf", ["filet de boeuf"]),
+        ("langue de boeuf", ["langue de boeuf"]),
+        ("steak", ["filet de boeuf", "boeuf sans os"]),
+        ("boeuf", ["boeuf sans os", "boeuf avec os"]),
+        ("agneau", ["mouton"]),
+        ("mouton", ["mouton"]),
+        ("lapin", ["lapin"]),
+        ("porc", ["porc"]),
+        ("poulpe", ["poulpe"]),
+        ("crevette", ["crevettes"]),
+        ("poisson", ["poisson frais", "poisson congele"]),
+        # Accompagnements
+        ("frite", ["frites surgelees", "frites"]),
+        ("pomme sautée", ["pomme de terre"]),
+        ("riz cantonais", ["riz parfume", "riz blanc"]),
+        ("riz blanc", ["riz blanc"]),
+        ("riz aux légumes", ["riz blanc"]),
+        ("riz", ["riz blanc"]),
+        ("alloco", ["banane plantain mure", "banane plantain"]),
+        ("igname", ["igname"]),
+        ("couscous", ["semoule de couscous", "semoule"]),
+        ("spaghetti", ["spaghetti"]),
+        ("pâtes", ["spaghetti", "pates"]),
+        ("tagliatelles", ["tagliatelles", "spaghetti"]),
+        ("atiéké", ["attieke", "atieke"]),
+        ("akassa", ["mais en grains", "farine de mais"]),
+        # Boissons (au cas où)
+        ("coca", ["coca"]),
+        ("fanta", ["fanta"]),
+        ("sprite", ["sprite"]),
+        ("heineken", ["heineken"]),
+        ("beaufort", ["beaufort"]),
+        ("possotomé", ["possotome"]),
+        ("eau gazeuse", ["eau gazeuse"]),
+        ("eau plate", ["eau plate", "eau minerale"]),
+        ("vin rouge", ["vin rouge"]),
+        ("vin blanc", ["vin blanc"]),
+        ("vin rosé", ["vin rose"]),
+        ("jus", ["jus en brique", "jus d'orange"]),
+        ("bissap", ["bissap"]),
+    ]
+
+    def norm(s: str) -> str:
+        return (s or "").strip().lower()
+
+    try:
+        caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+        stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(2000)
+        sp_by_norm = [(norm(sp.get("name")), sp) for sp in stock_products]
+
+        report = {
+            "scanned": len(caisse_products),
+            "already_linked": 0,
+            "linked": [],
+            "no_match": [],
+            "dry_run": dry_run,
+        }
+
+        for cp in caisse_products:
+            cp_name = norm(cp.get("name"))
+            if not cp_name:
+                continue
+            if cp.get("stock_product_id"):
+                report["already_linked"] += 1
+                continue
+
+            matched_sp = None
+            matched_rule = None
+            for kw, candidates in RULES:
+                if kw in cp_name:
+                    # Find first candidate whose fragment exists in stock list
+                    for frag in candidates:
+                        # Pick shortest stock name that contains the fragment (more generic wins)
+                        hits = [sp for sn, sp in sp_by_norm if frag in sn]
+                        if hits:
+                            hits.sort(key=lambda s: len(s.get("name", "")))
+                            matched_sp = hits[0]
+                            matched_rule = f"{kw} → {frag}"
+                            break
+                    if matched_sp:
+                        break
+
+            if not matched_sp:
+                report["no_match"].append({"caisse_id": cp["id"], "caisse_name": cp.get("name")})
+                continue
+
+            entry = {
+                "caisse_id": cp["id"],
+                "caisse_name": cp.get("name"),
+                "stock_id": matched_sp.get("id"),
+                "stock_name": matched_sp.get("name"),
+                "rule": matched_rule,
+            }
+            if not dry_run:
+                await db.caisse_products.update_one(
+                    {"id": cp["id"]},
+                    {"$set": {
+                        "stock_product_id": matched_sp["id"],
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+            report["linked"].append(entry)
+
+        report["linked_count"] = len(report["linked"])
+        report["no_match_count"] = len(report["no_match"])
+        return report
+    except Exception as e:
+        logger.error(f"Smart-link caisse products error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/caisse/products/stock-suggestions")
 async def stock_suggestions_for_caisse_product(
     name: str,

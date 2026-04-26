@@ -40,20 +40,19 @@ const ProductsTab = ({
 
   const handleAutoLink = async () => {
     if (!window.confirm(
-      `Lier automatiquement tous les produits Caisse non liés au produit Stock le mieux correspondant (similarité ≥ 80%) ?\n\n` +
-      `${unlinkedCount} produit(s) à analyser. Les liaisons seront appliquées immédiatement.`
+      `Lier automatiquement tous les produits Caisse non liés au produit Stock le mieux correspondant (par mots-clés : poulet, poisson, frite, riz, agneau, etc.) ?\n\n` +
+      `${unlinkedCount} produit(s) à analyser. Les liaisons seront appliquées immédiatement.\n\n` +
+      `Une fois lié, chaque vente déstocke automatiquement le produit (sans passer par les recettes).`
     )) return;
     setAutoLinking(true);
     try {
-      const { data } = await axios.post(
-        `${API}/caisse/products/auto-link-to-stock?threshold=0.80&dry_run=false`
-      );
+      // Use smart-link (keyword-based) as primary strategy.
+      const { data } = await axios.post(`${API}/caisse/products/smart-link-to-stock`);
       const lines = [
-        `📊 Analyse de ${data.scanned} produit(s) Caisse :`,
-        `  ✓ ${data.linked_count} liaison(s) créée(s)`,
-        data.ambiguous_count > 0 ? `  ? ${data.ambiguous_count} cas ambigus (à lier manuellement)` : null,
-        `  ✗ ${data.no_match_count} sans correspondance Stock (à créer ou ignorer)`,
-        data.already_linked > 0 ? `  • ${data.already_linked} déjà liés (ignorés)` : null,
+        `📊 ${data.scanned} produit(s) Caisse analysés :`,
+        `  ✓ ${data.linked_count} liaison(s) créée(s) par mot-clé`,
+        `  ✗ ${data.no_match_count} sans correspondance (composés, salades, sauces locales…)`,
+        data.already_linked > 0 ? `  • ${data.already_linked} déjà liés` : null,
       ].filter(Boolean).join('\n');
       toast.success("Liaison automatique terminée", { description: lines });
       if (onProductsRefresh) await onProductsRefresh();
