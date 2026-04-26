@@ -1219,6 +1219,12 @@ Régression validée : 26/26 tests passés (iteration_31).
 - [x] Rapports Stock filtrables + Export PDF/Excel (16/04/2026)
 - [x] Fiches Techniques / Recettes (16/04/2026)
 - [x] Liaison Achats/Ventes Caisse <-> Stock (16/04/2026)
+- [x] Validation Achats 2 étapes + audit trail + version originale/corrigée mobile (Feb/2026)
+- [x] Comptes Courants : Allocation intelligente + Top-up + Édition échéancier + Marquer payé (Feb/2026)
+- [x] Stock : Fix bug 404 double-slash + Bouton 📦 conversion + Détails sorties dashboard (Feb/2026)
+- [x] Caisse↔Stock : Auto-link similarité + Auto-compose recettes (1 portion/ingrédient) (Feb/2026)
+- [x] Bug : Exclusion stricte achats rejetés/reportés du rapport hebdomadaire (Feb/2026)
+- [x] **"Valider sans modifier"** : Bouton vert sur achats pending → approved direct, sans audit trail. Tests 100% (iter70). (Feb/2026)
 
 ### P1 (Next)
 - [x] Module Inventaire physique (DONE session précédente)
