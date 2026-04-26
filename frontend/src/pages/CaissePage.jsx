@@ -1348,6 +1348,11 @@ const CaissePage = () => {
     try {
       setIsSubmittingEndOfService(true);
       const serverName = currentUser?.full_name || currentUser?.username;
+      if (!serverName) {
+        toast.error("Impossible d'identifier le serveur connecté.");
+        setIsSubmittingEndOfService(false);
+        return;
+      }
       
       await axios.post(`${API}/server-end-of-service`, {
         server_name: serverName,
@@ -1361,7 +1366,8 @@ const CaissePage = () => {
       setEndOfServiceObservation("");
     } catch (error) {
       console.error("Error submitting end of service:", error);
-      toast.error("Erreur lors de l'envoi du point");
+      const detail = error?.response?.data?.detail || error?.message || "Erreur réseau";
+      toast.error(`Échec de l'envoi : ${detail}`);
     } finally {
       setIsSubmittingEndOfService(false);
     }
@@ -4661,8 +4667,14 @@ _Gérante - Espace Maxo_
               {/* End of Service Button for Servers */}
               {currentUser?.role === 'server' && (
                 <Button 
-                  onClick={() => setShowEndOfServiceModal(true)}
+                  onClick={() => {
+                    // Pre-load today's report so the modal shows the summary
+                    const serverName = currentUser?.full_name || currentUser?.username;
+                    if (serverName) fetchServerDailyReport(serverName, format(new Date(), "yyyy-MM-dd"));
+                    setShowEndOfServiceModal(true);
+                  }}
                   className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm"
+                  data-testid="terminer-service-btn"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
                   Terminer Service
@@ -7372,7 +7384,7 @@ _Gérante - Espace Maxo_
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* Summary Preview */}
-            {serverDailyReport && (
+            {serverDailyReport ? (
               <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                 <h4 className="text-sm font-medium text-slate-400 mb-3">Résumé de votre journée</h4>
                 <div className="grid grid-cols-3 gap-3 text-center">
@@ -7389,6 +7401,10 @@ _Gérante - Espace Maxo_
                     <p className="text-xs text-slate-500">Total</p>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700 text-center text-slate-400 text-xs">
+                Chargement du résumé… (vous pouvez quand même envoyer votre point)
               </div>
             )}
 
@@ -7420,6 +7436,7 @@ _Gérante - Espace Maxo_
               onClick={submitEndOfService}
               disabled={isSubmittingEndOfService}
               className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              data-testid="envoyer-point-btn"
             >
               {isSubmittingEndOfService ? (
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
