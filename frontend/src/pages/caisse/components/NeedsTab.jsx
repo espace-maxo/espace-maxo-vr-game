@@ -429,6 +429,19 @@ const NeedsTab = ({ currentUser }) => {
                         </Button>
                       </>
                     )}
+                    {/* Admin: bouton Supprimer disponible pour tous les statuts (traité, annulé) */}
+                    {!isPending && isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-rose-600/60 text-rose-300 hover:bg-rose-500/20"
+                        onClick={() => deleteNeed(n.id)}
+                        data-testid={`admin-delete-need-${n.id}`}
+                        title="Supprimer définitivement ce besoin"
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" /> Supprimer
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
