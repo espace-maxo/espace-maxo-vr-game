@@ -181,6 +181,37 @@ const AchatsTab = ({ ctx }) => {
     updateExpense(expense.id, payload);
   };
 
+  // Direct approval: skip admin_review entirely, go straight to "approved"
+  // (use this when the admin has nothing to modify in the manager's list).
+  const handleApproveDirectly = (expense) => {
+    const editedItems = getEditedItems(expense);
+    const hasStruck = expense.is_group && editedItems.some((it) => it.struck);
+    const baseMsg = `Valider directement cette demande sans la modifier ?\n\n${expense.description}\n` +
+      (expense.is_group ? `(${editedItems.filter(it => !it.struck).length} articles)` : "");
+    const warn = hasStruck
+      ? "\n\n⚠ Vous avez coché des lignes à rayer — elles seront prises en compte. Pour modifier davantage, utilisez plutôt 'Première validation'."
+      : "\n\nLa liste est envoyée à la gérante telle quelle.";
+    if (!window.confirm(baseMsg + warn)) return;
+
+    const adminAmountInput = document.getElementById(`admin-amount-${expense.id}`);
+    const payload = { status: "approved", approved_by: "Administrateur" };
+    if (expense.is_group && editedItems.length > 0) {
+      payload.items = editedItems.map((it) => ({
+        category: it.category,
+        description: it.description,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        amount: it.amount,
+        struck: !!it.struck,
+        strike_reason: it.struck ? (it.strike_reason || "autres") : null,
+        strike_note: it.struck ? (it.strike_note || "") : null,
+      }));
+    } else if (adminAmountInput) {
+      payload.amount = parseFloat(adminAmountInput.value) || expense.amount;
+    }
+    updateExpense(expense.id, payload);
+  };
+
   const handleSendToManager = (expense) => {
     if (!window.confirm(`Envoyer cette liste corrigée à la gérante pour achat ?\n\n${expense.description}`)) return;
     const editedItems = getEditedItems(expense);
@@ -1019,6 +1050,16 @@ const AchatsTab = ({ ctx }) => {
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Première validation
+                            </Button>
+                            <Button 
+                              size="sm"
+                              onClick={() => handleApproveDirectly(expense)}
+                              className="bg-green-600 hover:bg-green-700"
+                              data-testid={`direct-approve-btn-${expense.id}`}
+                              title="Valider directement sans modification — la liste est envoyée à la gérante telle quelle"
+                            >
+                              <Truck className="w-4 h-4 mr-1" />
+                              Valider sans modifier
                             </Button>
                             <Button 
                               size="sm"
