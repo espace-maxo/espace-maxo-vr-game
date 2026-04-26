@@ -459,63 +459,85 @@ const AchatsTab = ({ ctx }) => {
 
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="achats-kpi-cards">
-                    {/* À TRAITER */}
-                    <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/40">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-amber-300/80 text-xs uppercase tracking-wider font-medium">À traiter</p>
-                            <p className="text-amber-300 font-bold text-2xl mt-1" data-testid="kpi-a-traiter-amount">
-                              {formatPrice(aTraiterAmount)} <span className="text-base text-amber-400/70">F</span>
-                            </p>
-                            <p className="text-slate-400 text-xs mt-1">{aTraiterCount} demande{aTraiterCount > 1 ? 's' : ''}</p>
-                          </div>
-                          <AlertCircle className="w-7 h-7 text-amber-400/60 flex-shrink-0" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* VALIDÉS */}
-                    <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/40">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-green-300/80 text-xs uppercase tracking-wider font-medium">Validés &amp; terminés</p>
-                            <p className="text-green-300 font-bold text-2xl mt-1" data-testid="kpi-valides-amount">
-                              {formatPrice(validesAmount)} <span className="text-base text-green-400/70">F</span>
-                            </p>
-                            <p className="text-slate-400 text-xs mt-1">{validesCount} demande{validesCount > 1 ? 's' : ''}</p>
-                          </div>
-                          <CheckCircle className="w-7 h-7 text-green-400/60 flex-shrink-0" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* TOTAL GÉNÉRAL + Ratio (admin uniquement) */}
-                    <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/40">
-                      <CardContent className="py-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-purple-300/80 text-xs uppercase tracking-wider font-medium">Total général</p>
-                            <p className="text-white font-bold text-2xl mt-1" data-testid="kpi-total-amount">
-                              {formatPrice(totalAmount)} <span className="text-base text-purple-400/70">F</span>
-                            </p>
-                            {isAdmin && expenseRatioAlert ? (
-                              <p
-                                className={`text-xs mt-1 ${expenseRatioAlert.isOverLimit ? 'text-red-400' : 'text-green-400'}`}
-                                data-testid="expense-ratio-ok"
-                              >
-                                Ratio Dép./CA semaine : <span className="font-bold">{expenseRatioAlert.ratio}%</span>
-                                <span className="text-slate-500"> (seuil 40%)</span>
+                    {/* À TRAITER → onglet Validation en cours */}
+                    <button
+                      type="button"
+                      onClick={() => setAchatsSubView('en_cours')}
+                      className="text-left group focus:outline-none focus:ring-2 focus:ring-amber-500/60 rounded-lg"
+                      data-testid="kpi-a-traiter-card"
+                    >
+                      <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/40 hover:border-amber-400 hover:from-amber-900/50 hover:to-orange-900/30 transition-all cursor-pointer h-full">
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-amber-300/80 text-xs uppercase tracking-wider font-medium">À traiter</p>
+                              <p className="text-amber-300 font-bold text-2xl mt-1" data-testid="kpi-a-traiter-amount">
+                                {formatPrice(aTraiterAmount)} <span className="text-base text-amber-400/70">F</span>
                               </p>
-                            ) : (
-                              <p className="text-slate-400 text-xs mt-1">{expenses.length} demande{expenses.length > 1 ? 's' : ''}</p>
-                            )}
+                              <p className="text-slate-400 text-xs mt-1">{aTraiterCount} demande{aTraiterCount > 1 ? 's' : ''} • <span className="text-amber-400/80 group-hover:underline">voir →</span></p>
+                            </div>
+                            <AlertCircle className="w-7 h-7 text-amber-400/60 flex-shrink-0 group-hover:text-amber-300 transition-colors" />
                           </div>
-                          <Wallet className="w-7 h-7 text-purple-400/60 flex-shrink-0" />
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    </button>
+
+                    {/* VALIDÉS → onglet Achats validés */}
+                    <button
+                      type="button"
+                      onClick={() => setAchatsSubView('valides')}
+                      className="text-left group focus:outline-none focus:ring-2 focus:ring-green-500/60 rounded-lg"
+                      data-testid="kpi-valides-card"
+                    >
+                      <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/40 hover:border-green-400 hover:from-green-900/50 hover:to-emerald-900/30 transition-all cursor-pointer h-full">
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-green-300/80 text-xs uppercase tracking-wider font-medium">Validés &amp; terminés</p>
+                              <p className="text-green-300 font-bold text-2xl mt-1" data-testid="kpi-valides-amount">
+                                {formatPrice(validesAmount)} <span className="text-base text-green-400/70">F</span>
+                              </p>
+                              <p className="text-slate-400 text-xs mt-1">{validesCount} demande{validesCount > 1 ? 's' : ''} • <span className="text-green-400/80 group-hover:underline">voir →</span></p>
+                            </div>
+                            <CheckCircle className="w-7 h-7 text-green-400/60 flex-shrink-0 group-hover:text-green-300 transition-colors" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
+
+                    {/* TOTAL GÉNÉRAL → vue détaillée */}
+                    <button
+                      type="button"
+                      onClick={() => setShowAllExpenses(true)}
+                      className="text-left group focus:outline-none focus:ring-2 focus:ring-purple-500/60 rounded-lg"
+                      data-testid="kpi-total-card"
+                    >
+                      <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/40 hover:border-purple-400 hover:from-purple-900/50 hover:to-indigo-900/30 transition-all cursor-pointer h-full">
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-purple-300/80 text-xs uppercase tracking-wider font-medium">Total général</p>
+                              <p className="text-white font-bold text-2xl mt-1" data-testid="kpi-total-amount">
+                                {formatPrice(totalAmount)} <span className="text-base text-purple-400/70">F</span>
+                              </p>
+                              {isAdmin && expenseRatioAlert ? (
+                                <p
+                                  className={`text-xs mt-1 ${expenseRatioAlert.isOverLimit ? 'text-red-400' : 'text-green-400'}`}
+                                  data-testid="expense-ratio-ok"
+                                >
+                                  Ratio Dép./CA sem. : <span className="font-bold">{expenseRatioAlert.ratio}%</span>
+                                  <span className="text-slate-500"> • </span>
+                                  <span className="text-purple-400/80 group-hover:underline">détails →</span>
+                                </p>
+                              ) : (
+                                <p className="text-slate-400 text-xs mt-1">{expenses.length} demande{expenses.length > 1 ? 's' : ''} • <span className="text-purple-400/80 group-hover:underline">détails →</span></p>
+                              )}
+                            </div>
+                            <Wallet className="w-7 h-7 text-purple-400/60 flex-shrink-0 group-hover:text-purple-300 transition-colors" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
                   </div>
                 );
               })()}
