@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 ---
+## 25/04/2026 — Modifier conditions de remboursement + Marquer comme payé (DONE)
+
+**Demande utilisateur** : "dans le module caisse, dans le menu compte courant, permettre de modifier les conditions de remboursement et aussi de marquer comme payé".
+
+**Backend** (`/app/backend/routers/current_accounts.py`) :
+- Modèle `ScheduleEntryUpdate { label?, due_date?, expected_amount? }` + endpoint `PUT /api/current-accounts/{id}/schedule/{schedule_id}` : édition partielle d'une échéance.
+- `DELETE /api/current-accounts/{id}/schedule/{schedule_id}` : suppression d'une échéance via `$pull`.
+- Modèle `MarkScheduleAsPaidBody { repayment_date?, method?, reference?, notes?, amount_override? }` + endpoint `POST /api/current-accounts/{id}/schedule/{schedule_id}/mark-paid` : crée un repayment lié (`schedule_id`). **Idempotent** : si un repayment référence déjà cette échéance, retourne `already_paid=true`.
+- Enrich logic mise à jour : une échéance est `paid=true` si un repayment a son `schedule_id` **OU** si la logique cumulative la couvre.
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/CurrentAccountsTab.jsx`) :
+- State `editingScheduleId` + helpers `startEditSchedule` / `saveScheduleEdit` / `deleteScheduleEntry` / `markScheduleAsPaid`.
+- 3 nouvelles actions sur chaque échéance (admin only, déplié):
+  - **CheckCircle vert** (data-testid `schedule-mark-paid-{id}`) : marquer comme payé (avec confirm preview + toast).
+  - **Edit2 bleu** (data-testid `schedule-edit-btn-{id}`) : passe la ligne en mode édition inline (3 inputs : date, libellé, montant + Save/Cancel).
+  - **Trash2 rose** (data-testid `schedule-delete-{id}`) : supprimer l'échéance.
+- Le bouton "Marquer comme payé" est masqué pour les échéances déjà payées (ligne barrée verte).
+- Imports ajoutés : `Save`, `X`.
+
+**Test end-to-end** :
+- Backend : 20/20 tests pytest dans `/app/backend/tests/test_schedule_edit_markpaid_iter69.py`. Curl validé : édition (10000→12000, date+label), mark-paid avec idempotency, ré-paiement bloqué proprement.
+- Testing agent (iter. 69) : 100% backend + 100% frontend. Régression : prélèvement automatique, repayments existants, création/édition de compte intacts.
+
+
+---
 ## 25/04/2026 — Composition automatique de fiches techniques (DONE)
 
 **Demande utilisateur** : "compose moi des fiches de recettes en te basant sur une portion de chaque ingrédient pour pouvoir décrémenter le stock". Implémenté un moteur de génération automatique par analyse du nom du plat.
