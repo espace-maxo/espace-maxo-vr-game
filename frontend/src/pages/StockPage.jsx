@@ -124,6 +124,11 @@ export default function StockPage() {
   // Déstockage live dashboard
   const [destockLive, setDestockLive] = useState(null);
   const [destockLiveLoading, setDestockLiveLoading] = useState(false);
+  // Manual link modal (per unlinked product)
+  const [linkModalCp, setLinkModalCp] = useState(null); // {id, name, category, price}
+  const [linkSearchQuery, setLinkSearchQuery] = useState("");
+  const [linkSearchResults, setLinkSearchResults] = useState([]);
+  const [linkSearching, setLinkSearching] = useState(false);
   const fetchDestockLive = useCallback(async () => {
     setDestockLiveLoading(true);
     try {
@@ -144,6 +149,52 @@ export default function StockPage() {
       fetchDestockLive();
     } catch (e) {
       toast.error("Erreur lors de la liaison automatique");
+    }
+  };
+  // Open the per-product link modal and pre-load suggestions based on the caisse name
+  const openLinkModal = (cp) => {
+    setLinkModalCp(cp);
+    setLinkSearchQuery(cp.name || "");
+    setLinkSearchResults([]);
+    // Pre-search using the caisse product name
+    setLinkSearching(true);
+    const baseApi = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
+    axios.get(`${baseApi}/caisse/products/stock-suggestions`, { params: { name: cp.name, limit: 10 } })
+      .then((res) => setLinkSearchResults(res.data.suggestions || []))
+      .catch(() => setLinkSearchResults([]))
+      .finally(() => setLinkSearching(false));
+  };
+  const searchStockForLink = async (q) => {
+    setLinkSearchQuery(q);
+    if (!q || q.length < 2) {
+      setLinkSearchResults([]);
+      return;
+    }
+    setLinkSearching(true);
+    try {
+      const baseApi = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
+      const { data } = await axios.get(`${baseApi}/caisse/products/stock-suggestions`,
+        { params: { name: q, limit: 10 } });
+      setLinkSearchResults(data.suggestions || []);
+    } catch (e) {
+      setLinkSearchResults([]);
+    } finally {
+      setLinkSearching(false);
+    }
+  };
+  const confirmManualLink = async (sp) => {
+    if (!linkModalCp) return;
+    try {
+      const baseApi = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
+      await axios.put(`${baseApi}/caisse/products/${linkModalCp.id}`,
+        { stock_product_id: sp.id });
+      toast.success(`Lié : ${linkModalCp.name} → ${sp.name}`);
+      setLinkModalCp(null);
+      setLinkSearchQuery("");
+      setLinkSearchResults([]);
+      fetchDestockLive();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors de la liaison");
     }
   };
 
@@ -1295,14 +1346,17 @@ export default function StockPage() {
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                         {destockLive.unlinked_caisse_products.map((cp) => (
-                          <div key={cp.id} className="bg-slate-800/50 rounded p-2 text-xs">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white truncate font-medium">{cp.name}</p>
-                                <p className="text-slate-500">{cp.category || "Sans catégorie"}</p>
-                              </div>
-                              <span className="text-slate-400">{formatPrice(cp.price)} F</span>
+                          <div key={cp.id} className="bg-slate-800/50 rounded p-2 text-xs flex items-center gap-2"
+                               data-testid={`unlinked-card-${cp.id}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white truncate font-medium">{cp.name}</p>
+                              <p className="text-slate-500">{cp.category || "Sans catégorie"} · {formatPrice(cp.price)} F</p>
                             </div>
+                            <Button size="sm" onClick={() => openLinkModal(cp)}
+                              className="bg-emerald-600 hover:bg-emerald-700 h-7 px-2 text-xs"
+                              data-testid={`link-btn-${cp.id}`}>
+                              <Link2 className="w-3 h-3 mr-1" /> Lier
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -1311,6 +1365,59 @@ export default function StockPage() {
                 )}
               </>
             )}
+
+            {/* Modal: Manual link an unlinked caisse product to a stock product */}
+            <Dialog open={!!linkModalCp} onOpenChange={(open) => { if (!open) setLinkModalCp(null); }}>
+              <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg" data-testid="link-modal">
+                <DialogHeader>
+                  <DialogTitle className="text-emerald-400 flex items-center gap-2">
+                    <Link2 className="w-5 h-5" />
+                    Lier au stock : {linkModalCp?.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-400">
+                    Cherchez le produit Stock à associer. Une fois lié, chaque vente déstockera automatiquement.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Input
+                    autoFocus
+                    placeholder="Nom du produit stock (ex: poulet, frites…)"
+                    value={linkSearchQuery}
+                    onChange={(e) => searchStockForLink(e.target.value)}
+                    className="bg-slate-800 border-slate-600 text-white"
+                    data-testid="link-search-input"
+                  />
+                  {linkSearching && <p className="text-slate-500 text-xs italic">Recherche…</p>}
+                  <div className="max-h-72 overflow-y-auto space-y-1">
+                    {linkSearchResults.length === 0 && !linkSearching && (
+                      <p className="text-slate-500 text-sm italic text-center py-4">
+                        {linkSearchQuery.length < 2 ? "Tapez au moins 2 caractères" : "Aucun produit stock trouvé"}
+                      </p>
+                    )}
+                    {linkSearchResults.map((sp) => (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        onClick={() => confirmManualLink(sp)}
+                        className="w-full text-left bg-slate-800 hover:bg-emerald-900/40 border border-slate-700 hover:border-emerald-500 rounded p-2 transition-colors"
+                        data-testid={`link-result-${sp.id}`}
+                      >
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-medium truncate">{sp.name}</p>
+                            <p className="text-slate-400 text-xs">
+                              {sp.category || "—"} · {sp.quantity ?? 0} {sp.unit || ""}
+                              {sp.score ? ` · score ${Math.round(sp.score * 100)}%` : ""}
+                            </p>
+                          </div>
+                          <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 
