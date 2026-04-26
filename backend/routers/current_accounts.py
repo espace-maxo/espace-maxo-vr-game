@@ -96,13 +96,16 @@ def _enrich_account(acc: dict) -> dict:
 
     # Enrich schedule entries
     schedule_sorted = sorted(schedule, key=lambda s: s.get("due_date") or "")
+    # Repayments may reference a specific schedule entry by schedule_id (explicit "Payé").
+    repaid_schedule_ids = {r.get("schedule_id") for r in repayments if r.get("schedule_id")}
     cumul_expected = 0
     enriched_schedule = []
     for s in schedule_sorted:
         cumul_expected += s.get("expected_amount", 0) or 0
         due = s.get("due_date") or ""
-        # An entry is considered "paid" when total_repaid covers the cumulative expected up to this point
-        paid = total_repaid >= cumul_expected
+        # An entry is considered "paid" when EITHER it has been explicitly marked
+        # via a repayment with matching schedule_id, OR cumulative logic covers it.
+        paid = (s.get("id") in repaid_schedule_ids) or (total_repaid >= cumul_expected)
         is_late = (not paid) and due and due < today
         enriched_schedule.append({
             **s,
@@ -256,6 +259,110 @@ async def delete_account(account_id: str):
     if res.deleted_count == 0:
         raise HTTPException(404, "Compte non trouvé")
     return {"success": True}
+
+
+# ==================== SCHEDULE: Inline edit + Mark Paid ====================
+
+class ScheduleEntryUpdate(BaseModel):
+    label: Optional[str] = None
+    due_date: Optional[str] = None
+    expected_amount: Optional[float] = None
+
+
+@router.put("/current-accounts/{account_id}/schedule/{schedule_id}")
+async def update_schedule_entry(account_id: str, schedule_id: str, data: ScheduleEntryUpdate):
+    """Update a single schedule entry (label, due_date and/or expected_amount)."""
+    try:
+        acc = await db.current_accounts.find_one({"id": account_id}, {"_id": 0})
+        if not acc:
+            raise HTTPException(404, "Compte non trouvé")
+        sched = list(acc.get("schedule") or [])
+        idx = next((i for i, s in enumerate(sched) if s.get("id") == schedule_id), -1)
+        if idx < 0:
+            raise HTTPException(404, "Échéance non trouvée")
+        if data.label is not None:
+            sched[idx]["label"] = data.label
+        if data.due_date is not None:
+            sched[idx]["due_date"] = data.due_date
+        if data.expected_amount is not None:
+            sched[idx]["expected_amount"] = float(data.expected_amount)
+        await db.current_accounts.update_one(
+            {"id": account_id},
+            {"$set": {"schedule": sched, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        refreshed = await db.current_accounts.find_one({"id": account_id}, {"_id": 0})
+        return {"success": True, "account": refreshed}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update schedule entry error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@router.delete("/current-accounts/{account_id}/schedule/{schedule_id}")
+async def delete_schedule_entry(account_id: str, schedule_id: str):
+    """Remove a single schedule entry."""
+    res = await db.current_accounts.update_one(
+        {"id": account_id},
+        {"$pull": {"schedule": {"id": schedule_id}}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Compte non trouvé")
+    return {"success": True}
+
+
+class MarkScheduleAsPaidBody(BaseModel):
+    repayment_date: Optional[str] = None  # YYYY-MM-DD; defaults to today
+    method: Optional[str] = "cash"
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+    amount_override: Optional[float] = None  # use this instead of expected_amount
+
+
+@router.post("/current-accounts/{account_id}/schedule/{schedule_id}/mark-paid")
+async def mark_schedule_as_paid(account_id: str, schedule_id: str, body: MarkScheduleAsPaidBody):
+    """Create a repayment that fulfills a specific schedule entry.
+    The repayment is linked via schedule_id so the schedule entry shows as paid.
+    """
+    try:
+        acc = await db.current_accounts.find_one({"id": account_id}, {"_id": 0})
+        if not acc:
+            raise HTTPException(404, "Compte non trouvé")
+        sched_entry = next((s for s in (acc.get("schedule") or []) if s.get("id") == schedule_id), None)
+        if not sched_entry:
+            raise HTTPException(404, "Échéance non trouvée")
+        # Idempotency: if a repayment already references this schedule_id, just return
+        existing = next(
+            (r for r in (acc.get("repayments") or []) if r.get("schedule_id") == schedule_id),
+            None,
+        )
+        if existing:
+            return {"success": True, "repayment": existing, "already_paid": True}
+
+        amount = float(body.amount_override) if body.amount_override is not None else float(sched_entry.get("expected_amount") or 0)
+        if amount <= 0:
+            raise HTTPException(400, "Montant invalide")
+        repayment = {
+            "id": str(uuid.uuid4()),
+            "repayment_date": body.repayment_date or datetime.now(timezone.utc).date().isoformat(),
+            "amount": amount,
+            "method": body.method or "cash",
+            "reference": body.reference or sched_entry.get("label") or "",
+            "notes": body.notes or "",
+            "schedule_id": schedule_id,
+            "auto": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.current_accounts.update_one(
+            {"id": account_id},
+            {"$push": {"repayments": repayment}, "$set": {"updated_at": repayment["created_at"]}},
+        )
+        return {"success": True, "repayment": repayment}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mark schedule paid error: {e}")
+        raise HTTPException(500, str(e))
 
 
 @router.post("/current-accounts/{account_id}/repayments")

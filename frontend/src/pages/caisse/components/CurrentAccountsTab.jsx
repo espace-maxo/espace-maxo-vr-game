@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, Wallet, TrendingDown, Calendar, AlertTriangle,
-  CheckCircle, DollarSign, ChevronDown, ChevronUp, Banknote,
+  CheckCircle, DollarSign, ChevronDown, ChevronUp, Banknote, Save, X,
 } from "lucide-react";
 
 const API = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
@@ -174,6 +174,63 @@ const CurrentAccountsTab = () => {
       });
       toast.success(`Compte rechargé de ${formatPrice(amt)} F`);
       setShowTopUpModal(false);
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  // ---- Schedule edit + mark-paid ----
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [scheduleEditForm, setScheduleEditForm] = useState({ label: "", due_date: "", expected_amount: 0 });
+
+  const startEditSchedule = (s) => {
+    setEditingScheduleId(s.id);
+    setScheduleEditForm({
+      label: s.label || "",
+      due_date: s.due_date || "",
+      expected_amount: s.expected_amount || 0,
+    });
+  };
+  const cancelEditSchedule = () => setEditingScheduleId(null);
+
+  const saveScheduleEdit = async (accountId, scheduleId) => {
+    if (!scheduleEditForm.due_date) return toast.error("Date requise");
+    const amt = parseFloat(scheduleEditForm.expected_amount) || 0;
+    if (amt <= 0) return toast.error("Montant > 0 requis");
+    try {
+      await axios.put(`${API}/current-accounts/${accountId}/schedule/${scheduleId}`, {
+        label: scheduleEditForm.label,
+        due_date: scheduleEditForm.due_date,
+        expected_amount: amt,
+      });
+      toast.success("Échéance mise à jour");
+      setEditingScheduleId(null);
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  const deleteScheduleEntry = async (accountId, scheduleId) => {
+    if (!window.confirm("Supprimer cette échéance ?")) return;
+    try {
+      await axios.delete(`${API}/current-accounts/${accountId}/schedule/${scheduleId}`);
+      toast.success("Échéance supprimée");
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  const markScheduleAsPaid = async (accountId, sched) => {
+    if (!window.confirm(
+      `Marquer l'échéance "${sched.label || sched.due_date}" comme payée ?\n\n` +
+      `Un remboursement de ${formatPrice(sched.expected_amount)} F sera créé automatiquement.`
+    )) return;
+    try {
+      await axios.post(`${API}/current-accounts/${accountId}/schedule/${sched.id}/mark-paid`, {});
+      toast.success("Échéance marquée comme payée");
       fetchAccounts();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur");
@@ -370,22 +427,83 @@ const CurrentAccountsTab = () => {
                           <div className="text-slate-300 text-xs font-medium mb-1 flex items-center gap-1">
                             <Calendar className="w-3 h-3" /> Échéancier prévu
                           </div>
-                          <div className="bg-slate-900/40 rounded p-2 space-y-1">
-                            {(acc.schedule || []).map((s, i) => (
-                              <div key={s.id || i} className="flex justify-between items-center text-xs">
-                                <div className="flex items-center gap-2">
-                                  {s.paid ? <CheckCircle className="w-3 h-3 text-emerald-400" /> :
-                                    s.is_late ? <AlertTriangle className="w-3 h-3 text-rose-400" /> :
-                                    <Calendar className="w-3 h-3 text-slate-400" />}
-                                  <span className={s.paid ? "text-emerald-300 line-through" : s.is_late ? "text-rose-300" : "text-slate-300"}>
-                                    {s.due_date}{s.label ? ` • ${s.label}` : ""}
-                                  </span>
+                          <div className="bg-slate-900/40 rounded p-2 space-y-1" data-testid={`schedule-list-${acc.id}`}>
+                            {(acc.schedule || []).map((s, i) => {
+                              const isEditing = editingScheduleId === s.id;
+                              if (isEditing) {
+                                return (
+                                  <div key={s.id || i} className="flex flex-wrap items-center gap-2 text-xs bg-slate-800/60 border border-blue-500/40 rounded p-2" data-testid={`schedule-edit-${s.id}`}>
+                                    <Input
+                                      type="date"
+                                      value={scheduleEditForm.due_date}
+                                      onChange={(e) => setScheduleEditForm({ ...scheduleEditForm, due_date: e.target.value })}
+                                      className="h-7 w-36 bg-slate-900 border-slate-600 text-white text-xs"
+                                    />
+                                    <Input
+                                      placeholder="Libellé"
+                                      value={scheduleEditForm.label}
+                                      onChange={(e) => setScheduleEditForm({ ...scheduleEditForm, label: e.target.value })}
+                                      className="h-7 flex-1 min-w-[140px] bg-slate-900 border-slate-600 text-white text-xs"
+                                    />
+                                    <Input
+                                      type="number"
+                                      step="any"
+                                      placeholder="Montant"
+                                      value={scheduleEditForm.expected_amount}
+                                      onChange={(e) => setScheduleEditForm({ ...scheduleEditForm, expected_amount: e.target.value })}
+                                      className="h-7 w-28 bg-slate-900 border-slate-600 text-white text-xs text-right"
+                                    />
+                                    <Button size="sm" onClick={() => saveScheduleEdit(acc.id, s.id)}
+                                      className="h-7 px-2 bg-blue-600 hover:bg-blue-700" data-testid={`schedule-save-${s.id}`}>
+                                      <Save className="w-3 h-3" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={cancelEditSchedule} className="h-7 px-2 text-slate-400">
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={s.id || i} className="flex justify-between items-center text-xs" data-testid={`schedule-row-${s.id}`}>
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    {s.paid ? <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" /> :
+                                      s.is_late ? <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" /> :
+                                      <Calendar className="w-3 h-3 text-slate-400 shrink-0" />}
+                                    <span className={`truncate ${s.paid ? "text-emerald-300 line-through" : s.is_late ? "text-rose-300" : "text-slate-300"}`}>
+                                      {s.due_date}{s.label ? ` • ${s.label}` : ""}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span className={s.paid ? "text-emerald-300" : "text-slate-200"}>
+                                      {formatPrice(s.expected_amount)} F
+                                    </span>
+                                    {!s.paid && (
+                                      <Button size="sm" variant="ghost"
+                                        onClick={() => markScheduleAsPaid(acc.id, s)}
+                                        className="h-6 w-6 p-0 text-emerald-400 hover:bg-emerald-500/20"
+                                        title="Marquer comme payé"
+                                        data-testid={`schedule-mark-paid-${s.id}`}>
+                                        <CheckCircle className="w-3.5 h-3.5" />
+                                      </Button>
+                                    )}
+                                    <Button size="sm" variant="ghost"
+                                      onClick={() => startEditSchedule(s)}
+                                      className="h-6 w-6 p-0 text-blue-400 hover:bg-blue-500/20"
+                                      title="Modifier les conditions"
+                                      data-testid={`schedule-edit-btn-${s.id}`}>
+                                      <Edit2 className="w-3 h-3" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost"
+                                      onClick={() => deleteScheduleEntry(acc.id, s.id)}
+                                      className="h-6 w-6 p-0 text-rose-400 hover:bg-rose-500/20"
+                                      title="Supprimer"
+                                      data-testid={`schedule-delete-${s.id}`}>
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <span className={s.paid ? "text-emerald-300" : "text-slate-200"}>
-                                  {formatPrice(s.expected_amount)} F
-                                </span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
