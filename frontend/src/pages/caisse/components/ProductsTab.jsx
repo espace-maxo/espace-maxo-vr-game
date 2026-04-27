@@ -21,6 +21,7 @@ const ProductsTab = ({
   onEditProduct,
   onDeleteProduct,
   onLinkStock,
+  onMultiLinkStock,
   onProductsRefresh,
 }) => {
   const [showOnlyUnlinked, setShowOnlyUnlinked] = useState(false);
@@ -97,6 +98,18 @@ const ProductsTab = ({
             >
               <Wand2 className="w-4 h-4 mr-2" />
               {autoLinking ? "Liaison…" : "🔗 Lier automatiquement"}
+            </Button>
+          )}
+          {canManage && onMultiLinkStock && (
+            <Button
+              onClick={onMultiLinkStock}
+              variant="outline"
+              className="border-violet-500/60 text-violet-300 hover:bg-violet-500/10"
+              data-testid="multi-link-btn"
+              title="Lier plusieurs produits Caisse au même produit Stock en une action"
+            >
+              <Link2 className="w-4 h-4 mr-2" />
+              Liaison multiple
             </Button>
           )}
           {canManage && (

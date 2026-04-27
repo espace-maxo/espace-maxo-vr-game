@@ -42,6 +42,7 @@ import ClientsTab from "./caisse/components/ClientsTab";
 import AnalyticsTab from "./caisse/components/AnalyticsTab";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
+import MultiLinkStockModal from "./caisse/components/MultiLinkStockModal";
 import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
@@ -257,6 +258,7 @@ const CaissePage = () => {
   const [stockSuggestions, setStockSuggestions] = useState([]);
   const [showLinkStockModal, setShowLinkStockModal] = useState(false);
   const [linkStockTarget, setLinkStockTarget] = useState(null);
+  const [showMultiLinkModal, setShowMultiLinkModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
@@ -5291,6 +5293,7 @@ _Gérante - Espace Maxo_
                 setLinkStockTarget(product);
                 setShowLinkStockModal(true);
               }}
+              onMultiLinkStock={() => setShowMultiLinkModal(true)}
             />
           </TabsContent>
 
@@ -6195,6 +6198,21 @@ _Gérante - Espace Maxo_
         onClose={() => { setShowLinkStockModal(false); setLinkStockTarget(null); }}
         caisseProduct={linkStockTarget}
         onLinked={async () => {
+          try {
+            const res = await axios.get(`${API}/caisse/products`);
+            const grouped = { bar: [], jardin: [], jeux: [] };
+            (res.data || []).forEach(p => { if (grouped[p.department]) grouped[p.department].push(p); });
+            setCatalog(grouped);
+          } catch (e) { /* silent */ }
+        }}
+      />
+
+      {/* Multi-Link Stock Modal (lier plusieurs produits caisse au même produit stock) */}
+      <MultiLinkStockModal
+        open={showMultiLinkModal}
+        onClose={() => setShowMultiLinkModal(false)}
+        caisseProducts={Object.values(catalog || {}).flat().filter(Boolean)}
+        onDone={async () => {
           try {
             const res = await axios.get(`${API}/caisse/products`);
             const grouped = { bar: [], jardin: [], jeux: [] };
