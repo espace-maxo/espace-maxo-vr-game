@@ -124,6 +124,8 @@ export default function StockPage() {
   // Déstockage live dashboard
   const [destockLive, setDestockLive] = useState(null);
   const [destockLiveLoading, setDestockLiveLoading] = useState(false);
+  // Mobile sidebar drawer
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Manual link modal (per unlinked product)
   const [linkModalCp, setLinkModalCp] = useState(null); // {id, name, category, price}
   const [linkSearchQuery, setLinkSearchQuery] = useState("");
@@ -886,8 +888,20 @@ export default function StockPage() {
       {/* MAIN APP - Only shown when authenticated */}
       {currentUser && (
       <div className="flex min-h-screen">
+      {/* Mobile overlay (clickable to close) */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+          data-testid="mobile-overlay"
+        />
+      )}
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 sticky top-0 h-screen">
+      <aside
+        className={`bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 transition-transform z-40
+          fixed md:sticky inset-y-0 left-0 top-0 h-screen w-72 md:w-64
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+      >
         <div className="p-5 border-b border-slate-800">
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Warehouse className="w-6 h-6 text-emerald-400" /> Gestion Stock</h1>
           <p className="text-slate-500 text-xs mt-1">Espace Maxo</p>
@@ -901,7 +915,7 @@ export default function StockPage() {
             if (item.id === "users") return isAdmin;
             return true;
           }).map(item => (
-            <button key={item.id} onClick={() => { setActiveSection(item.id); clearSelection(); }} data-testid={`nav-${item.id}`}
+            <button key={item.id} onClick={() => { setActiveSection(item.id); clearSelection(); setMobileMenuOpen(false); }} data-testid={`nav-${item.id}`}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === item.id ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <item.icon className="w-4 h-4" /> {item.label}
             </button>
@@ -914,12 +928,26 @@ export default function StockPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 overflow-auto w-full md:w-auto min-w-0">
+        {/* Mobile top bar with hamburger */}
+        <div className="md:hidden flex items-center justify-between mb-4 -mt-1">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg flex items-center gap-2"
+            data-testid="mobile-menu-btn"
+            aria-label="Ouvrir le menu"
+          >
+            <Filter className="w-5 h-5" />
+            <span className="text-sm font-medium">Menu</span>
+          </button>
+          <span className="text-emerald-400 text-sm font-medium">{NAV_ITEMS.find(i => i.id === activeSection)?.label}</span>
+        </div>
         {/* DASHBOARD */}
         {activeSection === "dashboard" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">Tableau de Bord</h2>
+          <div className="space-y-4 md:space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-xl md:text-2xl font-bold text-white">Tableau de Bord</h2>
               <div className="flex gap-2">
                 {!seeded && (!dashboard || dashboard.total_products === 0) && (
                   <Button onClick={seed} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="seed-btn"><Plus className="w-4 h-4 mr-1" /> Charger donnees demo</Button>
@@ -946,13 +974,13 @@ export default function StockPage() {
             {dashboard && (
               <>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4">
                   {[
                     { label: "Produits", value: dashboard.total_products, icon: Package, color: "blue" },
                     { label: "Critiques", value: dashboard.critical_products, icon: AlertTriangle, color: "red" },
                     { label: "Valeur Stock", value: `${formatPrice(dashboard.total_value)} F`, icon: TrendingUp, color: "emerald", small: true },
-                    { label: "Entrees Aujourd'hui", value: dashboard.entrees_today, icon: ArrowDown, color: "green" },
-                    { label: "Sorties Aujourd'hui", value: dashboard.sorties_today, icon: ArrowUp, color: "orange",
+                    { label: "Entrees Auj.", value: dashboard.entrees_today, icon: ArrowDown, color: "green" },
+                    { label: "Sorties Auj.", value: dashboard.sorties_today, icon: ArrowUp, color: "orange",
                       onClick: () => {
                         const next = !showSortiesDetail;
                         setShowSortiesDetail(next);
@@ -967,14 +995,14 @@ export default function StockPage() {
                       onClick={c.onClick}
                       data-testid={c.testid}
                     >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-slate-400 text-xs">{c.label}</span>
-                          <c.icon className={`w-4 h-4 text-${c.color}-400`} />
+                      <CardContent className="p-3 md:p-4">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-slate-400 text-[11px] md:text-xs leading-tight">{c.label}</span>
+                          <c.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 text-${c.color}-400 flex-shrink-0`} />
                         </div>
-                        <p className={`${c.small ? 'text-lg' : 'text-2xl'} font-bold text-white`}>{c.value}</p>
+                        <p className={`${c.small ? 'text-sm md:text-lg' : 'text-lg md:text-2xl'} font-bold text-white truncate`}>{c.value}</p>
                         {c.onClick && (
-                          <p className="text-orange-300/70 text-[10px] mt-1">{showSortiesDetail ? "Masquer le détail" : "Cliquer pour le détail"}</p>
+                          <p className="text-orange-300/70 text-[9px] md:text-[10px] mt-1 leading-tight">{showSortiesDetail ? "Masquer" : "Voir détail"}</p>
                         )}
                       </CardContent>
                     </Card>
