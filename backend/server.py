@@ -4605,15 +4605,18 @@ class LocationReservationUpdate(BaseModel):
 class ProformaInvoiceItem(BaseModel):
     name: str
     quantity: int = 1
-    unit_price: float
-    subtotal: float
+    unit_price: float = 0  # Allow 0 for label-only lines
+    subtotal: float = 0
     department: str = "autres"
+    is_label: bool = False  # True for label-only lines (section/note without price)
 
 class ProformaInvoiceCreate(BaseModel):
     client_name: str
     client_phone: Optional[str] = ""
     client_email: Optional[str] = ""
     client_address: Optional[str] = ""
+    client_ifu: Optional[str] = ""
+    proforma_title: Optional[str] = ""  # Optional general title (reservation purpose)
     items: List[ProformaInvoiceItem]
     subtotal: float
     discount: float = 0
@@ -4629,6 +4632,8 @@ class ProformaInvoiceUpdate(BaseModel):
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
     client_address: Optional[str] = None
+    client_ifu: Optional[str] = None
+    proforma_title: Optional[str] = None
     items: Optional[List[dict]] = None
     subtotal: Optional[float] = None
     discount: Optional[float] = None

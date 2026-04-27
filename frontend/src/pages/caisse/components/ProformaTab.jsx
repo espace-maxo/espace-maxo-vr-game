@@ -35,6 +35,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
   
   // Form state
   const [formData, setFormData] = useState({
+    proforma_title: "",  // Titre général (optionnel) — ex: "Réservation anniversaire 12 ans"
     client_name: "",
     client_phone: "",
     client_email: "",
@@ -117,17 +118,17 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       toast.error("Veuillez entrer une désignation");
       return;
     }
-    if (manualProduct.unit_price <= 0) {
-      toast.error("Veuillez entrer un prix unitaire valide");
-      return;
-    }
-    
+    const price = parseFloat(manualProduct.unit_price) || 0;
+    const qty = manualProduct.quantity || 1;
+    const isLabelOnly = price <= 0;
+
     const newItem = {
       name: manualProduct.name.trim(),
-      quantity: manualProduct.quantity || 1,
-      unit_price: parseFloat(manualProduct.unit_price),
-      subtotal: (manualProduct.quantity || 1) * parseFloat(manualProduct.unit_price),
-      department: "autres"
+      quantity: isLabelOnly ? 0 : qty,
+      unit_price: price,
+      subtotal: isLabelOnly ? 0 : qty * price,
+      department: "autres",
+      is_label: isLabelOnly,  // Ligne sans prix (titre/section/note)
     };
     
     const newItems = [...formData.items, newItem];
@@ -136,7 +137,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     
     // Reset manual product form
     setManualProduct({ name: "", quantity: 1, unit_price: 0 });
-    toast.success(`${newItem.name} ajouté`);
+    toast.success(isLabelOnly ? `Libellé "${newItem.name}" ajouté` : `${newItem.name} ajouté`);
   };
 
   const updateItemQuantity = (index, quantity) => {
@@ -202,6 +203,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
 
   const resetForm = () => {
     setFormData({
+      proforma_title: "",
       client_name: "",
       client_phone: "",
       client_email: "",
@@ -224,6 +226,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     const applyTva = proforma.apply_tva !== false; // Default to true if not set
     const { subtotal, montantHT, tvaAmount, total } = calculateTotals(proforma.items || [], proforma.discount || 0, applyTva);
     setFormData({
+      proforma_title: proforma.proforma_title || "",
       client_name: proforma.client_name,
       client_phone: proforma.client_phone || "",
       client_email: proforma.client_email || "",
@@ -643,6 +646,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           </div>
         </div>
         
+        ${proforma.proforma_title ? `
+          <div style="margin: 20px 0 10px; padding: 10px 14px; background:#fff8e6; border-left: 4px solid #f59e0b; border-radius: 4px;">
+            <div style="font-size: 11px; color:#92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Objet de la réservation</div>
+            <div style="font-size: 15px; font-weight: 700; color:#1f2937;">${proforma.proforma_title}</div>
+          </div>
+        ` : ''}
+        
         <table>
           <thead>
             <tr>
@@ -653,14 +663,26 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             </tr>
           </thead>
           <tbody>
-            ${proforma.items.map(item => `
-              <tr>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>${item.unit_price?.toLocaleString('fr-FR')} F</td>
-                <td>${item.subtotal?.toLocaleString('fr-FR')} F</td>
-              </tr>
-            `).join('')}
+            ${proforma.items.map(item => {
+              const isLabel = item.is_label || !(item.unit_price > 0);
+              if (isLabel) {
+                return `
+                  <tr style="background: #fef3c7;">
+                    <td colspan="4" style="font-style: italic; color:#92400e; font-weight: 600; padding: 8px 10px;">
+                      ${item.name}
+                    </td>
+                  </tr>
+                `;
+              }
+              return `
+                <tr>
+                  <td>${item.name}</td>
+                  <td>${item.quantity}</td>
+                  <td>${item.unit_price?.toLocaleString('fr-FR')} F</td>
+                  <td>${item.subtotal?.toLocaleString('fr-FR')} F</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
         
@@ -1001,6 +1023,26 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             </DialogTitle>
           </DialogHeader>
           
+          <div className="space-y-4 py-4">
+            {/* Titre général de la proforma (optionnel) */}
+            <div>
+              <Label className="text-slate-400 text-sm flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" />
+                Titre général de la réservation (optionnel)
+              </Label>
+              <Input
+                value={formData.proforma_title}
+                onChange={(e) => setFormData({ ...formData, proforma_title: e.target.value })}
+                placeholder='Ex: "Réservation Anniversaire 12 ans" ou "Mariage Famille KOFFI"'
+                className="bg-slate-900/50 border-slate-700 text-white mt-1"
+                data-testid="proforma-title-input"
+              />
+              <p className="text-slate-500 text-xs mt-1">
+                S'affichera en haut de la proforma imprimée, sous le numéro.
+              </p>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             {/* Left: Client Info */}
             <div className="space-y-4">
@@ -1115,17 +1157,21 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                       />
                     </div>
                     <div>
-                      <Label className="text-slate-500 text-xs">Prix unitaire (F CFA) *</Label>
+                      <Label className="text-slate-500 text-xs">Prix unitaire (F CFA)</Label>
                       <Input
                         data-testid="proforma-item-price"
                         type="number"
                         min="0"
                         value={manualProduct.unit_price}
                         onChange={(e) => setManualProduct({ ...manualProduct, unit_price: parseFloat(e.target.value) || 0 })}
+                        placeholder="0 = libellé sans prix"
                         className="bg-slate-800 border-slate-600 text-white mt-1"
                       />
                     </div>
                   </div>
+                  <p className="text-slate-500 text-[11px] -mt-2">
+                    💡 Laissez le prix à <span className="text-amber-400">0</span> pour ajouter un libellé/section sans montant (ex : "— Prestations incluses —", "Forfait à confirmer").
+                  </p>
                   <Button 
                     data-testid="proforma-add-item-btn"
                     onClick={addManualProduct}
@@ -1152,23 +1198,35 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                       <span className="w-24 text-right">Montant</span>
                       <span className="w-8"></span>
                     </div>
-                    {formData.items.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded p-2">
-                        <div className="flex-1 min-w-0">
-                          <span className="text-white text-sm truncate block">{item.name}</span>
+                    {formData.items.map((item, index) => {
+                      const isLabel = item.is_label || (!(item.unit_price > 0));
+                      return (
+                        <div key={index} className={`flex items-center justify-between rounded p-2 ${isLabel ? 'bg-amber-900/20 border border-amber-500/30' : 'bg-slate-800/50'}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm truncate block ${isLabel ? 'text-amber-200 italic' : 'text-white'}`}>
+                              {isLabel && <span className="text-amber-400 mr-1">📝</span>}
+                              {item.name}
+                            </span>
+                          </div>
+                          {isLabel ? (
+                            <span className="text-amber-300/70 text-[10px] italic w-44 text-center">— libellé sans prix —</span>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1 w-20 justify-center">
+                                <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity - 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">-</Button>
+                                <span className="text-white w-6 text-center text-sm">{item.quantity}</span>
+                                <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">+</Button>
+                              </div>
+                              <span className="text-slate-400 text-xs w-20 text-right">{formatPrice(item.unit_price)} F</span>
+                              <span className="text-amber-400 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
+                            </>
+                          )}
+                          <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400 hover:text-red-300 ml-1">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
-                        <div className="flex items-center gap-1 w-20 justify-center">
-                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity - 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">-</Button>
-                          <span className="text-white w-6 text-center text-sm">{item.quantity}</span>
-                          <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">+</Button>
-                        </div>
-                        <span className="text-slate-400 text-xs w-20 text-right">{formatPrice(item.unit_price)} F</span>
-                        <span className="text-amber-400 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
-                        <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400 hover:text-red-300 ml-1">
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
