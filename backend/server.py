@@ -453,6 +453,7 @@ class CaisseProductCreate(BaseModel):
     category: str = ""
     is_available: bool = True
     stock_product_id: str = ""  # Optional link to stock_products for auto-decrement on sale
+    stock_recipe_id: str = ""  # Optional link to a stock_recipe (composed product). Takes over stock_product_id if set.
 
 class CaisseProduct(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -464,6 +465,7 @@ class CaisseProduct(BaseModel):
     category: str = ""
     is_available: bool = True
     stock_product_id: str = ""  # Optional link to stock_products
+    stock_recipe_id: str = ""  # Optional link to a stock_recipe
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Caisse Client Model
@@ -3188,7 +3190,14 @@ async def update_caisse_product(product_id: str, product_data: dict = Body(...))
     try:
         # Get old product data for notification
         old_product = await db.caisse_products.find_one({"id": product_id}, {"_id": 0})
-        
+
+        # Mutual exclusion: stock_product_id and stock_recipe_id cannot coexist.
+        # If the caller sets one to a non-empty value, clear the other.
+        if product_data.get("stock_product_id"):
+            product_data["stock_recipe_id"] = ""
+        elif product_data.get("stock_recipe_id"):
+            product_data["stock_product_id"] = ""
+
         result = await db.caisse_products.update_one({"id": product_id}, {"$set": product_data})
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Produit non trouvé")

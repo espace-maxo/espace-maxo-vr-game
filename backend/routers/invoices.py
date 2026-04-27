@@ -259,13 +259,20 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
 
                     # 1) EXPLICIT LINK: if the caisse product is linked to a stock product, use that directly.
                     linked_stock_product = None
+                    linked_recipe = None
                     caisse_product_id = item.get("product_id") or item.get("id")
                     if caisse_product_id:
                         caisse_prod = await db.caisse_products.find_one({"id": caisse_product_id})
-                        if caisse_prod and caisse_prod.get("stock_product_id"):
-                            linked_stock_product = await db.stock_products.find_one({
-                                "id": caisse_prod["stock_product_id"], "is_active": True
-                            })
+                        if caisse_prod:
+                            if caisse_prod.get("stock_product_id"):
+                                linked_stock_product = await db.stock_products.find_one({
+                                    "id": caisse_prod["stock_product_id"], "is_active": True
+                                })
+                            # Explicit link to a recipe (composed product)
+                            elif caisse_prod.get("stock_recipe_id"):
+                                linked_recipe = await db.stock_recipes.find_one({
+                                    "id": caisse_prod["stock_recipe_id"]
+                                })
 
                     if linked_stock_product:
                         sp = linked_stock_product
@@ -302,6 +309,48 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                             }}
                         )
                         logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+                        continue  # skip fallback logic
+
+                    # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.
+                    if linked_recipe:
+                        for ing in linked_recipe.get("ingredients", []):
+                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True})
+                            if ing_product:
+                                ing_qty = ing["quantity"] * item_qty
+                                old_qty = ing_product.get("quantity", 0)
+                                new_qty = max(0, old_qty - ing_qty)
+                                new_valeur = new_qty * ing_product.get("purchase_price", 0)
+                                smin = ing_product.get("stock_min", 5)
+                                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                                await db.stock_movements.insert_one({
+                                    "id": str(uuid.uuid4()),
+                                    "product_id": ing_product["id"],
+                                    "product_name": ing_product["name"],
+                                    "product_code": ing_product.get("code", ""),
+                                    "movement_type": "sortie",
+                                    "quantity": round(ing_qty, 3),
+                                    "previous_quantity": old_qty,
+                                    "new_quantity": new_qty,
+                                    "unit": ing_product.get("unit", ""),
+                                    "unit_price": ing_product.get("purchase_price", 0),
+                                    "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
+                                    "reason": f"Vente (Recette liée: {linked_recipe['name']}) - Facture {invoice_number}",
+                                    "user_name": current_invoice.get("created_by", "Caisse"),
+                                    "invoice_id": invoice_id,
+                                    "caisse_product_id": caisse_product_id,
+                                    "recipe_id": linked_recipe["id"],
+                                    "created_at": now_iso,
+                                })
+                                await db.stock_products.update_one(
+                                    {"id": ing_product["id"]},
+                                    {"$set": {
+                                        "quantity": round(new_qty, 3),
+                                        "valeur_stock": round(new_valeur, 2),
+                                        "statut": new_statut,
+                                        "updated_at": now_iso,
+                                    }}
+                                )
+                        logger.info(f"Stock recipe-linked deduction: recipe={linked_recipe['name']} items={len(linked_recipe.get('ingredients', []))} (invoice {invoice_number})")
                         continue  # skip fallback logic
 
                     recipe = await db.stock_recipes.find_one({
