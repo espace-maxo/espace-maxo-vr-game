@@ -124,11 +124,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
 
     const newItem = {
       name: manualProduct.name.trim(),
-      quantity: isLabelOnly ? 0 : qty,
+      quantity: qty,  // Keep user-entered quantity even for labels (e.g. "50 personnes")
       unit_price: price,
       subtotal: isLabelOnly ? 0 : qty * price,
       department: "autres",
-      is_label: isLabelOnly,  // Ligne sans prix (titre/section/note)
+      is_label: isLabelOnly,  // Line without price (section/title/note)
     };
     
     const newItems = [...formData.items, newItem];
@@ -450,49 +450,75 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #f59e0b;
           }
           .logo-section {
-            width: 90px;
-            height: 90px;
+            width: 95px;
+            height: 95px;
+            flex-shrink: 0;
           }
           .logo-section img {
             width: 100%;
             height: 100%;
             object-fit: contain;
           }
+          .header-center {
+            flex: 1;
+            text-align: center;
+            padding: 0 20px;
+          }
+          .header-center .brand {
+            font-size: 17pt;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #1f2937;
+          }
+          .header-center .brand-sub {
+            font-size: 8.5pt;
+            color: #6b7280;
+            margin-top: 3px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+          }
           .header-right {
             text-align: right;
-            font-size: 9pt;
-            color: #333;
-            line-height: 1.5;
+            font-size: 8.5pt;
+            color: #4b5563;
+            line-height: 1.6;
+            white-space: nowrap;
           }
+          .header-right strong { color: #1f2937; }
           
           .doc-title-section {
             text-align: center;
-            margin: 15px 0;
+            margin: 18px 0 12px;
           }
           .doc-title {
-            font-size: 16pt;
-            font-weight: bold;
+            font-size: 17pt;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 5px;
+            letter-spacing: 3px;
+            color: #f59e0b;
+            margin-bottom: 6px;
           }
           .doc-info-line {
             font-size: 10pt;
-            color: #555;
+            color: #4b5563;
           }
           .doc-number {
-            font-weight: bold;
+            font-weight: 700;
+            color: #1f2937;
           }
           
           .client-section {
             margin: 15px 0;
-            padding: 12px;
-            border: 1px solid #999;
+            padding: 14px 16px;
+            border: 1px solid #d1d5db;
+            border-left: 4px solid #f59e0b;
+            border-radius: 4px;
+            background: #fafafa;
           }
           .client-label {
             font-weight: bold;
@@ -517,98 +543,117 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             width: 100%; 
             border-collapse: collapse; 
             margin: 15px 0;
-            font-size: 9pt;
+            font-size: 9.5pt;
           }
           thead tr {
-            border-top: 2px solid #333;
-            border-bottom: 2px solid #333;
+            background: #1f2937;
+            color: #fff;
           }
           th { 
-            padding: 10px 8px; 
+            padding: 11px 10px; 
             text-align: left;
-            font-weight: bold;
+            font-weight: 700;
             text-transform: uppercase;
-            font-size: 8pt;
+            font-size: 8.5pt;
+            letter-spacing: 0.5px;
           }
           th:nth-child(2), th:nth-child(3), th:nth-child(4) {
             text-align: right;
           }
           td { 
-            padding: 8px; 
-            border-bottom: 1px solid #ddd;
+            padding: 9px 10px; 
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: middle;
           }
+          tbody tr:nth-child(even) td { background: #fafafa; }
           td:nth-child(2), td:nth-child(3), td:nth-child(4) {
             text-align: right;
           }
           
           .totals-section {
-            margin-top: 15px;
+            margin-top: 18px;
             display: flex;
             justify-content: flex-end;
           }
           .totals-table {
-            width: 250px;
-            font-size: 9pt;
+            width: 280px;
+            font-size: 9.5pt;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            overflow: hidden;
           }
           .totals-table tr {
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #e5e7eb;
           }
           .totals-table td {
-            padding: 6px 0;
+            padding: 8px 12px;
           }
           .totals-table .label {
             text-align: left;
+            color: #4b5563;
           }
           .totals-table .value {
             text-align: right;
-            font-weight: 500;
+            font-weight: 600;
           }
           .totals-table .total-row {
-            border-top: 2px solid #333;
-            border-bottom: none;
+            background: #1f2937;
+            color: #fff;
+            border: none;
           }
           .totals-table .total-row td {
-            font-size: 11pt;
-            font-weight: bold;
-            padding-top: 8px;
+            font-size: 11.5pt;
+            font-weight: 700;
+            padding: 11px 12px;
           }
           
           .amount-words {
-            margin-top: 15px;
-            padding: 10px 0;
-            border-top: 1px solid #ddd;
-            font-size: 9pt;
-            font-style: italic;
+            margin-top: 16px;
+            padding: 10px 14px;
+            background: #fffbeb;
+            border-left: 3px solid #f59e0b;
+            font-size: 9.5pt;
+            color: #451a03;
+          }
+          .amount-words strong {
+            font-weight: 700;
           }
           
           .notes-section {
-            margin-top: 10px;
-            padding: 8px 0;
+            margin-top: 12px;
+            padding: 10px 14px;
             font-size: 9pt;
             font-style: italic;
-            color: #555;
+            color: #4b5563;
+            background: #f9fafb;
+            border-radius: 4px;
           }
           
           .footer {
-            margin-top: 25px;
-            padding-top: 15px;
+            margin-top: 30px;
+            padding-top: 18px;
+            border-top: 1px solid #e5e7eb;
           }
           .thank-you {
             text-align: center;
-            font-size: 9pt;
+            font-size: 9.5pt;
             font-style: italic;
-            margin-bottom: 20px;
+            color: #4b5563;
+            margin-bottom: 25px;
           }
           .signature-section {
             text-align: right;
+            padding-right: 40px;
           }
           .signature-name {
-            font-weight: bold;
-            font-size: 9pt;
+            font-weight: 700;
+            font-size: 10pt;
+            color: #1f2937;
           }
           .signature-title {
-            font-size: 8pt;
-            color: #666;
+            font-size: 8.5pt;
+            color: #6b7280;
+            margin-top: 2px;
           }
           
           @media print { 
@@ -621,9 +666,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           <div class="logo-section">
             <img src="${LOGO_BASE64}" alt="Logo" />
           </div>
+          <div class="header-center">
+            <div class="brand">ESPACE MAXO</div>
+            <div class="brand-sub">Restaurant &middot; Événementiel &middot; Jeux VR</div>
+          </div>
           <div class="header-right">
-            <p>Tél: +229 01 4147 0000</p>
-            <p>RCCM RB/COT/22 B 32037</p>
+            <p><strong>Tél</strong> : +229 01 4147 0000</p>
+            <p><strong>RCCM</strong> : RB/COT/22 B 32037</p>
             <p>Fidjrossè, Cotonou - Bénin</p>
           </div>
         </div>
@@ -657,20 +706,24 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           <thead>
             <tr>
               <th style="width: 50%;">Description</th>
-              <th style="width: 12%;">Qté</th>
-              <th style="width: 19%;">Prix Unit.</th>
-              <th style="width: 19%;">Montant</th>
+              <th style="width: 10%;">Qté</th>
+              <th style="width: 20%;">Prix Unit.</th>
+              <th style="width: 20%;">Montant</th>
             </tr>
           </thead>
           <tbody>
             ${proforma.items.map(item => {
               const isLabel = item.is_label || !(item.unit_price > 0);
               if (isLabel) {
+                const qty = item.quantity && item.quantity > 0 ? item.quantity : '';
                 return `
-                  <tr style="background: #fef3c7;">
-                    <td colspan="4" style="font-style: italic; color:#92400e; font-weight: 600; padding: 8px 10px;">
+                  <tr style="background: #fef7e0;">
+                    <td style="font-weight: 700; color:#78350f; padding: 8px 10px;">
                       ${item.name}
                     </td>
+                    <td style="text-align: right; font-weight: 700; color:#78350f;">${qty}</td>
+                    <td style="color:#b45309;">—</td>
+                    <td style="color:#b45309;">—</td>
                   </tr>
                 `;
               }
