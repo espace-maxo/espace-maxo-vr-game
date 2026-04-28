@@ -227,13 +227,33 @@ export default function CaisseStockLinksOverview() {
         </CardHeader>
         <CardContent>
           {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="links-kpis">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2" data-testid="links-kpis">
             <Kpi label="Produits Caisse" value={summary.total_caisse_products || 0} color="text-slate-300" />
-            <Kpi label="Caisse liés" value={summary.caisse_with_links || 0} color="text-emerald-400" />
+            <Kpi label="Suivis Stock" value={summary.trackable_caisse_products || 0} color="text-slate-300" />
+            <Kpi label="Liés" value={summary.caisse_with_links || 0} color="text-emerald-400" />
             <Kpi label="Multi-cibles" value={summary.caisse_with_multi_links || 0} color="text-violet-400" />
             <Kpi label="Via Recette" value={summary.caisse_with_recipe || 0} color="text-amber-400" />
-            <Kpi label="Stocks consommés" value={summary.stock_with_consumers || 0} color="text-cyan-400" />
+            <Kpi label="Services" value={summary.caisse_services || 0} color="text-cyan-400" />
           </div>
+          {data?.services && data.services.length > 0 && (
+            <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3" data-testid="services-list">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-amber-300 text-sm font-medium flex items-center gap-1.5">
+                  <ShoppingBasket className="w-4 h-4" />
+                  Produits "Service" (sans déstockage)
+                </span>
+                <span className="text-amber-200/70 text-xs">{data.services.length} produit{data.services.length > 1 ? "s" : ""}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {data.services.map(s => (
+                  <span key={s.caisse_id} className="bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs rounded-full px-2 py-0.5">
+                    {s.caisse_name}
+                    {s.department && <span className="text-amber-300/60 ml-1">· {s.department}</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

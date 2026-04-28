@@ -350,12 +350,15 @@ async def destock_live_dashboard(limit: int = 50):
     ).sort("created_at", -1).to_list(limit)
 
     # Caisse products linkage state — uses NEW stock_links array (multi-link), with legacy fallback to stock_product_id.
+    # Products marked as "no_stock_tracking" (services/games/fees) are excluded from the linked/unlinked stats entirely.
     caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
-    total_caisse = len(caisse_products)
+    trackable_products = [cp for cp in caisse_products if not cp.get("no_stock_tracking")]
+    service_products = [cp for cp in caisse_products if cp.get("no_stock_tracking")]
+    total_caisse = len(trackable_products)
     def _is_linked(cp):
         return bool(cp.get("stock_links")) or bool(cp.get("stock_product_id")) or bool(cp.get("stock_recipe_id"))
-    linked = [cp for cp in caisse_products if _is_linked(cp)]
-    unlinked = [cp for cp in caisse_products if not _is_linked(cp)]
+    linked = [cp for cp in trackable_products if _is_linked(cp)]
+    unlinked = [cp for cp in trackable_products if not _is_linked(cp)]
 
     # For linked products, find last sale movement (using caisse_product_id)
     sales_by_caisse_id = {}
@@ -397,6 +400,7 @@ async def destock_live_dashboard(limit: int = 50):
             "linked_no_sales_count": len(linked_no_sales),
             "linked_with_recent_sales_count": len(linked_with_sales),
             "recent_sales_count": len(recent_sales),
+            "service_products_count": len(service_products),
         },
         "unlinked_caisse_products": [
             {"id": cp.get("id"), "name": cp.get("name"), "category": cp.get("category"), "price": cp.get("price")}
@@ -423,6 +427,7 @@ async def caisse_stock_links_overview():
 
     caisse_to_stock = []
     recipes_view = []
+    services_view = []  # Caisse products marked as no_stock_tracking
     stock_to_caisse_map = {}  # stock_id -> list of caisse {id, name, category}
 
     for cp in caisse_products:
@@ -430,6 +435,15 @@ async def caisse_stock_links_overview():
         cp_name = cp.get("name", "")
         cp_cat = cp.get("category", "")
         cp_dept = cp.get("department", "")
+        # Service products (no_stock_tracking=True) are listed separately, never in unlinked.
+        if cp.get("no_stock_tracking"):
+            services_view.append({
+                "caisse_id": cp_id,
+                "caisse_name": cp_name,
+                "category": cp_cat,
+                "department": cp_dept,
+            })
+            continue
         # Resolve effective links: prefer stock_links (multi), fallback legacy single
         link_ids = list(cp.get("stock_links") or [])
         if not link_ids and cp.get("stock_product_id"):
@@ -495,12 +509,15 @@ async def caisse_stock_links_overview():
         "caisse_to_stock": caisse_to_stock,
         "stock_to_caisse": stock_to_caisse,
         "recipes": recipes_view,
+        "services": services_view,
         "summary": {
             "total_caisse_products": len(caisse_products),
+            "trackable_caisse_products": len(caisse_products) - len(services_view),
             "total_stock_products": len(stock_products),
             "caisse_with_multi_links": sum(1 for x in caisse_to_stock if x["links_count"] > 1),
             "caisse_with_links": sum(1 for x in caisse_to_stock if x["links_count"] >= 1),
             "caisse_with_recipe": len(recipes_view),
+            "caisse_services": len(services_view),
             "stock_with_consumers": sum(1 for x in stock_to_caisse if x["consumers_count"] >= 1),
         },
     }

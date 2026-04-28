@@ -455,6 +455,7 @@ class CaisseProductCreate(BaseModel):
     stock_product_id: str = ""  # DEPRECATED legacy single link (kept for backwards compat). Migrated to stock_links on read.
     stock_recipe_id: str = ""  # Optional link to a stock_recipe (composed product). Mutually exclusive with stock_links.
     stock_links: List[str] = Field(default_factory=list)  # Multi-link: list of stock_product ids decremented on sale (qty=item_qty each).
+    no_stock_tracking: bool = False  # True for service products (games, fees, etc.) — excluded from "unlinked" stats and never destocked.
 
 class CaisseProduct(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -468,6 +469,7 @@ class CaisseProduct(BaseModel):
     stock_product_id: str = ""  # DEPRECATED legacy single link
     stock_recipe_id: str = ""
     stock_links: List[str] = Field(default_factory=list)
+    no_stock_tracking: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Caisse Client Model

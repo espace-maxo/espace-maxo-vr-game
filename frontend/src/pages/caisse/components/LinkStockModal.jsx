@@ -25,6 +25,8 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
   // Multi-select state for "stock" mode (set of stock_product ids)
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [saving, setSaving] = useState(false);
+  // Service flag: when true, this caisse product never destocks (jeux, services, droit de bouchon, etc.)
+  const [noStockTracking, setNoStockTracking] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +47,7 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
       }
     })();
     // Seed initial state from current product
+    setNoStockTracking(!!caisseProduct?.no_stock_tracking);
     if (caisseProduct?.stock_recipe_id) {
       setMode("recipe");
       setSelectedIds(new Set());
@@ -109,6 +112,7 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
       await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
         stock_links: ids,
         stock_recipe_id: "",
+        no_stock_tracking: false,
       });
       toast.success(ids.length === 0
         ? "Tous les liens stock retirés"
@@ -119,6 +123,41 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
       onClose();
     } catch (e) {
       toast.error("Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Toggle "Service - pas de déstockage": clears all links and flags the product as service.
+  const markAsService = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
+        stock_links: [],
+        stock_recipe_id: "",
+        no_stock_tracking: true,
+      });
+      toast.success("Marqué comme Service (jamais déstocké)");
+      onLinked?.();
+      onClose();
+    } catch (e) {
+      toast.error("Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const unmarkService = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
+        no_stock_tracking: false,
+      });
+      toast.success("Suivi stock réactivé");
+      onLinked?.();
+      onClose();
+    } catch (e) {
+      toast.error("Erreur");
     } finally {
       setSaving(false);
     }
@@ -179,6 +218,65 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
           </DialogDescription>
         </DialogHeader>
 
+        {/* Service toggle: when enabled, the product never destocks (jeux, droit de bouchon, services...) */}
+        <div className={`rounded-lg p-3 border ${noStockTracking ? "bg-amber-900/20 border-amber-500/40" : "bg-slate-800/40 border-slate-700"}`}>
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => setNoStockTracking(v => !v)}
+              className={`mt-0.5 w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${
+                noStockTracking ? "bg-amber-500" : "bg-slate-600"
+              }`}
+              data-testid="service-toggle"
+              aria-label="Marquer comme service"
+            >
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
+                noStockTracking ? "left-[18px]" : "left-0.5"
+              }`} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-white font-medium text-sm">Service / Pas de suivi stock</span>
+                {noStockTracking && (
+                  <Badge className="bg-amber-500/30 text-amber-200 border border-amber-500/50 text-[10px] py-0">
+                    Activé
+                  </Badge>
+                )}
+              </div>
+              <p className="text-slate-400 text-xs mt-0.5">
+                Pour les <strong>jeux VR, simulateur, droit de bouchon, locations, animations</strong>… qui ne consomment aucun stock physique.
+                Le produit sera <strong>exclu</strong> des stats "non liés" et ne déclenchera <strong>aucun déstockage</strong> lors d'une vente.
+              </p>
+            </div>
+            {noStockTracking && (
+              <Button
+                size="sm"
+                onClick={markAsService}
+                disabled={saving}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+                data-testid="confirm-service-btn"
+              >
+                <Save className="w-3 h-3 mr-1" />
+                Confirmer
+              </Button>
+            )}
+            {!noStockTracking && caisseProduct?.no_stock_tracking && (
+              <Button
+                size="sm"
+                onClick={unmarkService}
+                disabled={saving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8"
+                data-testid="unmark-service-btn"
+              >
+                Réactiver suivi
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Hide stock/recipe selection when service mode is active (avoid confusion) */}
+        {!noStockTracking && (
+        <>
         {/* Current state summary */}
         {mode === "stock" && selectedStockProducts.length > 0 && (
           <div className="bg-emerald-900/20 border border-emerald-500/30 rounded px-3 py-2">
@@ -356,18 +454,23 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
             );
           })}
         </div>
+        </>
+        )}
 
         <div className="flex justify-between items-center pt-2 border-t border-slate-700">
           <span className="text-slate-500 text-xs">
-            {mode === "stock" && selectedIds.size > 0 && (
+            {!noStockTracking && mode === "stock" && selectedIds.size > 0 && (
               <>{selectedIds.size} cible{selectedIds.size > 1 ? "s" : ""} → déstockage <span className="text-emerald-400">×{selectedIds.size}</span> à chaque vente</>
+            )}
+            {noStockTracking && (
+              <span className="text-amber-300">⚠ Aucun déstockage ne sera fait pour ce produit</span>
             )}
           </span>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} className="text-slate-400">
               <X className="w-4 h-4 mr-1" /> Fermer
             </Button>
-            {mode === "stock" && (
+            {!noStockTracking && mode === "stock" && (
               <Button
                 onClick={saveStockLinks}
                 disabled={saving || !hasChanges}
