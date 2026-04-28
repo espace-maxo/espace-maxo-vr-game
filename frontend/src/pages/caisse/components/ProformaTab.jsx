@@ -1631,7 +1631,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                 )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
                   <span className="text-white">MONTANT TTC:</span>
-                  <span className="text-blue-200 bg-slate-900 px-3 py-1 rounded">{formatPrice(formData.total)} F CFA</span>
+                  <span className="text-blue-950 bg-white px-3 py-1 rounded shadow-sm">{formatPrice(formData.total)} F CFA</span>
                 </div>
               </div>
             </div>
