@@ -261,23 +261,33 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                     linked_stock_products = []
                     linked_recipe = None
                     caisse_product_id = item.get("product_id") or item.get("id")
+                    caisse_prod = None
                     if caisse_product_id:
                         caisse_prod = await db.caisse_products.find_one({"id": caisse_product_id})
+                    # Fallback: some legacy invoices (or manually-added items) carry no product_id —
+                    # try to match by exact name (case-insensitive). Useful for 'free items' typed into the cart.
+                    if not caisse_prod and item_name:
+                        caisse_prod = await db.caisse_products.find_one({
+                            "name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
+                        })
                         if caisse_prod:
-                            # Resolve stock_links (multi). Backwards-compat: fallback to legacy single stock_product_id.
-                            link_ids = caisse_prod.get("stock_links") or []
-                            if not link_ids and caisse_prod.get("stock_product_id"):
-                                link_ids = [caisse_prod["stock_product_id"]]
-                            if link_ids:
-                                async for sp in db.stock_products.find({
-                                    "id": {"$in": link_ids}, "is_active": True
-                                }, {"_id": 0}):
-                                    linked_stock_products.append(sp)
-                            # Explicit link to a recipe (composed product) — only if no direct links.
-                            elif caisse_prod.get("stock_recipe_id"):
-                                linked_recipe = await db.stock_recipes.find_one({
-                                    "id": caisse_prod["stock_recipe_id"]
-                                })
+                            caisse_product_id = caisse_prod.get("id")
+                            logger.info(f"Stock deduction: matched item '{item_name}' to caisse product '{caisse_prod.get('name')}' by name (no product_id in invoice item)")
+                    if caisse_prod:
+                        # Resolve stock_links (multi). Backwards-compat: fallback to legacy single stock_product_id.
+                        link_ids = caisse_prod.get("stock_links") or []
+                        if not link_ids and caisse_prod.get("stock_product_id"):
+                            link_ids = [caisse_prod["stock_product_id"]]
+                        if link_ids:
+                            async for sp in db.stock_products.find({
+                                "id": {"$in": link_ids}, "is_active": True
+                            }, {"_id": 0}):
+                                linked_stock_products.append(sp)
+                        # Explicit link to a recipe (composed product) — only if no direct links.
+                        elif caisse_prod.get("stock_recipe_id"):
+                            linked_recipe = await db.stock_recipes.find_one({
+                                "id": caisse_prod["stock_recipe_id"]
+                            })
 
                     if linked_stock_products:
                         for sp in linked_stock_products:
