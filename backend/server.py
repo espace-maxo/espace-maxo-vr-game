@@ -452,8 +452,9 @@ class CaisseProductCreate(BaseModel):
     unit: str = "unité"
     category: str = ""
     is_available: bool = True
-    stock_product_id: str = ""  # Optional link to stock_products for auto-decrement on sale
-    stock_recipe_id: str = ""  # Optional link to a stock_recipe (composed product). Takes over stock_product_id if set.
+    stock_product_id: str = ""  # DEPRECATED legacy single link (kept for backwards compat). Migrated to stock_links on read.
+    stock_recipe_id: str = ""  # Optional link to a stock_recipe (composed product). Mutually exclusive with stock_links.
+    stock_links: List[str] = Field(default_factory=list)  # Multi-link: list of stock_product ids decremented on sale (qty=item_qty each).
 
 class CaisseProduct(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -464,8 +465,9 @@ class CaisseProduct(BaseModel):
     unit: str = "unité"
     category: str = ""
     is_available: bool = True
-    stock_product_id: str = ""  # Optional link to stock_products
-    stock_recipe_id: str = ""  # Optional link to a stock_recipe
+    stock_product_id: str = ""  # DEPRECATED legacy single link
+    stock_recipe_id: str = ""
+    stock_links: List[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Caisse Client Model
@@ -3191,11 +3193,22 @@ async def update_caisse_product(product_id: str, product_data: dict = Body(...))
         # Get old product data for notification
         old_product = await db.caisse_products.find_one({"id": product_id}, {"_id": 0})
 
-        # Mutual exclusion: stock_product_id and stock_recipe_id cannot coexist.
-        # If the caller sets one to a non-empty value, clear the other.
+        # Mutual exclusion: stock_links (multi), stock_recipe_id, and legacy stock_product_id cannot coexist.
+        # If the caller sets stock_links to a non-empty list, clear the others.
+        # If the caller sets stock_recipe_id, clear the others.
+        # If the caller sets legacy stock_product_id, migrate it transparently to stock_links: [id].
+        if "stock_links" in product_data:
+            sl = product_data.get("stock_links") or []
+            if isinstance(sl, list) and len(sl) > 0:
+                product_data["stock_recipe_id"] = ""
+                product_data["stock_product_id"] = ""  # legacy cleared
+        if product_data.get("stock_recipe_id"):
+            product_data["stock_links"] = []
+            product_data["stock_product_id"] = ""
+        # Legacy compatibility: convert stock_product_id (single) -> stock_links: [id]
         if product_data.get("stock_product_id"):
+            product_data["stock_links"] = [product_data["stock_product_id"]]
             product_data["stock_recipe_id"] = ""
-        elif product_data.get("stock_recipe_id"):
             product_data["stock_product_id"] = ""
 
         result = await db.caisse_products.update_one({"id": product_id}, {"$set": product_data})
@@ -3303,7 +3316,7 @@ async def auto_link_caisse_products_to_stock(
             cp_name = norm(cp.get("name"))
             if not cp_name:
                 continue
-            if cp.get("stock_product_id"):
+            if cp.get("stock_links") or cp.get("stock_product_id") or cp.get("stock_recipe_id"):
                 report["already_linked"] += 1
                 continue
 
@@ -3345,7 +3358,8 @@ async def auto_link_caisse_products_to_stock(
                 await db.caisse_products.update_one(
                     {"id": cp["id"]},
                     {"$set": {
-                        "stock_product_id": best_sp["id"],
+                        "stock_links": [best_sp["id"]],
+                        "stock_product_id": "",
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )
@@ -3441,7 +3455,7 @@ async def smart_link_caisse_products_to_stock(dry_run: bool = False):
             cp_name = norm(cp.get("name"))
             if not cp_name:
                 continue
-            if cp.get("stock_product_id"):
+            if cp.get("stock_links") or cp.get("stock_product_id") or cp.get("stock_recipe_id"):
                 report["already_linked"] += 1
                 continue
 
@@ -3476,7 +3490,8 @@ async def smart_link_caisse_products_to_stock(dry_run: bool = False):
                 await db.caisse_products.update_one(
                     {"id": cp["id"]},
                     {"$set": {
-                        "stock_product_id": matched_sp["id"],
+                        "stock_links": [matched_sp["id"]],
+                        "stock_product_id": "",
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )

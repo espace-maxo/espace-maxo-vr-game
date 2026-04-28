@@ -349,11 +349,13 @@ async def destock_live_dashboard(limit: int = 50):
         {"_id": 0},
     ).sort("created_at", -1).to_list(limit)
 
-    # Caisse products linkage state
+    # Caisse products linkage state — uses NEW stock_links array (multi-link), with legacy fallback to stock_product_id.
     caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
     total_caisse = len(caisse_products)
-    linked = [cp for cp in caisse_products if cp.get("stock_product_id")]
-    unlinked = [cp for cp in caisse_products if not cp.get("stock_product_id")]
+    def _is_linked(cp):
+        return bool(cp.get("stock_links")) or bool(cp.get("stock_product_id")) or bool(cp.get("stock_recipe_id"))
+    linked = [cp for cp in caisse_products if _is_linked(cp)]
+    unlinked = [cp for cp in caisse_products if not _is_linked(cp)]
 
     # For linked products, find last sale movement (using caisse_product_id)
     sales_by_caisse_id = {}
@@ -370,11 +372,15 @@ async def destock_live_dashboard(limit: int = 50):
     linked_with_sales = []
     for cp in linked:
         last_sale = sales_by_caisse_id.get(cp.get("id"))
+        # Resolve effective stock links (multi → list, legacy single → wrap)
+        effective_links = cp.get("stock_links") or ([cp["stock_product_id"]] if cp.get("stock_product_id") else [])
         info = {
             "id": cp.get("id"),
             "name": cp.get("name"),
             "category": cp.get("category"),
-            "stock_product_id": cp.get("stock_product_id"),
+            "stock_product_id": cp.get("stock_product_id"),  # legacy field, kept for backwards compat
+            "stock_links": effective_links,
+            "stock_recipe_id": cp.get("stock_recipe_id") or "",
             "last_sale_at": last_sale,
         }
         if not last_sale or last_sale < cutoff_iso:
@@ -398,6 +404,107 @@ async def destock_live_dashboard(limit: int = 50):
         ],
         "linked_no_sales": linked_no_sales,
     }
+
+
+@router.get("/links-overview")
+async def caisse_stock_links_overview():
+    """Bi-directional view of Caisse↔Stock links.
+
+    Returns:
+      - caisse_to_stock: list of caisse products with their resolved stock_links (multi)
+        and resolved stock product names.
+      - stock_to_caisse: list of stock products with all caisse products that link to them
+        (computed by inverse traversal).
+      - recipes: list of caisse products linked via a recipe (separate, not part of multi-link).
+    """
+    caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(5000)
+    stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)
+    sp_by_id = {sp.get("id"): sp for sp in stock_products}
+
+    caisse_to_stock = []
+    recipes_view = []
+    stock_to_caisse_map = {}  # stock_id -> list of caisse {id, name, category}
+
+    for cp in caisse_products:
+        cp_id = cp.get("id")
+        cp_name = cp.get("name", "")
+        cp_cat = cp.get("category", "")
+        cp_dept = cp.get("department", "")
+        # Resolve effective links: prefer stock_links (multi), fallback legacy single
+        link_ids = list(cp.get("stock_links") or [])
+        if not link_ids and cp.get("stock_product_id"):
+            link_ids = [cp["stock_product_id"]]
+        recipe_id = cp.get("stock_recipe_id") or ""
+
+        if recipe_id:
+            recipes_view.append({
+                "caisse_id": cp_id,
+                "caisse_name": cp_name,
+                "category": cp_cat,
+                "department": cp_dept,
+                "recipe_id": recipe_id,
+            })
+            continue
+
+        resolved_links = []
+        for sid in link_ids:
+            sp = sp_by_id.get(sid)
+            if sp:
+                resolved_links.append({
+                    "stock_id": sid,
+                    "stock_name": sp.get("name", ""),
+                    "stock_code": sp.get("code", ""),
+                    "current_quantity": sp.get("quantity", 0),
+                    "unit": sp.get("unit", ""),
+                })
+                stock_to_caisse_map.setdefault(sid, []).append({
+                    "caisse_id": cp_id,
+                    "caisse_name": cp_name,
+                    "category": cp_cat,
+                    "department": cp_dept,
+                })
+
+        caisse_to_stock.append({
+            "caisse_id": cp_id,
+            "caisse_name": cp_name,
+            "category": cp_cat,
+            "department": cp_dept,
+            "links": resolved_links,
+            "links_count": len(resolved_links),
+        })
+
+    stock_to_caisse = []
+    for sp in stock_products:
+        sid = sp.get("id")
+        consumers = stock_to_caisse_map.get(sid, [])
+        stock_to_caisse.append({
+            "stock_id": sid,
+            "stock_name": sp.get("name", ""),
+            "stock_code": sp.get("code", ""),
+            "current_quantity": sp.get("quantity", 0),
+            "unit": sp.get("unit", ""),
+            "consumers": consumers,
+            "consumers_count": len(consumers),
+        })
+
+    # Sort: most-linked first for stock view; alpha for caisse view
+    stock_to_caisse.sort(key=lambda x: (-x["consumers_count"], x["stock_name"]))
+    caisse_to_stock.sort(key=lambda x: (-x["links_count"], x["caisse_name"]))
+
+    return {
+        "caisse_to_stock": caisse_to_stock,
+        "stock_to_caisse": stock_to_caisse,
+        "recipes": recipes_view,
+        "summary": {
+            "total_caisse_products": len(caisse_products),
+            "total_stock_products": len(stock_products),
+            "caisse_with_multi_links": sum(1 for x in caisse_to_stock if x["links_count"] > 1),
+            "caisse_with_links": sum(1 for x in caisse_to_stock if x["links_count"] >= 1),
+            "caisse_with_recipe": len(recipes_view),
+            "stock_with_consumers": sum(1 for x in stock_to_caisse if x["consumers_count"] >= 1),
+        },
+    }
+
 
 @router.post("/movements")
 async def create_movement(data: StockMovementCreate):

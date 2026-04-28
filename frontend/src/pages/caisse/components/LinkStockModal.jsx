@@ -4,17 +4,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Link2, Link2Off, Package, X, BookOpen } from "lucide-react";
+import { Search, Link2, Link2Off, Package, X, BookOpen, Check, Save } from "lucide-react";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 /**
  * LinkStockModal
- * Links a Caisse product to EITHER:
- *  - a single Stock product (simple 1:1 decrement), OR
- *  - a stock_recipe (composed product — decrements multiple ingredients).
- * Tabs switch between the two modes; mutually exclusive on the backend.
+ * Links a Caisse product to:
+ *  - MULTIPLE Stock products (multi-select, each decremented by 1×qty per sale), OR
+ *  - a single stock_recipe (composed product — decrements its ingredients).
+ * The two modes are mutually exclusive (backend enforces this).
  */
 const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
   const [mode, setMode] = useState("stock"); // 'stock' | 'recipe'
@@ -22,6 +22,9 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
   const [recipes, setRecipes] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  // Multi-select state for "stock" mode (set of stock_product ids)
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -41,19 +44,28 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
         if (!cancelled) setLoading(false);
       }
     })();
-    // Seed initial tab based on what's currently linked
-    if (caisseProduct?.stock_recipe_id) setMode("recipe");
-    else setMode("stock");
+    // Seed initial state from current product
+    if (caisseProduct?.stock_recipe_id) {
+      setMode("recipe");
+      setSelectedIds(new Set());
+    } else {
+      setMode("stock");
+      // Resolve current multi-link (or legacy single)
+      const current = caisseProduct?.stock_links && caisseProduct.stock_links.length > 0
+        ? caisseProduct.stock_links
+        : (caisseProduct?.stock_product_id ? [caisseProduct.stock_product_id] : []);
+      setSelectedIds(new Set(current));
+    }
     setSearch(caisseProduct?.name?.split(" ").slice(0, 2).join(" ") || "");
     return () => { cancelled = true; };
   }, [open, caisseProduct]);
 
   const filteredStock = useMemo(() => {
-    if (!search.trim()) return stockProducts.slice(0, 30);
+    if (!search.trim()) return stockProducts.slice(0, 60);
     const q = search.toLowerCase();
     return stockProducts
       .filter(p => p.name.toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q))
-      .slice(0, 30);
+      .slice(0, 60);
   }, [stockProducts, search]);
 
   const filteredRecipes = useMemo(() => {
@@ -64,28 +76,42 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
       .slice(0, 30);
   }, [recipes, search]);
 
-  const currentlyLinked = useMemo(() => {
-    if (caisseProduct?.stock_product_id) {
-      const sp = stockProducts.find(p => p.id === caisseProduct.stock_product_id);
-      return sp ? { type: "stock", entity: sp } : null;
-    }
-    if (caisseProduct?.stock_recipe_id) {
-      const rp = recipes.find(r => r.id === caisseProduct.stock_recipe_id);
-      return rp ? { type: "recipe", entity: rp } : null;
-    }
-    return null;
-  }, [caisseProduct, stockProducts, recipes]);
+  const selectedStockProducts = useMemo(() => {
+    return stockProducts.filter(p => selectedIds.has(p.id));
+  }, [stockProducts, selectedIds]);
 
-  const linkToStock = async (stockProductId) => {
+  const currentRecipe = useMemo(() => {
+    if (!caisseProduct?.stock_recipe_id) return null;
+    return recipes.find(r => r.id === caisseProduct.stock_recipe_id) || null;
+  }, [caisseProduct, recipes]);
+
+  const toggleStock = (id) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const saveStockLinks = async () => {
+    setSaving(true);
     try {
+      const ids = Array.from(selectedIds);
       await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
-        stock_product_id: stockProductId,
+        stock_links: ids,
+        stock_recipe_id: "",
       });
-      toast.success(stockProductId ? "Lié à un produit stock" : "Lien supprimé");
+      toast.success(ids.length === 0
+        ? "Tous les liens stock retirés"
+        : ids.length === 1
+        ? "1 lien stock enregistré"
+        : `${ids.length} liens stock enregistrés (déstockage multi-cible activé)`);
       onLinked?.();
       onClose();
     } catch (e) {
-      toast.error("Erreur lors de la liaison");
+      toast.error("Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -93,8 +119,9 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
     try {
       await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
         stock_recipe_id: recipeId,
+        stock_links: [],
       });
-      toast.success(recipeId ? "Lié à une recette composée" : "Lien supprimé");
+      toast.success(recipeId ? "Lié à une recette composée" : "Lien recette supprimé");
       onLinked?.();
       onClose();
     } catch (e) {
@@ -105,16 +132,26 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
   const unlinkAll = async () => {
     try {
       await axios.put(`${API}/caisse/products/${caisseProduct.id}`, {
-        stock_product_id: "",
+        stock_links: [],
         stock_recipe_id: "",
       });
-      toast.success("Lien supprimé");
+      toast.success("Tous les liens supprimés");
       onLinked?.();
       onClose();
     } catch (e) {
       toast.error("Erreur lors du retrait du lien");
     }
   };
+
+  const hasChanges = useMemo(() => {
+    if (mode !== "stock") return false;
+    const original = caisseProduct?.stock_links && caisseProduct.stock_links.length > 0
+      ? new Set(caisseProduct.stock_links)
+      : (caisseProduct?.stock_product_id ? new Set([caisseProduct.stock_product_id]) : new Set());
+    if (original.size !== selectedIds.size) return true;
+    for (const id of original) if (!selectedIds.has(id)) return true;
+    return false;
+  }, [mode, caisseProduct, selectedIds]);
 
   if (!caisseProduct) return null;
 
@@ -127,36 +164,64 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
             Lier au stock
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Liez <strong className="text-white">{caisseProduct.name}</strong> à un produit stock simple
+            Liez <strong className="text-white">{caisseProduct.name}</strong> à <strong className="text-violet-300">un ou plusieurs produits stock</strong>
             <span className="text-slate-500"> ou à une recette composée</span>.
-            Chaque vente déstockera automatiquement.
+            Chaque vente déstockera automatiquement <strong>chaque cible</strong> (×qté vendue).
           </DialogDescription>
         </DialogHeader>
 
-        {currentlyLinked && (
-          <div className="bg-emerald-900/20 border border-emerald-500/30 rounded px-3 py-2 flex items-center justify-between">
-            <div className="text-sm">
-              <span className="text-emerald-300 font-medium">
-                {currentlyLinked.type === "recipe" ? "Recette actuelle : " : "Produit stock actuel : "}
+        {/* Current state summary */}
+        {mode === "stock" && selectedStockProducts.length > 0 && (
+          <div className="bg-emerald-900/20 border border-emerald-500/30 rounded px-3 py-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-emerald-300 font-medium text-sm">
+                {selectedStockProducts.length} produit{selectedStockProducts.length > 1 ? "s" : ""} stock sélectionné{selectedStockProducts.length > 1 ? "s" : ""} :
               </span>
-              <span className="text-white font-semibold">{currentlyLinked.entity.name}</span>
-              {currentlyLinked.type === "stock" && (
-                <span className="text-slate-400 text-xs ml-2">
-                  ({currentlyLinked.entity.quantity} {currentlyLinked.entity.unit} en stock)
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 text-xs"
+                data-testid="unselect-all-btn"
+              >
+                <Link2Off className="w-3 h-3 mr-1" /> Tout retirer
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedStockProducts.map(sp => (
+                <span
+                  key={sp.id}
+                  className="inline-flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs rounded-full pl-2 pr-1 py-0.5"
+                >
+                  {sp.name}
+                  <button
+                    type="button"
+                    onClick={() => toggleStock(sp.id)}
+                    className="ml-0.5 hover:bg-red-500/30 rounded-full p-0.5"
+                    title="Retirer ce lien"
+                    data-testid={`remove-chip-${sp.id}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </span>
-              )}
-              {currentlyLinked.type === "recipe" && (
-                <span className="text-slate-400 text-xs ml-2">
-                  ({(currentlyLinked.entity.ingredients || []).length} ingrédient(s))
-                </span>
-              )}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {mode === "recipe" && currentRecipe && (
+          <div className="bg-amber-900/20 border border-amber-500/30 rounded px-3 py-2 flex items-center justify-between">
+            <div className="text-sm">
+              <span className="text-amber-300 font-medium">Recette actuelle : </span>
+              <span className="text-white font-semibold">{currentRecipe.name}</span>
+              <span className="text-slate-400 text-xs ml-2">({(currentRecipe.ingredients || []).length} ingrédient(s))</span>
             </div>
             <Button
               size="sm"
               variant="ghost"
               onClick={unlinkAll}
               className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 text-xs"
-              data-testid="unlink-btn"
+              data-testid="unlink-recipe-btn"
             >
               <Link2Off className="w-3 h-3 mr-1" /> Délier
             </Button>
@@ -173,7 +238,7 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
             }`}
             data-testid="mode-stock-btn"
           >
-            <Package className="w-4 h-4" /> Produit stock simple
+            <Package className="w-4 h-4" /> Multi-stock direct
           </button>
           <button
             type="button"
@@ -192,46 +257,47 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={mode === "stock" ? "Rechercher un produit stock..." : "Rechercher une recette composée..."}
+            placeholder={mode === "stock" ? "Rechercher des produits stock à cocher..." : "Rechercher une recette composée..."}
             className="bg-slate-800 border-slate-700 text-white pl-9"
             autoFocus
             data-testid="link-stock-search"
           />
         </div>
 
-        <div className="max-h-[400px] overflow-y-auto space-y-1 pr-1">
+        <div className="max-h-[360px] overflow-y-auto space-y-1 pr-1">
           {loading && <p className="text-slate-500 text-sm text-center py-4">Chargement...</p>}
 
           {mode === "stock" && !loading && filteredStock.length === 0 && (
             <p className="text-slate-500 text-sm text-center py-4">Aucun produit stock ne correspond.</p>
           )}
           {mode === "stock" && filteredStock.map((sp) => {
-            const isThisLink = sp.id === caisseProduct.stock_product_id;
+            const checked = selectedIds.has(sp.id);
             return (
               <button
                 key={sp.id}
                 type="button"
-                onClick={() => linkToStock(sp.id)}
-                disabled={isThisLink}
-                className={`w-full text-left bg-slate-800/50 border rounded px-3 py-2 flex items-center justify-between transition-colors ${
-                  isThisLink
-                    ? "border-emerald-500/40 opacity-60 cursor-default"
+                onClick={() => toggleStock(sp.id)}
+                className={`w-full text-left bg-slate-800/50 border rounded px-3 py-2 flex items-center gap-3 transition-colors ${
+                  checked
+                    ? "border-emerald-500/60 bg-emerald-500/10"
                     : "border-slate-700 hover:border-violet-500/60 hover:bg-violet-500/10"
                 }`}
                 data-testid={`stock-choice-${sp.id}`}
               >
+                <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                  checked ? "bg-emerald-500 border-emerald-500" : "border-slate-500"
+                }`}>
+                  {checked && <Check className="w-3 h-3 text-white" />}
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm">{sp.name}</span>
+                    <span className="text-white font-medium text-sm truncate">{sp.name}</span>
                     <span className="font-mono text-xs text-slate-500">{sp.code}</span>
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">
                     Stock : <span className={sp.quantity <= 0 ? "text-red-400" : "text-emerald-400"}>{sp.quantity} {sp.unit}</span>
                   </div>
                 </div>
-                {isThisLink && (
-                  <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs">Déjà lié</Badge>
-                )}
               </button>
             );
           })}
@@ -282,10 +348,27 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
           })}
         </div>
 
-        <div className="flex justify-end">
-          <Button variant="ghost" onClick={onClose} className="text-slate-400">
-            <X className="w-4 h-4 mr-1" /> Fermer
-          </Button>
+        <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+          <span className="text-slate-500 text-xs">
+            {mode === "stock" && selectedIds.size > 0 && (
+              <>{selectedIds.size} cible{selectedIds.size > 1 ? "s" : ""} → déstockage <span className="text-emerald-400">×{selectedIds.size}</span> à chaque vente</>
+            )}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose} className="text-slate-400">
+              <X className="w-4 h-4 mr-1" /> Fermer
+            </Button>
+            {mode === "stock" && (
+              <Button
+                onClick={saveStockLinks}
+                disabled={saving || !hasChanges}
+                className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50"
+                data-testid="save-stock-links-btn"
+              >
+                <Save className="w-4 h-4 mr-1" /> {saving ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

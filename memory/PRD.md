@@ -4,6 +4,46 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 28/04/2026 — Stock : Liaison multi-cible Caisse↔Stock (bidirectionnel) (DONE)
+
+**Demande utilisateur** : « dans stock permettre de lier un produit caisse a plusieurs produits stock cible et vice versa ».
+
+**UX retenue (1b + 2c + 3b + 4a)** : 1 produit Caisse peut être lié à **N produits Stock** sans passer par une recette ; chaque cible est décrémentée d'1 × qté vendue à chaque vente. UI éditable des **deux côtés** (Caisse et Stock). Le multi-stock + recette remplacent l'ancien `stock_product_id` (legacy lu de manière transparente). Vue inversée disponible côté Stock (Stock → Caisse).
+
+**Backend** :
+- `server.py` `CaisseProduct[Create]` : nouveau champ `stock_links: List[str]` (tableau d'IDs stock). Le legacy `stock_product_id` est conservé pour rétrocompatibilité (lu et migré à la volée).
+- `PUT /api/caisse/products/{id}` : exclusion mutuelle stricte entre `stock_links` (multi), `stock_recipe_id` (recette) et legacy `stock_product_id`. Si legacy reçu, migré automatiquement vers `stock_links: [id]`.
+- `auto-link-to-stock` & `smart-link-to-stock` (server.py) : écrivent désormais dans `stock_links: [matched_id]` au lieu de `stock_product_id`. La détection `already_linked` couvre tous les types (`stock_links`, `stock_product_id`, `stock_recipe_id`).
+- `routers/invoices.py` (déstockage automatique sur validation) : la logique `linked_stock_product` (singulier) est devenue `linked_stock_products` (liste). Boucle sur chaque cible : 1 mouvement `sortie` par stock + update `quantity/valeur_stock/statut`. Fallback legacy `stock_product_id` conservé pour les vieux docs non migrés. Le `reason` du mouvement est suffixé `(multi-lien)` quand la liste contient ≥ 2 cibles, pour audit clair.
+- `routers/stock.py` :
+  - `GET /api/stock/destock-live` : `linked` détecté désormais sur `stock_links OR stock_product_id OR stock_recipe_id`. Réponse enrichie avec `stock_links`/`stock_recipe_id` par produit.
+  - **Nouveau endpoint** `GET /api/stock/links-overview` : vue bidirectionnelle complète. Retourne :
+    - `caisse_to_stock` : chaque produit Caisse + ses cibles stock résolues (nom, qty, unit, code).
+    - `stock_to_caisse` : chaque produit Stock + ses consommateurs Caisse (calculé par traversée inverse).
+    - `recipes` : produits Caisse liés via recette (séparés).
+    - `summary` : KPIs (total Caisse, liés, multi-cibles, via recette, stocks consommés).
+
+**Frontend** :
+- **Côté Caisse** (`LinkStockModal.jsx` réécrit) : passage du single-click au **multi-select** (cases à cocher). Liste des stocks sélectionnés affichée en chips (avec X pour retirer un lien). Bouton "Enregistrer" actif uniquement si changement détecté. Le legacy `stock_product_id` est seedé automatiquement comme cible unique. Mode "Recette composée" préservé en exclusion mutuelle.
+- **Côté Stock** : nouveau composant `pages/stock/components/CaisseStockLinksOverview.jsx` + nouvel onglet **"Liaisons Caisse↔Stock"** dans `StockPage.jsx`. 2 vues commutables :
+  - "Caisse → Stock" : liste des produits Caisse avec leurs cibles (chips vertes) + badge `N cibles` pour multi-link.
+  - "Stock → Caisse" : liste des produits Stock avec leurs consommateurs Caisse (chips cyan) + badge `N consommateurs`.
+  - Recherche transverse (filtre sur les noms et les chips).
+  - Bouton "Modifier" sur chaque ligne ouvre un modal d'édition multi-select unifié (côté Caisse → coche les stocks ; côté Stock → coche les produits Caisse, et le backend met à jour leurs `stock_links` respectifs).
+  - 5 KPI cards : Produits Caisse, Caisse liés, Multi-cibles, Via Recette, Stocks consommés.
+
+**Test end-to-end** :
+- Backend curl :
+  - `PUT /caisse/products/{id}` avec `stock_links: [SP1, SP2]` → vérifié, persiste correctement, vide `stock_product_id`.
+  - `GET /stock/links-overview` → 39 caisse liés / 1 multi-cibles / 18 stocks consommés / 6 consommateurs sur "Poulet entier".
+  - **Test déstockage multi-cible** : facture `EM-20260428-0001` validée avec 1× "Test Produit Manager" (lié à Abats de boeuf + Ail) → Abats de boeuf 2→1 ✅, Ail 6→5 ✅, 2 mouvements `sortie` créés avec reason `(multi-lien)` ✅.
+- Frontend Playwright :
+  - Onglet "Liaisons Caisse↔Stock" dans Stock affiche les bons KPIs et les chips.
+  - Vue inverse "Stock → Caisse" : Poulet entier → 6 consommateurs visibles, etc.
+  - Modal d'édition s'ouvre avec les coches pré-cochées sur les liens existants.
+
+
+
 ## 28/04/2026 — Proforma : Statut "Fourni" / "Non fourni" sur les presets équipements/services (DONE)
 
 **Demande utilisateur** : « pour les équipements et autres services proposer des boutons Fourni et Non Fourni ».

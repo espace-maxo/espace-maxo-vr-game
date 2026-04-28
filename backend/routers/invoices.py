@@ -257,58 +257,64 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                     item_qty = item.get("quantity", 1)
                     item_price = item.get("price", 0)
 
-                    # 1) EXPLICIT LINK: if the caisse product is linked to a stock product, use that directly.
-                    linked_stock_product = None
+                    # 1) EXPLICIT LINK: if the caisse product is linked to one or more stock products, deduct each.
+                    linked_stock_products = []
                     linked_recipe = None
                     caisse_product_id = item.get("product_id") or item.get("id")
                     if caisse_product_id:
                         caisse_prod = await db.caisse_products.find_one({"id": caisse_product_id})
                         if caisse_prod:
-                            if caisse_prod.get("stock_product_id"):
-                                linked_stock_product = await db.stock_products.find_one({
-                                    "id": caisse_prod["stock_product_id"], "is_active": True
-                                })
-                            # Explicit link to a recipe (composed product)
+                            # Resolve stock_links (multi). Backwards-compat: fallback to legacy single stock_product_id.
+                            link_ids = caisse_prod.get("stock_links") or []
+                            if not link_ids and caisse_prod.get("stock_product_id"):
+                                link_ids = [caisse_prod["stock_product_id"]]
+                            if link_ids:
+                                async for sp in db.stock_products.find({
+                                    "id": {"$in": link_ids}, "is_active": True
+                                }, {"_id": 0}):
+                                    linked_stock_products.append(sp)
+                            # Explicit link to a recipe (composed product) — only if no direct links.
                             elif caisse_prod.get("stock_recipe_id"):
                                 linked_recipe = await db.stock_recipes.find_one({
                                     "id": caisse_prod["stock_recipe_id"]
                                 })
 
-                    if linked_stock_product:
-                        sp = linked_stock_product
-                        old_qty = sp.get("quantity", 0)
-                        new_qty = max(0, old_qty - item_qty)
-                        new_valeur = new_qty * sp.get("purchase_price", 0)
-                        smin = sp.get("stock_min", 5)
-                        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-                        await db.stock_movements.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "product_id": sp["id"],
-                            "product_name": sp["name"],
-                            "product_code": sp.get("code", ""),
-                            "movement_type": "sortie",
-                            "quantity": item_qty,
-                            "previous_quantity": old_qty,
-                            "new_quantity": new_qty,
-                            "unit": sp.get("unit", ""),
-                            "unit_price": sp.get("purchase_price", 0),
-                            "total_value": item_qty * sp.get("purchase_price", 0),
-                            "reason": f"Vente (lien direct) - Facture {invoice_number}",
-                            "user_name": current_invoice.get("created_by", "Caisse"),
-                            "invoice_id": invoice_id,
-                            "caisse_product_id": caisse_product_id,
-                            "created_at": now_iso,
-                        })
-                        await db.stock_products.update_one(
-                            {"id": sp["id"]},
-                            {"$set": {
-                                "quantity": new_qty,
-                                "valeur_stock": new_valeur,
-                                "statut": new_statut,
-                                "updated_at": now_iso,
-                            }}
-                        )
-                        logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+                    if linked_stock_products:
+                        for sp in linked_stock_products:
+                            old_qty = sp.get("quantity", 0)
+                            new_qty = max(0, old_qty - item_qty)
+                            new_valeur = new_qty * sp.get("purchase_price", 0)
+                            smin = sp.get("stock_min", 5)
+                            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                            multi_suffix = " (multi-lien)" if len(linked_stock_products) > 1 else ""
+                            await db.stock_movements.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "product_id": sp["id"],
+                                "product_name": sp["name"],
+                                "product_code": sp.get("code", ""),
+                                "movement_type": "sortie",
+                                "quantity": item_qty,
+                                "previous_quantity": old_qty,
+                                "new_quantity": new_qty,
+                                "unit": sp.get("unit", ""),
+                                "unit_price": sp.get("purchase_price", 0),
+                                "total_value": item_qty * sp.get("purchase_price", 0),
+                                "reason": f"Vente (lien direct{multi_suffix}) - Facture {invoice_number}",
+                                "user_name": current_invoice.get("created_by", "Caisse"),
+                                "invoice_id": invoice_id,
+                                "caisse_product_id": caisse_product_id,
+                                "created_at": now_iso,
+                            })
+                            await db.stock_products.update_one(
+                                {"id": sp["id"]},
+                                {"$set": {
+                                    "quantity": new_qty,
+                                    "valeur_stock": new_valeur,
+                                    "statut": new_statut,
+                                    "updated_at": now_iso,
+                                }}
+                            )
+                            logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
                         continue  # skip fallback logic
 
                     # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.

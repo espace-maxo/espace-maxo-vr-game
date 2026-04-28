@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import CaisseStockLinksOverview from "./stock/components/CaisseStockLinksOverview";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
@@ -79,6 +80,7 @@ const MOVEMENT_TYPES = [
 const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
   { id: "destock_live", label: "Déstockage live", icon: Activity },
+  { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
   { id: "products", label: "Produits", icon: Package },
   { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
@@ -1226,6 +1228,13 @@ export default function StockPage() {
             )}
           </div>
         )}
+
+
+        {/* LIAISONS CAISSE↔STOCK (bidirectionnel) */}
+        {activeSection === "caisse_links" && (
+          <CaisseStockLinksOverview />
+        )}
+
 
         {/* DÉSTOCKAGE LIVE */}
         {activeSection === "destock_live" && (
