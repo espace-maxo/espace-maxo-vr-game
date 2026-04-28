@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   FileText, Plus, Trash2, Edit2, Eye, Send, CheckCircle, 
   RefreshCw, Search, Calendar, User, Phone, Mail, MapPin,
-  DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package
+  DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package, Save
 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGO_BASE64 } from "../constants_logo";
@@ -68,6 +68,34 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     quantity: 1,
     unit_price: 0
   });
+  // Inline edit of an existing item in the proforma items list
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [editingItemDraft, setEditingItemDraft] = useState(null);
+
+  const saveEditingItem = (index) => {
+    if (!editingItemDraft || !editingItemDraft.name?.trim()) {
+      toast.error("Désignation obligatoire");
+      return;
+    }
+    const price = parseFloat(editingItemDraft.unit_price) || 0;
+    const qty = parseFloat(editingItemDraft.quantity) || 0;
+    const isLabel = price <= 0;
+    const updated = {
+      ...formData.items[index],
+      name: editingItemDraft.name.trim(),
+      quantity: qty,
+      unit_price: price,
+      subtotal: isLabel ? 0 : qty * price,
+      is_label: isLabel,
+    };
+    const newItems = [...formData.items];
+    newItems[index] = updated;
+    const { subtotal, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
+    setEditingItemIndex(null);
+    setEditingItemDraft(null);
+    toast.success("Article modifié");
+  };
 
   useEffect(() => {
     fetchProformas();
@@ -1080,7 +1108,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                   {/* Right: Amount & Actions */}
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-amber-400 font-bold text-lg">{formatPrice(proforma.total)} F</p>
+                      <p className="text-blue-200 font-bold text-lg">{formatPrice(proforma.total)} F</p>
                       <p className="text-slate-500 text-xs">Total TTC</p>
                     </div>
                     <div className="flex gap-1">
@@ -1144,7 +1172,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                     <div>
                       <p className="font-medium text-white">{request.proforma_number}</p>
                       <p className="text-sm text-slate-400">{request.client_name}</p>
-                      <p className="text-sm text-amber-400">{formatPrice(request.total)} F CFA</p>
+                      <p className="text-sm text-blue-200">{formatPrice(request.total)} F CFA</p>
                     </div>
                     <Badge className="bg-yellow-500/20 text-yellow-400">En attente</Badge>
                   </div>
@@ -1333,6 +1361,48 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                     <Plus className="w-4 h-4 mr-2" />
                     Ajouter l'article
                   </Button>
+
+                  {/* Services prédéfinis cliquables */}
+                  <div className="border-t border-slate-700 pt-2 mt-1">
+                    <p className="text-slate-400 text-xs font-medium mb-1.5">📦 Équipements (1 clic = pré-remplit la désignation, à compléter avec qté/prix)</p>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        "Tables", "Chaises", "Tables et chaises",
+                        "Sonorisation", "Microphone", "Vidéo projecteur", "Écran",
+                        "Nappes", "Serviettes", "Vaisselle",
+                      ].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setManualProduct({ ...manualProduct, name: s })}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-emerald-600/30 hover:border-emerald-500 border border-slate-700 text-slate-300 text-xs transition-colors"
+                          data-testid={`preset-eq-${s.replace(/\s+/g, '-').toLowerCase()}`}
+                        >
+                          + {s}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-slate-400 text-xs font-medium mt-3 mb-1.5">🎯 Autres services / animations</p>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        "Serveurs", "Cuisinier", "DJ / Animation",
+                        "Décoration florale", "Photographe",
+                        "Table de billard", "Trampoline", "Château gonflable",
+                        "Animation enfants", "Sécurité",
+                      ].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setManualProduct({ ...manualProduct, name: s })}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-violet-600/30 hover:border-violet-500 border border-slate-700 text-slate-300 text-xs transition-colors"
+                          data-testid={`preset-svc-${s.replace(/\s+/g, '-').toLowerCase()}`}
+                        >
+                          + {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
               
@@ -1353,6 +1423,44 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                     </div>
                     {formData.items.map((item, index) => {
                       const isLabel = item.is_label || (!(item.unit_price > 0));
+                      const isEditing = editingItemIndex === index;
+                      if (isEditing) {
+                        return (
+                          <div key={index} className="bg-blue-900/30 border border-blue-500/50 rounded p-2 space-y-2" data-testid={`edit-item-${index}`}>
+                            <Input
+                              autoFocus
+                              value={editingItemDraft.name}
+                              onChange={(e) => setEditingItemDraft({ ...editingItemDraft, name: e.target.value })}
+                              placeholder="Désignation"
+                              className="bg-slate-800 border-slate-600 text-white text-sm h-8"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number" min="0"
+                                value={editingItemDraft.quantity}
+                                onChange={(e) => setEditingItemDraft({ ...editingItemDraft, quantity: parseFloat(e.target.value) || 0 })}
+                                placeholder="Qté"
+                                className="bg-slate-800 border-slate-600 text-white text-sm h-8"
+                              />
+                              <Input
+                                type="number" min="0"
+                                value={editingItemDraft.unit_price}
+                                onChange={(e) => setEditingItemDraft({ ...editingItemDraft, unit_price: parseFloat(e.target.value) || 0 })}
+                                placeholder="Prix unit. (0 = libellé)"
+                                className="bg-slate-800 border-slate-600 text-white text-sm h-8"
+                              />
+                            </div>
+                            <div className="flex gap-1 justify-end">
+                              <Button size="sm" onClick={() => { setEditingItemIndex(null); setEditingItemDraft(null); }} variant="ghost" className="h-7 text-xs text-slate-400">
+                                Annuler
+                              </Button>
+                              <Button size="sm" onClick={() => saveEditingItem(index)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700" data-testid={`save-edit-${index}`}>
+                                <Save className="w-3 h-3 mr-1" /> Enregistrer
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={index} className={`flex items-center justify-between rounded p-2 ${isLabel ? 'bg-amber-900/20 border border-amber-500/30' : 'bg-slate-800/50'}`}>
                           <div className="flex-1 min-w-0">
@@ -1371,9 +1479,18 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                                 <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">+</Button>
                               </div>
                               <span className="text-slate-400 text-xs w-20 text-right">{formatPrice(item.unit_price)} F</span>
-                              <span className="text-amber-400 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
+                              <span className="text-blue-300 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
                             </>
                           )}
+                          <Button
+                            size="icon" variant="ghost"
+                            onClick={() => { setEditingItemIndex(index); setEditingItemDraft({ ...item }); }}
+                            className="w-6 h-6 text-blue-400 hover:text-blue-300 ml-1"
+                            title="Modifier"
+                            data-testid={`edit-item-btn-${index}`}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
                           <Button size="icon" variant="ghost" onClick={() => removeItemFromForm(index)} className="w-6 h-6 text-red-400 hover:text-red-300 ml-1">
                             <Trash2 className="w-3 h-3" />
                           </Button>
@@ -1446,7 +1563,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                 )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
                   <span className="text-white">MONTANT TTC:</span>
-                  <span className="text-blue-400">{formatPrice(formData.total)} F CFA</span>
+                  <span className="text-blue-200 bg-slate-900 px-3 py-1 rounded">{formatPrice(formData.total)} F CFA</span>
                 </div>
               </div>
             </div>
