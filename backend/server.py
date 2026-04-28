@@ -4618,6 +4618,8 @@ class ProformaInvoiceItem(BaseModel):
     subtotal: float = 0
     department: str = "autres"
     is_label: bool = False  # True for label-only lines (section/note without price)
+    preset_kind: Optional[str] = None  # 'equipment' | 'service' | None for preset items
+    provided_status: Optional[str] = None  # 'fourni' | 'non_fourni' | None (only for preset items)
 
 class ProformaInvoiceCreate(BaseModel):
     client_name: str

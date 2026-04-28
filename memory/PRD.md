@@ -3,6 +3,34 @@
 ## Problem Statement
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
+
+## 28/04/2026 — Proforma : Statut "Fourni" / "Non fourni" sur les presets équipements/services (DONE)
+
+**Demande utilisateur** : « pour les équipements et autres services proposer des boutons Fourni et Non Fourni ».
+
+**UX retenue (1c + 2c + 3c + 4b)** : clic sur un preset = ajout direct dans la liste avec statut **Fourni** par défaut ; toggle dans la ligne du tableau pour basculer Fourni ↔ Non fourni ; statut purement informatif (prix libre) ; appliqué uniquement aux 20 presets (pas aux articles manuels).
+
+**Backend** (`/app/backend/server.py`) :
+- `ProformaInvoiceItem` : 2 nouveaux champs optionnels `preset_kind: Optional[str]` (`'equipment'|'service'|None`) et `provided_status: Optional[str]` (`'fourni'|'non_fourni'|None`).
+
+**Frontend `ProformaTab.jsx`** :
+- Nouvelle fonction `addPresetItem(name, kind)` : ajoute la ligne avec `preset_kind` + `provided_status: 'fourni'` (default), `unit_price: 0`. Si même preset existe déjà, on incrémente la quantité.
+- Nouvelle fonction `togglePresetStatus(index)` : bascule `fourni` ↔ `non_fourni`.
+- Les 20 boutons presets (`preset-eq-*`, `preset-svc-*`) appellent maintenant `addPresetItem(...)` au lieu de pré-remplir le formulaire manuel.
+- Détection mise à jour : `isLabel = !isPreset && (item.is_label || price <= 0)` → un preset à 0 F n'est plus traité comme un libellé.
+- Rendu de chaque ligne preset : badge `✓ Fourni` (vert) ou `✗ Non fourni` (rouge), cliquable pour basculer (`data-testid=toggle-status-{index}`). Fond de ligne tinté en vert/rouge.
+- `saveEditingItem` préserve `preset_kind` / `provided_status` lors de l'édition inline.
+- PDF : badge inline "Fourni" / "Non fourni" (pastille colorée) accolé au nom de l'article dans la colonne Description. Si prix=0 → "—" pour P.U. et Montant.
+
+**Frontend `ProformaPublicView.jsx`** :
+- Affichage du badge Fourni/Non fourni en pastille colorée sur la vue publique partagée par QR Code.
+- Lignes preset à 0 F : "Quantité : N" en italique (au lieu d'un calcul de prix).
+
+**Test** :
+- Backend : `POST /api/proforma-invoices` avec items `preset_kind`/`provided_status` → persistés et restitués correctement par `GET /api/proforma-invoices/{id}` (proforma `PRO-20260428-0002`).
+- Frontend (screenshot Playwright) : modal "Nouvelle Proforma", 4 presets cliqués (2 équipements + 2 services), 2 toggles vers "Non fourni" → badges et fond de ligne corrects. Vue publique `/proforma/{id}` : badges visibles côté client.
+
+
 ---
 ## 25/04/2026 — Modifier conditions de remboursement + Marquer comme payé (DONE)
 

@@ -93,7 +93,8 @@ const ProformaPublicView = () => {
           <p className="text-slate-500 text-xs uppercase tracking-wider mb-3">Détails</p>
           <div className="space-y-2">
             {items.map((it, idx) => {
-              const isLabel = it.is_label || !(it.unit_price > 0);
+              const isPreset = !!it.preset_kind;
+              const isLabel = !isPreset && (it.is_label || !(it.unit_price > 0));
               if (isLabel) {
                 return (
                   <div key={idx} className="bg-blue-50 border-l-4 border-blue-700 p-2 text-sm">
@@ -102,13 +103,31 @@ const ProformaPublicView = () => {
                   </div>
                 );
               }
+              const isProvided = it.provided_status !== "non_fourni";
               return (
                 <div key={idx} className="flex justify-between items-start gap-2 text-sm">
                   <div className="flex-1">
-                    <p className="text-slate-800">{it.name}</p>
-                    <p className="text-slate-500 text-xs">{it.quantity} × {formatPrice(it.unit_price)} F</p>
+                    <p className="text-slate-800 flex items-center flex-wrap gap-2">
+                      <span>{it.name}</span>
+                      {isPreset && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                            isProvided
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                              : "bg-rose-100 text-rose-800 border border-rose-300"
+                          }`}
+                        >
+                          {isProvided ? "✓ Fourni" : "✗ Non fourni"}
+                        </span>
+                      )}
+                    </p>
+                    {it.unit_price > 0 ? (
+                      <p className="text-slate-500 text-xs">{it.quantity} × {formatPrice(it.unit_price)} F</p>
+                    ) : (
+                      <p className="text-slate-400 text-xs italic">Quantité : {it.quantity}</p>
+                    )}
                   </div>
-                  <span className="text-slate-900 font-semibold">{formatPrice(it.subtotal)} F</span>
+                  <span className="text-slate-900 font-semibold">{it.unit_price > 0 ? `${formatPrice(it.subtotal)} F` : "—"}</span>
                 </div>
               );
             })}

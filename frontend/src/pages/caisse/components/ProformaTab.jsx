@@ -79,7 +79,9 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     }
     const price = parseFloat(editingItemDraft.unit_price) || 0;
     const qty = parseFloat(editingItemDraft.quantity) || 0;
-    const isLabel = price <= 0;
+    const isPreset = !!formData.items[index]?.preset_kind;
+    // A preset item is never a label (it always carries a status), even if price=0
+    const isLabel = !isPreset && price <= 0;
     const updated = {
       ...formData.items[index],
       name: editingItemDraft.name.trim(),
@@ -95,6 +97,43 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     setEditingItemIndex(null);
     setEditingItemDraft(null);
     toast.success("Article modifié");
+  };
+
+  // Add a preset (equipment/service) directly to the items list with default "Fourni" status
+  const addPresetItem = (name, kind) => {
+    const existingIndex = formData.items.findIndex(i => i.name === name && i.preset_kind === kind);
+    let newItems;
+    if (existingIndex >= 0) {
+      newItems = [...formData.items];
+      newItems[existingIndex].quantity = (newItems[existingIndex].quantity || 1) + 1;
+      newItems[existingIndex].subtotal = newItems[existingIndex].quantity * (newItems[existingIndex].unit_price || 0);
+    } else {
+      newItems = [...formData.items, {
+        name,
+        quantity: 1,
+        unit_price: 0,
+        subtotal: 0,
+        department: "autres",
+        preset_kind: kind,         // 'equipment' | 'service'
+        provided_status: "fourni", // default: provided
+        is_label: false,           // preset items are real items with status, not labels
+      }];
+    }
+    const { subtotal, tvaAmount, total } = calculateTotals(newItems, formData.discount, formData.apply_tva);
+    setFormData({ ...formData, items: newItems, subtotal, tax: tvaAmount, total });
+    toast.success(`${name} ajouté (Fourni)`);
+  };
+
+  // Toggle Fourni / Non fourni for a preset item
+  const togglePresetStatus = (index) => {
+    const item = formData.items[index];
+    if (!item?.preset_kind) return;
+    const newItems = [...formData.items];
+    newItems[index] = {
+      ...item,
+      provided_status: item.provided_status === "fourni" ? "non_fourni" : "fourni",
+    };
+    setFormData({ ...formData, items: newItems });
   };
 
   useEffect(() => {
@@ -801,7 +840,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           </thead>
           <tbody>
             ${proforma.items.map(item => {
-              const isLabel = item.is_label || !(item.unit_price > 0);
+              const isPreset = !!item.preset_kind;
+              const isLabel = !isPreset && (item.is_label || !(item.unit_price > 0));
               if (isLabel) {
                 const qty = item.quantity && item.quantity > 0 ? item.quantity : '';
                 return `
@@ -815,12 +855,19 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                   </tr>
                 `;
               }
+              const statusBadge = isPreset ? (
+                item.provided_status === 'non_fourni'
+                  ? `<span style="display:inline-block; margin-left:6px; padding:1px 6px; border-radius:8px; background:#fee2e2; color:#991b1b; font-size:9px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; vertical-align:middle;">Non fourni</span>`
+                  : `<span style="display:inline-block; margin-left:6px; padding:1px 6px; border-radius:8px; background:#dcfce7; color:#166534; font-size:9px; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; vertical-align:middle;">Fourni</span>`
+              ) : '';
+              const priceCell = item.unit_price > 0 ? `${item.unit_price.toLocaleString('fr-FR')} F` : '—';
+              const subtotalCell = item.unit_price > 0 ? `${(item.subtotal || 0).toLocaleString('fr-FR')} F` : '—';
               return `
                 <tr>
-                  <td>${item.name}</td>
+                  <td>${item.name}${statusBadge}</td>
                   <td>${item.quantity}</td>
-                  <td>${item.unit_price?.toLocaleString('fr-FR')} F</td>
-                  <td>${item.subtotal?.toLocaleString('fr-FR')} F</td>
+                  <td>${priceCell}</td>
+                  <td>${subtotalCell}</td>
                 </tr>
               `;
             }).join('')}
@@ -1364,7 +1411,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
 
                   {/* Services prédéfinis cliquables */}
                   <div className="border-t border-slate-700 pt-2 mt-1">
-                    <p className="text-slate-400 text-xs font-medium mb-1.5">📦 Équipements (1 clic = pré-remplit la désignation, à compléter avec qté/prix)</p>
+                    <p className="text-slate-400 text-xs font-medium mb-1.5">📦 Équipements (1 clic = ajoute la ligne avec statut <span className="text-emerald-400 font-semibold">Fourni</span>, basculable dans le tableau)</p>
                     <div className="flex flex-wrap gap-1">
                       {[
                         "Tables", "Chaises", "Tables et chaises",
@@ -1374,7 +1421,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                         <button
                           key={s}
                           type="button"
-                          onClick={() => setManualProduct({ ...manualProduct, name: s })}
+                          onClick={() => addPresetItem(s, "equipment")}
                           className="px-2 py-1 rounded bg-slate-800 hover:bg-emerald-600/30 hover:border-emerald-500 border border-slate-700 text-slate-300 text-xs transition-colors"
                           data-testid={`preset-eq-${s.replace(/\s+/g, '-').toLowerCase()}`}
                         >
@@ -1383,7 +1430,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                       ))}
                     </div>
 
-                    <p className="text-slate-400 text-xs font-medium mt-3 mb-1.5">🎯 Autres services / animations</p>
+                    <p className="text-slate-400 text-xs font-medium mt-3 mb-1.5">🎯 Autres services / animations (statut <span className="text-emerald-400 font-semibold">Fourni</span> par défaut)</p>
                     <div className="flex flex-wrap gap-1">
                       {[
                         "Serveurs", "Cuisinier", "DJ / Animation",
@@ -1394,7 +1441,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                         <button
                           key={s}
                           type="button"
-                          onClick={() => setManualProduct({ ...manualProduct, name: s })}
+                          onClick={() => addPresetItem(s, "service")}
                           className="px-2 py-1 rounded bg-slate-800 hover:bg-violet-600/30 hover:border-violet-500 border border-slate-700 text-slate-300 text-xs transition-colors"
                           data-testid={`preset-svc-${s.replace(/\s+/g, '-').toLowerCase()}`}
                         >
@@ -1422,7 +1469,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                       <span className="w-8"></span>
                     </div>
                     {formData.items.map((item, index) => {
-                      const isLabel = item.is_label || (!(item.unit_price > 0));
+                      const isPreset = !!item.preset_kind;
+                      const isLabel = !isPreset && (item.is_label || (!(item.unit_price > 0)));
                       const isEditing = editingItemIndex === index;
                       if (isEditing) {
                         return (
@@ -1462,12 +1510,32 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                         );
                       }
                       return (
-                        <div key={index} className={`flex items-center justify-between rounded p-2 ${isLabel ? 'bg-amber-900/20 border border-amber-500/30' : 'bg-slate-800/50'}`}>
-                          <div className="flex-1 min-w-0">
+                        <div key={index} className={`flex items-center justify-between rounded p-2 ${isLabel ? 'bg-amber-900/20 border border-amber-500/30' : (isPreset ? (item.provided_status === 'non_fourni' ? 'bg-rose-900/20 border border-rose-500/30' : 'bg-emerald-900/20 border border-emerald-500/30') : 'bg-slate-800/50')}`}>
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
                             <span className={`text-sm truncate block ${isLabel ? 'text-amber-200 italic' : 'text-white'}`}>
                               {isLabel && <span className="text-amber-400 mr-1">📝</span>}
+                              {isPreset && (
+                                <span className="mr-1" title={item.preset_kind === 'equipment' ? 'Équipement' : 'Service'}>
+                                  {item.preset_kind === 'equipment' ? '📦' : '🎯'}
+                                </span>
+                              )}
                               {item.name}
                             </span>
+                            {isPreset && (
+                              <button
+                                type="button"
+                                onClick={() => togglePresetStatus(index)}
+                                title="Cliquer pour basculer"
+                                data-testid={`toggle-status-${index}`}
+                                className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                                  item.provided_status === 'non_fourni'
+                                    ? 'bg-rose-500/30 text-rose-300 hover:bg-rose-500/40 border border-rose-500/50'
+                                    : 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/40 border border-emerald-500/50'
+                                }`}
+                              >
+                                {item.provided_status === 'non_fourni' ? '✗ Non fourni' : '✓ Fourni'}
+                              </button>
+                            )}
                           </div>
                           {isLabel ? (
                             <span className="text-amber-300/70 text-[10px] italic w-44 text-center">— libellé sans prix —</span>
@@ -1478,8 +1546,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                                 <span className="text-white w-6 text-center text-sm">{item.quantity}</span>
                                 <Button size="icon" variant="ghost" onClick={() => updateItemQuantity(index, item.quantity + 1)} className="w-5 h-5 text-slate-400 hover:text-white p-0">+</Button>
                               </div>
-                              <span className="text-slate-400 text-xs w-20 text-right">{formatPrice(item.unit_price)} F</span>
-                              <span className="text-blue-300 text-sm w-24 text-right font-medium">{formatPrice(item.subtotal)} F</span>
+                              <span className="text-slate-400 text-xs w-20 text-right">{item.unit_price > 0 ? `${formatPrice(item.unit_price)} F` : '—'}</span>
+                              <span className="text-blue-300 text-sm w-24 text-right font-medium">{item.unit_price > 0 ? `${formatPrice(item.subtotal)} F` : '—'}</span>
                             </>
                           )}
                           <Button
