@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGO_BASE64 } from "../constants_logo";
+import QRCode from "qrcode";
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -420,7 +421,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     return words.trim().replace(/\s+/g, ' ');
   };
 
-  const printProforma = (proforma) => {
+  const printProforma = async (proforma) => {
     const applyTva = proforma.apply_tva !== false;
     const subtotalCalc = proforma.items?.reduce((sum, item) => sum + item.subtotal, 0) || 0;
     const montantHT = subtotalCalc - (proforma.discount || 0);
@@ -436,6 +437,19 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     const dateFormatted = `Cotonou, le ${dateCreation.getDate()} ${moisFr[dateCreation.getMonth()]} ${dateCreation.getFullYear()}`;
     
     const proformaNum = proforma.proforma_number || 'N/A';
+    
+    // Generate QR code data URL pointing to public view
+    const publicUrl = `${window.location.origin}/proforma/${proforma.id}`;
+    let qrDataUrl = "";
+    try {
+      qrDataUrl = await QRCode.toDataURL(publicUrl, {
+        margin: 1,
+        width: 160,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      });
+    } catch (_) {
+      qrDataUrl = "";
+    }
     
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     printWindow.document.write(`
@@ -844,9 +858,17 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         
         <div class="footer">
           <p class="thank-you">Nous vous remercions de votre confiance.</p>
-          <div class="signature-section">
-            <p class="signature-name">AHOUANDJINOU Mères</p>
-            <p class="signature-title">La Gérante</p>
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px;">
+            ${qrDataUrl ? `
+              <div style="text-align: center; font-size: 8pt; color:#475569;">
+                <img src="${qrDataUrl}" alt="QR" style="width: 90px; height: 90px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px; background: #fff;" />
+                <div style="margin-top: 4px; max-width: 110px;">Scannez pour consulter cette proforma</div>
+              </div>
+            ` : '<div></div>'}
+            <div class="signature-section">
+              <p class="signature-name">AHOUANDJINOU Mères</p>
+              <p class="signature-title">La Gérante</p>
+            </div>
           </div>
         </div>
       </body>

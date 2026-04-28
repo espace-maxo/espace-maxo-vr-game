@@ -20,6 +20,7 @@ import JoinUsPage from "@/pages/JoinUsPage";
 import TableReservationPage from "@/pages/TableReservationPage";
 import CaissePage from "@/pages/CaissePage";
 import StockPage from "@/pages/StockPage";
+import ProformaPublicView from "@/pages/ProformaPublicView";
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
           {/* Standalone Caisse - No navbar/footer */}
           <Route path="/caisse" element={<CaissePage />} />
           <Route path="/stock" element={<StockPage />} />
+          {/* Public proforma view (QR code target) — no navbar/footer */}
+          <Route path="/proforma/:id" element={<ProformaPublicView />} />
           
           {/* Main website with navbar/footer */}
           <Route path="/*" element={
