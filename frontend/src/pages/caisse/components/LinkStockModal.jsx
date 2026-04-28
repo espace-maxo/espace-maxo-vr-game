@@ -56,17 +56,26 @@ const LinkStockModal = ({ open, onClose, caisseProduct, onLinked }) => {
         : (caisseProduct?.stock_product_id ? [caisseProduct.stock_product_id] : []);
       setSelectedIds(new Set(current));
     }
-    setSearch(caisseProduct?.name?.split(" ").slice(0, 2).join(" ") || "");
+    // Don't pre-fill search — user may need to see/check unrelated stock products too.
+    setSearch("");
     return () => { cancelled = true; };
   }, [open, caisseProduct]);
 
   const filteredStock = useMemo(() => {
-    if (!search.trim()) return stockProducts.slice(0, 60);
+    // Always include selected products at the top so user can uncheck them.
+    const selected = stockProducts.filter(p => selectedIds.has(p.id));
+    const others = stockProducts.filter(p => !selectedIds.has(p.id));
+    if (!search.trim()) {
+      // No search: show selected first, then alphabetically (capped to keep UI responsive)
+      return [...selected, ...others.slice(0, 200)];
+    }
     const q = search.toLowerCase();
-    return stockProducts
+    const matches = others
       .filter(p => p.name.toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q))
-      .slice(0, 60);
-  }, [stockProducts, search]);
+      .slice(0, 200);
+    // When searching, still show selected (they may be filtered out otherwise)
+    return [...selected, ...matches];
+  }, [stockProducts, search, selectedIds]);
 
   const filteredRecipes = useMemo(() => {
     if (!search.trim()) return recipes.slice(0, 30);
