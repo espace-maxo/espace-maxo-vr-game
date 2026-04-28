@@ -54,6 +54,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     // Reservation payment conditions
     payment_mode: "total",  // 'total' = paiement intégral avant événement | 'percent' = acompte %
     payment_percentage: 50,  // used when payment_mode = 'percent' (acompte, solde dû avant l'événement)
+    // Modalités de paiement acceptées (multi-sélection)
+    payment_methods: ["especes", "virement", "mobile_money"],  // possibles: especes | cheque | virement | mobile_money
   });
   
   // Product selection
@@ -225,6 +227,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       tva_exempt_mention: "exonere",
       payment_mode: "total",
       payment_percentage: 50,
+      payment_methods: ["especes", "virement", "mobile_money"],
     });
     setEditingProforma(null);
   };
@@ -251,6 +254,9 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       tva_exempt_mention: proforma.tva_exempt_mention || "exonere",
       payment_mode: proforma.payment_mode || "total",
       payment_percentage: proforma.payment_percentage || 50,
+      payment_methods: proforma.payment_methods && proforma.payment_methods.length > 0
+        ? proforma.payment_methods
+        : ["especes", "virement", "mobile_money"],
     });
     setShowCreateModal(true);
   };
@@ -458,29 +464,29 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       <head>
         <title>Proforma ${proforma.proforma_number}</title>
         <style>
-          @page { margin: 10mm; size: A4; }
+          @page { margin: 8mm; size: A4; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { 
             font-family: Arial, Helvetica, sans-serif; 
-            padding: 15px 30px; 
+            padding: 6px 22px; 
             max-width: 800px; 
             margin: 0 auto;
             color: #333;
-            font-size: 10pt;
-            line-height: 1.4;
+            font-size: 9.5pt;
+            line-height: 1.3;
           }
           
           .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
             border-bottom: 3px solid #1e3a8a;
           }
           .logo-section {
-            width: 95px;
-            height: 95px;
+            width: 80px;
+            height: 80px;
             flex-shrink: 0;
           }
           .logo-section img {
@@ -517,18 +523,18 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           
           .doc-title-section {
             text-align: center;
-            margin: 18px 0 12px;
+            margin: 10px 0 8px;
           }
           .doc-title {
-            font-size: 17pt;
+            font-size: 15pt;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 3px;
             color: #1e3a8a;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
           }
           .doc-info-line {
-            font-size: 10pt;
+            font-size: 9.5pt;
             color: #475569;
           }
           .doc-number {
@@ -537,8 +543,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           
           .client-section {
-            margin: 15px 0;
-            padding: 14px 16px;
+            margin: 10px 0;
+            padding: 10px 14px;
             border: 1px solid #cbd5e1;
             border-left: 4px solid #1e3a8a;
             border-radius: 4px;
@@ -566,26 +572,26 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin: 15px 0;
-            font-size: 9.5pt;
+            margin: 10px 0;
+            font-size: 9pt;
           }
           thead tr {
             background: #0f172a;
             color: #fff;
           }
           th { 
-            padding: 11px 10px; 
+            padding: 8px 9px; 
             text-align: left;
             font-weight: 700;
             text-transform: uppercase;
-            font-size: 8.5pt;
-            letter-spacing: 0.5px;
+            font-size: 8pt;
+            letter-spacing: 0.4px;
           }
           th:nth-child(2), th:nth-child(3), th:nth-child(4) {
             text-align: right;
           }
           td { 
-            padding: 9px 10px; 
+            padding: 6px 9px; 
             border-bottom: 1px solid #e5e7eb;
             vertical-align: middle;
           }
@@ -595,13 +601,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           
           .totals-section {
-            margin-top: 18px;
+            margin-top: 10px;
             display: flex;
             justify-content: flex-end;
           }
           .totals-table {
-            width: 280px;
-            font-size: 9.5pt;
+            width: 260px;
+            font-size: 9pt;
             border: 1px solid #d1d5db;
             border-radius: 4px;
             overflow: hidden;
@@ -610,7 +616,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             border-bottom: 1px solid #e5e7eb;
           }
           .totals-table td {
-            padding: 8px 12px;
+            padding: 6px 10px;
           }
           .totals-table .label {
             text-align: left;
@@ -626,17 +632,17 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             border: none;
           }
           .totals-table .total-row td {
-            font-size: 11.5pt;
+            font-size: 11pt;
             font-weight: 700;
-            padding: 11px 12px;
+            padding: 8px 10px;
           }
           
           .amount-words {
-            margin-top: 16px;
-            padding: 10px 14px;
+            margin-top: 10px;
+            padding: 7px 12px;
             background: #eff6ff;
             border-left: 3px solid #1e3a8a;
-            font-size: 9.5pt;
+            font-size: 9pt;
             color: #1e293b;
           }
           .amount-words strong {
@@ -644,27 +650,28 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           
           .conditions-section {
-            margin-top: 16px;
-            padding: 12px 16px;
+            margin-top: 10px;
+            padding: 9px 14px;
             background: #f1f5f9;
             border: 1px solid #cbd5e1;
             border-radius: 4px;
+            page-break-inside: avoid;
           }
           .conditions-section .title {
-            font-size: 9.5pt;
+            font-size: 9pt;
             font-weight: 700;
             color: #1e293b;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             border-bottom: 1px solid #cbd5e1;
-            padding-bottom: 4px;
+            padding-bottom: 3px;
           }
           .conditions-section .item {
-            font-size: 9pt;
+            font-size: 8.5pt;
             color: #334155;
-            line-height: 1.5;
-            margin: 4px 0;
+            line-height: 1.45;
+            margin: 2px 0;
           }
           .conditions-section .highlight {
             font-weight: 700;
@@ -672,9 +679,9 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           
           .notes-section {
-            margin-top: 12px;
-            padding: 10px 14px;
-            font-size: 9pt;
+            margin-top: 8px;
+            padding: 7px 12px;
+            font-size: 8.5pt;
             font-style: italic;
             color: #4b5563;
             background: #f9fafb;
@@ -682,34 +689,35 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           }
           
           .footer {
-            margin-top: 30px;
-            padding-top: 18px;
+            margin-top: 14px;
+            padding-top: 10px;
             border-top: 1px solid #e5e7eb;
+            page-break-inside: avoid;
           }
           .thank-you {
             text-align: center;
-            font-size: 9.5pt;
+            font-size: 9pt;
             font-style: italic;
             color: #4b5563;
-            margin-bottom: 25px;
+            margin-bottom: 10px;
           }
           .signature-section {
             text-align: right;
-            padding-right: 40px;
+            padding-right: 30px;
           }
           .signature-name {
             font-weight: 700;
-            font-size: 10pt;
+            font-size: 9.5pt;
             color: #1f2937;
           }
           .signature-title {
-            font-size: 8.5pt;
+            font-size: 8pt;
             color: #6b7280;
             margin-top: 2px;
           }
           
           @media print { 
-            body { padding: 10px 20px; }
+            body { padding: 5px 18px; }
           }
         </style>
       </head>
@@ -828,6 +836,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           const acompte = Math.round(totalTTC * pct / 100);
           const solde = totalTTC - acompte;
           const validity = proforma.validity_days || 30;
+          const methods = proforma.payment_methods && proforma.payment_methods.length > 0
+            ? proforma.payment_methods
+            : ['especes', 'virement', 'mobile_money'];
+          const labels = { especes: 'espèces', cheque: 'chèque', virement: 'virement bancaire', mobile_money: 'Mobile Money' };
+          const methodsStr = methods.map(m => labels[m] || m).join(', ');
           let paymentLine = '';
           if (mode === 'percent') {
             paymentLine = `
@@ -843,9 +856,8 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             <div class="conditions-section">
               <div class="title">Conditions de réservation</div>
               ${paymentLine}
-              <div class="item">• Modes de paiement acceptés : espèces, virement bancaire, Mobile Money.</div>
-              <div class="item">• Cette proforma est valable <span class="highlight">${validity} jour(s)</span> à compter de son émission.</div>
-              <div class="item">• Toute annulation moins de 48h avant l'événement entraîne la retenue de l'acompte.</div>
+              <div class="item">• Modes de paiement acceptés : ${methodsStr}.</div>
+              <div class="item">• Proforma valable <span class="highlight">${validity} jour(s)</span> · Annulation &lt; 48h : retenue de l'acompte.</div>
             </div>
           `;
         })()}
@@ -858,11 +870,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         
         <div class="footer">
           <p class="thank-you">Nous vous remercions de votre confiance.</p>
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px;">
             ${qrDataUrl ? `
-              <div style="text-align: center; font-size: 8pt; color:#475569;">
-                <img src="${qrDataUrl}" alt="QR" style="width: 90px; height: 90px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px; background: #fff;" />
-                <div style="margin-top: 4px; max-width: 110px;">Scannez pour consulter cette proforma</div>
+              <div style="text-align: center; font-size: 7.5pt; color:#475569;">
+                <img src="${qrDataUrl}" alt="QR" style="width: 72px; height: 72px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 3px; background: #fff;" />
+                <div style="margin-top: 3px; max-width: 100px;">Scanner pour consulter</div>
               </div>
             ` : '<div></div>'}
             <div class="signature-section">
@@ -1483,6 +1495,43 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                 </span>
               </div>
             )}
+
+            {/* Modalités de paiement acceptées (multi-sélection) */}
+            <div className="mt-3">
+              <Label className="text-slate-400 text-xs">Modalités de paiement acceptées :</Label>
+              <div className="flex gap-2 flex-wrap mt-1">
+                {[
+                  { id: "especes", label: "Espèces" },
+                  { id: "cheque", label: "Chèque" },
+                  { id: "virement", label: "Virement bancaire" },
+                  { id: "mobile_money", label: "Mobile Money" },
+                ].map((m) => {
+                  const active = formData.payment_methods?.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        const current = formData.payment_methods || [];
+                        const next = active ? current.filter(x => x !== m.id) : [...current, m.id];
+                        setFormData({ ...formData, payment_methods: next });
+                      }}
+                      className={`px-3 py-1.5 rounded text-sm border transition-colors ${
+                        active
+                          ? "bg-emerald-600/30 text-emerald-200 border-emerald-500/60"
+                          : "bg-slate-800 text-slate-400 border-slate-700 hover:border-emerald-500/40"
+                      }`}
+                      data-testid={`payment-method-${m.id}`}
+                    >
+                      {active ? "✓ " : ""}{m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-slate-500 text-xs mt-1">
+                Cliquez pour activer / désactiver les modes acceptés. Ils apparaîtront dans les conditions du PDF.
+              </p>
+            </div>
           </div>
           
           {/* Actions */}

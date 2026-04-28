@@ -4638,6 +4638,7 @@ class ProformaInvoiceCreate(BaseModel):
     tva_exempt_mention: str = "exonere"  # 'exonere' | 'non_applicable' (shown when apply_tva=False)
     payment_mode: str = "total"  # 'total' = full payment | 'percent' = acompte
     payment_percentage: int = 50
+    payment_methods: List[str] = Field(default_factory=lambda: ["especes", "virement", "mobile_money"])  # subset of: especes, cheque, virement, mobile_money
 
 class ProformaInvoiceUpdate(BaseModel):
     client_name: Optional[str] = None
@@ -4658,6 +4659,7 @@ class ProformaInvoiceUpdate(BaseModel):
     tva_exempt_mention: Optional[str] = None
     payment_mode: Optional[str] = None
     payment_percentage: Optional[int] = None
+    payment_methods: Optional[List[str]] = None
 
 # ============== INSTRUCTIONS & NOTES MODELS ==============
 
@@ -5753,6 +5755,7 @@ async def create_proforma_invoice(proforma_data: ProformaInvoiceCreate):
             "tva_exempt_mention": proforma_data.tva_exempt_mention,
             "payment_mode": proforma_data.payment_mode,
             "payment_percentage": proforma_data.payment_percentage,
+            "payment_methods": proforma_data.payment_methods,
         }
         
         await db.proforma_invoices.insert_one(proforma)

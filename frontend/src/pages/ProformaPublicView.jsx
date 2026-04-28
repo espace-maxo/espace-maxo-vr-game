@@ -150,7 +150,13 @@ const ProformaPublicView = () => {
             ) : (
               <li>• <strong>Paiement intégral de {formatPrice(proforma.total)} F CFA</strong> à la confirmation, avant la tenue de l'événement.</li>
             )}
-            <li>• Modes acceptés : espèces, virement bancaire, Mobile Money.</li>
+            {(() => {
+              const methods = (proforma.payment_methods && proforma.payment_methods.length > 0)
+                ? proforma.payment_methods
+                : ["especes", "virement", "mobile_money"];
+              const labels = { especes: "espèces", cheque: "chèque", virement: "virement bancaire", mobile_money: "Mobile Money" };
+              return <li>• Modes acceptés : {methods.map(m => labels[m] || m).join(", ")}.</li>;
+            })()}
             <li>• Proforma valable <strong>{proforma.validity_days || 30} jour(s)</strong>.</li>
             <li>• Annulation &lt; 48h avant l'événement : retenue de l'acompte.</li>
           </ul>
