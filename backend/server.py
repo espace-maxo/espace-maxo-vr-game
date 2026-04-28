@@ -4635,6 +4635,9 @@ class ProformaInvoiceCreate(BaseModel):
     validity_days: int = 30  # Validity period in days
     created_by: str = ""
     apply_tva: bool = True  # Option to apply/not apply TVA
+    tva_exempt_mention: str = "exonere"  # 'exonere' | 'non_applicable' (shown when apply_tva=False)
+    payment_mode: str = "total"  # 'total' = full payment | 'percent' = acompte
+    payment_percentage: int = 50
 
 class ProformaInvoiceUpdate(BaseModel):
     client_name: Optional[str] = None
@@ -4652,6 +4655,9 @@ class ProformaInvoiceUpdate(BaseModel):
     validity_days: Optional[int] = None
     status: Optional[str] = None  # draft, sent, accepted, rejected, converted
     apply_tva: Optional[bool] = None  # Option to apply/not apply TVA
+    tva_exempt_mention: Optional[str] = None
+    payment_mode: Optional[str] = None
+    payment_percentage: Optional[int] = None
 
 # ============== INSTRUCTIONS & NOTES MODELS ==============
 
@@ -5729,6 +5735,8 @@ async def create_proforma_invoice(proforma_data: ProformaInvoiceCreate):
             "client_phone": proforma_data.client_phone,
             "client_email": proforma_data.client_email,
             "client_address": proforma_data.client_address,
+            "client_ifu": proforma_data.client_ifu,
+            "proforma_title": proforma_data.proforma_title,
             "items": [item.model_dump() for item in proforma_data.items],
             "subtotal": proforma_data.subtotal,
             "discount": proforma_data.discount,
@@ -5741,7 +5749,10 @@ async def create_proforma_invoice(proforma_data: ProformaInvoiceCreate):
             "created_by": proforma_data.created_by,
             "created_at": today.isoformat(),
             "updated_at": today.isoformat(),
-            "apply_tva": proforma_data.apply_tva
+            "apply_tva": proforma_data.apply_tva,
+            "tva_exempt_mention": proforma_data.tva_exempt_mention,
+            "payment_mode": proforma_data.payment_mode,
+            "payment_percentage": proforma_data.payment_percentage,
         }
         
         await db.proforma_invoices.insert_one(proforma)

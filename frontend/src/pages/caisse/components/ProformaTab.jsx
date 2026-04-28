@@ -35,12 +35,12 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
   
   // Form state
   const [formData, setFormData] = useState({
-    proforma_title: "",  // Titre général (optionnel) — ex: "Réservation anniversaire 12 ans"
+    proforma_title: "",
     client_name: "",
     client_phone: "",
     client_email: "",
     client_address: "",
-    client_ifu: "",  // Numéro IFU du client
+    client_ifu: "",
     items: [],
     subtotal: 0,
     discount: 0,
@@ -48,7 +48,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     total: 0,
     notes: "",
     validity_days: 30,
-    apply_tva: true  // Option pour activer/désactiver la TVA
+    apply_tva: true,
+    tva_exempt_mention: "exonere",  // 'exonere' | 'non_applicable' — used when apply_tva=false
+    // Reservation payment conditions
+    payment_mode: "total",  // 'total' = paiement intégral avant événement | 'percent' = acompte %
+    payment_percentage: 50,  // used when payment_mode = 'percent' (acompte, solde dû avant l'événement)
   });
   
   // Product selection
@@ -216,7 +220,10 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       total: 0,
       notes: "",
       validity_days: 30,
-      apply_tva: true
+      apply_tva: true,
+      tva_exempt_mention: "exonere",
+      payment_mode: "total",
+      payment_percentage: 50,
     });
     setEditingProforma(null);
   };
@@ -239,7 +246,10 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       total: total,
       notes: proforma.notes || "",
       validity_days: proforma.validity_days || 30,
-      apply_tva: applyTva
+      apply_tva: applyTva,
+      tva_exempt_mention: proforma.tva_exempt_mention || "exonere",
+      payment_mode: proforma.payment_mode || "total",
+      payment_percentage: proforma.payment_percentage || 50,
     });
     setShowCreateModal(true);
   };
@@ -452,7 +462,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             justify-content: space-between;
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 3px solid #f59e0b;
+            border-bottom: 3px solid #1e3a8a;
           }
           .logo-section {
             width: 95px;
@@ -473,11 +483,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-size: 17pt;
             font-weight: 700;
             letter-spacing: 1px;
-            color: #1f2937;
+            color: #0f172a;
           }
           .header-center .brand-sub {
             font-size: 8.5pt;
-            color: #6b7280;
+            color: #475569;
             margin-top: 3px;
             letter-spacing: 2px;
             text-transform: uppercase;
@@ -485,11 +495,11 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .header-right {
             text-align: right;
             font-size: 8.5pt;
-            color: #4b5563;
+            color: #334155;
             line-height: 1.6;
             white-space: nowrap;
           }
-          .header-right strong { color: #1f2937; }
+          .header-right strong { color: #0f172a; }
           
           .doc-title-section {
             text-align: center;
@@ -500,25 +510,25 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 3px;
-            color: #f59e0b;
+            color: #1e3a8a;
             margin-bottom: 6px;
           }
           .doc-info-line {
             font-size: 10pt;
-            color: #4b5563;
+            color: #475569;
           }
           .doc-number {
             font-weight: 700;
-            color: #1f2937;
+            color: #0f172a;
           }
           
           .client-section {
             margin: 15px 0;
             padding: 14px 16px;
-            border: 1px solid #d1d5db;
-            border-left: 4px solid #f59e0b;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #1e3a8a;
             border-radius: 4px;
-            background: #fafafa;
+            background: #f8fafc;
           }
           .client-label {
             font-weight: bold;
@@ -546,7 +556,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-size: 9.5pt;
           }
           thead tr {
-            background: #1f2937;
+            background: #0f172a;
             color: #fff;
           }
           th { 
@@ -597,7 +607,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             font-weight: 600;
           }
           .totals-table .total-row {
-            background: #1f2937;
+            background: #1e3a8a;
             color: #fff;
             border: none;
           }
@@ -610,13 +620,41 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           .amount-words {
             margin-top: 16px;
             padding: 10px 14px;
-            background: #fffbeb;
-            border-left: 3px solid #f59e0b;
+            background: #eff6ff;
+            border-left: 3px solid #1e3a8a;
             font-size: 9.5pt;
-            color: #451a03;
+            color: #1e293b;
           }
           .amount-words strong {
             font-weight: 700;
+          }
+          
+          .conditions-section {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+          }
+          .conditions-section .title {
+            font-size: 9.5pt;
+            font-weight: 700;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 4px;
+          }
+          .conditions-section .item {
+            font-size: 9pt;
+            color: #334155;
+            line-height: 1.5;
+            margin: 4px 0;
+          }
+          .conditions-section .highlight {
+            font-weight: 700;
+            color: #1e3a8a;
           }
           
           .notes-section {
@@ -696,9 +734,9 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         </div>
         
         ${proforma.proforma_title ? `
-          <div style="margin: 20px 0 10px; padding: 10px 14px; background:#fff8e6; border-left: 4px solid #f59e0b; border-radius: 4px;">
-            <div style="font-size: 11px; color:#92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Objet de la réservation</div>
-            <div style="font-size: 15px; font-weight: 700; color:#1f2937;">${proforma.proforma_title}</div>
+          <div style="margin: 20px 0 10px; padding: 10px 14px; background:#eff6ff; border-left: 4px solid #1e3a8a; border-radius: 4px;">
+            <div style="font-size: 11px; color:#1e3a8a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Objet de la réservation</div>
+            <div style="font-size: 15px; font-weight: 700; color:#0f172a;">${proforma.proforma_title}</div>
           </div>
         ` : ''}
         
@@ -717,13 +755,13 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
               if (isLabel) {
                 const qty = item.quantity && item.quantity > 0 ? item.quantity : '';
                 return `
-                  <tr style="background: #fef7e0;">
-                    <td style="font-weight: 700; color:#78350f; padding: 8px 10px;">
+                  <tr style="background: #eff6ff;">
+                    <td style="font-weight: 700; color:#1e3a8a; padding: 8px 10px;">
                       ${item.name}
                     </td>
-                    <td style="text-align: right; font-weight: 700; color:#78350f;">${qty}</td>
-                    <td style="color:#b45309;">—</td>
-                    <td style="color:#b45309;">—</td>
+                    <td style="text-align: right; font-weight: 700; color:#1e3a8a;">${qty}</td>
+                    <td style="color:#475569;">—</td>
+                    <td style="color:#475569;">—</td>
                   </tr>
                 `;
               }
@@ -757,7 +795,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             </tr>
             <tr>
               <td class="label">TVA (18%)</td>
-              <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F' : 'Exonéré'}</td>
+              <td class="value">${applyTva ? tvaAmount.toLocaleString('fr-FR') + ' F' : (proforma.tva_exempt_mention === 'non_applicable' ? 'Non applicable' : 'Exonéré')}</td>
             </tr>
             <tr class="total-row">
               <td class="label">Total TTC</td>
@@ -769,6 +807,34 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         <div class="amount-words">
           Arrêtée la présente facture proforma à la somme de : <strong>${totalInWords}</strong>
         </div>
+
+        ${(() => {
+          const mode = proforma.payment_mode || 'total';
+          const pct = proforma.payment_percentage || 50;
+          const acompte = Math.round(totalTTC * pct / 100);
+          const solde = totalTTC - acompte;
+          const validity = proforma.validity_days || 30;
+          let paymentLine = '';
+          if (mode === 'percent') {
+            paymentLine = `
+              <div class="item">• <span class="highlight">Acompte de ${pct}% (${acompte.toLocaleString('fr-FR')} F CFA)</span> à verser à la confirmation de la réservation.</div>
+              <div class="item">• <span class="highlight">Solde de ${solde.toLocaleString('fr-FR')} F CFA</span> à régler au plus tard le jour de l'événement, avant le début des prestations.</div>
+            `;
+          } else {
+            paymentLine = `
+              <div class="item">• <span class="highlight">Paiement intégral de ${totalTTC.toLocaleString('fr-FR')} F CFA</span> exigé à la confirmation de la réservation, avant la tenue de l'événement.</div>
+            `;
+          }
+          return `
+            <div class="conditions-section">
+              <div class="title">Conditions de réservation</div>
+              ${paymentLine}
+              <div class="item">• Modes de paiement acceptés : espèces, virement bancaire, Mobile Money.</div>
+              <div class="item">• Cette proforma est valable <span class="highlight">${validity} jour(s)</span> à compter de son émission.</div>
+              <div class="item">• Toute annulation moins de 48h avant l'événement entraîne la retenue de l'acompte.</div>
+            </div>
+          `;
+        })()}
         
         ${proforma.notes ? `
           <div class="notes-section">
@@ -1320,12 +1386,81 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                   </div>
                   <span className="text-white">{formData.apply_tva ? `${formatPrice(formData.tax)} F` : '—'}</span>
                 </div>
+                {/* TVA exempt mention: exonéré vs non applicable */}
+                {!formData.apply_tva && (
+                  <div className="flex items-center justify-between text-xs bg-slate-900/40 rounded px-2 py-1.5">
+                    <span className="text-slate-500">Mention TVA :</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tva_exempt_mention: "exonere" })}
+                        className={`px-2 py-1 rounded text-xs ${formData.tva_exempt_mention === "exonere" ? "bg-blue-600/30 text-blue-300" : "text-slate-400 hover:bg-slate-700"}`}
+                        data-testid="tva-mention-exonere"
+                      >
+                        Exonéré
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tva_exempt_mention: "non_applicable" })}
+                        className={`px-2 py-1 rounded text-xs ${formData.tva_exempt_mention === "non_applicable" ? "bg-blue-600/30 text-blue-300" : "text-slate-400 hover:bg-slate-700"}`}
+                        data-testid="tva-mention-non-applicable"
+                      >
+                        Non applicable
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-700">
                   <span className="text-white">MONTANT TTC:</span>
-                  <span className="text-amber-400">{formatPrice(formData.total)} F CFA</span>
+                  <span className="text-blue-400">{formatPrice(formData.total)} F CFA</span>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Conditions de réservation */}
+          <div className="border-t border-slate-700 pt-4">
+            <Label className="text-slate-300 text-sm font-medium flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-blue-400" />
+              Conditions de réservation
+            </Label>
+            <p className="text-slate-500 text-xs mb-2">À respecter par le client avant la tenue de l'événement.</p>
+            <div className="flex gap-2 flex-wrap mb-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, payment_mode: "total" })}
+                className={`px-3 py-1.5 rounded text-sm ${formData.payment_mode === "total" ? "bg-blue-600/30 text-blue-300 border border-blue-500/40" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
+                data-testid="payment-mode-total"
+              >
+                Paiement intégral
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, payment_mode: "percent" })}
+                className={`px-3 py-1.5 rounded text-sm ${formData.payment_mode === "percent" ? "bg-blue-600/30 text-blue-300 border border-blue-500/40" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
+                data-testid="payment-mode-percent"
+              >
+                Acompte en %
+              </button>
+            </div>
+            {formData.payment_mode === "percent" && (
+              <div className="flex items-center gap-2">
+                <Label className="text-slate-400 text-xs">Pourcentage acompte :</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.payment_percentage}
+                  onChange={(e) => setFormData({ ...formData, payment_percentage: Math.min(100, Math.max(1, parseInt(e.target.value) || 1)) })}
+                  className="w-20 h-8 bg-slate-800 border-slate-700 text-white text-right"
+                  data-testid="payment-percentage-input"
+                />
+                <span className="text-slate-400 text-sm">%</span>
+                <span className="text-slate-500 text-xs ml-2">
+                  = <span className="text-blue-300 font-semibold">{formatPrice(Math.round(formData.total * formData.payment_percentage / 100))} F</span> à payer à la réservation
+                </span>
+              </div>
+            )}
           </div>
           
           {/* Actions */}
