@@ -3463,7 +3463,7 @@ async def smart_link_caisse_products_to_stock(dry_run: bool = False):
             matched_rule = None
             for kw, candidates in RULES:
                 if kw in cp_name:
-                    # Find first candidate whose fragment exists in stock list
+                    # Found a matching keyword. Try its candidates.
                     for frag in candidates:
                         # Pick shortest stock name that contains the fragment (more generic wins)
                         hits = [sp for sn, sp in sp_by_norm if frag in sn]
@@ -3472,8 +3472,11 @@ async def smart_link_caisse_products_to_stock(dry_run: bool = False):
                             matched_sp = hits[0]
                             matched_rule = f"{kw} → {frag}"
                             break
-                    if matched_sp:
-                        break
+                    # IMPORTANT: stop here even if no candidate matched.
+                    # The keyword is specific (rules are ordered specific→generic);
+                    # falling back to a less-specific rule would produce wrong mappings
+                    # (ex: "langue de boeuf" with no matching stock → falsely mapped to "boeuf sans os").
+                    break
 
             if not matched_sp:
                 report["no_match"].append({"caisse_id": cp["id"], "caisse_name": cp.get("name")})
