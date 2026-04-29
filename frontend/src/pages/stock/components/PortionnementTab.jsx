@@ -40,7 +40,7 @@ export default function PortionnementTab() {
       const list = r.data.product_rules || [];
       setRules(list);
       const orig = {};
-      list.forEach(x => { orig[x.stock_product_id] = { ppu: x.portions_per_unit, liq: x.is_liquid, conf: x.configured }; });
+      list.forEach(x => { orig[x.stock_product_id] = { ppu: x.portions_per_unit, liq: x.is_liquid, pu: x.purchase_unit, conf: x.configured }; });
       setOriginalRules(orig);
     } catch (e) {
       toast.error("Erreur chargement");
@@ -93,7 +93,9 @@ export default function PortionnementTab() {
     return rules.some(r => {
       const o = originalRules[r.stock_product_id];
       if (!o) return r.configured;
-      const valChanged = parseFloat(r.portions_per_unit) !== parseFloat(o.ppu) || !!r.is_liquid !== !!o.liq;
+      const valChanged = parseFloat(r.portions_per_unit) !== parseFloat(o.ppu)
+        || !!r.is_liquid !== !!o.liq
+        || (r.purchase_unit || "") !== (o.pu || "");
       return valChanged;
     });
   }, [rules, originalRules]);
@@ -108,6 +110,7 @@ export default function PortionnementTab() {
           stock_product_id: r.stock_product_id,
           portions_per_unit: parseFloat(r.portions_per_unit) || 1.0,
           is_liquid: !!r.is_liquid,
+          purchase_unit: r.purchase_unit || "",
         }));
       await axios.put(`${API}/stock/portionnement/rules`, {
         category_rules: [],
@@ -249,9 +252,9 @@ export default function PortionnementTab() {
           {/* Header row */}
           <div className="hidden md:flex items-center px-4 py-2 text-xs text-slate-500 font-medium border-b border-slate-700">
             <span className="flex-1">Produit</span>
-            <span className="w-44">Catégorie</span>
-            <span className="w-28 text-center">Portions/unité</span>
-            <span className="w-32 text-center">Type</span>
+            <span className="w-40">Catégorie</span>
+            <span className="w-72 text-center">Règle (1 unité d'achat = N portions)</span>
+            <span className="w-28 text-center">Type</span>
           </div>
           <div className="divide-y divide-slate-800">
             {paged.map(r => (
@@ -263,24 +266,58 @@ export default function PortionnementTab() {
                     {r.configured && <Badge className="bg-violet-500/20 text-violet-300 border border-violet-500/40 text-[10px] py-0">configuré</Badge>}
                   </div>
                   <div className="text-slate-500 text-[11px]">
-                    Stock actuel : {(r.current_quantity || 0).toLocaleString('fr-FR')} {r.current_unit}
-                    {r.purchase_unit && r.purchase_unit !== r.current_unit && <span> · achat en {r.purchase_unit}</span>}
+                    Stock : {(r.current_quantity || 0).toLocaleString('fr-FR')} {r.current_unit}
                   </div>
                 </div>
-                <div className="w-full md:w-44 text-slate-400 text-xs truncate" title={r.category_name}>
+                <div className="w-full md:w-40 text-slate-400 text-xs truncate" title={r.category_name}>
                   {r.category_name || <span className="text-slate-600 italic">sans catégorie</span>}
                 </div>
-                <div className="w-full md:w-28 flex justify-center">
+                <div className="w-full md:w-72 flex items-center gap-1 justify-center">
+                  <span className="text-slate-500 text-xs">1</span>
+                  <select
+                    value={r.purchase_unit || ""}
+                    onChange={(e) => updateRule(r.stock_product_id, { purchase_unit: e.target.value })}
+                    className="bg-slate-900 border border-slate-700 rounded text-white text-xs px-2 py-1 h-8 w-24"
+                    data-testid={`pu-${r.stock_product_id}`}
+                  >
+                    <option value="" disabled>unité…</option>
+                    <optgroup label="Solides">
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="piece">piece</option>
+                      <option value="unite">unité</option>
+                      <option value="sachet">sachet</option>
+                      <option value="paquet">paquet</option>
+                      <option value="boite">boite</option>
+                      <option value="pot">pot</option>
+                      <option value="carton">carton</option>
+                      <option value="caisse">caisse</option>
+                      <option value="botte">botte</option>
+                      <option value="rouleau">rouleau</option>
+                    </optgroup>
+                    <optgroup label="Liquides">
+                      <option value="litre">litre</option>
+                      <option value="ml">ml</option>
+                      <option value="bouteille">bouteille</option>
+                      <option value="canette">canette</option>
+                      <option value="brique">brique</option>
+                      <option value="bidon">bidon</option>
+                      <option value="fut">fût</option>
+                      <option value="gallon">gallon</option>
+                    </optgroup>
+                  </select>
+                  <span className="text-slate-500 text-xs">=</span>
                   <Input
                     type="number" min="0.01" step="0.01"
                     value={r.portions_per_unit}
                     onChange={(e) => updateRule(r.stock_product_id, { portions_per_unit: e.target.value })}
                     disabled={r.is_liquid}
-                    className="bg-slate-900 border-slate-700 text-white text-center h-8 w-24 disabled:opacity-50"
+                    className="bg-slate-900 border-slate-700 text-white text-center h-8 w-20 disabled:opacity-50"
                     data-testid={`ppu-${r.stock_product_id}`}
                   />
+                  <span className="text-slate-500 text-xs whitespace-nowrap">{r.is_liquid ? r.purchase_unit || r.current_unit : "portion"}{!r.is_liquid && parseFloat(r.portions_per_unit) > 1 ? "s" : ""}</span>
                 </div>
-                <div className="w-full md:w-32 flex justify-center">
+                <div className="w-full md:w-28 flex justify-center">
                   <button
                     type="button"
                     onClick={() => updateRule(r.stock_product_id, { is_liquid: !r.is_liquid })}

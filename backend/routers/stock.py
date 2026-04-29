@@ -194,6 +194,7 @@ class PortionProductOverride(BaseModel):
     stock_product_id: str
     portions_per_unit: float = 1.0  # Override the category rule for this specific product
     is_liquid: Optional[bool] = None  # Override liquid flag (None = inherit from category)
+    purchase_unit: Optional[str] = None  # Purchase unit (kg, l, piece, pot, etc.) — saved on the stock product
 
 class PortionRulesUpdate(BaseModel):
     category_rules: List[PortionCategoryRule] = []
@@ -585,9 +586,11 @@ async def get_portionnement_rules():
                 is_liq = default_liquid
             else:
                 is_liq = bool(is_liq)
+            saved_pu = saved.get("purchase_unit") or sp.get("purchase_unit") or sp.get("unit", "")
         else:
             ppu = 1.0
             is_liq = default_liquid
+            saved_pu = sp.get("purchase_unit") or sp.get("unit", "")
         rules_resp.append({
             "stock_product_id": spid,
             "stock_product_name": sp.get("name", ""),
@@ -595,7 +598,7 @@ async def get_portionnement_rules():
             "category_id": sp.get("category_id", ""),
             "category_name": cat_name,
             "current_unit": sp.get("unit", ""),
-            "purchase_unit": sp.get("purchase_unit", "") or sp.get("unit", ""),
+            "purchase_unit": saved_pu,
             "current_quantity": sp.get("quantity", 0),
             "portions_per_unit": ppu,
             "is_liquid": is_liq,
@@ -608,6 +611,7 @@ async def get_portionnement_rules():
 @router.put("/portionnement/rules")
 async def update_portionnement_rules(data: PortionRulesUpdate):
     """Replace product-level portionnement rules atomically.
+    Also updates `purchase_unit` on each stock product so future BC use the right unit.
     Note: category-level rules are no longer supported (kept in payload for backwards compat but ignored).
     """
     now = datetime.now(timezone.utc).isoformat()
@@ -616,6 +620,13 @@ async def update_portionnement_rules(data: PortionRulesUpdate):
         await db.portion_product_overrides.insert_many([
             {**r.model_dump(), "updated_at": now} for r in data.product_overrides
         ])
+        # Persist purchase_unit on each stock product (only when provided)
+        for r in data.product_overrides:
+            if r.purchase_unit:
+                await db.stock_products.update_one(
+                    {"id": r.stock_product_id},
+                    {"$set": {"purchase_unit": r.purchase_unit, "updated_at": now}}
+                )
     # Drop legacy category rules: per-product is the new source of truth
     await db.portion_category_rules.delete_many({})
     return {"success": True, "rules_count": len(data.product_overrides)}
