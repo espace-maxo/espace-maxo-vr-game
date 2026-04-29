@@ -148,18 +148,55 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
     }
   };
 
+  const [pendingPayment, setPendingPayment] = useState(null); // order being paid (modal open)
+  const [paymentMethod, setPaymentMethod] = useState("especes");
+
   const toggleStatus = async (order) => {
-    const newStatus = order.status === "regle" ? "non_regle" : "regle";
+    if (order.status === "regle") {
+      // Annul: confirm + send directly
+      if (!confirm("Annuler le règlement de cette commande ?\n\nLa facture Caisse liée sera marquée 'annulée' (le stock n'est pas réintégré).")) return;
+      try {
+        await axios.put(`${API}/monsieur-orders/${order.id}`, {
+          status: "non_regle",
+          paid_by: null,
+        });
+        toast.success("Règlement annulé · facture Caisse marquée 'annulée'");
+        fetchOrders();
+      } catch (error) {
+        toast.error("Erreur lors de l'annulation");
+      }
+      return;
+    }
+    // unpaid -> paid: open the payment method picker
+    setPaymentMethod("especes");
+    setPendingPayment(order);
+  };
+
+  const confirmPayment = async () => {
+    if (!pendingPayment) return;
     try {
-      await axios.put(`${API}/monsieur-orders/${order.id}`, {
-        status: newStatus,
-        paid_by: newStatus === "regle" ? (currentUser?.name || "Gérante") : null
+      await axios.put(`${API}/monsieur-orders/${pendingPayment.id}`, {
+        status: "regle",
+        paid_by: currentUser?.name || "Gérante",
+        payment_method: paymentMethod,
       });
-      toast.success(newStatus === "regle" ? "Marqué comme réglé" : "Marqué comme non réglé");
+      toast.success(`Réglée (${labelForMethod(paymentMethod)}) · ajoutée aux Factures du jour comme « Manager General »`);
+      setPendingPayment(null);
       fetchOrders();
     } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("Erreur lors de la mise à jour du statut");
+      toast.error("Erreur lors du règlement");
+    }
+  };
+
+  const labelForMethod = (m) => {
+    switch (m) {
+      case "especes": return "Espèces";
+      case "virement": return "Virement";
+      case "mobile_money": return "Mobile Money";
+      case "cheque": return "Chèque";
+      case "carte": return "Carte bancaire";
+      case "compte_courant": return "Compte courant";
+      default: return m;
     }
   };
 
@@ -608,6 +645,61 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
                 className="border-slate-600 text-slate-400"
               >
                 Annuler
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment method picker */}
+      <Dialog open={!!pendingPayment} onOpenChange={(v) => !v && setPendingPayment(null)}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-md" data-testid="payment-method-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-emerald-400" />
+              Encaisser cette commande
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-slate-800/40 border border-slate-700 rounded p-3 space-y-1">
+              <p className="text-slate-400 text-xs">Total à encaisser</p>
+              <p className="text-white text-2xl font-bold">{formatPrice(pendingPayment?.total || 0)} F CFA</p>
+              <p className="text-slate-500 text-xs">Sera ajoutée aux Factures du jour avec le client « Manager General »</p>
+            </div>
+            <div>
+              <Label className="text-slate-300 text-sm mb-2 block">Mode de règlement</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "especes", label: "Espèces", icon: "💵" },
+                  { id: "virement", label: "Virement", icon: "🏦" },
+                  { id: "mobile_money", label: "Mobile Money", icon: "📱" },
+                  { id: "cheque", label: "Chèque", icon: "📝" },
+                  { id: "carte", label: "Carte bancaire", icon: "💳" },
+                  { id: "compte_courant", label: "Compte courant", icon: "📒" },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(m.id)}
+                    data-testid={`pay-method-${m.id}`}
+                    className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                      paymentMethod === m.id
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
+                        : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500"
+                    }`}
+                  >
+                    <span className="mr-1.5">{m.icon}</span>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-700">
+              <Button variant="outline" onClick={() => setPendingPayment(null)} className="border-slate-600 text-slate-400">
+                <X className="w-4 h-4 mr-1" /> Annuler
+              </Button>
+              <Button onClick={confirmPayment} className="bg-emerald-600 hover:bg-emerald-700" data-testid="confirm-payment-btn">
+                <Check className="w-4 h-4 mr-1" /> Confirmer le règlement
               </Button>
             </div>
           </div>

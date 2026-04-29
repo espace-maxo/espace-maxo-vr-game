@@ -4870,10 +4870,11 @@ async def create_monsieur_order(
     notes: str = Body(None),
     created_by: str = Body(...)
 ):
-    """Create a new owner meal order"""
+    """Create a new owner meal order. Stock is deducted IMMEDIATELY (regardless of payment)."""
     try:
+        order_id = str(uuid.uuid4())
         order = {
-            "id": str(uuid.uuid4()),
+            "id": order_id,
             "items": items,
             "total": total,
             "notes": notes,
@@ -4881,13 +4882,63 @@ async def create_monsieur_order(
             "created_by": created_by,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "paid_at": None,
-            "paid_by": None
+            "paid_by": None,
+            "payment_method": None,
+            "linked_invoice_id": None,
+            "stock_deducted": True,  # marks the deduction as done at creation
         }
-        
+
+        # Deduct stock immediately for each linked caisse product
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for it in items or []:
+            cp_id = it.get("product_id") or it.get("id")
+            qty = it.get("quantity", 1) or 1
+            cp = None
+            if cp_id:
+                cp = await db.caisse_products.find_one({"id": cp_id})
+            if not cp and it.get("name"):
+                cp = await db.caisse_products.find_one({
+                    "name": {"$regex": f"^{re.escape(it['name'])}$", "$options": "i"}
+                })
+            if not cp or cp.get("no_stock_tracking"):
+                continue
+            link_ids = cp.get("stock_links") or []
+            if not link_ids and cp.get("stock_product_id"):
+                link_ids = [cp["stock_product_id"]]
+            if not link_ids:
+                continue
+            async for sp in db.stock_products.find({"id": {"$in": link_ids}, "is_active": True}, {"_id": 0}):
+                old_qty = sp.get("quantity", 0)
+                new_qty = max(0, old_qty - qty)
+                smin = sp.get("stock_min", 5)
+                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                new_valeur = new_qty * sp.get("purchase_price", 0)
+                await db.stock_movements.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "product_id": sp["id"],
+                    "product_name": sp["name"],
+                    "product_code": sp.get("code", ""),
+                    "movement_type": "sortie",
+                    "quantity": qty,
+                    "previous_quantity": old_qty,
+                    "new_quantity": new_qty,
+                    "unit": sp.get("unit", ""),
+                    "unit_price": sp.get("purchase_price", 0),
+                    "total_value": qty * sp.get("purchase_price", 0),
+                    "reason": f"Manager General - Commande #{order_id[:8]} (stock auto)",
+                    "user_name": created_by,
+                    "monsieur_order_id": order_id,
+                    "created_at": now_iso,
+                })
+                await db.stock_products.update_one(
+                    {"id": sp["id"]},
+                    {"$set": {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": now_iso}}
+                )
+
         await db.monsieur_orders.insert_one(order)
         if "_id" in order:
             del order["_id"]
-        
+
         return {"success": True, "order": order}
     except Exception as e:
         logger.error(f"Error creating monsieur order: {e}")
@@ -4900,14 +4951,20 @@ async def update_monsieur_order(
     total: float = Body(None),
     notes: str = Body(None),
     status: str = Body(None),
-    paid_by: str = Body(None)
+    paid_by: str = Body(None),
+    payment_method: str = Body(None),
 ):
-    """Update an owner meal order"""
+    """Update an owner meal order.
+    On status='regle' transition: create a Caisse invoice (client_name='Manager General')
+    with the chosen payment_method. Stock is NOT deducted again (already done at creation).
+    On status='non_regle' transition (annul): mark the linked invoice as cancelled (status='cancelled')
+    but keep it in the audit trail.
+    """
     try:
         order = await db.monsieur_orders.find_one({"id": order_id})
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        
+
         update_data = {}
         if items is not None:
             update_data["items"] = items
@@ -4915,22 +4972,81 @@ async def update_monsieur_order(
             update_data["total"] = total
         if notes is not None:
             update_data["notes"] = notes
-        if status is not None:
+
+        # Handle paid -> unpaid (cancel linked invoice without touching stock)
+        if status == "non_regle" and order.get("status") == "regle":
+            inv_id = order.get("linked_invoice_id")
+            if inv_id:
+                await db.invoices.update_one(
+                    {"id": inv_id},
+                    {"$set": {
+                        "validation_status": "cancelled",
+                        "status": "cancelled",
+                        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                        "cancellation_reason": f"Annulation règlement Manager General #{order_id[:8]}",
+                    }}
+                )
+            update_data["status"] = "non_regle"
+            update_data["paid_at"] = None
+            update_data["paid_by"] = None
+            update_data["payment_method"] = None
+            update_data["linked_invoice_id"] = None
+
+        # Handle unpaid -> paid (create a Caisse invoice mirror — stock NOT re-deducted)
+        elif status == "regle" and order.get("status") != "regle":
+            now_iso = datetime.now(timezone.utc).isoformat()
+            today = datetime.now(timezone.utc).strftime("%Y%m%d")
+            # Generate invoice number
+            count_today = await db.invoices.count_documents({"invoice_number": {"$regex": f"^EM-{today}-"}})
+            inv_number = f"EM-{today}-{count_today + 1:04d}"
+            inv_id = str(uuid.uuid4())
+            inv_items = []
+            for it in (order.get("items") or []):
+                inv_items.append({
+                    "product_id": it.get("product_id") or it.get("id"),
+                    "name": it.get("name", ""),
+                    "price": it.get("price", 0),
+                    "quantity": it.get("quantity", 1),
+                    "subtotal": (it.get("price", 0) or 0) * (it.get("quantity", 1) or 1),
+                    "department": it.get("department", "autres"),
+                })
+            invoice_doc = {
+                "id": inv_id,
+                "invoice_number": inv_number,
+                "customer_name": "Manager General",
+                "client_name": "Manager General",
+                "items": inv_items,
+                "subtotal": order.get("total", 0),
+                "total": order.get("total", 0),
+                "discount": 0,
+                "tax": 0,
+                "payment_method": payment_method or "especes",
+                "status": "paid",
+                "validation_status": "validated",
+                "modification_allowed": False,
+                "stock_deducted": True,  # already deducted at order creation
+                "skip_stock_deduction": True,  # safeguard
+                "monsieur_order_id": order_id,
+                "created_by": paid_by or order.get("created_by", "admin"),
+                "created_at": now_iso,
+                "validated_at": now_iso,
+            }
+            await db.invoices.insert_one(invoice_doc)
+            update_data["status"] = "regle"
+            update_data["paid_at"] = now_iso
+            update_data["paid_by"] = paid_by
+            update_data["payment_method"] = payment_method or "especes"
+            update_data["linked_invoice_id"] = inv_id
+        elif status is not None:
             update_data["status"] = status
-            if status == "regle":
-                update_data["paid_at"] = datetime.now(timezone.utc).isoformat()
-                update_data["paid_by"] = paid_by
-            elif status == "non_regle":
-                update_data["paid_at"] = None
-                update_data["paid_by"] = None
-        
+
         update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        
+
         await db.monsieur_orders.update_one(
             {"id": order_id},
             {"$set": update_data}
         )
-        
+
         updated = await db.monsieur_orders.find_one({"id": order_id}, {"_id": 0})
         return {"success": True, "order": updated}
     except HTTPException:
