@@ -4,6 +4,24 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 29/04/2026 — Manager Général : masquer les commandes réglées (DONE)
+
+**Demande utilisateur** : « les factures reglees doivent disparaître seules les non reglees restent ».
+
+**Contexte** : depuis la refonte du flow Manager Général, l'encaissement d'une commande crée automatiquement une facture Caisse standard. Les commandes réglées sont donc redondantes ici → la vue doit être épurée pour ne montrer que les dettes en attente.
+
+**Modifications** (`/app/frontend/src/pages/caisse/components/MonsieurTab.jsx`) :
+- Suppression de l'état `filter` et des 3 onglets (Tous / Non réglés / Réglés).
+- Filtrage strict : `visibleOrders = orders.filter(o => o.status !== "regle")`.
+- Stats simplifiées : 2 cartes (À encaisser / Déjà réglées (compteur info)) au lieu de 3.
+- Empty state mis à jour : « Aucune commande en attente de paiement » + sous-texte explicatif.
+- Bandeau d'info adapté : explique le basculement automatique vers les Factures du jour.
+- Nettoyage des branches mortes du rendu (badges/boutons « Annuler le règlement » / « Inclus dans le point » → uniquement vue non réglée). Bouton « Facture » retiré du rendu (devenu superflu, l'encaissement crée la facture).
+- Conservation des fonctions back-compat (`toggleStatus` annulation, `convertToInvoice`) sans rendu UI, pour ne pas casser d'éventuels appels résiduels.
+
+**Test** : screenshot validé — 3 commandes réglées en base masquées, état vide affiché correctement, stats à jour.
+
+
 ## 28/04/2026 — Stock : Liaison multi-cible Caisse↔Stock (bidirectionnel) (DONE)
 
 **Demande utilisateur** : « dans stock permettre de lier un produit caisse a plusieurs produits stock cible et vice versa ».

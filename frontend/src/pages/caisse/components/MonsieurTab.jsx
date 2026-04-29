@@ -23,7 +23,6 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
   const [stats, setStats] = useState({ total_unpaid: 0, total_paid: 0, count_unpaid: 0, count_paid: 0 });
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [filter, setFilter] = useState("non_regle"); // all, non_regle, regle — default = unpaid only
   
   // Order creation state
   const [selectedItems, setSelectedItems] = useState([]);
@@ -270,10 +269,8 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
     w.print();
   };
 
-  const filteredOrders = orders.filter(o => {
-    if (filter === "all") return true;
-    return o.status === filter;
-  });
+  // Affiche STRICTEMENT les commandes non réglées (les réglées sont basculées en factures Caisse)
+  const visibleOrders = orders.filter(o => o.status !== "regle");
 
   return (
     <div className="space-y-4">
@@ -295,29 +292,21 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Stats Cards — uniquement non réglés (les réglées sont automatiquement basculées en facture Caisse) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card className="bg-gradient-to-br from-red-900/30 to-red-800/20 border-red-500/30">
           <CardContent className="p-4 text-center">
             <AlertCircle className="w-6 h-6 text-red-400 mx-auto mb-1" />
             <p className="text-2xl font-bold text-red-400">{formatPrice(stats.total_unpaid)} F</p>
-            <p className="text-xs text-red-300/70">Non réglés ({stats.count_unpaid})</p>
+            <p className="text-xs text-red-300/70">À encaisser ({stats.count_unpaid})</p>
           </CardContent>
         </Card>
-        
-        <Card className="bg-gradient-to-br from-green-900/30 to-green-800/20 border-green-500/30">
+
+        <Card className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 border-purple-500/30">
           <CardContent className="p-4 text-center">
-            <CheckCircle className="w-6 h-6 text-green-400 mx-auto mb-1" />
-            <p className="text-2xl font-bold text-green-400">{formatPrice(stats.total_paid)} F</p>
-            <p className="text-xs text-green-300/70">Réglés ({stats.count_paid})</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 border-purple-500/30 col-span-2">
-          <CardContent className="p-4 text-center">
-            <Receipt className="w-6 h-6 text-purple-400 mx-auto mb-1" />
-            <p className="text-2xl font-bold text-purple-400">{formatPrice(stats.total_unpaid + stats.total_paid)} F</p>
-            <p className="text-xs text-purple-300/70">Total général</p>
+            <CheckCircle className="w-6 h-6 text-purple-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-purple-400">{stats.count_paid}</p>
+            <p className="text-xs text-purple-300/70">Déjà réglées (basculées en factures Caisse)</p>
           </CardContent>
         </Card>
       </div>
@@ -326,209 +315,119 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-200 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
         <span>
-          ℹ️ Seules les commandes <strong className="text-emerald-300">réglées</strong> figurent dans <strong>le point hebdo et journalier</strong>.
-          Les commandes <strong className="text-amber-300">non réglées</strong> sont en attente et n'impactent pas les totaux.
+          ℹ️ Cette vue n'affiche que les commandes <strong className="text-amber-300">non réglées</strong>.
+          Dès qu'une commande est encaissée, elle disparaît d'ici et apparaît dans les <strong className="text-emerald-300">Factures du jour</strong> de la Caisse.
         </span>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        <Button
-          size="sm"
-          variant={filter === "all" ? "default" : "outline"}
-          onClick={() => setFilter("all")}
-          className={filter === "all" ? "bg-purple-600" : "border-slate-600 text-slate-400"}
-        >
-          Tous ({orders.length})
-        </Button>
-        <Button
-          size="sm"
-          variant={filter === "non_regle" ? "default" : "outline"}
-          onClick={() => setFilter("non_regle")}
-          className={filter === "non_regle" ? "bg-red-600" : "border-red-500/50 text-red-400"}
-        >
-          Non réglés ({stats.count_unpaid})
-        </Button>
-        <Button
-          size="sm"
-          variant={filter === "regle" ? "default" : "outline"}
-          onClick={() => setFilter("regle")}
-          className={filter === "regle" ? "bg-green-600" : "border-green-500/50 text-green-400"}
-        >
-          Réglés ({stats.count_paid})
-        </Button>
-      </div>
-
-      {/* Orders List */}
+      {/* Orders List — uniquement non réglées */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardContent className="p-4">
-          {filteredOrders.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
+          {visibleOrders.length === 0 ? (
+            <div className="text-center py-8 text-slate-500" data-testid="monsieur-empty-state">
               <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Aucune commande Manager General</p>
+              <p>Aucune commande en attente de paiement</p>
+              <p className="text-xs mt-1 text-slate-600">Les commandes réglées sont automatiquement basculées dans les Factures du jour.</p>
             </div>
           ) : (
-            (() => {
-              const unpaid = filteredOrders.filter(o => o.status !== "regle");
-              const paid = filteredOrders.filter(o => o.status === "regle");
-              const renderOrder = (order) => (
-                <div
-                  key={order.id}
-                  className={`rounded-lg p-4 border ${
-                    order.status === "regle"
-                      ? "bg-green-900/20 border-green-500/30"
-                      : "bg-red-900/20 border-red-500/30"
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <Badge className={`text-xs ${
-                          order.status === "regle" 
-                            ? "bg-green-500/20 text-green-400" 
-                            : "bg-red-500/20 text-red-400"
-                        }`}>
-                          {order.status === "regle" ? "✓ Réglé" : "✗ Non réglé"}
-                        </Badge>
-                        <Badge className={`text-[10px] ${
-                          order.status === "regle"
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                            : "bg-amber-500/15 text-amber-300 border border-amber-500/40"
-                        }`}>
-                          {order.status === "regle" ? "✓ Inclus dans le point" : "⏸ Exclu du point (en attente)"}
-                        </Badge>
-                        <span className="text-slate-500 text-xs">
-                          {format(new Date(order.created_at), "dd/MM/yyyy à HH:mm", { locale: fr })}
-                        </span>
-                      </div>
-                      
-                      {/* Items list */}
-                      <div className="space-y-1 mb-2">
-                        {(order.items || []).map((item, idx) => (
-                          <div key={idx} className="flex justify-between text-sm">
-                            <span className="text-slate-300">
-                              {item.quantity}x {item.name}
-                            </span>
-                            <span className="text-slate-400">
-                              {formatPrice(item.price * item.quantity)} F
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <p className={`text-xl font-bold ${
-                        order.status === "regle" ? "text-green-400" : "text-red-400"
-                      }`}>
-                        Total: {formatPrice(order.total)} F
-                      </p>
-                      
-                      {order.notes && (
-                        <p className="text-slate-400 text-sm mt-2 italic">"{order.notes}"</p>
-                      )}
-                      
-                      {order.status === "regle" && order.paid_at && (
-                        <p className="text-green-400 text-xs mt-1">
-                          Réglé le: {format(new Date(order.paid_at), "dd/MM/yyyy", { locale: fr })}
-                          {order.paid_by && ` par ${order.paid_by}`}
+            <div>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <span className="bg-red-500/20 text-red-300 border border-red-500/40 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                  <X className="w-3 h-3" />
+                  À encaisser
+                </span>
+                <span className="text-red-400 text-sm font-medium">
+                  {visibleOrders.length} facture{visibleOrders.length > 1 ? "s" : ""}
+                </span>
+                <span className="text-slate-500 text-xs">
+                  · Total {formatPrice(visibleOrders.reduce((s, o) => s + (o.total || 0), 0))} F
+                </span>
+              </div>
+              <div className="space-y-3" data-testid="unpaid-section">
+                {visibleOrders.map(order => (
+                  <div
+                    key={order.id}
+                    className="rounded-lg p-4 border bg-red-900/20 border-red-500/30"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <Badge className="text-xs bg-red-500/20 text-red-400">
+                            ✗ Non réglé
+                          </Badge>
+                          <Badge className="text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                            ⏸ En attente d'encaissement
+                          </Badge>
+                          <span className="text-slate-500 text-xs">
+                            {format(new Date(order.created_at), "dd/MM/yyyy à HH:mm", { locale: fr })}
+                          </span>
+                        </div>
+
+                        {/* Items list */}
+                        <div className="space-y-1 mb-2">
+                          {(order.items || []).map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="text-slate-300">
+                                {item.quantity}x {item.name}
+                              </span>
+                              <span className="text-slate-400">
+                                {formatPrice(item.price * item.quantity)} F
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-xl font-bold text-red-400">
+                          Total: {formatPrice(order.total)} F
                         </p>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        onClick={() => convertToInvoice(order)}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        data-testid={`convert-invoice-${order.id}`}
-                      >
-                        <FileText className="w-4 h-4 mr-1" /> Facture
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => printOrder(order)}
-                        className="bg-slate-600 hover:bg-slate-700"
-                      >
-                        <Printer className="w-4 h-4 mr-1" /> Imprimer
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => toggleStatus(order)}
-                        title={order.status === "regle" ? "Cliquer pour repasser cette vente en NON RÉGLÉE (sortira du point)" : "Cliquer pour MARQUER comme RÉGLÉE (entre dans le point)"}
-                        className={order.status === "regle"
-                          ? "bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/40 shadow-md animate-pulse"
-                        }
-                        data-testid={`toggle-paid-${order.id}`}
-                      >
-                        {order.status === "regle" ? (
-                          <><X className="w-4 h-4 mr-1" /> Annuler le règlement</>
-                        ) : (
-                          <><Check className="w-4 h-4 mr-1" /> Encaisser maintenant</>
+
+                        {order.notes && (
+                          <p className="text-slate-400 text-sm mt-2 italic">"{order.notes}"</p>
                         )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditModal(order)}
-                        className="border-slate-600 text-slate-400 hover:bg-slate-700"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => deleteOrder(order.id)}
-                        className="border-red-600/50 text-red-400 hover:bg-red-600/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          onClick={() => printOrder(order)}
+                          className="bg-slate-600 hover:bg-slate-700"
+                          data-testid={`print-order-${order.id}`}
+                        >
+                          <Printer className="w-4 h-4 mr-1" /> Imprimer
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => toggleStatus(order)}
+                          title="Cliquer pour MARQUER comme RÉGLÉE (bascule en facture Caisse)"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/40 shadow-md animate-pulse"
+                          data-testid={`toggle-paid-${order.id}`}
+                        >
+                          <Check className="w-4 h-4 mr-1" /> Encaisser maintenant
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditModal(order)}
+                          className="border-slate-600 text-slate-400 hover:bg-slate-700"
+                          data-testid={`edit-order-${order.id}`}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deleteOrder(order.id)}
+                          className="border-red-600/50 text-red-400 hover:bg-red-600/20"
+                          data-testid={`delete-order-${order.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-              return (
-                <div className="space-y-6">
-                  {unpaid.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2 px-1">
-                        <span className="bg-red-500/20 text-red-300 border border-red-500/40 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-                          <X className="w-3 h-3" />
-                          À encaisser
-                        </span>
-                        <span className="text-red-400 text-sm font-medium">
-                          {unpaid.length} facture{unpaid.length > 1 ? "s" : ""}
-                        </span>
-                        <span className="text-slate-500 text-xs">
-                          · Total {formatPrice(unpaid.reduce((s, o) => s + (o.total || 0), 0))} F · ⏸ Exclues du point
-                        </span>
-                      </div>
-                      <div className="space-y-3" data-testid="unpaid-section">
-                        {unpaid.map(renderOrder)}
-                      </div>
-                    </div>
-                  )}
-                  {paid.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2 px-1">
-                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-                          <Check className="w-3 h-3" />
-                          Réglées
-                        </span>
-                        <span className="text-emerald-400 text-sm font-medium">
-                          {paid.length} facture{paid.length > 1 ? "s" : ""}
-                        </span>
-                        <span className="text-slate-500 text-xs">
-                          · Total {formatPrice(paid.reduce((s, o) => s + (o.total || 0), 0))} F · ✓ Incluses dans le point
-                        </span>
-                      </div>
-                      <div className="space-y-3" data-testid="paid-section">
-                        {paid.map(renderOrder)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()
+                ))}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
