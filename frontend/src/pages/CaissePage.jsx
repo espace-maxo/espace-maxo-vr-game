@@ -3505,19 +3505,29 @@ _Gérante - Espace Maxo_
     toast.info("Bon créé - Paiement en attente");
   };
 
-  // Open payment method modal before validating invoice
-  const validateInvoice = (invoiceId) => {
+  // Validate invoice IMMEDIATELY (no payment method modal)
+  // The Gérante asked: clicking "Bon-Client" must directly validate the facture
+  // without an extra confirmation step. Payment method = the one already on the bon
+  // (default 'cash'), date = original creation date. Both can still be edited later.
+  const validateInvoice = async (invoiceId) => {
     const invoice = invoices.find(i => i.id === invoiceId);
     if (!invoice) return;
-    setPendingValidationInvoice(invoice);
-    setSelectedPaymentMethod(invoice.payment_method || "cash");
-    // Set invoice date to the original creation date or today
-    const originalDate = invoice.created_at ? invoice.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
-    setInvoiceDate(originalDate);
-    setShowPaymentMethodModal(true);
+    try {
+      await axios.put(`${API}/invoices/${invoiceId}`, {
+        validation_status: "validated",
+        validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        validated_at: new Date().toISOString(),
+        payment_method: invoice.payment_method || "cash",
+      });
+      toast.success(`Bon ${invoice.invoice_number || ''} transformé en facture validée`);
+      fetchAllData();
+    } catch (error) {
+      console.error("Error validating invoice:", error);
+      toast.error("Erreur lors de la validation");
+    }
   };
 
-  // Actually validate the invoice with selected payment method
+  // Kept for backward compatibility (still used by the payment-method modal flow if reopened elsewhere)
   const confirmValidateInvoice = async () => {
     if (!pendingValidationInvoice) return;
     
