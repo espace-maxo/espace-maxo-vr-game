@@ -23,7 +23,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
   const [stats, setStats] = useState({ total_unpaid: 0, total_paid: 0, count_unpaid: 0, count_paid: 0 });
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [filter, setFilter] = useState("all"); // all, non_regle, regle
+  const [filter, setFilter] = useState("non_regle"); // all, non_regle, regle — default = unpaid only
   
   // Order creation state
   const [selectedItems, setSelectedItems] = useState([]);
