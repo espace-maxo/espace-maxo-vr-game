@@ -2986,7 +2986,7 @@ export default function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Prix de vente (FCFA)</Label>
-                <Input type="text" inputMode="decimal" min="0" value={recipeForm.selling_price || ""} onChange={e => setRecipeForm(p => ({...p, selling_price: parseDecimal(e.target.value)}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Prix de vente en Caisse" /></div>
+                <DecimalInput min="0" value={recipeForm.selling_price} onChange={(v) => setRecipeForm(p => ({...p, selling_price: v}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Prix de vente en Caisse" /></div>
               <div><Label className="text-slate-300 text-xs">Notes</Label>
                 <Input value={recipeForm.notes} onChange={e => setRecipeForm(p => ({...p, notes: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Remarques..." /></div>
             </div>
@@ -3005,7 +3005,7 @@ export default function StockPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Input type="text" inputMode="decimal" min="0" step="0.01" value={recipeIngredient.quantity || ""} onChange={e => setRecipeIngredient(p => ({...p, quantity: parseDecimal(e.target.value)}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Quantite" />
+                <DecimalInput min="0" value={recipeIngredient.quantity} onChange={(v) => setRecipeIngredient(p => ({...p, quantity: v}))} className="bg-slate-900 border-slate-700 text-white w-24 h-8 text-xs" placeholder="Quantite" data-testid="recipe-ingredient-quantity" />
                 <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700" onClick={addRecipeIngredient}><Plus className="w-3 h-3" /></Button>
               </div>
               {recipeForm.ingredients.length > 0 && (
