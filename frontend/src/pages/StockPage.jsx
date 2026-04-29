@@ -117,6 +117,7 @@ export default function StockPage() {
   const [purchases, setPurchases] = useState([]);
   const [stockUsers, setStockUsers] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [recipeSearch, setRecipeSearch] = useState("");
   const [report, setReport] = useState(null);
   const [reportFilters, setReportFilters] = useState({ type: "all", date_from: "", date_to: "", search: "" });
   const [reportLoading, setReportLoading] = useState(false);
@@ -1818,6 +1819,63 @@ export default function StockPage() {
             </div>
 
             <p className="text-slate-400 text-sm">Definissez la composition de chaque plat vendu a la Caisse. Lors de la validation d'une facture, les ingredients seront automatiquement deduits du stock.</p>
+
+            {/* Search bar + select all visible */}
+            {recipes.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative flex-1 min-w-[240px] max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Input
+                    value={recipeSearch}
+                    onChange={(e) => setRecipeSearch(e.target.value)}
+                    placeholder="Rechercher (nom de fiche, plat Caisse, ingrédient…)"
+                    className="bg-slate-900 border-slate-700 text-white pl-9 h-9"
+                    data-testid="recipe-search"
+                  />
+                </div>
+                {isAdmin && (() => {
+                  const filteredRecipes = recipes.filter(r => {
+                    const q = recipeSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    if ((r.name || "").toLowerCase().includes(q)) return true;
+                    if ((r.caisse_product_name || "").toLowerCase().includes(q)) return true;
+                    if ((r.ingredients || []).some(i => (i.product_name || "").toLowerCase().includes(q))) return true;
+                    return false;
+                  });
+                  const visibleIds = filteredRecipes.map(r => r.id);
+                  const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedItems.includes(id));
+                  const toggleAll = () => {
+                    if (allSelected) {
+                      setSelectedItems(prev => prev.filter(id => !visibleIds.includes(id)));
+                    } else {
+                      setSelectedItems(prev => [...new Set([...prev, ...visibleIds])]);
+                    }
+                  };
+                  return (
+                    <Button
+                      variant="outline" size="sm"
+                      onClick={toggleAll}
+                      className={`h-9 border-slate-700 ${allSelected ? "bg-violet-500/20 text-violet-300" : "bg-slate-800 text-slate-300"}`}
+                      data-testid="select-all-visible-recipes-btn"
+                    >
+                      <CheckSquare className="w-4 h-4 mr-1" />
+                      {allSelected ? `Désélectionner (${visibleIds.length})` : `Tout sélectionner (${visibleIds.length})`}
+                    </Button>
+                  );
+                })()}
+                <span className="text-slate-500 text-xs">
+                  {(() => {
+                    const q = recipeSearch.trim().toLowerCase();
+                    const filtered = q ? recipes.filter(r =>
+                      (r.name || "").toLowerCase().includes(q) ||
+                      (r.caisse_product_name || "").toLowerCase().includes(q) ||
+                      (r.ingredients || []).some(i => (i.product_name || "").toLowerCase().includes(q))
+                    ) : recipes;
+                    return `${filtered.length} / ${recipes.length} fiche${recipes.length > 1 ? "s" : ""}`;
+                  })()}
+                </span>
+              </div>
+            )}
             {isAdmin && <BulkBar count={selectedItems.filter(id => recipes.some(r => r.id === id)).length} label="fiche(s)" endpoint="recipes/delete-bulk" ids={selectedItems.filter(id => recipes.some(r => r.id === id))} refreshFn={fetchRecipes} />}
 
             {recipes.length === 0 ? (
@@ -1831,7 +1889,17 @@ export default function StockPage() {
               </Card>
             ) : (
               <div className="grid gap-4">
-                {recipes.map(r => {
+                {recipes
+                  .filter(r => {
+                    const q = recipeSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      (r.name || "").toLowerCase().includes(q) ||
+                      (r.caisse_product_name || "").toLowerCase().includes(q) ||
+                      (r.ingredients || []).some(i => (i.product_name || "").toLowerCase().includes(q))
+                    );
+                  })
+                  .map(r => {
                   const marginColor = r.margin > 0 ? "text-emerald-400" : r.margin < 0 ? "text-red-400" : "text-slate-400";
                   return (
                     <Card key={r.id} className="bg-slate-900/80 border-slate-800" data-testid={`recipe-card-${r.id}`}>
@@ -1899,6 +1967,26 @@ export default function StockPage() {
                     </Card>
                   );
                 })}
+                {(() => {
+                  const q = recipeSearch.trim().toLowerCase();
+                  if (!q) return null;
+                  const matches = recipes.filter(r =>
+                    (r.name || "").toLowerCase().includes(q) ||
+                    (r.caisse_product_name || "").toLowerCase().includes(q) ||
+                    (r.ingredients || []).some(i => (i.product_name || "").toLowerCase().includes(q))
+                  );
+                  if (matches.length === 0) {
+                    return (
+                      <Card className="bg-slate-900/80 border-slate-800">
+                        <CardContent className="p-8 text-center">
+                          <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                          <p className="text-slate-400">Aucune fiche ne correspond à « {recipeSearch} »</p>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
           </div>
