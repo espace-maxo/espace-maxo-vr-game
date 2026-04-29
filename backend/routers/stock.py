@@ -149,6 +149,7 @@ class StockProductCreate(BaseModel):
     stock_min: float = 5
     stock_max: float = 100
     purchase_price: float = 0
+    sale_price: float = 0  # Prix de vente unitaire (pour valoriser le stock en valeur de revente)
     supplier_id: str = ""
     storage_location: str = ""
     is_active: bool = True
@@ -288,7 +289,9 @@ async def create_product(data: StockProductCreate):
         "stock_min": data.stock_min,
         "stock_max": data.stock_max,
         "purchase_price": data.purchase_price,
+        "sale_price": data.sale_price,
         "valeur_stock": data.quantity * data.purchase_price,
+        "valeur_stock_vente": data.quantity * data.sale_price,
         "supplier_id": data.supplier_id,
         "storage_location": data.storage_location,
         "is_active": data.is_active,
@@ -315,8 +318,10 @@ async def update_product(product_id: str, data: dict = Body(...)):
         raise HTTPException(404, "Produit non trouve")
     qty = data.get("quantity", product.get("quantity", 0))
     price = data.get("purchase_price", product.get("purchase_price", 0))
+    sale_price = data.get("sale_price", product.get("sale_price", 0))
     smin = data.get("stock_min", product.get("stock_min", 5))
     data["valeur_stock"] = qty * price
+    data["valeur_stock_vente"] = qty * sale_price
     data["statut"] = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
     await db.stock_products.update_one({"id": product_id}, {"$set": data})
     updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
@@ -1561,6 +1566,7 @@ async def get_dashboard():
     
     total_products = len(products)
     total_value = sum(p.get("quantity", 0) * p.get("purchase_price", 0) for p in products)
+    total_value_vente = sum(p.get("quantity", 0) * p.get("sale_price", 0) for p in products)
     
     rupture = [p for p in products if p.get("quantity", 0) <= 0]
     faible = [p for p in products if 0 < p.get("quantity", 0) <= p.get("stock_min", 5)]
@@ -1587,9 +1593,10 @@ async def get_dashboard():
     for p in products:
         cname = cat_map.get(p.get("category_id"), "Autre")
         if cname not in stock_by_category:
-            stock_by_category[cname] = {"count": 0, "value": 0}
+            stock_by_category[cname] = {"count": 0, "value": 0, "value_vente": 0}
         stock_by_category[cname]["count"] += 1
         stock_by_category[cname]["value"] += p.get("quantity", 0) * p.get("purchase_price", 0)
+        stock_by_category[cname]["value_vente"] += p.get("quantity", 0) * p.get("sale_price", 0)
     
     # Top sorted products (most movements)
     top_sorted = await db.stock_movements.aggregate([
@@ -1610,6 +1617,8 @@ async def get_dashboard():
         "total_products": total_products,
         "critical_products": critical,
         "total_value": total_value,
+        "total_value_vente": total_value_vente,
+        "potential_margin": total_value_vente - total_value,
         "entrees_today": entrees_today,
         "sorties_today": sorties_today,
         "ventes_caisse_today": ventes_caisse_today,

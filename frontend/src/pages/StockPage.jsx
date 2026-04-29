@@ -376,7 +376,7 @@ export default function StockPage() {
   };
 
   // Forms
-  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" });
+  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" });
   const [movementForm, setMovementForm] = useState({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" });
   const [purchaseForm, setPurchaseForm] = useState({ supplier_id: "", supplier_name: "", purchase_date: "", items: [], notes: "" });
   const [purchaseItem, setPurchaseItem] = useState({ product_id: "", quantity: 0, unit_price: 0 });
@@ -539,7 +539,7 @@ export default function StockPage() {
 
   const openEditProduct = (p) => {
     setEditingItem(p);
-    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
+    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
     setShowProductModal(true);
   };
 
@@ -1486,7 +1486,7 @@ export default function StockPage() {
                     <Package className="w-4 h-4 mr-1" /> Convertir par lot
                   </Button>
                 )}
-                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" }); setShowProductModal(true); }}
+                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" }); setShowProductModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-product-btn"><Plus className="w-4 h-4 mr-1" /> Nouveau Produit</Button>
               </div>
             </div>
@@ -1496,10 +1496,12 @@ export default function StockPage() {
               const totalProducts = products.length;
               const renseigned = products.filter(p => p.quantity > 0 || p.purchase_price > 0).length;
               const totalValue = products.reduce((s, p) => s + (p.quantity * p.purchase_price || 0), 0);
+              const totalValueVente = products.reduce((s, p) => s + (p.quantity * (p.sale_price || 0) || 0), 0);
+              const margin = totalValueVente - totalValue;
               const rupture = products.filter(p => p.quantity <= 0).length;
               const faible = products.filter(p => p.quantity > 0 && p.quantity <= p.stock_min).length;
               return (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="products-kpi-cards">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="products-kpi-cards">
                   <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/80 border-slate-700">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -1527,11 +1529,28 @@ export default function StockPage() {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-cyan-300 text-xs uppercase tracking-wider">Valeur totale</p>
+                          <p className="text-cyan-300 text-xs uppercase tracking-wider">Valeur achat</p>
                           <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value">{formatPrice(totalValue)}</p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA · au coût</p>
                         </div>
                         <TrendingUp className="w-8 h-8 text-cyan-400/60" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 border-emerald-700/40">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-emerald-300 text-xs uppercase tracking-wider">Valeur vente</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value-vente">{formatPrice(totalValueVente)}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA · au prix de vente</p>
+                          {margin !== 0 && (
+                            <p className={`text-[11px] mt-0.5 font-semibold ${margin >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                              {margin >= 0 ? "+" : ""}{formatPrice(margin)} F · marge potentielle
+                            </p>
+                          )}
+                        </div>
+                        <TrendingUp className="w-8 h-8 text-emerald-400/60" />
                       </div>
                     </CardContent>
                   </Card>
@@ -1628,7 +1647,9 @@ export default function StockPage() {
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Catégorie</th>
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider w-[200px]">Stock</th>
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Prix achat</th>
-                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Valeur</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Prix vente</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Valeur achat</th>
+                        <th className="p-3 font-semibold uppercase text-[11px] tracking-wider text-right">Valeur vente</th>
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Statut</th>
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider">Lieu</th>
                         <th className="p-3 font-semibold uppercase text-[11px] tracking-wider"></th>
@@ -1707,8 +1728,18 @@ export default function StockPage() {
                               </span>
                             </td>
                             <td className="p-3 text-right">
-                              <span className={p.quantity * p.purchase_price > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-600'}>
+                              <span className={p.sale_price > 0 ? 'text-emerald-300 font-medium' : 'text-slate-600 italic text-xs'}>
+                                {p.sale_price > 0 ? `${formatPrice(p.sale_price)} F` : '—'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={p.quantity * p.purchase_price > 0 ? 'text-cyan-300 font-semibold' : 'text-slate-600'}>
                                 {p.quantity * p.purchase_price > 0 ? `${formatPrice(p.quantity * p.purchase_price)} F` : '—'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={p.quantity * (p.sale_price || 0) > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-600'}>
+                                {p.quantity * (p.sale_price || 0) > 0 ? `${formatPrice(p.quantity * (p.sale_price || 0))} F` : '—'}
                               </span>
                             </td>
                             <td className="p-3"><Badge className={status.color + " text-[10px] border border-current/20"}>{status.label}</Badge></td>
@@ -2539,6 +2570,7 @@ export default function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><DecimalInput value={productForm.purchase_price} onChange={(n) => setProductForm(p => ({...p, purchase_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div><Label className="text-slate-300 text-xs">Prix de vente unitaire (FCFA)</Label><DecimalInput value={productForm.sale_price} onChange={(n) => setProductForm(p => ({...p, sale_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
