@@ -181,6 +181,25 @@ class StockSupplierCreate(BaseModel):
     product_types: str = ""
     notes: str = ""
 
+
+# Portionnement rules: governs how purchase quantities are converted into "portions" stock units.
+# Liquid categories (boissons, huiles) are non-portionnable: 1 unit = 1 unit (no conversion).
+# Non-liquid categories: portion_factor (e.g., 5 portions/kg) defines conversion.
+class PortionCategoryRule(BaseModel):
+    category_id: str
+    portions_per_unit: float = 1.0  # 1.0 = no conversion (1 unit purchased = 1 portion stocked)
+    is_liquid: bool = False  # If True: stays in original unit, no conversion ever.
+
+class PortionProductOverride(BaseModel):
+    stock_product_id: str
+    portions_per_unit: float = 1.0  # Override the category rule for this specific product
+    is_liquid: Optional[bool] = None  # Override liquid flag (None = inherit from category)
+
+class PortionRulesUpdate(BaseModel):
+    category_rules: List[PortionCategoryRule] = []
+    product_overrides: List[PortionProductOverride] = []
+
+
 # ==================== CATEGORIES ====================
 
 @router.get("/categories")
@@ -521,6 +540,127 @@ async def caisse_stock_links_overview():
             "stock_with_consumers": sum(1 for x in stock_to_caisse if x["consumers_count"] >= 1),
         },
     }
+
+
+
+# ==================== PORTIONNEMENT RULES ====================
+
+# Default liquid category names (case-insensitive substring match)
+LIQUID_CATEGORY_KEYWORDS = [
+    "boisson", "boissons", "huile", "huiles", "matiere grasse", "matieres grasses",
+    "cocktail", "bar", "sirop",
+]
+
+def _is_liquid_category(category_name: str) -> bool:
+    n = (category_name or "").lower()
+    return any(kw in n for kw in LIQUID_CATEGORY_KEYWORDS)
+
+
+@router.get("/portionnement/rules")
+async def get_portionnement_rules():
+    """Get all portionnement rules: per-category defaults + per-product overrides.
+    For categories not yet configured, auto-detect liquid status from name."""
+    cats = await db.stock_categories.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    products = await db.stock_products.find({"is_active": True}, {"_id": 0}).sort("name", 1).to_list(5000)
+
+    saved_cat_rules = {r["category_id"]: r async for r in db.portion_category_rules.find({}, {"_id": 0})}
+    saved_prod_rules = {r["stock_product_id"]: r async for r in db.portion_product_overrides.find({}, {"_id": 0})}
+
+    cat_rules_resp = []
+    for c in cats:
+        cid = c.get("id")
+        saved = saved_cat_rules.get(cid)
+        cat_rules_resp.append({
+            "category_id": cid,
+            "category_name": c.get("name", ""),
+            "portions_per_unit": (saved or {}).get("portions_per_unit", 1.0),
+            "is_liquid": (saved or {}).get("is_liquid", _is_liquid_category(c.get("name", ""))),
+            "configured": saved is not None,
+        })
+
+    prod_overrides_resp = []
+    for sp in products:
+        spid = sp.get("id")
+        saved = saved_prod_rules.get(spid)
+        if saved:
+            prod_overrides_resp.append({
+                "stock_product_id": spid,
+                "stock_product_name": sp.get("name", ""),
+                "category_id": sp.get("category_id", ""),
+                "portions_per_unit": saved.get("portions_per_unit"),
+                "is_liquid": saved.get("is_liquid"),
+            })
+
+    return {"category_rules": cat_rules_resp, "product_overrides": prod_overrides_resp}
+
+
+@router.put("/portionnement/rules")
+async def update_portionnement_rules(data: PortionRulesUpdate):
+    """Replace all portionnement rules atomically."""
+    now = datetime.now(timezone.utc).isoformat()
+    # Replace category rules
+    await db.portion_category_rules.delete_many({})
+    if data.category_rules:
+        await db.portion_category_rules.insert_many([
+            {**r.model_dump(), "updated_at": now} for r in data.category_rules
+        ])
+    # Replace product overrides
+    await db.portion_product_overrides.delete_many({})
+    if data.product_overrides:
+        await db.portion_product_overrides.insert_many([
+            {**r.model_dump(), "updated_at": now} for r in data.product_overrides
+        ])
+    return {"success": True, "category_rules_count": len(data.category_rules), "overrides_count": len(data.product_overrides)}
+
+
+async def _resolve_portion_factor(stock_product: dict) -> tuple:
+    """Returns (portions_per_unit: float, is_liquid: bool) for a given stock product.
+    Priority: product override → category rule → category-name auto-detection (default 1.0).
+    """
+    spid = stock_product.get("id")
+    category_id = stock_product.get("category_id", "")
+
+    override = await db.portion_product_overrides.find_one({"stock_product_id": spid}, {"_id": 0})
+    if override is not None:
+        is_liq = override.get("is_liquid")
+        ppu = override.get("portions_per_unit", 1.0)
+        if is_liq is None:
+            # Inherit liquid flag from category
+            cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0})
+            is_liq = (cat_rule or {}).get("is_liquid", False)
+        return float(ppu or 1.0), bool(is_liq)
+
+    cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0})
+    if cat_rule:
+        return float(cat_rule.get("portions_per_unit", 1.0) or 1.0), bool(cat_rule.get("is_liquid", False))
+
+    # No rule at all: auto-detect liquid by category name, default factor=1
+    cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0})
+    is_liq = _is_liquid_category((cat or {}).get("name", ""))
+    return 1.0, is_liq
+
+
+@router.post("/portionnement/apply-units")
+async def apply_portionnement_units():
+    """One-shot migration: switch every non-liquid product unit to 'portion'.
+    Liquid products keep their original unit. Quantities are NOT modified (per user choice)."""
+    products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)
+    updated = 0
+    skipped_liquid = 0
+    for p in products:
+        ppu, is_liq = await _resolve_portion_factor(p)
+        if is_liq:
+            skipped_liquid += 1
+            continue
+        # Only update if not already 'portion'
+        if p.get("unit") != "portion":
+            await db.stock_products.update_one(
+                {"id": p["id"]},
+                {"$set": {"unit": "portion", "purchase_unit": p.get("unit", ""), "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            updated += 1
+    return {"success": True, "updated_to_portion": updated, "kept_liquid": skipped_liquid}
+
 
 
 @router.post("/movements")

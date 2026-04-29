@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap
+  Activity, Link2, Zap, Scale
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import CaisseStockLinksOverview from "./stock/components/CaisseStockLinksOverview";
+import PortionnementTab from "./stock/components/PortionnementTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
@@ -81,6 +82,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
   { id: "destock_live", label: "Déstockage live", icon: Activity },
   { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
+  { id: "portionnement", label: "Portionnement", icon: Scale },
   { id: "products", label: "Produits", icon: Package },
   { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
@@ -1233,6 +1235,11 @@ export default function StockPage() {
         {/* LIAISONS CAISSE↔STOCK (bidirectionnel) */}
         {activeSection === "caisse_links" && (
           <CaisseStockLinksOverview />
+        )}
+
+        {/* PORTIONNEMENT */}
+        {activeSection === "portionnement" && (
+          <PortionnementTab />
         )}
 
 

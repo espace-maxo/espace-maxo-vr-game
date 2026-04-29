@@ -394,20 +394,43 @@ async def receive_purchase_order(po_id: str, data: ReceivePayload):
 
             # Create stock movement "entree"
             if sp_id:
+                # Apply portionnement rule: convert purchase qty into portions for non-liquid products.
+                # The rule lookup is local to this file via stock_products + portion_* collections.
+                sp_doc = await db.stock_products.find_one({"id": sp_id}, {"_id": 0}) or {}
+                # Inline resolve of portion factor (avoid circular import with stock router)
+                category_id = sp_doc.get("category_id", "")
+                override = await db.portion_product_overrides.find_one({"stock_product_id": sp_id}, {"_id": 0})
+                cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0}) if category_id else None
+                portion_factor = 1.0
+                is_liquid = False
+                if override:
+                    portion_factor = float(override.get("portions_per_unit", 1.0) or 1.0)
+                    is_liquid = override.get("is_liquid")
+                    if is_liquid is None:
+                        is_liquid = bool((cat_rule or {}).get("is_liquid", False))
+                elif cat_rule:
+                    portion_factor = float(cat_rule.get("portions_per_unit", 1.0) or 1.0)
+                    is_liquid = bool(cat_rule.get("is_liquid", False))
+
+                effective_qty = rec.quantity_received if is_liquid else rec.quantity_received * portion_factor
                 mvt = {
                     "id": str(uuid.uuid4()),
                     "product_id": sp_id,
                     "movement_type": "entree",
-                    "quantity": rec.quantity_received,
-                    "unit_price": rec.unit_price if rec.unit_price is not None else matched["unit_price"],
-                    "reason": f"Réception BC {po['number']}",
+                    "quantity": effective_qty,
+                    "unit_price": (rec.unit_price if rec.unit_price is not None else matched["unit_price"]) / (portion_factor if (not is_liquid and portion_factor) else 1),
+                    "reason": (
+                        f"Réception BC {po['number']} ({rec.quantity_received} × {portion_factor} portion/u = {effective_qty} portions)"
+                        if (not is_liquid and portion_factor != 1.0)
+                        else f"Réception BC {po['number']}"
+                    ),
                     "user_name": data.user_name,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 await db.stock_movements.insert_one(mvt)
                 await db.stock_products.update_one(
                     {"id": sp_id},
-                    {"$inc": {"quantity": rec.quantity_received}}
+                    {"$inc": {"quantity": effective_qty}}
                 )
 
             received_log.append({
