@@ -331,13 +331,15 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
               <p>Aucune commande Manager General</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredOrders.map(order => (
-                <div 
+            (() => {
+              const unpaid = filteredOrders.filter(o => o.status !== "regle");
+              const paid = filteredOrders.filter(o => o.status === "regle");
+              const renderOrder = (order) => (
+                <div
                   key={order.id}
                   className={`rounded-lg p-4 border ${
-                    order.status === "regle" 
-                      ? "bg-green-900/20 border-green-500/30" 
+                    order.status === "regle"
+                      ? "bg-green-900/20 border-green-500/30"
                       : "bg-red-900/20 border-red-500/30"
                   }`}
                 >
@@ -446,8 +448,50 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+              return (
+                <div className="space-y-6">
+                  {unpaid.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <span className="bg-red-500/20 text-red-300 border border-red-500/40 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                          <X className="w-3 h-3" />
+                          À encaisser
+                        </span>
+                        <span className="text-red-400 text-sm font-medium">
+                          {unpaid.length} facture{unpaid.length > 1 ? "s" : ""}
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          · Total {formatPrice(unpaid.reduce((s, o) => s + (o.total || 0), 0))} F · ⏸ Exclues du point
+                        </span>
+                      </div>
+                      <div className="space-y-3" data-testid="unpaid-section">
+                        {unpaid.map(renderOrder)}
+                      </div>
+                    </div>
+                  )}
+                  {paid.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                          <Check className="w-3 h-3" />
+                          Réglées
+                        </span>
+                        <span className="text-emerald-400 text-sm font-medium">
+                          {paid.length} facture{paid.length > 1 ? "s" : ""}
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          · Total {formatPrice(paid.reduce((s, o) => s + (o.total || 0), 0))} F · ✓ Incluses dans le point
+                        </span>
+                      </div>
+                      <div className="space-y-3" data-testid="paid-section">
+                        {paid.map(renderOrder)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
         </CardContent>
       </Card>
