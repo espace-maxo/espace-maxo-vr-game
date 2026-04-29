@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Scale, Save, RefreshCw, Search, Droplet, Package, Wand2, X,
-  Calculator, ArrowRight, Filter,
+  Calculator, ArrowRight, Filter, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ export default function PortionnementTab() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [applyingDaily, setApplyingDaily] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [onlyConfigured, setOnlyConfigured] = useState(false);
@@ -40,7 +41,15 @@ export default function PortionnementTab() {
       const list = r.data.product_rules || [];
       setRules(list);
       const orig = {};
-      list.forEach(x => { orig[x.stock_product_id] = { ppu: x.portions_per_unit, liq: x.is_liquid, pu: x.purchase_unit, conf: x.configured }; });
+      list.forEach(x => {
+        orig[x.stock_product_id] = {
+          ppu: x.portions_per_unit,
+          liq: x.is_liquid,
+          pu: x.purchase_unit,
+          dc: x.daily_consumption || 0,
+          conf: x.configured,
+        };
+      });
       setOriginalRules(orig);
     } catch (e) {
       toast.error("Erreur chargement");
@@ -95,7 +104,8 @@ export default function PortionnementTab() {
       if (!o) return r.configured;
       const valChanged = parseFloat(r.portions_per_unit) !== parseFloat(o.ppu)
         || !!r.is_liquid !== !!o.liq
-        || (r.purchase_unit || "") !== (o.pu || "");
+        || (r.purchase_unit || "") !== (o.pu || "")
+        || parseFloat(r.daily_consumption || 0) !== parseFloat(o.dc || 0);
       return valChanged;
     });
   }, [rules, originalRules]);
@@ -111,6 +121,7 @@ export default function PortionnementTab() {
           portions_per_unit: parseFloat(r.portions_per_unit) || 1.0,
           is_liquid: !!r.is_liquid,
           purchase_unit: r.purchase_unit || "",
+          daily_consumption: parseFloat(r.daily_consumption) || 0,
         }));
       await axios.put(`${API}/stock/portionnement/rules`, {
         category_rules: [],
@@ -139,10 +150,29 @@ export default function PortionnementTab() {
     }
   };
 
+  const applyDailyDeductions = async () => {
+    setApplyingDaily(true);
+    try {
+      const r = await axios.post(`${API}/stock/portionnement/apply-daily`);
+      const { applied_count, total_deducted } = r.data;
+      if (applied_count === 0) {
+        toast.info("Aucun déstockage journalier à appliquer (déjà à jour ou aucune règle configurée)");
+      } else {
+        toast.success(`✓ ${applied_count} produit${applied_count > 1 ? "s" : ""} déstocké${applied_count > 1 ? "s" : ""} (${total_deducted.toLocaleString('fr-FR')} portions au total)`);
+      }
+      await fetchRules();
+    } catch (e) {
+      toast.error("Erreur lors du déstockage journalier");
+    } finally {
+      setApplyingDaily(false);
+    }
+  };
+
   // -------- Stats --------
   const liquidCount = rules.filter(r => r.is_liquid).length;
   const configuredCount = rules.filter(r => r.configured).length;
   const portionCount = rules.length - liquidCount;
+  const dailyCount = rules.filter(r => parseFloat(r.daily_consumption) > 0).length;
 
   // -------- Simulator --------
   const simSuggestions = useMemo(() => {
@@ -186,6 +216,11 @@ export default function PortionnementTab() {
                 <Wand2 className={`w-4 h-4 mr-1 ${applying ? "animate-spin" : ""}`} />
                 Appliquer les unités
               </Button>
+              <Button onClick={applyDailyDeductions} variant="outline" size="sm" className="bg-cyan-600/20 border-cyan-500/40 text-cyan-300 hover:bg-cyan-600/30"
+                disabled={applyingDaily} data-testid="apply-daily-btn">
+                <Clock className={`w-4 h-4 mr-1 ${applyingDaily ? "animate-spin" : ""}`} />
+                Appliquer la conso du jour
+              </Button>
               <Button onClick={saveAll} className="bg-violet-600 hover:bg-violet-700"
                 disabled={saving || !dirty} data-testid="save-rules-btn">
                 <Save className="w-4 h-4 mr-1" />
@@ -195,11 +230,12 @@ export default function PortionnementTab() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <Kpi label="Produits" value={rules.length} color="text-slate-300" icon={<Package className="w-3 h-3" />} />
             <Kpi label="Configurés" value={configuredCount} color="text-violet-400" />
             <Kpi label="Liquides" value={liquidCount} color="text-cyan-400" icon={<Droplet className="w-3 h-3" />} />
             <Kpi label="En portions" value={portionCount} color="text-amber-400" />
+            <Kpi label="Conso/jour" value={dailyCount} color="text-cyan-300" icon={<Clock className="w-3 h-3" />} />
           </div>
         </CardContent>
       </Card>
@@ -252,9 +288,10 @@ export default function PortionnementTab() {
           {/* Header row */}
           <div className="hidden md:flex items-center px-4 py-2 text-xs text-slate-500 font-medium border-b border-slate-700">
             <span className="flex-1">Produit</span>
-            <span className="w-40">Catégorie</span>
-            <span className="w-72 text-center">Règle (1 unité d'achat = N portions)</span>
-            <span className="w-28 text-center">Type</span>
+            <span className="w-32">Catégorie</span>
+            <span className="w-72 text-center">Règle (1 unité = N portions)</span>
+            <span className="w-32 text-center" title="Conso. journalière auto (en portions/jour)">⏱ Conso/jour</span>
+            <span className="w-24 text-center">Type</span>
           </div>
           <div className="divide-y divide-slate-800">
             {paged.map(r => (
@@ -269,7 +306,7 @@ export default function PortionnementTab() {
                     Stock : {(r.current_quantity || 0).toLocaleString('fr-FR')} {r.current_unit}
                   </div>
                 </div>
-                <div className="w-full md:w-40 text-slate-400 text-xs truncate" title={r.category_name}>
+                <div className="w-full md:w-32 text-slate-400 text-xs truncate" title={r.category_name}>
                   {r.category_name || <span className="text-slate-600 italic">sans catégorie</span>}
                 </div>
                 <div className="w-full md:w-72 flex items-center gap-1 justify-center">
@@ -317,7 +354,18 @@ export default function PortionnementTab() {
                   />
                   <span className="text-slate-500 text-xs whitespace-nowrap">{r.is_liquid ? r.purchase_unit || r.current_unit : "portion"}{!r.is_liquid && parseFloat(r.portions_per_unit) > 1 ? "s" : ""}</span>
                 </div>
-                <div className="w-full md:w-28 flex justify-center">
+                <div className="w-full md:w-32 flex items-center gap-1 justify-center">
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={r.daily_consumption || 0}
+                    onChange={(e) => updateRule(r.stock_product_id, { daily_consumption: e.target.value })}
+                    placeholder="0"
+                    className={`bg-slate-900 border-slate-700 text-white text-center h-8 w-20 ${parseFloat(r.daily_consumption) > 0 ? "border-cyan-500/50 ring-1 ring-cyan-500/20" : ""}`}
+                    data-testid={`dc-${r.stock_product_id}`}
+                  />
+                  <span className="text-slate-500 text-xs whitespace-nowrap">/j</span>
+                </div>
+                <div className="w-full md:w-24 flex justify-center">
                   <button
                     type="button"
                     onClick={() => updateRule(r.stock_product_id, { is_liquid: !r.is_liquid })}

@@ -195,6 +195,7 @@ class PortionProductOverride(BaseModel):
     portions_per_unit: float = 1.0  # Override the category rule for this specific product
     is_liquid: Optional[bool] = None  # Override liquid flag (None = inherit from category)
     purchase_unit: Optional[str] = None  # Purchase unit (kg, l, piece, pot, etc.) — saved on the stock product
+    daily_consumption: float = 0.0  # Time-based deduction: portions consumed per day (0 = none)
 
 class PortionRulesUpdate(BaseModel):
     category_rules: List[PortionCategoryRule] = []
@@ -362,6 +363,12 @@ async def destock_live_dashboard(limit: int = 50):
     """
     now = datetime.now(timezone.utc)
     cutoff_iso = (now - timedelta(days=30)).isoformat()
+
+    # Auto-trigger daily deductions (silent, idempotent: only applies if elapsed days >= 1)
+    try:
+        await _apply_daily_deductions_internal(silent=True)
+    except Exception as e:
+        logger.warning(f"Daily deduction auto-trigger failed: {e}")
 
     # Recent sales (movements tied to invoices)
     recent_sales = await db.stock_movements.find(
@@ -587,10 +594,12 @@ async def get_portionnement_rules():
             else:
                 is_liq = bool(is_liq)
             saved_pu = saved.get("purchase_unit") or sp.get("purchase_unit") or sp.get("unit", "")
+            daily = float(saved.get("daily_consumption", 0) or 0)
         else:
             ppu = 1.0
             is_liq = default_liquid
             saved_pu = sp.get("purchase_unit") or sp.get("unit", "")
+            daily = 0.0
         rules_resp.append({
             "stock_product_id": spid,
             "stock_product_name": sp.get("name", ""),
@@ -602,6 +611,8 @@ async def get_portionnement_rules():
             "current_quantity": sp.get("quantity", 0),
             "portions_per_unit": ppu,
             "is_liquid": is_liq,
+            "daily_consumption": daily,
+            "last_daily_deduction_date": sp.get("last_daily_deduction_date", ""),
             "configured": saved is not None,
         })
 
@@ -674,6 +685,111 @@ async def apply_portionnement_units():
             )
             updated += 1
     return {"success": True, "updated_to_portion": updated, "kept_liquid": skipped_liquid}
+
+
+
+async def _apply_daily_deductions_internal(silent: bool = True) -> dict:
+    """Run daily deduction for every product with daily_consumption > 0.
+    Computes elapsed full days since last_daily_deduction_date (or override.updated_at),
+    deducts (days * daily_consumption), stamps last_daily_deduction_date to today.
+    Logs each deduction in stock_movements.
+    Returns a summary report.
+    """
+    today = datetime.now(timezone.utc).date()
+    today_iso = today.isoformat()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    overrides = await db.portion_product_overrides.find(
+        {"daily_consumption": {"$gt": 0}}, {"_id": 0}
+    ).to_list(2000)
+    if not overrides:
+        return {"applied_count": 0, "total_deducted": 0, "details": []}
+
+    details = []
+    applied_count = 0
+    total_deducted = 0.0
+
+    for ov in overrides:
+        spid = ov.get("stock_product_id")
+        daily = float(ov.get("daily_consumption", 0) or 0)
+        if daily <= 0:
+            continue
+        sp = await db.stock_products.find_one({"id": spid}, {"_id": 0})
+        if not sp or not sp.get("is_active", True):
+            continue
+
+        # Determine reference date: last deduction or override creation date (fall back to today)
+        last_date_str = sp.get("last_daily_deduction_date") or ov.get("updated_at") or today_iso
+        try:
+            last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00")).date()
+        except Exception:
+            last_date = today
+        days_elapsed = (today - last_date).days
+        if days_elapsed <= 0:
+            continue
+
+        deducted_qty = daily * days_elapsed
+        old_qty = sp.get("quantity", 0)
+        new_qty = max(0, old_qty - deducted_qty)
+        actually_deducted = old_qty - new_qty
+        smin = sp.get("stock_min", 5)
+        new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+        new_valeur = new_qty * sp.get("purchase_price", 0)
+
+        await db.stock_movements.insert_one({
+            "id": str(uuid.uuid4()),
+            "product_id": spid,
+            "product_name": sp.get("name", ""),
+            "product_code": sp.get("code", ""),
+            "movement_type": "sortie",
+            "quantity": actually_deducted,
+            "previous_quantity": old_qty,
+            "new_quantity": new_qty,
+            "unit": sp.get("unit", ""),
+            "unit_price": sp.get("purchase_price", 0),
+            "total_value": actually_deducted * sp.get("purchase_price", 0),
+            "reason": (
+                f"Conso journalière auto ({daily}/jour × {days_elapsed} jour{'s' if days_elapsed > 1 else ''})"
+            ),
+            "user_name": "Système (auto)",
+            "created_at": now_iso,
+        })
+        await db.stock_products.update_one(
+            {"id": spid},
+            {"$set": {
+                "quantity": new_qty,
+                "valeur_stock": new_valeur,
+                "statut": new_statut,
+                "last_daily_deduction_date": today_iso,
+                "updated_at": now_iso,
+            }}
+        )
+        applied_count += 1
+        total_deducted += actually_deducted
+        details.append({
+            "stock_product_id": spid,
+            "name": sp.get("name", ""),
+            "days": days_elapsed,
+            "daily": daily,
+            "deducted": actually_deducted,
+            "previous_qty": old_qty,
+            "new_qty": new_qty,
+        })
+
+    if not silent:
+        logger.info(f"Daily deduction: {applied_count} products, total {total_deducted} portions deducted")
+
+    return {
+        "applied_count": applied_count,
+        "total_deducted": total_deducted,
+        "details": details,
+    }
+
+
+@router.post("/portionnement/apply-daily")
+async def apply_daily_deductions():
+    """Manually trigger the daily deduction for all configured products."""
+    return await _apply_daily_deductions_internal(silent=False)
 
 
 
