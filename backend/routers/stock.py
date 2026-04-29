@@ -558,84 +558,87 @@ def _is_liquid_category(category_name: str) -> bool:
 
 @router.get("/portionnement/rules")
 async def get_portionnement_rules():
-    """Get all portionnement rules: per-category defaults + per-product overrides.
-    For categories not yet configured, auto-detect liquid status from name."""
-    cats = await db.stock_categories.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    """Get all portionnement rules: product-level only.
+    Returns the full list of active stock products with their effective rule.
+    For products without an override:
+      - portions_per_unit defaults to 1.0
+      - is_liquid is auto-detected from the category name (boisson/huile/cocktail).
+    """
     products = await db.stock_products.find({"is_active": True}, {"_id": 0}).sort("name", 1).to_list(5000)
+    cats = await db.stock_categories.find({}, {"_id": 0}).to_list(500)
+    cat_by_id = {c.get("id"): c for c in cats}
 
-    saved_cat_rules = {r["category_id"]: r async for r in db.portion_category_rules.find({}, {"_id": 0})}
     saved_prod_rules = {r["stock_product_id"]: r async for r in db.portion_product_overrides.find({}, {"_id": 0})}
 
-    cat_rules_resp = []
-    for c in cats:
-        cid = c.get("id")
-        saved = saved_cat_rules.get(cid)
-        cat_rules_resp.append({
-            "category_id": cid,
-            "category_name": c.get("name", ""),
-            "portions_per_unit": (saved or {}).get("portions_per_unit", 1.0),
-            "is_liquid": (saved or {}).get("is_liquid", _is_liquid_category(c.get("name", ""))),
+    rules_resp = []
+    for sp in products:
+        spid = sp.get("id")
+        cat = cat_by_id.get(sp.get("category_id", ""))
+        cat_name = (cat or {}).get("name", "")
+        saved = saved_prod_rules.get(spid)
+        # Default liquid detection from category name (UI suggestion only)
+        default_liquid = _is_liquid_category(cat_name)
+        if saved:
+            ppu = float(saved.get("portions_per_unit", 1.0) or 1.0)
+            is_liq = saved.get("is_liquid")
+            if is_liq is None:
+                is_liq = default_liquid
+            else:
+                is_liq = bool(is_liq)
+        else:
+            ppu = 1.0
+            is_liq = default_liquid
+        rules_resp.append({
+            "stock_product_id": spid,
+            "stock_product_name": sp.get("name", ""),
+            "stock_product_code": sp.get("code", ""),
+            "category_id": sp.get("category_id", ""),
+            "category_name": cat_name,
+            "current_unit": sp.get("unit", ""),
+            "purchase_unit": sp.get("purchase_unit", "") or sp.get("unit", ""),
+            "current_quantity": sp.get("quantity", 0),
+            "portions_per_unit": ppu,
+            "is_liquid": is_liq,
             "configured": saved is not None,
         })
 
-    prod_overrides_resp = []
-    for sp in products:
-        spid = sp.get("id")
-        saved = saved_prod_rules.get(spid)
-        if saved:
-            prod_overrides_resp.append({
-                "stock_product_id": spid,
-                "stock_product_name": sp.get("name", ""),
-                "category_id": sp.get("category_id", ""),
-                "portions_per_unit": saved.get("portions_per_unit"),
-                "is_liquid": saved.get("is_liquid"),
-            })
-
-    return {"category_rules": cat_rules_resp, "product_overrides": prod_overrides_resp}
+    return {"product_rules": rules_resp}
 
 
 @router.put("/portionnement/rules")
 async def update_portionnement_rules(data: PortionRulesUpdate):
-    """Replace all portionnement rules atomically."""
+    """Replace product-level portionnement rules atomically.
+    Note: category-level rules are no longer supported (kept in payload for backwards compat but ignored).
+    """
     now = datetime.now(timezone.utc).isoformat()
-    # Replace category rules
-    await db.portion_category_rules.delete_many({})
-    if data.category_rules:
-        await db.portion_category_rules.insert_many([
-            {**r.model_dump(), "updated_at": now} for r in data.category_rules
-        ])
-    # Replace product overrides
     await db.portion_product_overrides.delete_many({})
     if data.product_overrides:
         await db.portion_product_overrides.insert_many([
             {**r.model_dump(), "updated_at": now} for r in data.product_overrides
         ])
-    return {"success": True, "category_rules_count": len(data.category_rules), "overrides_count": len(data.product_overrides)}
+    # Drop legacy category rules: per-product is the new source of truth
+    await db.portion_category_rules.delete_many({})
+    return {"success": True, "rules_count": len(data.product_overrides)}
 
 
 async def _resolve_portion_factor(stock_product: dict) -> tuple:
     """Returns (portions_per_unit: float, is_liquid: bool) for a given stock product.
-    Priority: product override → category rule → category-name auto-detection (default 1.0).
+    Priority: product rule → auto-detection by category name (default 1.0, is_liquid=False).
     """
     spid = stock_product.get("id")
     category_id = stock_product.get("category_id", "")
 
     override = await db.portion_product_overrides.find_one({"stock_product_id": spid}, {"_id": 0})
     if override is not None:
+        ppu = float(override.get("portions_per_unit", 1.0) or 1.0)
         is_liq = override.get("is_liquid")
-        ppu = override.get("portions_per_unit", 1.0)
         if is_liq is None:
-            # Inherit liquid flag from category
-            cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0})
-            is_liq = (cat_rule or {}).get("is_liquid", False)
-        return float(ppu or 1.0), bool(is_liq)
+            cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0}) if category_id else None
+            is_liq = _is_liquid_category((cat or {}).get("name", ""))
+        return ppu, bool(is_liq)
 
-    cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0})
-    if cat_rule:
-        return float(cat_rule.get("portions_per_unit", 1.0) or 1.0), bool(cat_rule.get("is_liquid", False))
-
-    # No rule at all: auto-detect liquid by category name, default factor=1
-    cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0})
+    # No rule: default factor 1.0, auto-detect liquid by category name
+    cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0}) if category_id else None
     is_liq = _is_liquid_category((cat or {}).get("name", ""))
     return 1.0, is_liq
 

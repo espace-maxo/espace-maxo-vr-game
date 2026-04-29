@@ -394,23 +394,25 @@ async def receive_purchase_order(po_id: str, data: ReceivePayload):
 
             # Create stock movement "entree"
             if sp_id:
-                # Apply portionnement rule: convert purchase qty into portions for non-liquid products.
-                # The rule lookup is local to this file via stock_products + portion_* collections.
+                # Apply portionnement rule (per-product only): convert purchase qty into portions for non-liquid products.
                 sp_doc = await db.stock_products.find_one({"id": sp_id}, {"_id": 0}) or {}
-                # Inline resolve of portion factor (avoid circular import with stock router)
                 category_id = sp_doc.get("category_id", "")
                 override = await db.portion_product_overrides.find_one({"stock_product_id": sp_id}, {"_id": 0})
-                cat_rule = await db.portion_category_rules.find_one({"category_id": category_id}, {"_id": 0}) if category_id else None
                 portion_factor = 1.0
                 is_liquid = False
                 if override:
                     portion_factor = float(override.get("portions_per_unit", 1.0) or 1.0)
                     is_liquid = override.get("is_liquid")
                     if is_liquid is None:
-                        is_liquid = bool((cat_rule or {}).get("is_liquid", False))
-                elif cat_rule:
-                    portion_factor = float(cat_rule.get("portions_per_unit", 1.0) or 1.0)
-                    is_liquid = bool(cat_rule.get("is_liquid", False))
+                        # Auto-detect liquid by category name as fallback
+                        cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0}) if category_id else None
+                        cat_name = (cat or {}).get("name", "").lower()
+                        is_liquid = any(kw in cat_name for kw in ["boisson", "huile", "matiere grasse", "cocktail", "bar", "sirop"])
+                # If no override at all: portion_factor=1.0, is_liquid auto from category name
+                else:
+                    cat = await db.stock_categories.find_one({"id": category_id}, {"_id": 0}) if category_id else None
+                    cat_name = (cat or {}).get("name", "").lower()
+                    is_liquid = any(kw in cat_name for kw in ["boisson", "huile", "matiere grasse", "cocktail", "bar", "sirop"])
 
                 effective_qty = rec.quantity_received if is_liquid else rec.quantity_received * portion_factor
                 mvt = {
