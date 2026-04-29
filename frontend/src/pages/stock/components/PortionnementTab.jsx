@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Scale, Save, RefreshCw, Search, Droplet, Package, AlertCircle, Wand2, Plus, X,
+  Calculator, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,10 @@ export default function PortionnementTab() {
   const [applying, setApplying] = useState(false);
   const [search, setSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  // Simulator state
+  const [simSearch, setSimSearch] = useState("");
+  const [simProduct, setSimProduct] = useState(null);
+  const [simQty, setSimQty] = useState("");
 
   const fetchAll = async () => {
     setLoading(true);
@@ -137,6 +142,47 @@ export default function PortionnementTab() {
 
   const liquidCount = categoryRules.filter(c => c.is_liquid).length;
   const portionCount = categoryRules.length - liquidCount;
+
+  // Resolve the effective portion rule for a product (override → category → defaults)
+  const resolveRule = (product) => {
+    if (!product) return null;
+    const override = productOverrides.find(o => o.stock_product_id === product.id);
+    const catRule = categoryRules.find(c => c.category_id === product.category_id);
+    if (override) {
+      const isLiquid = override.is_liquid === true ? true
+        : override.is_liquid === false ? false
+        : (catRule?.is_liquid || false);
+      return {
+        portions_per_unit: parseFloat(override.portions_per_unit) || 1.0,
+        is_liquid: isLiquid,
+        source: "override",
+      };
+    }
+    if (catRule) {
+      return {
+        portions_per_unit: parseFloat(catRule.portions_per_unit) || 1.0,
+        is_liquid: !!catRule.is_liquid,
+        source: "category",
+      };
+    }
+    return { portions_per_unit: 1.0, is_liquid: false, source: "default" };
+  };
+
+  // Simulator suggestions: products matching search, only if non-empty
+  const simSuggestions = useMemo(() => {
+    if (!simSearch.trim() || simProduct) return [];
+    const q = simSearch.toLowerCase();
+    return allProducts
+      .filter(p => p.name.toLowerCase().includes(q) || (p.code || "").toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [simSearch, allProducts, simProduct]);
+
+  const simRule = simProduct ? resolveRule(simProduct) : null;
+  const simQtyNum = parseFloat(simQty) || 0;
+  const simResult = simProduct && simRule
+    ? (simRule.is_liquid ? simQtyNum : simQtyNum * simRule.portions_per_unit)
+    : 0;
+  const simNewStock = simProduct ? (simProduct.quantity || 0) + simResult : 0;
 
   return (
     <div className="space-y-4" data-testid="portionnement-tab">
@@ -332,6 +378,146 @@ export default function PortionnementTab() {
                 </Button>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SIMULATEUR */}
+      <Card className="bg-gradient-to-br from-emerald-900/20 via-slate-800/50 to-slate-800/50 border-emerald-500/30" data-testid="simulator-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-white text-base flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-emerald-400" />
+            Simulateur d'achat
+          </CardTitle>
+          <p className="text-slate-400 text-sm">
+            Vérifiez l'impact d'une réception sur le stock <strong>avant</strong> d'enregistrer un Bon de Commande. Calcul instantané selon les règles configurées.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Left: product picker + qty */}
+            <div className="space-y-3">
+              <div className="relative">
+                <label className="text-slate-400 text-xs uppercase tracking-wide block mb-1">Produit Stock</label>
+                <Search className="absolute left-3 top-9 w-4 h-4 text-slate-500" />
+                <Input
+                  value={simProduct ? simProduct.name : simSearch}
+                  onChange={(e) => {
+                    setSimSearch(e.target.value);
+                    if (simProduct) setSimProduct(null);
+                  }}
+                  placeholder="Rechercher (ex: riz, poulet, mouton…)"
+                  className="bg-slate-900 border-slate-700 text-white pl-9"
+                  data-testid="sim-product-search"
+                />
+                {simSuggestions.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    {simSuggestions.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => { setSimProduct(p); setSimSearch(""); }}
+                        className="w-full text-left px-3 py-2 hover:bg-emerald-500/10 flex items-center gap-2 text-sm"
+                        data-testid={`sim-pick-${p.id}`}
+                      >
+                        <Package className="w-3 h-3 text-emerald-400" />
+                        <span className="text-white">{p.name}</span>
+                        <span className="text-slate-500 text-xs">{p.code} · {p.unit}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {simProduct && (
+                  <button
+                    type="button"
+                    onClick={() => { setSimProduct(null); setSimSearch(""); setSimQty(""); }}
+                    className="absolute right-2 top-9 text-slate-500 hover:text-white p-1"
+                    title="Effacer"
+                    data-testid="sim-clear"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="text-slate-400 text-xs uppercase tracking-wide block mb-1">
+                  Quantité reçue {simProduct && <span className="text-slate-500">en {simProduct.purchase_unit || simProduct.unit || "unité"}</span>}
+                </label>
+                <Input
+                  type="number" min="0" step="0.01"
+                  value={simQty}
+                  onChange={(e) => setSimQty(e.target.value)}
+                  placeholder="Ex: 10"
+                  className="bg-slate-900 border-slate-700 text-white"
+                  disabled={!simProduct}
+                  data-testid="sim-qty"
+                />
+              </div>
+            </div>
+
+            {/* Right: result */}
+            <div className="bg-slate-900/40 border border-slate-700 rounded p-4">
+              {!simProduct && (
+                <div className="text-center py-6">
+                  <Calculator className="w-10 h-10 text-slate-700 mx-auto mb-2" />
+                  <p className="text-slate-500 text-sm">Sélectionnez un produit et une quantité pour simuler.</p>
+                </div>
+              )}
+              {simProduct && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Règle appliquée</span>
+                    <Badge className={`${
+                      simRule.is_liquid
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                        : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    } text-[10px] py-0`}>
+                      {simRule.is_liquid ? <><Droplet className="w-3 h-3 mr-1 inline-block" /> Liquide (pas de conversion)</> : `${simRule.portions_per_unit} portion${simRule.portions_per_unit > 1 ? "s" : ""}/unité`}
+                      {simRule.source === "override" && " (override)"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm pt-2 border-t border-slate-700">
+                    <span className="text-slate-400">Stock actuel</span>
+                    <span className="text-white font-mono">{(simProduct.quantity || 0).toLocaleString('fr-FR')} {simProduct.unit}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Quantité achetée</span>
+                    <span className="text-white font-mono">
+                      {simQtyNum.toLocaleString('fr-FR')} {simProduct.purchase_unit || simProduct.unit}
+                    </span>
+                  </div>
+
+                  {!simRule.is_liquid && simRule.portions_per_unit !== 1 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Conversion</span>
+                      <span className="text-amber-300 font-mono">
+                        ×{simRule.portions_per_unit}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded px-3 py-2 mt-2">
+                    <span className="text-emerald-300 text-sm font-medium flex items-center gap-1">
+                      <ArrowRight className="w-4 h-4" />
+                      Sera ajouté au stock
+                    </span>
+                    <span className="text-emerald-300 font-bold text-lg" data-testid="sim-result-portions">
+                      +{simResult.toLocaleString('fr-FR')} {simProduct.unit}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-800/40 border border-slate-700 rounded px-3 py-2">
+                    <span className="text-slate-300 text-sm font-medium">Stock après réception</span>
+                    <span className="text-white font-bold text-lg" data-testid="sim-result-new-stock">
+                      {simNewStock.toLocaleString('fr-FR')} {simProduct.unit}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
