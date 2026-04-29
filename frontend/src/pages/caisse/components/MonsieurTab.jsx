@@ -285,6 +285,15 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         </Card>
       </div>
 
+      {/* Info banner */}
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-200 flex items-start gap-2">
+        <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+        <span>
+          ℹ️ Seules les commandes <strong className="text-emerald-300">réglées</strong> figurent dans <strong>le point hebdo et journalier</strong>.
+          Les commandes <strong className="text-amber-300">non réglées</strong> sont en attente et n'impactent pas les totaux.
+        </span>
+      </div>
+
       {/* Filter Tabs */}
       <div className="flex gap-2 flex-wrap">
         <Button
@@ -342,6 +351,13 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
                         }`}>
                           {order.status === "regle" ? "✓ Réglé" : "✗ Non réglé"}
                         </Badge>
+                        <Badge className={`text-[10px] ${
+                          order.status === "regle"
+                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-300 border border-amber-500/40"
+                        }`}>
+                          {order.status === "regle" ? "✓ Inclus dans le point" : "⏸ Exclu du point (en attente)"}
+                        </Badge>
                         <span className="text-slate-500 text-xs">
                           {format(new Date(order.created_at), "dd/MM/yyyy à HH:mm", { locale: fr })}
                         </span>
@@ -398,15 +414,17 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
                       <Button
                         size="sm"
                         onClick={() => toggleStatus(order)}
-                        className={order.status === "regle" 
-                          ? "bg-red-600 hover:bg-red-700" 
-                          : "bg-green-600 hover:bg-green-700"
+                        title={order.status === "regle" ? "Cliquer pour repasser cette vente en NON RÉGLÉE (sortira du point)" : "Cliquer pour MARQUER comme RÉGLÉE (entre dans le point)"}
+                        className={order.status === "regle"
+                          ? "bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/40 shadow-md animate-pulse"
                         }
+                        data-testid={`toggle-paid-${order.id}`}
                       >
                         {order.status === "regle" ? (
-                          <><X className="w-4 h-4 mr-1" /> Non réglé</>
+                          <><X className="w-4 h-4 mr-1" /> Annuler le règlement</>
                         ) : (
-                          <><Check className="w-4 h-4 mr-1" /> Réglé</>
+                          <><Check className="w-4 h-4 mr-1" /> Encaisser maintenant</>
                         )}
                       </Button>
                       <Button

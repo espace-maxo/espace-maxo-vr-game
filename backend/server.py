@@ -5402,7 +5402,7 @@ async def get_weekly_report(week_start: Optional[str] = None):
             "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
         }, {"_id": 0}).to_list(500)
         
-        mg_orders_total = sum(o.get("total", 0) for o in mg_orders)
+        mg_orders_total = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "regle")
         mg_orders_unpaid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "non_regle")
         mg_orders_paid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "regle")
         mg_purchases_total = sum(p.get("amount", 0) for p in mg_purchases)
@@ -5413,6 +5413,9 @@ async def get_weekly_report(week_start: Optional[str] = None):
             daily_data[date]["manager_general"] = {"orders_count": 0, "orders_total": 0, "purchases_count": 0, "purchases_total": 0}
         
         for o in mg_orders:
+            # Only count paid orders in the daily/weekly point — unpaid ones don't contribute to revenue.
+            if o.get("status") != "regle":
+                continue
             odate = (o.get("created_at") or "")[:10]
             if odate in daily_data:
                 daily_data[odate]["manager_general"]["orders_count"] += 1
@@ -5621,7 +5624,8 @@ async def get_activity_report(
             "created_at": {"$gte": start_str, "$lte": end_str}
         }, {"_id": 0}).to_list(500)
         
-        mg_orders_total = sum(o.get("total", 0) for o in mg_orders)
+        # Manager General orders: only paid orders count in totals/point
+        mg_orders_total = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "regle")
         mg_orders_unpaid = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "non_regle")
         mg_purchases_total = sum(p.get("amount", 0) for p in mg_purchases)
         mg_purchases_unpaid = sum(p.get("amount", 0) for p in mg_purchases if p.get("status") == "non_regle")
