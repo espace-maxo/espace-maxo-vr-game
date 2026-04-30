@@ -169,6 +169,32 @@ const AchatsTab = ({ ctx }) => {
   const setReviewViewModeFor = (expenseId, mode) =>
     setReviewViewMode((prev) => ({ ...prev, [expenseId]: mode }));
 
+  // Author filter for "Validation en cours" (admin only) : 'all' | 'admin' | 'manager' | 'other'
+  const [authorFilter, setAuthorFilter] = React.useState('all');
+  // List of unique authors found in current expenses (for the dropdown of "other")
+  const allAuthors = React.useMemo(() => {
+    const set = new Set();
+    (expenses || []).forEach(e => { if (e.requested_by) set.add(e.requested_by); });
+    return Array.from(set);
+  }, [expenses]);
+
+  const matchesAuthorFilter = (expense) => {
+    if (authorFilter === 'all') return true;
+    const author = (expense.requested_by || '').toLowerCase();
+    if (authorFilter === 'admin') {
+      return author.includes('admin') || author.includes('administrateur');
+    }
+    if (authorFilter === 'manager') {
+      return author.includes('manager') || author.includes('gérante') || author.includes('gerante');
+    }
+    if (authorFilter === 'other') {
+      return !author.includes('admin') && !author.includes('administrateur')
+          && !author.includes('manager') && !author.includes('gérante') && !author.includes('gerante');
+    }
+    // Specific named filter (e.g., a precise full_name)
+    return expense.requested_by === authorFilter;
+  };
+
   const getEditedItems = (expense) => {
     if (strikeEdits[expense.id]) return strikeEdits[expense.id];
     return (expense.items || []).map((it) => ({
@@ -480,6 +506,44 @@ const AchatsTab = ({ ctx }) => {
                   {showAllExpenses ? 'Masquer détails' : 'Voir tout en détail'}
                 </Button>
               </div>
+
+              {/* AUTHOR FILTER (admin only) — visible only on "Validation en cours" subtab */}
+              {currentUser?.role === 'admin' && achatsSubView === 'en_cours' && (
+                <div className="flex items-center gap-2 flex-wrap" data-testid="author-filter-bar">
+                  <span className="text-slate-400 text-xs uppercase tracking-wide font-medium">Filtrer par auteur :</span>
+                  {[
+                    { value: 'all',     label: 'Tous',     color: 'bg-slate-600' },
+                    { value: 'admin',   label: 'Admin',    color: 'bg-amber-600' },
+                    { value: 'manager', label: 'Gérante',  color: 'bg-purple-600' },
+                    { value: 'other',   label: 'Autres',   color: 'bg-blue-600' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setAuthorFilter(opt.value)}
+                      data-testid={`author-filter-${opt.value}`}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        authorFilter === opt.value
+                          ? `${opt.color} text-white`
+                          : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  {allAuthors.length > 0 && (
+                    <select
+                      value={['all','admin','manager','other'].includes(authorFilter) ? '' : authorFilter}
+                      onChange={(e) => setAuthorFilter(e.target.value || 'all')}
+                      className="bg-slate-800/50 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1"
+                      data-testid="author-filter-named"
+                    >
+                      <option value="">— Auteur précis —</option>
+                      {allAuthors.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
 
               {/* ALERT: Expense ratio > 40% (gardée car critique) */}
               {currentUser?.role === 'admin' && expenseRatioAlert?.isOverLimit && (
@@ -951,14 +1015,14 @@ const AchatsTab = ({ ctx }) => {
               )}
 
               {/* Pending validations (admin: full controls, manager: read-only) */}
-              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'pending').length > 0 && (
+              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'pending' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).length > 0 && (
                 <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/50" data-testid="pending-expenses-card">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-purple-400 flex items-center gap-2">
                       <ShoppingCart className="w-5 h-5" />
                       {currentUser?.role === 'admin' ? 'DEMANDES À VALIDER' : 'EN ATTENTE DE VALIDATION'}
                       <Badge className="bg-purple-500/30 text-purple-300 ml-2">
-                        {expenses.filter(e => e.status === 'pending').length}
+                        {expenses.filter(e => e.status === 'pending' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).length}
                       </Badge>
                       {currentUser?.role !== 'admin' && (
                         <Badge className="bg-slate-500/30 text-slate-300 ml-auto text-xs">
@@ -968,7 +1032,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {expenses.filter(e => e.status === 'pending').map(expense => (
+                    {expenses.filter(e => e.status === 'pending' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).map(expense => (
                       <div key={expense.id} className="bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
                         <div className="flex flex-col gap-3">
                           <div className="flex items-start justify-between">
@@ -1207,7 +1271,7 @@ const AchatsTab = ({ ctx }) => {
                    - Admin: full inline editing of items, PDF preview, send to manager
                    - Manager: read-only with original list snapshot + locked banner
                   ============================================================ */}
-              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'admin_review').length > 0 && (
+              {achatsSubView === 'en_cours' && expenses.filter(e => e.status === 'admin_review' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).length > 0 && (
                 <Card className={`bg-gradient-to-br ${currentUser?.role === 'admin' ? 'from-amber-900/30 to-orange-900/20 border-amber-500/50' : 'from-slate-900/40 to-slate-800/20 border-slate-600/50'}`} data-testid="admin-review-expenses-card">
                   <CardHeader className="pb-2">
                     <CardTitle className={`flex items-center gap-2 ${currentUser?.role === 'admin' ? 'text-amber-300' : 'text-slate-300'}`}>
@@ -1216,7 +1280,7 @@ const AchatsTab = ({ ctx }) => {
                         ? 'EN COURS DE CORRECTION (votre profil)'
                         : 'EN COURS DE VALIDATION PAR L\'ADMIN'}
                       <Badge className={`ml-2 ${currentUser?.role === 'admin' ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-500/30 text-slate-300'}`}>
-                        {expenses.filter(e => e.status === 'admin_review').length}
+                        {expenses.filter(e => e.status === 'admin_review' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).length}
                       </Badge>
                       {currentUser?.role !== 'admin' && (
                         <Badge className="ml-auto bg-slate-700/40 text-slate-300 text-xs flex items-center gap-1">
@@ -1226,7 +1290,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {expenses.filter(e => e.status === 'admin_review').map(expense => {
+                    {expenses.filter(e => e.status === 'admin_review' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).map(expense => {
                       const isAdmin = currentUser?.role === 'admin';
                       // Manager sees the ORIGINAL snapshot (before admin started correcting)
                       const managerItems = expense.original_items || expense.items || [];
