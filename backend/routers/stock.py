@@ -929,7 +929,7 @@ async def transfer_magasin_to_cuisine(req: TransferMagasinCuisineRequest):
         else:
             target = {
                 "id": str(_uuid.uuid4()),
-                "code": "",
+                "code": f"PRD-{str(_uuid.uuid4())[:6].upper()}",
                 "name": target_name,
                 "category_id": req.target_category_id or source.get("category_id", ""),
                 "subcategory": source.get("subcategory", ""),

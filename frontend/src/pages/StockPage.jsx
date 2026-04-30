@@ -2081,6 +2081,29 @@ export default function StockPage() {
                                     >
                                       Entrée
                                     </Button>
+                                    {isAdmin && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={async () => {
+                                          if (!confirm(`Supprimer définitivement "${p.name}" du stock magasin ?\n\nCette action est irréversible.`)) return;
+                                          try {
+                                            await axios.delete(`${API}/products/${p.id}`);
+                                            toast.success("Produit supprimé");
+                                            fetchMagasinProducts();
+                                            fetchMagasinMovements();
+                                            fetchProducts();
+                                          } catch (e) {
+                                            toast.error(e?.response?.data?.detail || "Erreur de suppression");
+                                          }
+                                        }}
+                                        className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10 h-7 w-7 p-0"
+                                        title="Supprimer ce produit"
+                                        data-testid={`magasin-delete-${p.id}`}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -3115,8 +3138,98 @@ export default function StockPage() {
           <DialogHeader><DialogTitle className="text-white">{editingItem ? "Modifier le Produit" : "Nouveau Produit"}</DialogTitle><DialogDescription className="text-slate-400">Remplissez les informations du produit</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-slate-300 text-xs">Code produit</Label><Input value={productForm.code} onChange={e => setProductForm(p => ({...p, code: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Auto" /></div>
-              <div><Label className="text-slate-300 text-xs">Nom du produit *</Label><Input value={productForm.name} onChange={e => setProductForm(p => ({...p, name: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
+              <div>
+                <Label className="text-slate-300 text-xs">Code produit</Label>
+                <div className="flex gap-1">
+                  <Input
+                    value={productForm.code}
+                    onChange={e => setProductForm(p => ({...p, code: e.target.value}))}
+                    className="bg-slate-800 border-slate-700 text-white flex-1"
+                    placeholder="Auto-généré si vide"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+                      setProductForm(p => ({ ...p, code: `PRD-${rand}` }));
+                    }}
+                    className="border-slate-700 text-slate-300 hover:bg-slate-700 px-2"
+                    title="Générer un code automatiquement"
+                  >
+                    Auto
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="text-slate-300 text-xs">Nom du produit *</Label>
+                {(() => {
+                  const q = (productForm.name || "").toLowerCase().trim();
+                  // Suggest only when typing AND not editing an existing product
+                  const showSuggestions = !editingItem && q.length >= 2;
+                  const matches = showSuggestions
+                    ? products
+                        .filter(p => (p.name || "").toLowerCase().includes(q))
+                        .slice(0, 8)
+                    : [];
+                  return (
+                    <div className="relative">
+                      <Input
+                        value={productForm.name}
+                        onChange={e => setProductForm(p => ({...p, name: e.target.value}))}
+                        className="bg-slate-800 border-slate-700 text-white"
+                        placeholder="Tapez le nom — suggestions automatiques"
+                        data-testid="product-name-input"
+                      />
+                      {matches.length > 0 && (
+                        <div className="absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl">
+                          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-slate-500 bg-slate-900/50">
+                            Produits existants — cliquez pour charger
+                          </div>
+                          {matches.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setEditingItem(p);
+                                setProductForm({
+                                  code: p.code || "",
+                                  name: p.name,
+                                  category_id: p.category_id || "",
+                                  subcategory: p.subcategory || "",
+                                  unit: p.unit || "kg",
+                                  quantity: p.quantity || 0,
+                                  stock_min: p.stock_min || 0,
+                                  stock_max: p.stock_max || 100,
+                                  purchase_price: p.purchase_price || 0,
+                                  sale_price: p.sale_price || 0,
+                                  supplier_id: p.supplier_id || "",
+                                  storage_location: p.storage_location || "",
+                                  storage_zone: p.storage_zone || "cuisine",
+                                  date_achat: p.date_achat || "",
+                                  date_peremption: p.date_peremption || "",
+                                  observation: p.observation || "",
+                                });
+                                toast.info(`Produit "${p.name}" chargé pour modification`);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-slate-700 border-b border-slate-700/40 last:border-b-0"
+                              data-testid={`product-name-suggestion-${p.id}`}
+                            >
+                              <div className="text-white text-sm font-medium">{p.name}</div>
+                              <div className="text-[11px] text-slate-400">
+                                {p.code ? `${p.code} · ` : ""}
+                                {(p.storage_zone || 'cuisine') === 'magasin' ? '🏬 Magasin' : '🏠 Restau'}
+                                {" · "}qté : {p.quantity} {p.unit}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Categorie *</Label>
