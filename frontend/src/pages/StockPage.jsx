@@ -561,7 +561,7 @@ export default function StockPage() {
   }, []);
 
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories();
+    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories(); fetchMagasinProducts();
   }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
 
   // Enhanced refresh with loading state, last-refreshed timestamp, and toast feedback
@@ -1941,16 +1941,18 @@ export default function StockPage() {
                 </Button>
                 <Button
                   onClick={() => {
-                    // Pre-select 1st magasin product if any
                     const first = magasinProducts[0]?.id || "";
-                    setMovementForm({ product_id: first, movement_type: "sortie", quantity: 0, unit_price: 0, reason: "Sortie magasin" });
+                    // "Nouveau Mouvement" magasin = usages rares (perte, casse, ajustement, retour fournisseur, entrée réappro)
+                    // Pour une SORTIE vers cuisine, l'utilisateur doit utiliser le bouton "→ Cuisine" sur la ligne.
+                    setMovementForm({ product_id: first, movement_type: "perte", quantity: 0, unit_price: 0, reason: "" });
                     setShowMovementModal(true);
                   }}
                   className="bg-amber-600 hover:bg-amber-700"
                   data-testid="magasin-new-movement-btn"
                   disabled={magasinProducts.length === 0}
+                  title="Enregistrer une perte, casse, ajustement ou retour fournisseur"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement
+                  <Plus className="w-4 h-4 mr-1" /> Perte / Ajustement
                 </Button>
                 {isAdmin && (
                   <Button
@@ -1978,9 +1980,9 @@ export default function StockPage() {
             <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-200 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Comment ça fonctionne :</strong> les produits de cette zone ne sont <strong>jamais</strong> déstockés automatiquement par les factures Caisse, les recettes ou la conso journalière.
-                Pour enregistrer une sortie (ex: utilisation par la cuisine, vente directe, cadeau), cliquez sur <em>Nouveau Mouvement</em>.
-                Pour convertir un produit existant en produit "magasin", ouvrez-le dans <em>Produits & Recettes</em> et changez sa <em>zone de stockage</em> → Magasin.
+                <strong>Comment ça fonctionne :</strong> les produits de cette zone ne sont <strong>jamais</strong> déstockés automatiquement par les factures Caisse.
+                Pour sortir du stock magasin vers la cuisine (et bénéficier du déstockage automatique), cliquez sur <strong className="text-blue-300">"→ Cuisine"</strong> sur la ligne — cela crée atomiquement une sortie magasin + une entrée cuisine.
+                Le bouton <em>Perte / Ajustement</em> ne sert qu'aux cas exceptionnels (casse, péremption, inventaire).
               </span>
             </div>
 
@@ -2062,23 +2064,10 @@ export default function StockPage() {
                                         setShowTransferModal(true);
                                       }}
                                       className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10 h-7 px-2 text-xs"
-                                      title="Transférer vers la cuisine (qui déstocke auto)"
+                                      title="Transférer vers la cuisine (sera déstocké auto par les ventes)"
                                       data-testid={`magasin-transfer-${p.id}`}
                                     >
                                       → Cuisine
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setMovementForm({ product_id: p.id, movement_type: "sortie", quantity: 0, unit_price: 0, reason: "Sortie magasin" });
-                                        setShowMovementModal(true);
-                                      }}
-                                      className="border-red-500/40 text-red-300 hover:bg-red-500/10 h-7 px-2 text-xs"
-                                      title="Enregistrer une sortie manuelle (sans transfert)"
-                                      data-testid={`magasin-destock-${p.id}`}
-                                    >
-                                      Déstocker
                                     </Button>
                                     <Button
                                       size="sm"
@@ -2088,7 +2077,7 @@ export default function StockPage() {
                                         setShowMovementModal(true);
                                       }}
                                       className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 h-7 px-2 text-xs"
-                                      title="Enregistrer une entrée"
+                                      title="Enregistrer une entrée (réapprovisionnement magasin)"
                                     >
                                       Entrée
                                     </Button>
@@ -2175,12 +2164,27 @@ export default function StockPage() {
 
 
         {/* MOVEMENTS */}
-        {activeSection === "movements" && (
+        {activeSection === "movements" && (() => {
+          // Filter out magasin-side movements (they live only in the "Stock Magasin" section).
+          // We exclude movements whose product is in magasin zone AND transfert_sortie (magasin outflow of a transfer).
+          // transfert_entree stays visible because it is a legitimate cuisine inflow.
+          const magIds = new Set(magasinProducts.map(p => p.id));
+          const visibleMovements = movements.filter(m =>
+            !magIds.has(m.product_id) && m.movement_type !== "transfert_sortie"
+          );
+          return (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h2 className="text-2xl font-bold text-white">Mouvements de Stock</h2>
-                <p className="text-slate-500 text-xs mt-0.5">Historique complet · {movements.length} ligne(s) affichée(s)</p>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Historique restaurant · {visibleMovements.length} ligne(s) affichée(s)
+                  {movements.length - visibleMovements.length > 0 && (
+                    <span className="ml-2 text-amber-400">
+                      ({movements.length - visibleMovements.length} mouvement(s) magasin masqué(s) — voir <em>Stock magasin</em>)
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button
@@ -2189,7 +2193,7 @@ export default function StockPage() {
                   onClick={() => {
                     // Export CSV of current view
                     const headers = ["Date", "Produit", "Type", "Quantité", "Unité", "Avant", "Après", "Motif", "Utilisateur"];
-                    const rows = movements.map(m => [
+                    const rows = visibleMovements.map(m => [
                       new Date(m.created_at).toLocaleString('fr-FR'),
                       m.product_name || "",
                       MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type,
@@ -2317,20 +2321,20 @@ export default function StockPage() {
               </CardContent>
             </Card>
 
-            {isAdmin && <BulkBar count={selectedItems.filter(id => movements.some(m => m.id === id)).length} label="mouvement(s)" endpoint="movements/delete-bulk" ids={selectedItems.filter(id => movements.some(m => m.id === id))} refreshFn={fetchMovements} />}
+            {isAdmin && <BulkBar count={selectedItems.filter(id => visibleMovements.some(m => m.id === id)).length} label="mouvement(s)" endpoint="movements/delete-bulk" ids={selectedItems.filter(id => visibleMovements.some(m => m.id === id))} refreshFn={fetchMovements} />}
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={movements.length > 0 && movements.every(m => selectedItems.includes(m.id))} onChange={() => toggleSelectAll(movements.map(m => m.id))} /></th>}
+                  {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={visibleMovements.length > 0 && visibleMovements.every(m => selectedItems.includes(m.id))} onChange={() => toggleSelectAll(visibleMovements.map(m => m.id))} /></th>}
                   <th className="p-3">Date</th><th className="p-3">Produit</th><th className="p-3">Type</th><th className="p-3 text-right">Quantite</th><th className="p-3 text-right">Avant</th><th className="p-3 text-right">Apres</th><th className="p-3">Motif</th><th className="p-3">Utilisateur</th>{isAdmin && <th className="p-3"></th>}
                 </tr></thead>
                 <tbody>
-                  {movements.map(m => (
+                  {visibleMovements.map(m => (
                     <tr key={m.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(m.id) ? 'bg-slate-800/50' : ''}`}>
                       {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>}
                       <td className="p-3 text-slate-400 text-xs">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="p-3 text-white">{m.product_name}</td>
-                      <td className="p-3"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
+                      <td className="p-3"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' || m.movement_type === 'transfert_entree' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
                       <td className="p-3 text-right text-white font-medium">{m.quantity} {m.unit}</td>
                       <td className="p-3 text-right text-slate-500">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
                       <td className="p-3 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
@@ -2343,7 +2347,8 @@ export default function StockPage() {
               </table>
             </div></CardContent></Card>
           </div>
-        )}
+          );
+        })()}
 
 
         {/* RECIPES / FICHES TECHNIQUES */}
