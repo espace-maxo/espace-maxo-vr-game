@@ -77,7 +77,7 @@ const MOVEMENT_TYPES = [
   { value: "ajustement", label: "Ajustement", color: "blue", icon: ArrowUpDown },
   { value: "retour_fournisseur", label: "Retour fournisseur", color: "purple", icon: Truck },
   { value: "transfert_sortie", label: "Transfert (sortie Magasin)", color: "amber", icon: ArrowUp },
-  { value: "transfert_entree", label: "Transfert (entrée Cuisine)", color: "amber", icon: ArrowDown },
+  { value: "transfert_entree", label: "Transfert (entrée Restau)", color: "amber", icon: ArrowDown },
 ];
 
 const NAV_ITEMS = [
@@ -3160,7 +3160,7 @@ export default function StockPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><DecimalInput value={productForm.purchase_price} onChange={(n) => setProductForm(p => ({...p, purchase_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Prix de vente unitaire (FCFA)</Label><DecimalInput value={productForm.sale_price} onChange={(n) => setProductForm(p => ({...p, sale_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
-              <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
+              <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Restau..." /></div>
             </div>
 
             {/* Storage zone selector */}
