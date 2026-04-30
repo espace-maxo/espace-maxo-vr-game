@@ -519,7 +519,7 @@ export default function StockPage() {
       }
       const r = await axios.post(`${API}/transfer-magasin-cuisine`, payload);
       if (r.data?.success) {
-        toast.success(`Transféré ${qty} ${transferForm.source_unit} de Magasin vers Cuisine`);
+        toast.success(`Transféré ${qty} ${transferForm.source_unit} de Magasin vers Restau`);
         setShowTransferModal(false);
         fetchMagasinProducts();
         fetchMagasinMovements();
@@ -1981,7 +1981,7 @@ export default function StockPage() {
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>
                 <strong>Comment ça fonctionne :</strong> les produits de cette zone ne sont <strong>jamais</strong> déstockés automatiquement par les factures Caisse.
-                Pour sortir du stock magasin vers la cuisine (et bénéficier du déstockage automatique), cliquez sur <strong className="text-blue-300">"→ Cuisine"</strong> sur la ligne — cela crée atomiquement une sortie magasin + une entrée cuisine.
+                Pour sortir du stock magasin vers le restau (et bénéficier du déstockage automatique), cliquez sur <strong className="text-blue-300">"→ Restau"</strong> sur la ligne — cela crée atomiquement une sortie magasin + une entrée restau.
                 Le bouton <em>Perte / Ajustement</em> ne sert qu'aux cas exceptionnels (casse, péremption, inventaire).
               </span>
             </div>
@@ -2064,10 +2064,10 @@ export default function StockPage() {
                                         setShowTransferModal(true);
                                       }}
                                       className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10 h-7 px-2 text-xs"
-                                      title="Transférer vers la cuisine (sera déstocké auto par les ventes)"
+                                      title="Transférer vers le restau (sera déstocké auto par les ventes)"
                                       data-testid={`magasin-transfer-${p.id}`}
                                     >
-                                      → Cuisine
+                                      → Restau
                                     </Button>
                                     <Button
                                       size="sm"
@@ -3168,7 +3168,7 @@ export default function StockPage() {
               <Label className="text-slate-300 text-xs uppercase tracking-wide mb-2 block">Zone de stockage</Label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { v: 'cuisine', l: 'Cuisine (auto)', d: 'Déstockage auto via factures/recettes', color: 'emerald' },
+                  { v: 'cuisine', l: 'Restau (auto)', d: 'Déstockage auto via factures/recettes', color: 'emerald' },
                   { v: 'magasin', l: 'Magasin (manuel)', d: 'Déstockage manuel uniquement', color: 'amber' },
                 ].map(opt => (
                   <button
@@ -3457,16 +3457,16 @@ export default function StockPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Transfer Magasin → Cuisine Modal */}
+      {/* Transfer Magasin → Restau Modal */}
       <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
         <DialogContent className="bg-slate-900 border-slate-700 max-w-lg" data-testid="transfer-modal">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <ArrowUpDown className="w-5 h-5 text-blue-400" />
-              Transfert Magasin → Cuisine
+              Transfert Magasin → Restau
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Sortir du stock magasin (manuel) vers un produit cuisine qui sera déstocké automatiquement par les ventes.
+              Sortir du stock magasin (manuel) vers un produit restau qui sera déstocké automatiquement par les ventes.
             </DialogDescription>
           </DialogHeader>
 
@@ -3495,7 +3495,7 @@ export default function StockPage() {
 
             {/* Target mode toggle */}
             <div>
-              <Label className="text-slate-300 text-xs">Produit cuisine cible</Label>
+              <Label className="text-slate-300 text-xs">Produit restau cible</Label>
               <div className="grid grid-cols-2 gap-2 mt-1">
                 {[
                   { v: "existing", l: "Produit existant" },
@@ -3520,7 +3520,7 @@ export default function StockPage() {
 
             {transferForm.target_mode === "existing" ? (
               <div>
-                <Label className="text-slate-300 text-xs">Sélectionnez le produit cuisine</Label>
+                <Label className="text-slate-300 text-xs">Sélectionnez le produit restau</Label>
                 {(() => {
                   const cuisineProducts = [...products]
                     .filter(p => (p.storage_zone || 'cuisine') !== 'magasin')
@@ -3560,7 +3560,7 @@ export default function StockPage() {
                               Aucun produit trouvé
                               {q && (
                                 <div className="text-[11px] text-slate-600 mt-1">
-                                  Astuce : cliquez sur <strong>"Créer un nouveau"</strong> pour l'ajouter à la cuisine.
+                                  Astuce : cliquez sur <strong>"Créer un nouveau"</strong> pour l'ajouter au restau.
                                 </div>
                               )}
                             </div>
@@ -3600,7 +3600,7 @@ export default function StockPage() {
               </div>
             ) : (
               <div>
-                <Label className="text-slate-300 text-xs">Nom du nouveau produit cuisine</Label>
+                <Label className="text-slate-300 text-xs">Nom du nouveau produit restau</Label>
                 <Input
                   value={transferForm.target_name}
                   onChange={(e) => setTransferForm(p => ({ ...p, target_name: e.target.value }))}
@@ -3609,7 +3609,7 @@ export default function StockPage() {
                   data-testid="transfer-target-name"
                 />
                 <p className="text-slate-500 text-[11px] mt-1">
-                  Le produit sera créé automatiquement en <strong className="text-emerald-300">zone Cuisine</strong> (auto-déstockage activé).
+                  Le produit sera créé automatiquement en <strong className="text-emerald-300">zone Restau</strong> (auto-déstockage activé).
                 </p>
               </div>
             )}
@@ -3620,7 +3620,7 @@ export default function StockPage() {
                 value={transferForm.reason}
                 onChange={(e) => setTransferForm(p => ({ ...p, reason: e.target.value }))}
                 className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ex: Approvisionnement cuisine du jour"
+                placeholder="Ex: Approvisionnement restau du jour"
                 data-testid="transfer-reason"
               />
             </div>
