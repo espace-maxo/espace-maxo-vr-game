@@ -76,6 +76,8 @@ const MOVEMENT_TYPES = [
   { value: "casse", label: "Casse", color: "red", icon: X },
   { value: "ajustement", label: "Ajustement", color: "blue", icon: ArrowUpDown },
   { value: "retour_fournisseur", label: "Retour fournisseur", color: "purple", icon: Truck },
+  { value: "transfert_sortie", label: "Transfert (sortie Magasin)", color: "amber", icon: ArrowUp },
+  { value: "transfert_entree", label: "Transfert (entrée Cuisine)", color: "amber", icon: ArrowDown },
 ];
 
 const NAV_ITEMS = [
@@ -467,6 +469,20 @@ export default function StockPage() {
   const [magasinMovements, setMagasinMovements] = useState([]);
   const [magasinSearch, setMagasinSearch] = useState("");
 
+  // Transfer Magasin → Cuisine
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    source_product_id: "",
+    source_product_name: "",
+    source_quantity: 0,
+    source_unit: "",
+    target_mode: "existing", // 'existing' | 'new'
+    target_product_id: "",
+    target_name: "",
+    quantity: "",
+    reason: "",
+  });
+
   const fetchMagasinProducts = useCallback(async () => {
     try {
       const r = await axios.get(`${API}/products`, { params: { storage_zone: "magasin" } });
@@ -481,6 +497,40 @@ export default function StockPage() {
       setMagasinMovements(r.data.movements || []);
     } catch {}
   }, []);
+
+  const submitTransfer = async () => {
+    const qty = parseFloat(String(transferForm.quantity).replace(',', '.'));
+    if (!qty || qty <= 0) { toast.error("Quantité invalide"); return; }
+    if (qty > transferForm.source_quantity) {
+      toast.error(`Stock insuffisant. Disponible: ${transferForm.source_quantity} ${transferForm.source_unit}`);
+      return;
+    }
+    try {
+      const payload = {
+        source_product_id: transferForm.source_product_id,
+        quantity: qty,
+        reason: transferForm.reason || null,
+        user_name: currentUser?.full_name || currentUser?.username || "Administrateur",
+      };
+      if (transferForm.target_mode === "existing" && transferForm.target_product_id) {
+        payload.target_product_id = transferForm.target_product_id;
+      } else {
+        payload.target_name = transferForm.target_name || transferForm.source_product_name;
+      }
+      const r = await axios.post(`${API}/transfer-magasin-cuisine`, payload);
+      if (r.data?.success) {
+        toast.success(`Transféré ${qty} ${transferForm.source_unit} de Magasin vers Cuisine`);
+        setShowTransferModal(false);
+        fetchMagasinProducts();
+        fetchMagasinMovements();
+        fetchProducts();
+        fetchMovements();
+        fetchDashboard();
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur de transfert");
+    }
+  };
 
   const fetchMovements = useCallback(async () => {
     try {
@@ -1998,11 +2048,34 @@ export default function StockPage() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() => {
+                                        setTransferForm({
+                                          source_product_id: p.id,
+                                          source_product_name: p.name,
+                                          source_quantity: p.quantity,
+                                          source_unit: p.unit,
+                                          target_mode: "existing",
+                                          target_product_id: "",
+                                          target_name: p.name,
+                                          quantity: "",
+                                          reason: "",
+                                        });
+                                        setShowTransferModal(true);
+                                      }}
+                                      className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10 h-7 px-2 text-xs"
+                                      title="Transférer vers la cuisine (qui déstocke auto)"
+                                      data-testid={`magasin-transfer-${p.id}`}
+                                    >
+                                      → Cuisine
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
                                         setMovementForm({ product_id: p.id, movement_type: "sortie", quantity: 0, unit_price: 0, reason: "Sortie magasin" });
                                         setShowMovementModal(true);
                                       }}
                                       className="border-red-500/40 text-red-300 hover:bg-red-500/10 h-7 px-2 text-xs"
-                                      title="Enregistrer une sortie manuelle"
+                                      title="Enregistrer une sortie manuelle (sans transfert)"
                                       data-testid={`magasin-destock-${p.id}`}
                                     >
                                       Déstocker
@@ -3337,6 +3410,135 @@ export default function StockPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Magasin → Cuisine Modal */}
+      <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-lg" data-testid="transfer-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <ArrowUpDown className="w-5 h-5 text-blue-400" />
+              Transfert Magasin → Cuisine
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Sortir du stock magasin (manuel) vers un produit cuisine qui sera déstocké automatiquement par les ventes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* Source info */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-amber-200 text-xs uppercase tracking-wide">Produit source (Magasin)</p>
+              <p className="text-white font-bold text-lg">{transferForm.source_product_name}</p>
+              <p className="text-slate-400 text-sm">Disponible : <strong className="text-amber-300">{transferForm.source_quantity} {transferForm.source_unit}</strong></p>
+            </div>
+
+            {/* Quantity */}
+            <div>
+              <Label className="text-slate-300 text-xs">Quantité à transférer *</Label>
+              <div className="flex items-center gap-2">
+                <DecimalInput
+                  value={transferForm.quantity}
+                  onChange={(v) => setTransferForm(p => ({ ...p, quantity: v }))}
+                  className="bg-slate-800 border-slate-700 text-white flex-1"
+                  placeholder="0"
+                  data-testid="transfer-qty-input"
+                />
+                <span className="text-slate-400 text-sm w-12">{transferForm.source_unit}</span>
+              </div>
+            </div>
+
+            {/* Target mode toggle */}
+            <div>
+              <Label className="text-slate-300 text-xs">Produit cuisine cible</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {[
+                  { v: "existing", l: "Produit existant" },
+                  { v: "new", l: "Créer un nouveau" },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setTransferForm(p => ({ ...p, target_mode: opt.v, target_product_id: "" }))}
+                    data-testid={`transfer-target-mode-${opt.v}`}
+                    className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                      transferForm.target_mode === opt.v
+                        ? "bg-blue-500/20 border-blue-500/60 text-blue-100"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"
+                    }`}
+                  >
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {transferForm.target_mode === "existing" ? (
+              <div>
+                <Label className="text-slate-300 text-xs">Sélectionnez le produit cuisine</Label>
+                <select
+                  value={transferForm.target_product_id}
+                  onChange={(e) => setTransferForm(p => ({ ...p, target_product_id: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded px-2 py-2"
+                  data-testid="transfer-target-select"
+                >
+                  <option value="">— Choisir —</option>
+                  {[...products]
+                    .filter(p => (p.storage_zone || 'cuisine') !== 'magasin')
+                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                    .map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · qté actuelle : {p.quantity} {p.unit}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-slate-500 text-[11px] mt-1">
+                  💡 Astuce : si un produit du même nom existe déjà, choisissez-le pour cumuler les quantités.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label className="text-slate-300 text-xs">Nom du nouveau produit cuisine</Label>
+                <Input
+                  value={transferForm.target_name}
+                  onChange={(e) => setTransferForm(p => ({ ...p, target_name: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder={`Par défaut : ${transferForm.source_product_name}`}
+                  data-testid="transfer-target-name"
+                />
+                <p className="text-slate-500 text-[11px] mt-1">
+                  Le produit sera créé automatiquement en <strong className="text-emerald-300">zone Cuisine</strong> (auto-déstockage activé).
+                </p>
+              </div>
+            )}
+
+            <div>
+              <Label className="text-slate-300 text-xs">Motif (optionnel)</Label>
+              <Input
+                value={transferForm.reason}
+                onChange={(e) => setTransferForm(p => ({ ...p, reason: e.target.value }))}
+                className="bg-slate-800 border-slate-700 text-white"
+                placeholder="Ex: Approvisionnement cuisine du jour"
+                data-testid="transfer-reason"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowTransferModal(false)} className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800">
+                Annuler
+              </Button>
+              <Button
+                onClick={submitTransfer}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={!transferForm.quantity || (transferForm.target_mode === "existing" && !transferForm.target_product_id)}
+                data-testid="transfer-submit"
+              >
+                <ArrowUpDown className="w-4 h-4 mr-1" />
+                Transférer
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -819,9 +819,9 @@ async def create_movement(data: StockMovementCreate):
     current_qty = product.get("quantity", 0)
     
     # Calculate new quantity
-    if data.movement_type in ["entree", "retour_fournisseur"]:
+    if data.movement_type in ["entree", "retour_fournisseur", "transfert_entree"]:
         new_qty = current_qty + data.quantity
-    elif data.movement_type in ["sortie", "perte", "casse"]:
+    elif data.movement_type in ["sortie", "perte", "casse", "transfert_sortie"]:
         if data.quantity > current_qty:
             raise HTTPException(400, f"Stock insuffisant. Disponible: {current_qty} {product.get('unit', '')}")
         new_qty = current_qty - data.quantity
@@ -873,6 +873,164 @@ async def delete_movement(movement_id: str):
 async def delete_movements_bulk(ids: List[str] = Body(..., embed=True)):
     result = await db.stock_movements.delete_many({"id": {"$in": ids}})
     return {"success": True, "deleted": result.deleted_count}
+
+
+class TransferMagasinCuisineRequest(BaseModel):
+    source_product_id: str  # product in "magasin" zone
+    target_product_id: Optional[str] = None  # optional: existing cuisine product
+    target_name: Optional[str] = None  # OR create a new cuisine product with this name
+    target_category_id: Optional[str] = None  # only used when creating
+    target_unit: Optional[str] = None  # only used when creating
+    quantity: float
+    reason: Optional[str] = None
+    user_name: Optional[str] = "Administrateur"
+
+
+@router.post("/transfer-magasin-cuisine")
+async def transfer_magasin_to_cuisine(req: TransferMagasinCuisineRequest):
+    """Atomic transfer from a magasin product to a cuisine product.
+
+    - Decrements the magasin product by `quantity` (creates a 'transfert_sortie' movement).
+    - Increments (or creates) the cuisine product by the same quantity (creates a 'transfert_entree' movement).
+    - The two movements are linked via a shared `transfer_id`.
+    """
+    import uuid as _uuid
+
+    # 1. Validate source
+    source = await db.stock_products.find_one({"id": req.source_product_id})
+    if not source:
+        raise HTTPException(404, "Produit magasin source introuvable")
+    if source.get("storage_zone") != "magasin":
+        raise HTTPException(400, "Le produit source n'est pas en zone magasin")
+    if req.quantity <= 0:
+        raise HTTPException(400, "La quantité doit être strictement positive")
+    src_qty = source.get("quantity", 0) or 0
+    if req.quantity > src_qty:
+        raise HTTPException(400, f"Stock magasin insuffisant. Disponible: {src_qty} {source.get('unit','')}")
+
+    # 2. Resolve or create target (cuisine product)
+    target = None
+    if req.target_product_id:
+        target = await db.stock_products.find_one({"id": req.target_product_id})
+        if not target:
+            raise HTTPException(404, "Produit cuisine cible introuvable")
+        if target.get("storage_zone") == "magasin":
+            raise HTTPException(400, "Le produit cible est en magasin — choisissez un produit cuisine")
+    else:
+        target_name = (req.target_name or source.get("name") or "").strip()
+        if not target_name:
+            raise HTTPException(400, "Nom du produit cuisine cible manquant")
+        existing = await db.stock_products.find_one({
+            "name": target_name,
+            "storage_zone": {"$ne": "magasin"}
+        })
+        if existing:
+            target = existing
+        else:
+            target = {
+                "id": str(_uuid.uuid4()),
+                "code": "",
+                "name": target_name,
+                "category_id": req.target_category_id or source.get("category_id", ""),
+                "subcategory": source.get("subcategory", ""),
+                "unit": req.target_unit or source.get("unit", "unit"),
+                "quantity": 0,
+                "stock_min": source.get("stock_min", 0),
+                "stock_max": source.get("stock_max", 0),
+                "purchase_price": source.get("purchase_price", 0),
+                "sale_price": source.get("sale_price", 0),
+                "valeur_stock": 0,
+                "valeur_stock_vente": 0,
+                "supplier_id": source.get("supplier_id", ""),
+                "storage_location": source.get("storage_location", ""),
+                "storage_zone": "cuisine",
+                "is_active": True,
+                "photo_url": source.get("photo_url", ""),
+                "statut": "rupture",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.stock_products.insert_one(target.copy())
+            target.pop("_id", None)
+
+    # 3. Compute new quantities
+    transfer_id = str(_uuid.uuid4())
+    src_new = src_qty - req.quantity
+    tgt_qty = target.get("quantity", 0) or 0
+    tgt_new = tgt_qty + req.quantity
+
+    reason = req.reason or f"Transfert magasin → cuisine ({target['name']})"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    mov_out = {
+        "id": str(_uuid.uuid4()),
+        "product_id": source["id"],
+        "product_name": source.get("name", ""),
+        "product_code": source.get("code", ""),
+        "movement_type": "transfert_sortie",
+        "quantity": req.quantity,
+        "previous_quantity": src_qty,
+        "new_quantity": src_new,
+        "unit": source.get("unit", ""),
+        "unit_price": source.get("purchase_price", 0),
+        "total_value": req.quantity * (source.get("purchase_price", 0) or 0),
+        "reason": reason,
+        "user_name": req.user_name or "Administrateur",
+        "transfer_id": transfer_id,
+        "transfer_role": "source",
+        "linked_product_id": target["id"],
+        "created_at": now_iso,
+    }
+    mov_in = {
+        "id": str(_uuid.uuid4()),
+        "product_id": target["id"],
+        "product_name": target.get("name", ""),
+        "product_code": target.get("code", ""),
+        "movement_type": "transfert_entree",
+        "quantity": req.quantity,
+        "previous_quantity": tgt_qty,
+        "new_quantity": tgt_new,
+        "unit": target.get("unit", ""),
+        "unit_price": source.get("purchase_price", 0),
+        "total_value": req.quantity * (source.get("purchase_price", 0) or 0),
+        "reason": f"Reçu de magasin ({source['name']})",
+        "user_name": req.user_name or "Administrateur",
+        "transfer_id": transfer_id,
+        "transfer_role": "target",
+        "linked_product_id": source["id"],
+        "created_at": now_iso,
+    }
+
+    await db.stock_movements.insert_many([mov_out.copy(), mov_in.copy()])
+    await db.stock_products.update_one(
+        {"id": source["id"]},
+        {"$set": {
+            "quantity": src_new,
+            "valeur_stock": src_new * (source.get("purchase_price", 0) or 0),
+            "statut": "rupture" if src_new <= 0 else ("faible" if src_new <= source.get("stock_min", 0) else "normal"),
+            "updated_at": now_iso,
+        }},
+    )
+    await db.stock_products.update_one(
+        {"id": target["id"]},
+        {"$set": {
+            "quantity": tgt_new,
+            "valeur_stock": tgt_new * (target.get("purchase_price", 0) or 0),
+            "statut": "rupture" if tgt_new <= 0 else ("faible" if tgt_new <= target.get("stock_min", 0) else "normal"),
+            "updated_at": now_iso,
+        }},
+    )
+
+    mov_out.pop("_id", None)
+    mov_in.pop("_id", None)
+    return {
+        "success": True,
+        "transfer_id": transfer_id,
+        "source_movement": mov_out,
+        "target_movement": mov_in,
+        "target_product_id": target["id"],
+    }
+
 
 
 class ConvertUnitRequest(BaseModel):
