@@ -2228,17 +2228,56 @@ export default function StockPage() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                   <div>
                     <Label className="text-slate-400 text-xs uppercase">Produit</Label>
-                    <select
-                      value={movementFilters.product_id}
-                      onChange={e => setMovementFilters(p => ({ ...p, product_id: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded px-2 py-1.5"
-                      data-testid="movements-filter-product"
-                    >
-                      <option value="">Tous les produits</option>
-                      {[...products].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const allProducts = [...products].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                      const q = (movementFilters._product_search || "").toLowerCase().trim();
+                      const filtered = q
+                        ? allProducts.filter(p =>
+                            (p.name || "").toLowerCase().includes(q) ||
+                            (p.code || "").toLowerCase().includes(q)
+                          )
+                        : allProducts;
+                      const selected = allProducts.find(p => p.id === movementFilters.product_id);
+                      const isSearching = movementFilters._product_search !== undefined && movementFilters._product_search !== null;
+                      return (
+                        <div className="relative">
+                          <Input
+                            value={isSearching ? movementFilters._product_search : (selected?.name || "")}
+                            onChange={e => setMovementFilters(p => ({ ...p, _product_search: e.target.value, product_id: "" }))}
+                            onFocus={() => setMovementFilters(p => ({ ...p, _product_search: p._product_search ?? "" }))}
+                            placeholder="Tous les produits"
+                            className="bg-slate-900 border-slate-700 text-white h-9 text-sm pr-8"
+                            data-testid="movements-filter-product-search"
+                          />
+                          {(isSearching || selected) && (
+                            <button
+                              type="button"
+                              onClick={() => setMovementFilters(p => ({ ...p, _product_search: undefined, product_id: "" }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs"
+                              title="Réinitialiser"
+                            >✕</button>
+                          )}
+                          {isSearching && !selected && (
+                            <div className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl">
+                              {filtered.length === 0 ? (
+                                <div className="px-3 py-3 text-slate-500 text-sm text-center">Aucun produit</div>
+                              ) : (
+                                filtered.slice(0, 50).map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setMovementFilters(f => ({ ...f, product_id: p.id, _product_search: undefined }))}
+                                    className="w-full text-left px-3 py-2 hover:bg-slate-700 border-b border-slate-700/50 last:border-b-0 text-sm text-white"
+                                  >
+                                    {p.name} <span className="text-[10px] text-slate-500">{p.code || ""}</span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div>
                     <Label className="text-slate-400 text-xs uppercase">Type</Label>
@@ -3482,22 +3521,79 @@ export default function StockPage() {
             {transferForm.target_mode === "existing" ? (
               <div>
                 <Label className="text-slate-300 text-xs">Sélectionnez le produit cuisine</Label>
-                <select
-                  value={transferForm.target_product_id}
-                  onChange={(e) => setTransferForm(p => ({ ...p, target_product_id: e.target.value }))}
-                  className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded px-2 py-2"
-                  data-testid="transfer-target-select"
-                >
-                  <option value="">— Choisir —</option>
-                  {[...products]
+                {(() => {
+                  const cuisineProducts = [...products]
                     .filter(p => (p.storage_zone || 'cuisine') !== 'magasin')
-                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-                    .map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} · qté actuelle : {p.quantity} {p.unit}
-                      </option>
-                    ))}
-                </select>
+                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                  const q = (transferForm._target_search || "").toLowerCase().trim();
+                  const filtered = q
+                    ? cuisineProducts.filter(p =>
+                        (p.name || "").toLowerCase().includes(q) ||
+                        (p.code || "").toLowerCase().includes(q)
+                      )
+                    : cuisineProducts;
+                  const selected = cuisineProducts.find(p => p.id === transferForm.target_product_id);
+                  return (
+                    <div className="relative">
+                      <Input
+                        value={transferForm._target_search ?? (selected?.name || "")}
+                        onChange={(e) => setTransferForm(p => ({ ...p, _target_search: e.target.value, target_product_id: "" }))}
+                        onFocus={() => setTransferForm(p => ({ ...p, _target_search: p._target_search ?? "" }))}
+                        placeholder="Tapez pour rechercher un produit..."
+                        className="bg-slate-800 border-slate-700 text-white pr-8"
+                        data-testid="transfer-target-search"
+                      />
+                      {(transferForm._target_search || selected) && (
+                        <button
+                          type="button"
+                          onClick={() => setTransferForm(p => ({ ...p, _target_search: "", target_product_id: "" }))}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                          title="Effacer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {transferForm._target_search !== undefined && transferForm._target_search !== null && !selected && (
+                        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl" data-testid="transfer-target-list">
+                          {filtered.length === 0 ? (
+                            <div className="px-3 py-4 text-slate-500 text-sm text-center">
+                              Aucun produit trouvé
+                              {q && (
+                                <div className="text-[11px] text-slate-600 mt-1">
+                                  Astuce : cliquez sur <strong>"Créer un nouveau"</strong> pour l'ajouter à la cuisine.
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            filtered.slice(0, 50).map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => setTransferForm(f => ({
+                                  ...f,
+                                  target_product_id: p.id,
+                                  _target_search: undefined,
+                                }))}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-700 border-b border-slate-700/50 last:border-b-0"
+                                data-testid={`transfer-target-option-${p.id}`}
+                              >
+                                <div className="text-white text-sm font-medium">{p.name}</div>
+                                <div className="text-[11px] text-slate-400">
+                                  {p.code ? `${p.code} · ` : ""}qté actuelle : {p.quantity} {p.unit}
+                                </div>
+                              </button>
+                            ))
+                          )}
+                          {filtered.length > 50 && (
+                            <div className="px-3 py-2 text-slate-500 text-[11px] text-center border-t border-slate-700/50">
+                              {filtered.length - 50} résultat(s) supplémentaire(s)… Tapez plus de caractères pour affiner.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <p className="text-slate-500 text-[11px] mt-1">
                   💡 Astuce : si un produit du même nom existe déjà, choisissez-le pour cumuler les quantités.
                 </p>
