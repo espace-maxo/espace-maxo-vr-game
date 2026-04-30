@@ -82,6 +82,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
   { id: "destock_live", label: "Déstockage live", icon: Activity },
   { id: "products_recipes", label: "Produits & Recettes", icon: Package },
+  { id: "magasin", label: "Stock magasin", icon: Warehouse },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
   { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
   { id: "purchases", label: "Achats", icon: ShoppingCart },
@@ -383,7 +384,7 @@ export default function StockPage() {
   };
 
   // Forms
-  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" });
+  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", storage_zone: "cuisine", date_achat: "", date_peremption: "", observation: "" });
   const [movementForm, setMovementForm] = useState({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" });
   const [purchaseForm, setPurchaseForm] = useState({ supplier_id: "", supplier_name: "", purchase_date: "", items: [], notes: "" });
   const [purchaseItem, setPurchaseItem] = useState({ product_id: "", quantity: 0, unit_price: 0 });
@@ -461,6 +462,26 @@ export default function StockPage() {
     limit: 200,
   });
 
+  // "Stock magasin" zone (manual-only stock — no auto-destock from invoices)
+  const [magasinProducts, setMagasinProducts] = useState([]);
+  const [magasinMovements, setMagasinMovements] = useState([]);
+  const [magasinSearch, setMagasinSearch] = useState("");
+
+  const fetchMagasinProducts = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/products`, { params: { storage_zone: "magasin" } });
+      setMagasinProducts(r.data.products || []);
+    } catch {}
+  }, []);
+
+  const fetchMagasinMovements = useCallback(async () => {
+    try {
+      // Fetch all recent movements and keep only those on magasin products
+      const r = await axios.get(`${API}/movements`, { params: { limit: 500 } });
+      setMagasinMovements(r.data.movements || []);
+    } catch {}
+  }, []);
+
   const fetchMovements = useCallback(async () => {
     try {
       const params = { limit: movementFilters.limit || 200 };
@@ -525,6 +546,15 @@ export default function StockPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
+  // Auto-fetch magasin data when entering the tab
+  useEffect(() => {
+    if (activeSection === "magasin") {
+      fetchMagasinProducts();
+      fetchMagasinMovements();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
+
   // Products sorted so that items with a filled quantity or purchase_price appear first.
   // "Filled" score: +2 if both quantity and price > 0, +1 if only one, 0 if empty.
   // Array.prototype.sort is stable (ES2019+) so original order is kept within each score group.
@@ -562,7 +592,7 @@ export default function StockPage() {
 
   const openEditProduct = (p) => {
     setEditingItem(p);
-    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
+    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", storage_zone: p.storage_zone || "cuisine", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
     setShowProductModal(true);
   };
 
@@ -572,7 +602,7 @@ export default function StockPage() {
     try {
       await axios.post(`${API}/movements`, { ...movementForm, user_name: "Administrateur" });
       toast.success("Mouvement enregistre");
-      setShowMovementModal(false); fetchMovements(); fetchProducts(); fetchDashboard();
+      setShowMovementModal(false); fetchMovements(); fetchProducts(); fetchDashboard(); fetchMagasinProducts(); fetchMagasinMovements();
     } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
   };
 
@@ -1836,6 +1866,241 @@ export default function StockPage() {
           </div>
         )}
 
+        {/* STOCK MAGASIN — Zone "manuelle uniquement" : pas de déstockage auto par les factures */}
+        {activeSection === "magasin" && (
+          <div className="space-y-4" data-testid="magasin-section">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Warehouse className="w-7 h-7 text-amber-400" />
+                  Stock Magasin
+                  <Badge className="bg-amber-500/20 text-amber-300 ml-1 text-xs">Déstockage manuel uniquement</Badge>
+                </h2>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Cette zone n'est PAS affectée par les ventes Caisse. Toute sortie doit être enregistrée manuellement.
+                </p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  onClick={() => { fetchMagasinProducts(); fetchMagasinMovements(); }}
+                  data-testid="magasin-refresh-btn"
+                >
+                  <Activity className="w-4 h-4 mr-1" /> Actualiser
+                </Button>
+                <Button
+                  onClick={() => {
+                    // Pre-select 1st magasin product if any
+                    const first = magasinProducts[0]?.id || "";
+                    setMovementForm({ product_id: first, movement_type: "sortie", quantity: 0, unit_price: 0, reason: "Sortie magasin" });
+                    setShowMovementModal(true);
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700"
+                  data-testid="magasin-new-movement-btn"
+                  disabled={magasinProducts.length === 0}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement
+                </Button>
+                {isAdmin && (
+                  <Button
+                    onClick={() => {
+                      setEditingItem(null);
+                      setProductForm({
+                        code: "", name: "", category_id: categories[0]?.id || "",
+                        subcategory: "", unit: "piece", quantity: 0, stock_min: 5, stock_max: 100,
+                        purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "",
+                        storage_zone: "magasin", is_active: true, photo_url: "",
+                        date_achat: "", date_peremption: "", observation: ""
+                      });
+                      setShowProductModal(true);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    data-testid="magasin-new-product-btn"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Produit magasin
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Info banner */}
+            <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-200 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                <strong>Comment ça fonctionne :</strong> les produits de cette zone ne sont <strong>jamais</strong> déstockés automatiquement par les factures Caisse, les recettes ou la conso journalière.
+                Pour enregistrer une sortie (ex: utilisation par la cuisine, vente directe, cadeau), cliquez sur <em>Nouveau Mouvement</em>.
+                Pour convertir un produit existant en produit "magasin", ouvrez-le dans <em>Produits & Recettes</em> et changez sa <em>zone de stockage</em> → Magasin.
+              </span>
+            </div>
+
+            {/* Products (real-time quantities) */}
+            <Card className="bg-slate-900/80 border-slate-800">
+              <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <CardTitle className="text-amber-300 text-lg flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Produits ({magasinProducts.length})
+                </CardTitle>
+                <Input
+                  placeholder="Rechercher un produit..."
+                  value={magasinSearch}
+                  onChange={(e) => setMagasinSearch(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white w-full md:w-64"
+                  data-testid="magasin-search"
+                />
+              </CardHeader>
+              <CardContent className="p-0">
+                {magasinProducts.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500">
+                    <Warehouse className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Aucun produit dans le stock magasin pour l'instant.</p>
+                    <p className="text-xs mt-1">Cliquez sur <strong>"Produit magasin"</strong> en haut pour en créer un.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
+                          <th className="p-3">Produit</th>
+                          <th className="p-3">Catégorie</th>
+                          <th className="p-3 text-right">Quantité</th>
+                          <th className="p-3 text-right">Seuil min</th>
+                          <th className="p-3 text-right">Valeur achat</th>
+                          <th className="p-3 text-center">Statut</th>
+                          <th className="p-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {magasinProducts
+                          .filter(p => !magasinSearch || (p.name || "").toLowerCase().includes(magasinSearch.toLowerCase()))
+                          .map(p => {
+                            const qty = Number(p.quantity) || 0;
+                            const smin = Number(p.stock_min) || 0;
+                            const statut = qty <= 0 ? "rupture" : (qty <= smin ? "faible" : "normal");
+                            const catName = categories.find(c => c.id === p.category_id)?.name || "—";
+                            return (
+                              <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                                <td className="p-3 text-white font-medium">{p.name} <span className="text-slate-500 text-xs">{p.code || ""}</span></td>
+                                <td className="p-3 text-slate-400">{catName}</td>
+                                <td className="p-3 text-right font-bold text-amber-300">{parseFloat(qty.toFixed(3))} {p.unit}</td>
+                                <td className="p-3 text-right text-slate-500">{smin}</td>
+                                <td className="p-3 text-right text-slate-300">{Math.round(qty * (p.purchase_price || 0)).toLocaleString('fr-FR')} F</td>
+                                <td className="p-3 text-center">
+                                  <Badge className={`text-xs ${
+                                    statut === "rupture" ? "bg-red-500/20 text-red-400" :
+                                    statut === "faible" ? "bg-orange-500/20 text-orange-400" :
+                                    "bg-emerald-500/20 text-emerald-400"
+                                  }`}>{statut}</Badge>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <div className="flex gap-1 justify-end">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setMovementForm({ product_id: p.id, movement_type: "sortie", quantity: 0, unit_price: 0, reason: "Sortie magasin" });
+                                        setShowMovementModal(true);
+                                      }}
+                                      className="border-red-500/40 text-red-300 hover:bg-red-500/10 h-7 px-2 text-xs"
+                                      title="Enregistrer une sortie manuelle"
+                                      data-testid={`magasin-destock-${p.id}`}
+                                    >
+                                      Déstocker
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setMovementForm({ product_id: p.id, movement_type: "entree", quantity: 0, unit_price: p.purchase_price || 0, reason: "Entrée magasin" });
+                                        setShowMovementModal(true);
+                                      }}
+                                      className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 h-7 px-2 text-xs"
+                                      title="Enregistrer une entrée"
+                                    >
+                                      Entrée
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Movements history (filtered on magasin products) */}
+            <Card className="bg-slate-900/80 border-slate-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-amber-300 text-lg flex items-center gap-2">
+                  <ArrowUpDown className="w-5 h-5" />
+                  Historique des mouvements
+                  <Badge className="bg-slate-700 text-slate-300 text-xs ml-1">
+                    {(() => {
+                      const magIds = new Set(magasinProducts.map(p => p.id));
+                      return magasinMovements.filter(m => magIds.has(m.product_id)).length;
+                    })()}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Produit</th>
+                        <th className="p-3">Type</th>
+                        <th className="p-3 text-right">Quantité</th>
+                        <th className="p-3 text-right">Avant</th>
+                        <th className="p-3 text-right">Après</th>
+                        <th className="p-3">Motif</th>
+                        <th className="p-3">Utilisateur</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const magIds = new Set(magasinProducts.map(p => p.id));
+                        const rows = magasinMovements.filter(m => magIds.has(m.product_id));
+                        if (rows.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="8" className="p-8 text-center text-slate-500">
+                                Aucun mouvement enregistré sur le stock magasin pour l'instant.
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return rows.map(m => (
+                          <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                            <td className="p-3 text-slate-400 text-xs">
+                              {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="p-3 text-white">{m.product_name}</td>
+                            <td className="p-3">
+                              <Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-right text-white font-medium">{m.quantity} {m.unit}</td>
+                            <td className="p-3 text-right text-slate-500">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
+                            <td className="p-3 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
+                            <td className="p-3 text-slate-400 text-xs max-w-[200px] truncate">{m.reason}</td>
+                            <td className="p-3 text-slate-500 text-xs">{m.user_name}</td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+
         {/* MOVEMENTS */}
         {activeSection === "movements" && (
           <div className="space-y-4">
@@ -2779,6 +3044,32 @@ export default function StockPage() {
               <div><Label className="text-slate-300 text-xs">Prix d'achat (FCFA)</Label><DecimalInput value={productForm.purchase_price} onChange={(n) => setProductForm(p => ({...p, purchase_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Prix de vente unitaire (FCFA)</Label><DecimalInput value={productForm.sale_price} onChange={(n) => setProductForm(p => ({...p, sale_price: n}))} className="bg-slate-800 border-slate-700 text-white" /></div>
               <div><Label className="text-slate-300 text-xs">Emplacement</Label><Input value={productForm.storage_location} onChange={e => setProductForm(p => ({...p, storage_location: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" placeholder="Reserve, Cuisine..." /></div>
+            </div>
+
+            {/* Storage zone selector */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+              <Label className="text-slate-300 text-xs uppercase tracking-wide mb-2 block">Zone de stockage</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { v: 'cuisine', l: 'Cuisine (auto)', d: 'Déstockage auto via factures/recettes', color: 'emerald' },
+                  { v: 'magasin', l: 'Magasin (manuel)', d: 'Déstockage manuel uniquement', color: 'amber' },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setProductForm(p => ({ ...p, storage_zone: opt.v }))}
+                    data-testid={`storage-zone-${opt.v}`}
+                    className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                      (productForm.storage_zone || 'cuisine') === opt.v
+                        ? (opt.v === 'magasin' ? 'bg-amber-500/20 border-amber-500/60 text-amber-100' : 'bg-emerald-500/20 border-emerald-500/60 text-emerald-100')
+                        : 'bg-slate-900/40 border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    <p className="font-bold text-sm">{opt.l}</p>
+                    <p className="text-[11px] opacity-75">{opt.d}</p>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-slate-300 text-xs">Date d'achat</Label><Input type="date" value={productForm.date_achat} onChange={e => setProductForm(p => ({...p, date_achat: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>

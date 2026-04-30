@@ -300,7 +300,8 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                             link_ids = [caisse_prod["stock_product_id"]]
                         if link_ids:
                             async for sp in db.stock_products.find({
-                                "id": {"$in": link_ids}, "is_active": True
+                                "id": {"$in": link_ids}, "is_active": True,
+                                "storage_zone": {"$ne": "magasin"}
                             }, {"_id": 0}):
                                 linked_stock_products.append(sp)
                         # Explicit link to a recipe (composed product) — only if no direct links.
@@ -350,7 +351,7 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                     # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.
                     if linked_recipe:
                         for ing in linked_recipe.get("ingredients", []):
-                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True})
+                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
                             if ing_product:
                                 ing_qty = ing["quantity"] * item_qty
                                 old_qty = ing_product.get("quantity", 0)
@@ -395,7 +396,7 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
 
                     if recipe:
                         for ing in recipe.get("ingredients", []):
-                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True})
+                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
                             if ing_product:
                                 ing_qty = ing["quantity"] * item_qty
                                 old_qty = ing_product.get("quantity", 0)
@@ -436,7 +437,8 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                     else:
                         stock_product = await db.stock_products.find_one({
                             "name": {"$regex": f"^{re.escape(item_name[:20])}", "$options": "i"},
-                            "is_active": True
+                            "is_active": True,
+                            "storage_zone": {"$ne": "magasin"}
                         })
                         if stock_product:
                             old_qty = stock_product.get("quantity", 0)

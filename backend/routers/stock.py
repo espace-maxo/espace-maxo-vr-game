@@ -152,6 +152,9 @@ class StockProductCreate(BaseModel):
     sale_price: float = 0  # Prix de vente unitaire (pour valoriser le stock en valeur de revente)
     supplier_id: str = ""
     storage_location: str = ""
+    # 'cuisine' (default): auto-déstockage via factures/recettes
+    # 'magasin'         : stock isolé, déstockage MANUEL uniquement (aucune synchro Caisse)
+    storage_zone: str = "cuisine"
     is_active: bool = True
     photo_url: str = ""
     date_achat: str = ""
@@ -241,7 +244,7 @@ async def delete_category(cat_id: str):
 # ==================== PRODUCTS ====================
 
 @router.get("/products")
-async def get_products(category_id: str = None, status: str = None, search: str = None, alert: str = None):
+async def get_products(category_id: str = None, status: str = None, search: str = None, alert: str = None, storage_zone: str = None):
     query = {}
     if category_id:
         query["category_id"] = category_id
@@ -254,6 +257,11 @@ async def get_products(category_id: str = None, status: str = None, search: str 
             {"name": {"$regex": search, "$options": "i"}},
             {"code": {"$regex": search, "$options": "i"}}
         ]
+    if storage_zone == "magasin":
+        query["storage_zone"] = "magasin"
+    elif storage_zone == "cuisine":
+        # Default cuisine = everything that is NOT explicitly magasin (back-compat for old rows)
+        query["storage_zone"] = {"$ne": "magasin"}
     
     products = await db.stock_products.find(query, {"_id": 0}).sort("name", 1).to_list(2000)
     
@@ -294,6 +302,7 @@ async def create_product(data: StockProductCreate):
         "valeur_stock_vente": data.quantity * data.sale_price,
         "supplier_id": data.supplier_id,
         "storage_location": data.storage_location,
+        "storage_zone": data.storage_zone or "cuisine",
         "is_active": data.is_active,
         "photo_url": data.photo_url,
         "date_achat": data.date_achat,
@@ -721,6 +730,9 @@ async def _apply_daily_deductions_internal(silent: bool = True) -> dict:
             continue
         sp = await db.stock_products.find_one({"id": spid}, {"_id": 0})
         if not sp or not sp.get("is_active", True):
+            continue
+        # Skip "magasin" products — manual-only zone
+        if sp.get("storage_zone") == "magasin":
             continue
 
         # Determine reference date: last deduction or override creation date (fall back to today)
