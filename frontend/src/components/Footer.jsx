@@ -111,6 +111,16 @@ const Footer = () => {
             >
               •
             </Link>
+            {" "}
+            <a
+              href="https://attendance-gps-test.preview.emergentagent.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-500 hover:text-gray-400 transition-colors text-xs"
+              data-testid="footer-staff-link"
+            >
+              Staff
+            </a>
           </p>
         </div>
       </div>
