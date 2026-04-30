@@ -39,7 +39,7 @@ import PointFinancierTab from "./caisse/components/PointFinancierTab";
 import ActiviteTab from "./caisse/components/ActiviteTab";
 import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
-import AnalyticsTab from "./caisse/components/AnalyticsTab";
+import PointCaisseTab from "./caisse/components/PointCaisseTab";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
 import MultiLinkStockModal from "./caisse/components/MultiLinkStockModal";
@@ -4959,10 +4959,10 @@ _Gérante - Espace Maxo_
                 <NotifBadge count={effectiveCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
-            {/* 8.5 ANALYTICS (Admin only) */}
+            {/* 8.5 POINT DE LA CAISSE (Admin only) — remplace Analytics */}
             {currentUser?.role === 'admin' && (
-              <TabsTrigger value="analytics" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-analytics">
-                <TrendingUp className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Analytics</span>
+              <TabsTrigger value="point_caisse" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-caisse">
+                <Receipt className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Point de la Caisse</span>
               </TabsTrigger>
             )}
             {/* 8.7 PREVISIONS (Admin only) */}
@@ -5877,10 +5877,10 @@ _Gérante - Espace Maxo_
             />
           </TabsContent>
 
-          {/* ==================== ANALYTICS TAB (Admin only) ==================== */}
+          {/* ==================== POINT DE LA CAISSE TAB (Admin only) — remplace Analytics ==================== */}
           {currentUser?.role === 'admin' && (
-          <TabsContent value="analytics">
-            <AnalyticsTab />
+          <TabsContent value="point_caisse">
+            <PointCaisseTab currentUser={currentUser} />
           </TabsContent>
           )}
 

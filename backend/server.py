@@ -38,6 +38,7 @@ from routers.current_accounts import router as current_accounts_router, set_db a
 from routers.tips import router as tips_router, set_db as set_tips_db
 from routers.notifications import router as notifications_router, set_db as set_notifications_db
 from routers.product_packages import router as product_packages_router, set_db as set_product_packages_db
+from routers.cash_closures import router as cash_closures_router, set_db as set_cash_closures_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -64,6 +65,7 @@ set_ca_db(db)
 set_tips_db(db)
 set_notifications_db(db)
 set_product_packages_db(db)
+set_cash_closures_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -117,6 +119,7 @@ api_router.include_router(financial_points_router)
 api_router.include_router(service_reports_router)
 api_router.include_router(subscriptions_router)
 api_router.include_router(stock_router)
+api_router.include_router(cash_closures_router)
 
 # Configure logging
 logging.basicConfig(
