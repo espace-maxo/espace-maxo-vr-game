@@ -268,232 +268,7 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                     logger.info(f"Auto-stopped table {table_number} after invoice validation")
 
             try:
-                items = current_invoice.get("items", [])
-                invoice_number = current_invoice.get("invoice_number", "")
-                now_iso = datetime.now(timezone.utc).isoformat()
-
-                for item in items:
-                    item_name = item.get("name", "")
-                    item_qty = item.get("quantity", 1)
-                    item_price = item.get("price", 0)
-
-                    # 1) EXPLICIT LINK: if the caisse product is linked to one or more stock products, deduct each.
-                    linked_stock_products = []
-                    linked_recipe = None
-                    caisse_product_id = item.get("product_id") or item.get("id")
-                    caisse_prod = None
-                    if caisse_product_id:
-                        caisse_prod = await db.caisse_products.find_one({"id": caisse_product_id})
-                    # Fallback: some legacy invoices (or manually-added items) carry no product_id —
-                    # try to match by exact name (case-insensitive). Useful for 'free items' typed into the cart.
-                    if not caisse_prod and item_name:
-                        caisse_prod = await db.caisse_products.find_one({
-                            "name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
-                        })
-                        if caisse_prod:
-                            caisse_product_id = caisse_prod.get("id")
-                            logger.info(f"Stock deduction: matched item '{item_name}' to caisse product '{caisse_prod.get('name')}' by name (no product_id in invoice item)")
-                    if caisse_prod:
-                        # Resolve stock_links (multi). Backwards-compat: fallback to legacy single stock_product_id.
-                        link_ids = caisse_prod.get("stock_links") or []
-                        if not link_ids and caisse_prod.get("stock_product_id"):
-                            link_ids = [caisse_prod["stock_product_id"]]
-                        if link_ids:
-                            async for sp in db.stock_products.find({
-                                "id": {"$in": link_ids}, "is_active": True,
-                                "storage_zone": {"$ne": "magasin"}
-                            }, {"_id": 0}):
-                                linked_stock_products.append(sp)
-                        # Explicit link to a recipe (composed product) — only if no direct links.
-                        elif caisse_prod.get("stock_recipe_id"):
-                            linked_recipe = await db.stock_recipes.find_one({
-                                "id": caisse_prod["stock_recipe_id"]
-                            })
-
-                    if linked_stock_products:
-                        for sp in linked_stock_products:
-                            old_qty = sp.get("quantity", 0)
-                            new_qty = max(0, old_qty - item_qty)
-                            new_valeur = new_qty * sp.get("purchase_price", 0)
-                            smin = sp.get("stock_min", 5)
-                            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-                            multi_suffix = " (multi-lien)" if len(linked_stock_products) > 1 else ""
-                            await db.stock_movements.insert_one({
-                                "id": str(uuid.uuid4()),
-                                "product_id": sp["id"],
-                                "product_name": sp["name"],
-                                "product_code": sp.get("code", ""),
-                                "movement_type": "sortie",
-                                "quantity": item_qty,
-                                "previous_quantity": old_qty,
-                                "new_quantity": new_qty,
-                                "unit": sp.get("unit", ""),
-                                "unit_price": sp.get("purchase_price", 0),
-                                "total_value": item_qty * sp.get("purchase_price", 0),
-                                "reason": f"Vente (lien direct{multi_suffix}) - Facture {invoice_number}",
-                                "user_name": current_invoice.get("created_by", "Caisse"),
-                                "invoice_id": invoice_id,
-                                "caisse_product_id": caisse_product_id,
-                                "created_at": now_iso,
-                            })
-                            await db.stock_products.update_one(
-                                {"id": sp["id"]},
-                                {"$set": {
-                                    "quantity": new_qty,
-                                    "valeur_stock": new_valeur,
-                                    "statut": new_statut,
-                                    "updated_at": now_iso,
-                                }}
-                            )
-                            logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
-                        continue  # skip fallback logic
-
-                    # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.
-                    if linked_recipe:
-                        for ing in linked_recipe.get("ingredients", []):
-                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
-                            if ing_product:
-                                ing_qty = ing["quantity"] * item_qty
-                                old_qty = ing_product.get("quantity", 0)
-                                new_qty = max(0, old_qty - ing_qty)
-                                new_valeur = new_qty * ing_product.get("purchase_price", 0)
-                                smin = ing_product.get("stock_min", 5)
-                                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-                                await db.stock_movements.insert_one({
-                                    "id": str(uuid.uuid4()),
-                                    "product_id": ing_product["id"],
-                                    "product_name": ing_product["name"],
-                                    "product_code": ing_product.get("code", ""),
-                                    "movement_type": "sortie",
-                                    "quantity": round(ing_qty, 3),
-                                    "previous_quantity": old_qty,
-                                    "new_quantity": new_qty,
-                                    "unit": ing_product.get("unit", ""),
-                                    "unit_price": ing_product.get("purchase_price", 0),
-                                    "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
-                                    "reason": f"Vente (Recette liée: {linked_recipe['name']}) - Facture {invoice_number}",
-                                    "user_name": current_invoice.get("created_by", "Caisse"),
-                                    "invoice_id": invoice_id,
-                                    "caisse_product_id": caisse_product_id,
-                                    "recipe_id": linked_recipe["id"],
-                                    "created_at": now_iso,
-                                })
-                                await db.stock_products.update_one(
-                                    {"id": ing_product["id"]},
-                                    {"$set": {
-                                        "quantity": round(new_qty, 3),
-                                        "valeur_stock": round(new_valeur, 2),
-                                        "statut": new_statut,
-                                        "updated_at": now_iso,
-                                    }}
-                                )
-                        logger.info(f"Stock recipe-linked deduction: recipe={linked_recipe['name']} items={len(linked_recipe.get('ingredients', []))} (invoice {invoice_number})")
-                        continue  # skip fallback logic
-
-                    recipe = await db.stock_recipes.find_one({
-                        "caisse_product_name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
-                    })
-
-                    if recipe:
-                        for ing in recipe.get("ingredients", []):
-                            ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
-                            if ing_product:
-                                ing_qty = ing["quantity"] * item_qty
-                                old_qty = ing_product.get("quantity", 0)
-                                new_qty = max(0, old_qty - ing_qty)
-                                new_valeur = new_qty * ing_product.get("purchase_price", 0)
-                                smin = ing_product.get("stock_min", 5)
-                                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-
-                                stock_mov = {
-                                    "id": str(uuid.uuid4()),
-                                    "product_id": ing_product["id"],
-                                    "product_name": ing_product["name"],
-                                    "product_code": ing_product.get("code", ""),
-                                    "movement_type": "sortie",
-                                    "quantity": round(ing_qty, 3),
-                                    "previous_quantity": old_qty,
-                                    "new_quantity": new_qty,
-                                    "unit": ing_product.get("unit", ""),
-                                    "unit_price": ing_product.get("purchase_price", 0),
-                                    "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
-                                    "reason": f"Vente (Recette: {recipe['name']}) - Facture {invoice_number}",
-                                    "user_name": current_invoice.get("created_by", "Caisse"),
-                                    "invoice_id": invoice_id,
-                                    "recipe_id": recipe["id"],
-                                    "created_at": now_iso,
-                                }
-                                await db.stock_movements.insert_one(stock_mov)
-                                await db.stock_products.update_one(
-                                    {"id": ing_product["id"]},
-                                    {"$set": {
-                                        "quantity": round(new_qty, 3),
-                                        "valeur_stock": round(new_valeur, 2),
-                                        "statut": new_statut,
-                                        "updated_at": now_iso,
-                                    }}
-                                )
-                                logger.info(f"Stock recipe deduction: {ing_product['name']} {old_qty} -> {round(new_qty, 3)} (recipe: {recipe['name']}, invoice {invoice_number})")
-                    else:
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": f"^{re.escape(item_name[:20])}", "$options": "i"},
-                            "is_active": True,
-                            "storage_zone": {"$ne": "magasin"}
-                        })
-                        if stock_product:
-                            old_qty = stock_product.get("quantity", 0)
-                            new_qty = max(0, old_qty - item_qty)
-                            new_valeur = new_qty * stock_product.get("purchase_price", 0)
-                            smin = stock_product.get("stock_min", 5)
-                            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
-
-                            stock_mov = {
-                                "id": str(uuid.uuid4()),
-                                "product_id": stock_product["id"],
-                                "product_name": stock_product["name"],
-                                "product_code": stock_product.get("code", ""),
-                                "movement_type": "sortie",
-                                "quantity": item_qty,
-                                "previous_quantity": old_qty,
-                                "new_quantity": new_qty,
-                                "unit": stock_product.get("unit", ""),
-                                "unit_price": item_price,
-                                "total_value": item_qty * item_price,
-                                "reason": f"Vente - Facture {invoice_number}",
-                                "user_name": current_invoice.get("created_by", "Caisse"),
-                                "invoice_id": invoice_id,
-                                "created_at": now_iso,
-                            }
-                            await db.stock_movements.insert_one(stock_mov)
-                            await db.stock_products.update_one(
-                                {"id": stock_product["id"]},
-                                {"$set": {
-                                    "quantity": new_qty,
-                                    "valeur_stock": new_valeur,
-                                    "statut": new_statut,
-                                    "updated_at": now_iso,
-                                }}
-                            )
-                            logger.info(f"Stock updated: {stock_product['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
-                        else:
-                            sale_record = {
-                                "id": str(uuid.uuid4()),
-                                "product_id": "",
-                                "product_name": item_name,
-                                "product_code": "",
-                                "movement_type": "sortie",
-                                "quantity": item_qty,
-                                "previous_quantity": 0,
-                                "new_quantity": 0,
-                                "unit": item.get("unit", "portion"),
-                                "unit_price": item_price,
-                                "total_value": item_qty * item_price,
-                                "reason": f"Vente (non lie au stock) - Facture {invoice_number}",
-                                "user_name": current_invoice.get("created_by", "Caisse"),
-                                "invoice_id": invoice_id,
-                                "created_at": now_iso,
-                            }
-                            await db.stock_movements.insert_one(sale_record)
+                await _apply_destocking_for_invoice(current_invoice, db, logger)
             except Exception as stock_err:
                 logger.error(f"Error syncing invoice to stock: {stock_err}")
 
@@ -503,6 +278,285 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
     except Exception as e:
         logger.error(f"Error updating invoice: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _apply_destocking_for_invoice(current_invoice, db, logger):
+    """Shared helper: apply stock destocking for a single invoice. Idempotent-check on caller side.
+
+    Extracted from update_invoice so it can be reused by the 'resync' endpoint.
+    """
+    items = current_invoice.get("items", [])
+    invoice_id = current_invoice.get("id")
+    invoice_number = current_invoice.get("invoice_number", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for item in items:
+        item_name = item.get("name", "")
+        item_qty = item.get("quantity", 1)
+        item_price = item.get("price", 0)
+
+        # 1) EXPLICIT LINK: if the caisse product is linked to one or more stock products, deduct each.
+        linked_stock_products = []
+        linked_recipe = None
+        caisse_product_id = item.get("product_id") or item.get("id")
+        caisse_prod = None
+        if caisse_product_id:
+            caisse_prod = await db.caisse_products.find_one({"id": caisse_product_id})
+        # Fallback: some legacy invoices (or manually-added items) carry no product_id —
+        # try to match by exact name (case-insensitive). Useful for 'free items' typed into the cart.
+        if not caisse_prod and item_name:
+            caisse_prod = await db.caisse_products.find_one({
+                "name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
+            })
+            if caisse_prod:
+                caisse_product_id = caisse_prod.get("id")
+                logger.info(f"Stock deduction: matched item '{item_name}' to caisse product '{caisse_prod.get('name')}' by name (no product_id in invoice item)")
+        if caisse_prod:
+            # Resolve stock_links (multi). Backwards-compat: fallback to legacy single stock_product_id.
+            link_ids = caisse_prod.get("stock_links") or []
+            if not link_ids and caisse_prod.get("stock_product_id"):
+                link_ids = [caisse_prod["stock_product_id"]]
+            if link_ids:
+                async for sp in db.stock_products.find({
+                    "id": {"$in": link_ids}, "is_active": True,
+                    "storage_zone": {"$ne": "magasin"}
+                }, {"_id": 0}):
+                    linked_stock_products.append(sp)
+            # Explicit link to a recipe (composed product) — only if no direct links.
+            elif caisse_prod.get("stock_recipe_id"):
+                linked_recipe = await db.stock_recipes.find_one({
+                    "id": caisse_prod["stock_recipe_id"]
+                })
+
+        if linked_stock_products:
+            for sp in linked_stock_products:
+                old_qty = sp.get("quantity", 0)
+                new_qty = max(0, old_qty - item_qty)
+                new_valeur = new_qty * sp.get("purchase_price", 0)
+                smin = sp.get("stock_min", 5)
+                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                multi_suffix = " (multi-lien)" if len(linked_stock_products) > 1 else ""
+                await db.stock_movements.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "product_id": sp["id"],
+                    "product_name": sp["name"],
+                    "product_code": sp.get("code", ""),
+                    "movement_type": "sortie",
+                    "quantity": item_qty,
+                    "previous_quantity": old_qty,
+                    "new_quantity": new_qty,
+                    "unit": sp.get("unit", ""),
+                    "unit_price": sp.get("purchase_price", 0),
+                    "total_value": item_qty * sp.get("purchase_price", 0),
+                    "reason": f"Vente (lien direct{multi_suffix}) - Facture {invoice_number}",
+                    "user_name": current_invoice.get("created_by", "Caisse"),
+                    "invoice_id": invoice_id,
+                    "caisse_product_id": caisse_product_id,
+                    "created_at": now_iso,
+                })
+                await db.stock_products.update_one(
+                    {"id": sp["id"]},
+                    {"$set": {
+                        "quantity": new_qty,
+                        "valeur_stock": new_valeur,
+                        "statut": new_statut,
+                        "updated_at": now_iso,
+                    }}
+                )
+                logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+            continue  # skip fallback logic
+
+        # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.
+        if linked_recipe:
+            for ing in linked_recipe.get("ingredients", []):
+                ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
+                if ing_product:
+                    ing_qty = ing["quantity"] * item_qty
+                    old_qty = ing_product.get("quantity", 0)
+                    new_qty = max(0, old_qty - ing_qty)
+                    new_valeur = new_qty * ing_product.get("purchase_price", 0)
+                    smin = ing_product.get("stock_min", 5)
+                    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                    await db.stock_movements.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "product_id": ing_product["id"],
+                        "product_name": ing_product["name"],
+                        "product_code": ing_product.get("code", ""),
+                        "movement_type": "sortie",
+                        "quantity": round(ing_qty, 3),
+                        "previous_quantity": old_qty,
+                        "new_quantity": new_qty,
+                        "unit": ing_product.get("unit", ""),
+                        "unit_price": ing_product.get("purchase_price", 0),
+                        "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
+                        "reason": f"Vente (Recette liée: {linked_recipe['name']}) - Facture {invoice_number}",
+                        "user_name": current_invoice.get("created_by", "Caisse"),
+                        "invoice_id": invoice_id,
+                        "caisse_product_id": caisse_product_id,
+                        "recipe_id": linked_recipe["id"],
+                        "created_at": now_iso,
+                    })
+                    await db.stock_products.update_one(
+                        {"id": ing_product["id"]},
+                        {"$set": {
+                            "quantity": round(new_qty, 3),
+                            "valeur_stock": round(new_valeur, 2),
+                            "statut": new_statut,
+                            "updated_at": now_iso,
+                        }}
+                    )
+            logger.info(f"Stock recipe-linked deduction: recipe={linked_recipe['name']} items={len(linked_recipe.get('ingredients', []))} (invoice {invoice_number})")
+            continue  # skip fallback logic
+
+        recipe = await db.stock_recipes.find_one({
+            "caisse_product_name": {"$regex": f"^{re.escape(item_name)}$", "$options": "i"}
+        })
+
+        if recipe:
+            for ing in recipe.get("ingredients", []):
+                ing_product = await db.stock_products.find_one({"id": ing["product_id"], "is_active": True, "storage_zone": {"$ne": "magasin"}})
+                if ing_product:
+                    ing_qty = ing["quantity"] * item_qty
+                    old_qty = ing_product.get("quantity", 0)
+                    new_qty = max(0, old_qty - ing_qty)
+                    new_valeur = new_qty * ing_product.get("purchase_price", 0)
+                    smin = ing_product.get("stock_min", 5)
+                    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+
+                    stock_mov = {
+                        "id": str(uuid.uuid4()),
+                        "product_id": ing_product["id"],
+                        "product_name": ing_product["name"],
+                        "product_code": ing_product.get("code", ""),
+                        "movement_type": "sortie",
+                        "quantity": round(ing_qty, 3),
+                        "previous_quantity": old_qty,
+                        "new_quantity": new_qty,
+                        "unit": ing_product.get("unit", ""),
+                        "unit_price": ing_product.get("purchase_price", 0),
+                        "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
+                        "reason": f"Vente (Recette: {recipe['name']}) - Facture {invoice_number}",
+                        "user_name": current_invoice.get("created_by", "Caisse"),
+                        "invoice_id": invoice_id,
+                        "recipe_id": recipe["id"],
+                        "created_at": now_iso,
+                    }
+                    await db.stock_movements.insert_one(stock_mov)
+                    await db.stock_products.update_one(
+                        {"id": ing_product["id"]},
+                        {"$set": {
+                            "quantity": round(new_qty, 3),
+                            "valeur_stock": round(new_valeur, 2),
+                            "statut": new_statut,
+                            "updated_at": now_iso,
+                        }}
+                    )
+                    logger.info(f"Stock recipe deduction: {ing_product['name']} {old_qty} -> {round(new_qty, 3)} (recipe: {recipe['name']}, invoice {invoice_number})")
+        else:
+            stock_product = await db.stock_products.find_one({
+                "name": {"$regex": f"^{re.escape(item_name[:20])}", "$options": "i"},
+                "is_active": True,
+                "storage_zone": {"$ne": "magasin"}
+            })
+            if stock_product:
+                old_qty = stock_product.get("quantity", 0)
+                new_qty = max(0, old_qty - item_qty)
+                new_valeur = new_qty * stock_product.get("purchase_price", 0)
+                smin = stock_product.get("stock_min", 5)
+                new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+
+                stock_mov = {
+                    "id": str(uuid.uuid4()),
+                    "product_id": stock_product["id"],
+                    "product_name": stock_product["name"],
+                    "product_code": stock_product.get("code", ""),
+                    "movement_type": "sortie",
+                    "quantity": item_qty,
+                    "previous_quantity": old_qty,
+                    "new_quantity": new_qty,
+                    "unit": stock_product.get("unit", ""),
+                    "unit_price": item_price,
+                    "total_value": item_qty * item_price,
+                    "reason": f"Vente - Facture {invoice_number}",
+                    "user_name": current_invoice.get("created_by", "Caisse"),
+                    "invoice_id": invoice_id,
+                    "created_at": now_iso,
+                }
+                await db.stock_movements.insert_one(stock_mov)
+                await db.stock_products.update_one(
+                    {"id": stock_product["id"]},
+                    {"$set": {
+                        "quantity": new_qty,
+                        "valeur_stock": new_valeur,
+                        "statut": new_statut,
+                        "updated_at": now_iso,
+                    }}
+                )
+                logger.info(f"Stock updated: {stock_product['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
+            else:
+                sale_record = {
+                    "id": str(uuid.uuid4()),
+                    "product_id": "",
+                    "product_name": item_name,
+                    "product_code": "",
+                    "movement_type": "sortie",
+                    "quantity": item_qty,
+                    "previous_quantity": 0,
+                    "new_quantity": 0,
+                    "unit": item.get("unit", "portion"),
+                    "unit_price": item_price,
+                    "total_value": item_qty * item_price,
+                    "reason": f"Vente (non lie au stock) - Facture {invoice_number}",
+                    "user_name": current_invoice.get("created_by", "Caisse"),
+                    "invoice_id": invoice_id,
+                    "created_at": now_iso,
+                }
+                await db.stock_movements.insert_one(sale_record)
+
+
+@router.post("/invoices/resync-destockage")
+async def resync_destockage(date: Optional[str] = None):
+    """Re-apply stock destocking for all validated invoices of a given day.
+
+    Idempotent: skips invoices that already have at least one linked stock_movement.
+    Defaults to today if no date is provided.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    day = date or _dt.now(_tz.utc).strftime("%Y-%m-%d")
+    day_start = f"{day}T00:00:00"
+    day_end = f"{day}T23:59:59.999"
+
+    # Find today's validated invoices
+    invoices_today = await db.invoices.find({
+        "validation_status": "validated",
+        "created_at": {"$gte": day_start, "$lte": day_end},
+    }, {"_id": 0}).to_list(2000)
+
+    processed = 0
+    skipped = 0
+    errors = 0
+    for inv in invoices_today:
+        inv_id = inv.get("id")
+        # Idempotence: skip if at least one movement already references this invoice
+        existing_mv = await db.stock_movements.count_documents({"invoice_id": inv_id})
+        if existing_mv > 0:
+            skipped += 1
+            continue
+        try:
+            await _apply_destocking_for_invoice(inv, db, logger)
+            processed += 1
+        except Exception as e:
+            errors += 1
+            logger.error(f"Resync error for invoice {inv_id}: {e}")
+
+    return {
+        "success": True,
+        "date": day,
+        "total_invoices": len(invoices_today),
+        "processed": processed,
+        "skipped_already_destocked": skipped,
+        "errors": errors,
+    }
 
 
 @router.delete("/invoices/{invoice_id}")

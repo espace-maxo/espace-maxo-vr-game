@@ -2211,6 +2211,35 @@ export default function StockPage() {
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button
+                  onClick={async () => {
+                    try {
+                      toast.info("Re-sync en cours...");
+                      const [r1, r2] = await Promise.all([
+                        axios.post(`${API}/invoices/resync-destockage`),
+                        axios.post(`${API}/stock/portionnement/apply-daily`),
+                      ]);
+                      await Promise.all([
+                        fetchMovements(),
+                        fetchProducts(),
+                        fetchDashboard(),
+                      ]);
+                      const r = r1.data || {};
+                      const d = r2.data || {};
+                      toast.success(
+                        `Actualisé ✅ ${r.processed || 0} factures re-déstockées (${r.skipped_already_destocked || 0} déjà OK) · ${d.applied_count || 0} produits daily déstockés`,
+                        { duration: 6000 }
+                      );
+                    } catch (e) {
+                      toast.error(e?.response?.data?.detail || "Erreur lors de l'actualisation");
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="movements-resync-btn"
+                  title="Refresh + re-applique le déstockage automatique des factures du jour + consommation journalière"
+                >
+                  <Activity className="w-4 h-4 mr-1" /> Actualiser (re-sync)
+                </Button>
+                <Button
                   variant="outline"
                   className="border-slate-700 text-slate-300 hover:bg-slate-800"
                   onClick={() => {
