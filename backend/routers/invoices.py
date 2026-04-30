@@ -515,30 +515,39 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
 
 
 @router.post("/invoices/resync-destockage")
-async def resync_destockage(date: Optional[str] = None):
-    """Re-apply stock destocking for all validated invoices of a given day.
+async def resync_destockage(date: Optional[str] = None, all_past: bool = False):
+    """Re-apply stock destocking for validated invoices.
+
+    - By default: processes all validated invoices of the given day (or today).
+    - `all_past=true`: processes ALL validated invoices regardless of date (still idempotent).
 
     Idempotent: skips invoices that already have at least one linked stock_movement.
-    Defaults to today if no date is provided.
     """
     from datetime import datetime as _dt, timezone as _tz
-    day = date or _dt.now(_tz.utc).strftime("%Y-%m-%d")
-    day_start = f"{day}T00:00:00"
-    day_end = f"{day}T23:59:59.999"
 
-    # Find today's validated invoices
-    invoices_today = await db.invoices.find({
-        "validation_status": "validated",
-        "created_at": {"$gte": day_start, "$lte": day_end},
-    }, {"_id": 0}).to_list(2000)
+    query = {"validation_status": "validated"}
+    day = None
+    if not all_past:
+        day = date or _dt.now(_tz.utc).strftime("%Y-%m-%d")
+        day_start = f"{day}T00:00:00"
+        day_end = f"{day}T23:59:59.999"
+        query["created_at"] = {"$gte": day_start, "$lte": day_end}
+
+    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", 1).to_list(5000)
 
     processed = 0
     skipped = 0
     errors = 0
-    for inv in invoices_today:
+    error_details = []
+    for inv in invoices:
         inv_id = inv.get("id")
-        # Idempotence: skip if at least one movement already references this invoice
-        existing_mv = await db.stock_movements.count_documents({"invoice_id": inv_id})
+        inv_number = inv.get("invoice_number", "")
+        # Idempotence: skip if a movement already references this invoice,
+        # either by explicit invoice_id field, or by invoice_number in reason text (legacy rows).
+        idem_query = {"$or": [{"invoice_id": inv_id}]}
+        if inv_number:
+            idem_query["$or"].append({"reason": {"$regex": inv_number, "$options": "i"}})
+        existing_mv = await db.stock_movements.count_documents(idem_query)
         if existing_mv > 0:
             skipped += 1
             continue
@@ -547,15 +556,18 @@ async def resync_destockage(date: Optional[str] = None):
             processed += 1
         except Exception as e:
             errors += 1
+            error_details.append({"invoice_id": inv_id, "error": str(e)[:200]})
             logger.error(f"Resync error for invoice {inv_id}: {e}")
 
     return {
         "success": True,
         "date": day,
-        "total_invoices": len(invoices_today),
+        "all_past": all_past,
+        "total_invoices": len(invoices),
         "processed": processed,
         "skipped_already_destocked": skipped,
         "errors": errors,
+        "error_details": error_details[:20],
     }
 
 

@@ -2240,6 +2240,32 @@ export default function StockPage() {
                   <Activity className="w-4 h-4 mr-1" /> Actualiser (re-sync)
                 </Button>
                 <Button
+                  onClick={async () => {
+                    if (!confirm("⚠️ Re-déstocker TOUTES les factures validées passées qui n'ont pas été synchronisées ?\n\nUtile après avoir créé/corrigé des recettes. Les factures déjà déstockées sont ignorées automatiquement.")) return;
+                    try {
+                      toast.info("Re-sync complet en cours...");
+                      const r = await axios.post(`${API}/invoices/resync-destockage?all_past=true`);
+                      await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
+                      const d = r.data || {};
+                      toast.success(
+                        `Re-sync complet ✅ ${d.processed} factures rattrapées (${d.skipped_already_destocked} déjà OK, ${d.errors} erreurs)`,
+                        { duration: 8000 }
+                      );
+                      if (d.errors > 0 && d.error_details?.length) {
+                        console.warn("Resync errors:", d.error_details);
+                      }
+                    } catch (e) {
+                      toast.error(e?.response?.data?.detail || "Erreur");
+                    }
+                  }}
+                  variant="outline"
+                  className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10"
+                  data-testid="movements-resync-all-btn"
+                  title="Rattrape toutes les factures passées non-déstockées (utile après avoir créé des recettes)"
+                >
+                  ↺ Rattraper tout
+                </Button>
+                <Button
                   variant="outline"
                   className="border-slate-700 text-slate-300 hover:bg-slate-800"
                   onClick={() => {
