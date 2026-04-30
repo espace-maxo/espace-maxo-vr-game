@@ -8,7 +8,8 @@
  * Ainsi l'extraction ne change rien au comportement existant (itérations 42-49).
  */
 import React from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -385,11 +386,32 @@ const AchatsTab = ({ ctx }) => {
                   }`}
                 >
                   <Edit2 className="w-4 h-4 mr-1 inline" />
-                  À réviser
+                  Réviser la demande
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
                     {expenses.filter(e => e.status === 'revision_requested').length}
                   </Badge>
                 </button>
+                {currentUser?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => setAchatsSubView('mes_demandes')}
+                    data-testid="achats-subtab-mes-demandes"
+                    className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
+                      achatsSubView === 'mes_demandes'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1 inline" />
+                    Mes demandes
+                    <Badge className="ml-2 bg-white/20 text-white text-xs">
+                      {expenses.filter(e => {
+                        const me = currentUser?.full_name || currentUser?.username || '';
+                        return e.requested_by === me || e.requested_by === currentUser?.username;
+                      }).length}
+                    </Badge>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setAchatsSubView('valides')}
@@ -2056,6 +2078,121 @@ const AchatsTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
               )}
+
+              {/* ============================================================
+                   MES DEMANDES (Admin only) — demandes créées par l'admin
+                  ============================================================ */}
+              {achatsSubView === 'mes_demandes' && currentUser?.role === 'admin' && (() => {
+                const me = currentUser?.full_name || currentUser?.username || '';
+                const myExpenses = expenses.filter(e =>
+                  e.requested_by === me || e.requested_by === currentUser?.username
+                );
+                if (myExpenses.length === 0) {
+                  return (
+                    <Card className="bg-slate-800/30 border-slate-700" data-testid="my-requests-empty">
+                      <CardContent className="py-12 text-center">
+                        <ShoppingCart className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                        <p className="text-slate-500">Vous n'avez pas encore créé de demande d'achat</p>
+                        <p className="text-slate-600 text-xs mt-1">
+                          Cliquez sur <strong className="text-purple-300">"Nouvelle demande d'achat"</strong> en haut pour en créer une.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                const STATUS_META = {
+                  pending:            { label: 'En attente',     color: 'bg-amber-500/20 text-amber-300' },
+                  admin_review:       { label: 'En correction',  color: 'bg-orange-500/20 text-orange-300' },
+                  revision_requested: { label: 'À réviser',      color: 'bg-rose-500/20 text-rose-300' },
+                  approved:           { label: 'Validée',        color: 'bg-emerald-500/20 text-emerald-300' },
+                  completed:          { label: 'Terminée',       color: 'bg-blue-500/20 text-blue-300' },
+                  rejected:           { label: 'Rejetée',        color: 'bg-slate-500/20 text-slate-400' },
+                };
+                return (
+                  <Card className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border-indigo-500/40" data-testid="my-requests-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-indigo-200 flex items-center gap-2">
+                        <ShoppingCart className="w-5 h-5" />
+                        MES DEMANDES D'ACHAT
+                        <Badge className="bg-indigo-500/30 text-indigo-200 ml-2">
+                          {myExpenses.length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-900/40 text-slate-400 text-xs uppercase">
+                            <tr>
+                              <th className="p-2 text-left">Date</th>
+                              <th className="p-2 text-left">Catégorie</th>
+                              <th className="p-2 text-left">Description</th>
+                              <th className="p-2 text-right">Montant</th>
+                              <th className="p-2 text-center">Statut</th>
+                              <th className="p-2 text-center">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {myExpenses.map(expense => {
+                              const meta = STATUS_META[expense.status] || { label: expense.status, color: 'bg-slate-500/20 text-slate-400' };
+                              return (
+                                <tr key={expense.id} className="border-t border-slate-700/50 hover:bg-slate-800/30 group">
+                                  <td className="p-2 text-slate-400 text-xs">
+                                    {expense.created_at ? format(parseISO(expense.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                                  </td>
+                                  <td className="p-2">
+                                    <Badge className={`text-xs ${
+                                      expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                      expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                      expense.category === 'jeux' ? 'bg-blue-500/20 text-blue-400' :
+                                      expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                      'bg-slate-500/20 text-slate-400'
+                                    }`}>{expense.category}</Badge>
+                                  </td>
+                                  <td className="p-2 text-white">
+                                    <span className="flex items-center gap-2 flex-wrap">
+                                      {expense.is_group
+                                        ? <span className="font-semibold">{expense.description} ({expense.items?.length || 0} articles)</span>
+                                        : expense.description}
+                                      <TypeDestBadges expense={expense} />
+                                    </span>
+                                  </td>
+                                  <td className="p-2 text-right font-bold text-purple-300">{formatPrice(expense.amount)} F</td>
+                                  <td className="p-2 text-center">
+                                    <Badge className={`text-xs ${meta.color}`}>{meta.label}</Badge>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <Button
+                                        size="sm" variant="ghost"
+                                        onClick={() => openExpenseForEdit ? openExpenseForEdit(expense) : null}
+                                        className="h-7 w-7 p-0 text-indigo-400 hover:bg-indigo-500/20"
+                                        title="Modifier / Réviser"
+                                        data-testid={`my-request-edit-${expense.id}`}
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm" variant="ghost"
+                                        onClick={() => deleteExpense(expense.id)}
+                                        className="h-7 w-7 p-0 text-rose-400 hover:bg-rose-500/20"
+                                        title="Supprimer"
+                                        data-testid={`my-request-delete-${expense.id}`}
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {expenses.length === 0 && (
                 <Card className="bg-slate-800/30 border-slate-700">
