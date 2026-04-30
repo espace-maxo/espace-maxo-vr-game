@@ -130,6 +130,8 @@ class ExpenseItem(BaseModel):
     amount: float
     struck: Optional[bool] = False
     strike_reason: Optional[str] = None
+    expense_type: Optional[str] = None  # 'achat' | 'paiement'
+    destination: Optional[str] = None  # 'cuisine'|'bar'|'salle'|'jeux_vr'|'jardin'|'administratif'
 
 
 class ExpenseCreate(BaseModel):
@@ -150,6 +152,9 @@ class ExpenseCreate(BaseModel):
     funded_by_account_id: Optional[str] = None
     funded_by_account_name: Optional[str] = None
     funded_affects_ca: Optional[bool] = True  # if True, expense still deducted from daily CA
+    # Type & destination (added 29/04/2026)
+    expense_type: Optional[str] = "achat"  # 'achat' | 'paiement'
+    destination: Optional[str] = None  # 'cuisine' | 'bar' | 'salle' | 'jeux_vr' | 'jardin' | 'administratif'
 
 
 class ExpenseUpdate(BaseModel):
@@ -172,6 +177,9 @@ class ExpenseUpdate(BaseModel):
     paid_at: Optional[str] = None
     paid_by: Optional[str] = None
     approved_by: Optional[str] = None
+    # Admin can re-classify (added 29/04/2026)
+    expense_type: Optional[str] = None
+    destination: Optional[str] = None
 
 
 # ==================== CRUD ====================
@@ -248,6 +256,9 @@ async def create_expense(expense: ExpenseCreate):
             "funded_by_account_id": expense.funded_by_account_id,
             "funded_by_account_name": expense.funded_by_account_name,
             "funded_affects_ca": bool(expense.funded_affects_ca) if expense.funded_affects_ca is not None else True,
+            # Type & destination
+            "expense_type": expense.expense_type or "achat",
+            "destination": expense.destination,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -374,7 +385,9 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
             logger.warning(f"Expense funding-alloc sync failed: {alloc_err}")
 
         # === SYNC WITH STOCK MODULE (Achats Caisse → Entrées Stock) ===
-        if update.status == "completed" and not was_completed_before:
+        # Skip stock sync for "paiement" expenses (charges/services without inventory impact).
+        is_paiement = (update_data.get("expense_type") or expense.get("expense_type")) == "paiement"
+        if update.status == "completed" and not was_completed_before and not is_paiement:
             try:
                 # Idempotency guard: skip if this expense was already synced (e.g. on hot-reload replay)
                 already_synced = await db.stock_purchases.find_one({

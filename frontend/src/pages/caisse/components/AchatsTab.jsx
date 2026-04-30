@@ -30,6 +30,41 @@ const STRIKE_REASONS = [
 
 const STRIKE_LABEL = STRIKE_REASONS.reduce((acc, r) => ({ ...acc, [r.value]: r.label }), {});
 
+// Type & Destination badges (29/04/2026)
+const DEST_LABELS = {
+  cuisine: "🍳 Cuisine",
+  bar: "🍹 Bar",
+  salle: "🪑 Salle",
+  jeux_vr: "🎮 Jeux VR",
+  jardin: "🌳 Jardin",
+  administratif: "📋 Administratif",
+};
+
+export const TypeDestBadges = ({ expense, compact = false }) => {
+  if (!expense) return null;
+  const t = expense.expense_type;
+  const d = expense.destination;
+  if (!t && !d) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 ${compact ? "" : "ml-1"}`}>
+      {t && (
+        <Badge className={`text-[10px] ${
+          t === "paiement"
+            ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+        }`}>
+          {t === "paiement" ? "💳 Paiement" : "🛒 Achat"}
+        </Badge>
+      )}
+      {d && (
+        <Badge className="text-[10px] bg-slate-700/50 text-slate-300 border border-slate-600">
+          {DEST_LABELS[d] || d}
+        </Badge>
+      )}
+    </span>
+  );
+};
+
 /**
  * Compare original_items (manager's submission snapshot) with current items
  * (final corrected version) and return a structured audit trail.
@@ -617,10 +652,11 @@ const AchatsTab = ({ ctx }) => {
                                   }`}>{expense.category}</Badge>
                                 )}
                               </td>
-                              <td className="p-2 text-white flex items-center gap-2">
+                              <td className="p-2 text-white flex items-center gap-2 flex-wrap">
                                 {expense.is_group ? (
                                   <span className="font-semibold">{expense.description} ({expense.items?.length || 0} articles)</span>
                                 ) : expense.description}
+                                <TypeDestBadges expense={expense} />
                                 <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </td>
                               <td className="p-2 text-center text-slate-300">{expense.is_group ? expense.items?.length : (expense.quantity || 1)}</td>

@@ -56,6 +56,14 @@ import { NotifBadge, NotificationBell, CrossRoleBanner } from "./caisse/componen
 import { useNotifications } from "./caisse/hooks/useNotifications";
 import ExpenseAnalysisBadges from "./caisse/components/ExpenseAnalysisBadges";
 
+// Taxonomy (type achat/paiement, destinations, libellés prédéfinis paiements)
+import {
+  EXPENSE_TYPES,
+  DESTINATIONS,
+  PREDEFINED_PAYMENTS,
+  PAYMENT_GROUPS,
+} from "./caisse/constants/expenseTaxonomy";
+
 // Import logo for printing
 import { LOGO_BASE64 } from "./caisse/constants_logo";
 
@@ -349,13 +357,16 @@ const CaissePage = () => {
     funded_by_account_id: "",
     funded_by_account_name: "",
     funded_affects_ca: true,
+    // Type & destination (29/04/2026)
+    expense_type: "achat",
+    destination: "cuisine",
   });
   // Available current accounts (for funding-source selector)
   const [availableAccounts, setAvailableAccounts] = useState([]);
   
   // Achats communs - multi-items
   const [commonItems, setCommonItems] = useState([]);
-  const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+  const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0, expense_type: "achat", destination: "cuisine" });
 
   // Admin revision modal (modify expense before sending back to manager)
   const [showReviseModal, setShowReviseModal] = useState(false);
@@ -1145,11 +1156,15 @@ const CaissePage = () => {
             quantity: it.quantity || 1,
             unit_price: it.unit_price || 0,
             amount: (it.quantity || 1) * (it.unit_price || 0),
+            expense_type: it.expense_type || expenseForm.expense_type || "achat",
+            destination: it.destination || expenseForm.destination || null,
           })),
           requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
           funded_by_account_id: expenseForm.funded_by_account_id || null,
           funded_by_account_name: expenseForm.funded_by_account_name || null,
           funded_affects_ca: expenseForm.funded_affects_ca,
+          expense_type: expenseForm.expense_type || "achat",
+          destination: expenseForm.destination || null,
         });
         toast.success(`Achats communs créés avec ${commonItems.length} article(s) !`);
         setShowExpenseModal(false);
@@ -1216,7 +1231,14 @@ const CaissePage = () => {
     }
     const amount = (commonNewItem.quantity || 1) * (commonNewItem.unit_price || 0);
     setCommonItems([...commonItems, { ...commonNewItem, amount, id: Date.now() }]);
-    setCommonNewItem({ category: commonNewItem.category, description: "", quantity: 1, unit_price: 0 });
+    setCommonNewItem({
+      category: commonNewItem.category,
+      description: "",
+      quantity: 1,
+      unit_price: 0,
+      expense_type: commonNewItem.expense_type,
+      destination: commonNewItem.destination,
+    });
   };
   const removeCommonItem = (id) => setCommonItems(commonItems.filter((i) => i.id !== id));
   const getCommonTotal = () => commonItems.reduce((s, it) => s + (it.amount || 0), 0);
@@ -2813,7 +2835,9 @@ const CaissePage = () => {
       amount: expense.amount,
       supplier: expense.supplier || "",
       planned_date: expense.planned_date || format(new Date(), "yyyy-MM-dd"),
-      receipt_image: expense.receipt_image
+      receipt_image: expense.receipt_image,
+      expense_type: expense.expense_type || "achat",
+      destination: expense.destination || "cuisine"
     });
     setEditingExpense(expense);
     setShowExpenseModal(true);
@@ -6641,24 +6665,67 @@ _Gérante - Espace Maxo_
           </DialogHeader>
           <div className="space-y-4">
             {editingExpense ? (
-              /* --- EDIT MODE (single-item legacy) --- */
+              /* --- EDIT MODE (admin) — single-item legacy + Type/Destination --- */
               <>
-                <div>
-                  <Label className="text-slate-300">Catégorie *</Label>
-                  <Select 
-                    value={expenseForm.category} 
-                    onValueChange={(v) => setExpenseForm({...expenseForm, category: v})}
-                  >
-                    <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
-                      <SelectItem value="bar">🍹 Bar</SelectItem>
-                      <SelectItem value="paiement">💳 Paiement</SelectItem>
-                      <SelectItem value="autres">📦 Autres</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Admin-only: re-classify Achat ↔ Paiement */}
+                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                  <Label className="text-slate-300 text-xs uppercase tracking-wide mb-2 block">Type d'opération (Admin)</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EXPENSE_TYPES.map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setExpenseForm(p => ({ ...p, expense_type: t.value }))}
+                        data-testid={`edit-expense-type-${t.value}-btn`}
+                        className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                          (expenseForm.expense_type || "achat") === t.value
+                            ? (t.value === "paiement"
+                                ? "bg-rose-500/20 border-rose-500/60 text-rose-100"
+                                : "bg-emerald-500/20 border-emerald-500/60 text-emerald-100")
+                            : "bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
+                        }`}
+                      >
+                        <span className="text-base mr-1">{t.icon}</span>
+                        <span className="font-bold">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-slate-300">Catégorie *</Label>
+                    <Select
+                      value={expenseForm.category}
+                      onValueChange={(v) => setExpenseForm({...expenseForm, category: v})}
+                    >
+                      <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                        <SelectItem value="bar">🍹 Bar</SelectItem>
+                        <SelectItem value="paiement">💳 Paiement</SelectItem>
+                        <SelectItem value="autres">📦 Autres</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Destination</Label>
+                    <Select
+                      value={expenseForm.destination || "cuisine"}
+                      onValueChange={(v) => setExpenseForm({...expenseForm, destination: v})}
+                    >
+                      <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white" data-testid="edit-expense-destination-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        {DESTINATIONS.map(d => (
+                          <SelectItem key={d.value} value={d.value}>{d.icon} {d.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div>
@@ -6707,8 +6774,60 @@ _Gérante - Espace Maxo_
                 </div>
               </>
             ) : (
-              /* --- CREATE MODE (multi-items) --- */
+              /* --- CREATE MODE (multi-items + Achat / Paiement) --- */
               <>
+                {/* Type toggle : Achat ↔ Paiement (top-level) */}
+                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                  <Label className="text-slate-300 text-xs uppercase tracking-wide mb-2 block">Type d'opération</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EXPENSE_TYPES.map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => {
+                          setExpenseForm(p => ({ ...p, expense_type: t.value }));
+                          setCommonNewItem(p => ({ ...p, expense_type: t.value, description: "" }));
+                        }}
+                        data-testid={`expense-type-${t.value}-btn`}
+                        className={`px-4 py-3 rounded-lg border text-left transition-colors ${
+                          expenseForm.expense_type === t.value
+                            ? (t.value === "paiement"
+                                ? "bg-rose-500/20 border-rose-500/60 text-rose-100"
+                                : "bg-emerald-500/20 border-emerald-500/60 text-emerald-100")
+                            : "bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{t.icon}</span>
+                          <span className="font-bold">{t.label}</span>
+                        </div>
+                        <p className="text-[11px] opacity-75 mt-0.5">{t.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Destination */}
+                <div>
+                  <Label className="text-slate-300 text-sm">Destination *</Label>
+                  <Select
+                    value={expenseForm.destination || "cuisine"}
+                    onValueChange={(v) => {
+                      setExpenseForm(p => ({ ...p, destination: v }));
+                      setCommonNewItem(p => ({ ...p, destination: v }));
+                    }}
+                  >
+                    <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white" data-testid="expense-destination-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {DESTINATIONS.map(d => (
+                        <SelectItem key={d.value} value={d.value}>{d.icon} {d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div>
                   <Label className="text-slate-300 text-sm">Libellé global (optionnel)</Label>
                   <Input
@@ -6721,61 +6840,111 @@ _Gérante - Espace Maxo_
                 </div>
 
                 {/* Add new article block */}
-                <Card className="bg-purple-900/20 border-purple-500/30">
+                <Card className={`${expenseForm.expense_type === "paiement" ? "bg-rose-900/15 border-rose-500/30" : "bg-purple-900/20 border-purple-500/30"}`}>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-purple-300 text-sm flex items-center gap-2">
-                      <Plus className="w-4 h-4" /> Ajouter un article
+                    <CardTitle className={`text-sm flex items-center gap-2 ${expenseForm.expense_type === "paiement" ? "text-rose-200" : "text-purple-300"}`}>
+                      <Plus className="w-4 h-4" />
+                      {expenseForm.expense_type === "paiement" ? "Ajouter un paiement" : "Ajouter un article"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-                      <Select value={commonNewItem.category} onValueChange={(v) => setCommonNewItem({...commonNewItem, category: v})}>
-                        <SelectTrigger className="w-full sm:w-[140px] bg-slate-700/50 border-slate-600 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700">
-                          <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
-                          <SelectItem value="bar">🍹 Bar</SelectItem>
-                          <SelectItem value="paiement">💳 Paiement</SelectItem>
-                          <SelectItem value="autres">📦 Autres</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        value={commonNewItem.description}
-                        onChange={(e) => setCommonNewItem({...commonNewItem, description: e.target.value})}
-                        placeholder="Article / libellé"
-                        className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
-                        data-testid="common-new-item-desc"
-                      />
-                      <Input
-                        type="number" min="0" step="any"
-                        value={commonNewItem.quantity || ""}
-                        onChange={(e) => setCommonNewItem({...commonNewItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
-                        placeholder="Qté"
-                        className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
-                      />
-                      <Input
-                        type="number"
-                        value={commonNewItem.unit_price || ""}
-                        onChange={(e) => setCommonNewItem({...commonNewItem, unit_price: parseFloat(e.target.value) || 0})}
-                        placeholder="PU"
-                        className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
-                      />
-                      <div className="flex items-center bg-purple-900/30 rounded px-2 text-purple-300 text-sm">
-                        = {formatPrice((commonNewItem.quantity || 1) * (commonNewItem.unit_price || 0))} F
+                    {expenseForm.expense_type === "paiement" ? (
+                      /* PAIEMENT: select from predefined list */
+                      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                        <Select
+                          value={commonNewItem.description || ""}
+                          onValueChange={(v) => {
+                            const preset = PREDEFINED_PAYMENTS.find(p => p.label === v);
+                            setCommonNewItem({
+                              ...commonNewItem,
+                              description: v,
+                              category: "paiement",
+                              expense_type: "paiement",
+                              destination: preset?.destination || expenseForm.destination || "administratif",
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="flex-1 min-w-[200px] bg-slate-700/50 border-slate-600 text-white" data-testid="payment-preset-select">
+                            <SelectValue placeholder="Choisir un type de paiement…" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
+                            {PAYMENT_GROUPS.map(group => (
+                              <div key={group}>
+                                <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 bg-slate-900/50">{group}</div>
+                                {PREDEFINED_PAYMENTS.filter(p => p.group === group).map(p => (
+                                  <SelectItem key={p.label} value={p.label} className="text-white text-sm">
+                                    {p.label}
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          value={commonNewItem.unit_price || ""}
+                          onChange={(e) => setCommonNewItem({...commonNewItem, quantity: 1, unit_price: parseFloat(e.target.value) || 0})}
+                          placeholder="Montant FCFA"
+                          className="w-full sm:w-[140px] bg-slate-700/50 border-slate-600 text-white"
+                          data-testid="payment-amount-input"
+                        />
+                        <Button onClick={addCommonItem} className="bg-rose-600 hover:bg-rose-700" data-testid="common-add-item-btn">
+                          <Plus className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button onClick={addCommonItem} className="bg-purple-600 hover:bg-purple-700" data-testid="common-add-item-btn">
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {/* Conditioning suggestions (persisted + static presets + custom creator) */}
-                    <ConditioningSuggester
-                      description={commonNewItem.description}
-                      category={commonNewItem.category}
-                      quantity={commonNewItem.quantity}
-                      onApply={(desc, qty) => setCommonNewItem({ ...commonNewItem, description: desc, quantity: qty })}
-                      testIdPrefix="common"
-                    />
+                    ) : (
+                      /* ACHAT: free text + qty + PU (legacy multi-items flow) */
+                      <>
+                        <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                          <Select value={commonNewItem.category} onValueChange={(v) => setCommonNewItem({...commonNewItem, category: v})}>
+                            <SelectTrigger className="w-full sm:w-[140px] bg-slate-700/50 border-slate-600 text-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-800 border-slate-700">
+                              <SelectItem value="cuisine">🍳 Cuisine</SelectItem>
+                              <SelectItem value="bar">🍹 Bar</SelectItem>
+                              <SelectItem value="paiement">💳 Paiement</SelectItem>
+                              <SelectItem value="autres">📦 Autres</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={commonNewItem.description}
+                            onChange={(e) => setCommonNewItem({...commonNewItem, description: e.target.value})}
+                            placeholder="Article / libellé"
+                            className="flex-1 min-w-[150px] bg-slate-700/50 border-slate-600 text-white"
+                            data-testid="common-new-item-desc"
+                          />
+                          <Input
+                            type="number" min="0" step="any"
+                            value={commonNewItem.quantity || ""}
+                            onChange={(e) => setCommonNewItem({...commonNewItem, quantity: parseFloat(e.target.value.replace(',', '.')) || 1})}
+                            placeholder="Qté"
+                            className="w-full sm:w-[70px] bg-slate-700/50 border-slate-600 text-white"
+                          />
+                          <Input
+                            type="number"
+                            value={commonNewItem.unit_price || ""}
+                            onChange={(e) => setCommonNewItem({...commonNewItem, unit_price: parseFloat(e.target.value) || 0})}
+                            placeholder="PU"
+                            className="w-full sm:w-[100px] bg-slate-700/50 border-slate-600 text-white"
+                          />
+                          <div className="flex items-center bg-purple-900/30 rounded px-2 text-purple-300 text-sm">
+                            = {formatPrice((commonNewItem.quantity || 1) * (commonNewItem.unit_price || 0))} F
+                          </div>
+                          <Button onClick={addCommonItem} className="bg-purple-600 hover:bg-purple-700" data-testid="common-add-item-btn">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {/* Conditioning suggestions (persisted + static presets + custom creator) */}
+                        <ConditioningSuggester
+                          description={commonNewItem.description}
+                          category={commonNewItem.category}
+                          quantity={commonNewItem.quantity}
+                          onApply={(desc, qty) => setCommonNewItem({ ...commonNewItem, description: desc, quantity: qty })}
+                          testIdPrefix="common"
+                        />
+                      </>
+                    )}
                   </CardContent>
                 </Card>
 
