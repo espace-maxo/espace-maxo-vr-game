@@ -237,12 +237,12 @@ body {
   }
 }
 
-/* Hide Emergent branding badge */
-div[class*="fixed"][class*="bottom"][class*="right"],
-a[href*="emergentagent"],
-[data-testid*="emergent"],
+/* Hide Emergent branding badge — but keep our intentional Staff link */
+div[class*="fixed"][class*="bottom"][class*="right"]:not(:has([data-testid="footer-staff-link"])),
+a[href*="emergentagent"]:not([data-testid="footer-staff-link"]),
+[data-testid*="emergent"]:not([data-testid="footer-staff-link"]),
 .emergent-badge,
-div:has(> a[href*="emergent"]) {
+div:has(> a[href*="emergent"]:not([data-testid="footer-staff-link"])) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;

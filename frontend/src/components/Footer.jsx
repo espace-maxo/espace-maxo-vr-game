@@ -116,7 +116,7 @@ const Footer = () => {
               href="https://attendance-gps-test.preview.emergentagent.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-500 hover:text-gray-400 transition-colors text-xs"
+              className="text-gray-400 hover:text-neon-blue transition-colors font-outfit"
               data-testid="footer-staff-link"
             >
               Staff
@@ -125,11 +125,10 @@ const Footer = () => {
         </div>
       </div>
       
-      {/* Hide Emergent branding */}
+      {/* Hide Emergent branding (NB: a[href*="emergent"] retiré car cassait le lien Staff vers attendance-gps-test.preview.emergentagent.com) */}
       <style>{`
         [class*="emergent"], 
         [data-emergent], 
-        a[href*="emergent"],
         div:has(> span:contains("Emergent")),
         .fixed.bottom-4.right-4,
         div[style*="position: fixed"][style*="bottom"],
