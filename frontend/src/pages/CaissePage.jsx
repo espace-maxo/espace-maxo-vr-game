@@ -40,6 +40,7 @@ import ActiviteTab from "./caisse/components/ActiviteTab";
 import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
 import PointCaisseTab from "./caisse/components/PointCaisseTab";
+import ClosureLockBanner from "./caisse/components/ClosureLockBanner";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
 import MultiLinkStockModal from "./caisse/components/MultiLinkStockModal";
@@ -4886,6 +4887,13 @@ _Gérante - Espace Maxo_
         ) : (
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Closure lock banner (admin only) — affiché si la journée du filtre est clôturée */}
+          {currentUser?.role === 'admin' && (
+            <ClosureLockBanner
+              date={filterDate || undefined}
+              onOpenPointCaisse={() => setActiveTab('point_caisse')}
+            />
+          )}
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start">
             {/* 1. TABLES */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
