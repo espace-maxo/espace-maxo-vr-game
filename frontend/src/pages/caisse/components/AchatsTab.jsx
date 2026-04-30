@@ -331,7 +331,7 @@ const AchatsTab = ({ ctx }) => {
                   <ShoppingCart className="w-6 h-6" />
                   Achats & Dépenses
                 </h2>
-                {currentUser?.role === 'manager' && (
+                {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                   <div className="flex gap-2 flex-wrap">
                     <Button 
                       onClick={() => setShowExpenseModal(true)}
@@ -339,18 +339,20 @@ const AchatsTab = ({ ctx }) => {
                       data-testid="new-expense-btn"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Achats communs
+                      {currentUser?.role === 'admin' ? "Nouvelle demande d'achat" : "Achats communs"}
                     </Button>
-                    <Button 
-                      onClick={() => setShowShoppingListModal(true)}
-                      className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                    >
-                      <ShoppingCart className="w-4 h-4 mr-2" />
-                      Achats Fournisseurs
-                      {shoppingList.length > 0 && (
-                        <Badge className="ml-2 bg-white/20 text-white">{shoppingList.length}</Badge>
-                      )}
-                    </Button>
+                    {currentUser?.role === 'manager' && (
+                      <Button 
+                        onClick={() => setShowShoppingListModal(true)}
+                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Achats Fournisseurs
+                        {shoppingList.length > 0 && (
+                          <Badge className="ml-2 bg-white/20 text-white">{shoppingList.length}</Badge>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
