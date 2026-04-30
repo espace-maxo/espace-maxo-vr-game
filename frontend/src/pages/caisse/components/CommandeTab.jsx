@@ -65,8 +65,8 @@ const CommandeTab = ({ ctx }) => {
   } = ctx;
   return (
     <>
-            {/* ============== ADMIN VIEW: Priority on validations ============== */}
-            {currentUser?.role === 'admin' ? (
+            {/* ============== ADMIN VIEW: Priority on validations (sections de validation) ============== */}
+            {currentUser?.role === 'admin' && (
               <div className="space-y-4">
                 {/* ADMIN ONLY: Cancellation Requests */}
                 {currentUser?.role === 'admin' && cancellationRequests.length > 0 && (
@@ -351,134 +351,20 @@ const CommandeTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
 
-                {/* Collapsible: Create Invoice (Secondary for managers) */}
-                <details className="bg-slate-800/30 rounded-lg border border-slate-700">
-                  <summary className="p-4 cursor-pointer text-slate-400 hover:text-white flex items-center gap-2">
-                    <Plus className="w-5 h-5" />
-                    <span>Créer une facture (optionnel)</span>
-                  </summary>
-                  <div className="p-4 pt-0">
-                    {/* Multi-Table Bar */}
-                    <div className="mb-4 bg-slate-800/70 rounded-lg border border-slate-700 p-2">
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                        <span className="text-slate-400 text-sm font-medium px-2 whitespace-nowrap">Tables:</span>
-                        
-                        {openTables.map(table => (
-                          <div
-                            key={table.id}
-                            className={`flex items-center gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all whitespace-nowrap ${
-                              activeTableId === table.id
-                                ? 'bg-amber-500 text-white shadow-lg'
-                                : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                            }`}
-                            onClick={() => selectTable(table)}
-                          >
-                            <span className="font-bold">T{table.table_number}</span>
-                            {table.items?.length > 0 && (
-                              <Badge className={`ml-1 ${activeTableId === table.id ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-400'}`}>
-                                {table.items.length}
-                              </Badge>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (table.items?.length > 0) {
-                                  if (confirm(`Fermer la Table ${table.table_number} ?`)) {
-                                    closeTable(table.id);
-                                  }
-                                } else {
-                                  closeTable(table.id);
-                                }
-                              }}
-                              className={`ml-1 p-0.5 rounded hover:bg-red-500/30 ${activeTableId === table.id ? 'text-white/70 hover:text-white' : 'text-slate-500 hover:text-red-400'}`}
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowNewTableModal(true)}
-                          className="border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-amber-500 whitespace-nowrap"
-                          disabled={availableTableNumbers.length === 0}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Nouvelle Table
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Compact product grid for managers */}
-                    {activeTableId && (
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <div className="lg:col-span-2">
-                          <div className="flex gap-2 flex-wrap mb-2">
-                            {Object.entries(DEPARTMENT_CONFIG).map(([key, config]) => {
-                              const Icon = config.icon;
-                              return (
-                                <Button
-                                  key={key}
-                                  variant={activeDepartment === key ? "default" : "ghost"}
-                                  size="sm"
-                                  onClick={() => setActiveDepartment(key)}
-                                  className={activeDepartment === key ? "bg-amber-500 text-white" : "text-slate-400"}
-                                >
-                                  <Icon className="w-4 h-4 mr-1" />
-                                  {config.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
-                            {(catalog[activeDepartment] || []).slice(0, 8).map((item) => (
-                              <button
-                                key={`${activeDepartment}-${item.id}`}
-                                onClick={() => addToBill(item, activeDepartment)}
-                                className="p-2 rounded bg-slate-700/50 hover:bg-slate-600/50 text-left text-xs"
-                              >
-                                <p className="text-slate-300 truncate">{item.name}</p>
-                                <p className="text-amber-400 font-bold">{formatPrice(item.price)} F</p>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <Card className="bg-slate-800/50 border-amber-500/30">
-                            <CardHeader className="py-2">
-                              <CardTitle className="text-amber-500 text-sm">Table {activeTable?.table_number}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="py-2">
-                              {currentBill.length === 0 ? (
-                                <p className="text-slate-500 text-xs">Aucun article</p>
-                              ) : (
-                                <>
-                                  {currentBill.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-xs py-1">
-                                      <span className="text-slate-300">{item.quantity}x {item.name}</span>
-                                      <span className="text-amber-400">{formatPrice(item.price * item.quantity)}</span>
-                                    </div>
-                                  ))}
-                                  <div className="border-t border-slate-700 mt-2 pt-2 flex justify-between font-bold">
-                                    <span className="text-white">TOTAL</span>
-                                    <span className="text-amber-500">{formatPrice(total)} F</span>
-                                  </div>
-                                  <Button onClick={saveInvoice} className="w-full mt-2 bg-amber-500 hover:bg-amber-600" size="sm">
-                                    CRÉER FACTURE
-                                  </Button>
-                                </>
-                              )}
-                            </CardContent>
-                          </Card>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </details>
+                {/* Section "Créer une facture" supprimée — l'admin a maintenant accès à la vue de création complète ci-dessous */}
               </div>
-            ) : (
-              /* ============== SERVER VIEW: Focus on creating invoices ============== */
+            )}
+            {/* ============== UNIFIED CREATION VIEW (Server + Manager + Admin) ============== */}
+            {(currentUser?.role === 'admin') && (
+              <div className="mb-3 mt-6 flex items-center gap-2 pb-2 border-b border-slate-700">
+                <Plus className="w-5 h-5 text-amber-400" />
+                <h3 className="text-lg font-bold text-amber-400">Créer une facture</h3>
+                <Badge className="bg-amber-500/20 text-amber-300 text-xs">
+                  Mode complet
+                </Badge>
+              </div>
+            )}
+            {(currentUser?.role === 'server' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <>
             {/* Multi-Table Bar */}
             <div className="mb-4 bg-slate-800/70 rounded-lg border border-slate-700 p-2">
