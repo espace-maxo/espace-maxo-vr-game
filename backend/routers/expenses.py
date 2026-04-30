@@ -17,6 +17,13 @@ except Exception:  # pragma: no cover
     async def send_admin_sms_notification(_msg: str) -> bool:
         return False
 
+# Cash closure lock helper
+try:
+    from routers.cash_closures import is_date_closed
+except Exception:  # pragma: no cover
+    async def is_date_closed(_d):
+        return None
+
 router = APIRouter(tags=["expenses"])
 db = None
 logger = logging.getLogger(__name__)
@@ -313,6 +320,16 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
 
+        # Cash closure lock : block edits if the expense's effective day is closed.
+        # We protect modification of completed expenses on closed days; pending edits remain free.
+        ref_date = (expense.get("completed_at") or expense.get("created_at") or "")[:10]
+        closure = await is_date_closed(ref_date) if ref_date else None
+        if closure and expense.get("status") == "completed":
+            raise HTTPException(
+                status_code=423,
+                detail=f"Caisse clôturée pour le {ref_date}. Rouvrez le Z avant de modifier cette dépense."
+            )
+
         was_completed_before = expense.get("status") == "completed"
 
         update_data = {}
@@ -608,6 +625,17 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
 async def delete_expense(expense_id: str):
     """Delete an expense"""
     try:
+        # Cash closure lock for completed expenses
+        existing = await db.expenses.find_one({"id": expense_id})
+        if existing and existing.get("status") == "completed":
+            ref_date = (existing.get("completed_at") or existing.get("created_at") or "")[:10]
+            closure = await is_date_closed(ref_date) if ref_date else None
+            if closure:
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Caisse clôturée pour le {ref_date}. Rouvrez le Z avant de supprimer cette dépense."
+                )
+
         # Unallocate from current account first (if any)
         try:
             await _unallocate_expense_from_accounts(expense_id)

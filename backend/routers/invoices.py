@@ -19,6 +19,15 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
+# Cross-router helper for cash closure lock
+try:
+    from routers.cash_closures import is_date_closed, _date_from_iso
+except Exception:  # pragma: no cover
+    async def is_date_closed(_d):
+        return None
+    def _date_from_iso(s):
+        return (str(s) or "")[:10] if s else None
+
 router = APIRouter(tags=["invoices"])
 db = None
 logger = logging.getLogger(__name__)
@@ -203,6 +212,17 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
     """
     try:
         current_invoice = await db.invoices.find_one({"id": invoice_id})
+        if not current_invoice:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+
+        # Cash closure lock : block edits on a day already Z-closed
+        invoice_date = _date_from_iso(current_invoice.get("created_at"))
+        closure = await is_date_closed(invoice_date)
+        if closure:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Caisse clôturée pour le {invoice_date}. Rouvrez le Z dans 'Point de la Caisse' avant de modifier cette facture."
+            )
 
         invoice_data["updated_at"] = datetime.now(timezone.utc).isoformat()
         result = await db.invoices.update_one({"id": invoice_id}, {"$set": invoice_data})
@@ -487,6 +507,19 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
 async def delete_invoice(invoice_id: str):
     """Delete an invoice"""
     try:
+        existing = await db.invoices.find_one({"id": invoice_id})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Facture non trouvée")
+
+        # Cash closure lock
+        invoice_date = _date_from_iso(existing.get("created_at"))
+        closure = await is_date_closed(invoice_date)
+        if closure:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Caisse clôturée pour le {invoice_date}. Rouvrez le Z avant de supprimer cette facture."
+            )
+
         result = await db.invoices.delete_one({"id": invoice_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Facture non trouvée")

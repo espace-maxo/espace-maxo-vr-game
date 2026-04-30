@@ -26,6 +26,29 @@ def set_db(database):
 
 # ==================== HELPERS ====================
 
+async def is_date_closed(date_iso: str) -> Optional[dict]:
+    """Return the closure document for a given YYYY-MM-DD date, or None if open."""
+    if not date_iso:
+        return None
+    if db is None:
+        return None
+    try:
+        doc = await db.cash_closures.find_one({"date": date_iso}, {"_id": 0})
+        return doc
+    except Exception:
+        return None
+
+
+def _date_from_iso(iso_str: str) -> Optional[str]:
+    """Extract YYYY-MM-DD from any ISO datetime string. Returns None if invalid."""
+    if not iso_str:
+        return None
+    try:
+        return str(iso_str)[:10]
+    except Exception:
+        return None
+
+
 # Map raw payment_method values used across the app to a normalized 4-bucket key
 PAY_METHOD_MAP = {
     # cash
