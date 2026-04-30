@@ -81,18 +81,25 @@ const MOVEMENT_TYPES = [
 const NAV_ITEMS = [
   { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
   { id: "destock_live", label: "Déstockage live", icon: Activity },
-  { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
-  { id: "portionnement", label: "Portionnement", icon: Scale },
-  { id: "products", label: "Produits", icon: Package },
-  { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
+  { id: "products_recipes", label: "Produits & Recettes", icon: Package },
   { id: "movements", label: "Mouvements", icon: ArrowUpDown },
-  { id: "reports", label: "Rapports", icon: FileText },
   { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
   { id: "purchases", label: "Achats", icon: ShoppingCart },
   { id: "suppliers", label: "Fournisseurs", icon: Truck },
-  { id: "categories", label: "Categories", icon: ClipboardList },
+  { id: "reports", label: "Rapports", icon: FileText },
   { id: "users", label: "Utilisateurs", icon: Users },
 ];
+
+// Sub-tabs of "Produits & Recettes"
+const PRODUCTS_RECIPES_SUBTABS = [
+  { id: "products", label: "Produits", icon: Package },
+  { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
+  { id: "portionnement", label: "Portionnement", icon: Scale },
+  { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
+  { id: "categories", label: "Catégories", icon: ClipboardList },
+];
+
+const PRODUCTS_RECIPES_IDS = PRODUCTS_RECIPES_SUBTABS.map(t => t.id);
 
 const ROLES = [
   { value: "administrateur", label: "Administrateur", desc: "Acces complet" },
@@ -446,9 +453,25 @@ export default function StockPage() {
     try { const r = await axios.get(`${API}/suppliers`); setSuppliers(r.data.suppliers); } catch {}
   }, []);
 
+  const [movementFilters, setMovementFilters] = useState({
+    product_id: "",
+    movement_type: "",
+    date_from: "",
+    date_to: "",
+    limit: 200,
+  });
+
   const fetchMovements = useCallback(async () => {
-    try { const r = await axios.get(`${API}/movements`, { params: { limit: 50 } }); setMovements(r.data.movements); } catch {}
-  }, []);
+    try {
+      const params = { limit: movementFilters.limit || 200 };
+      if (movementFilters.product_id) params.product_id = movementFilters.product_id;
+      if (movementFilters.movement_type) params.movement_type = movementFilters.movement_type;
+      if (movementFilters.date_from) params.date_from = movementFilters.date_from;
+      if (movementFilters.date_to) params.date_to = movementFilters.date_to;
+      const r = await axios.get(`${API}/movements`, { params });
+      setMovements(r.data.movements);
+    } catch {}
+  }, [movementFilters]);
 
   const fetchPurchases = useCallback(async () => {
     try { const r = await axios.get(`${API}/purchases`); setPurchases(r.data.purchases); } catch {}
@@ -919,12 +942,33 @@ export default function StockPage() {
           {NAV_ITEMS.filter(item => {
             if (item.id === "users") return isAdmin;
             return true;
-          }).map(item => (
-            <button key={item.id} onClick={() => { setActiveSection(item.id); clearSelection(); setMobileMenuOpen(false); }} data-testid={`nav-${item.id}`}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${activeSection === item.id ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-              <item.icon className="w-4 h-4" /> {item.label}
-            </button>
-          ))}
+          }).map(item => {
+            // Highlight "Produits & Recettes" when any of its sub-tabs is active
+            const isActiveGroup =
+              item.id === "products_recipes"
+                ? PRODUCTS_RECIPES_IDS.includes(activeSection)
+                : activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  // When clicking the group entry, default to the first sub-tab
+                  const target = item.id === "products_recipes" ? "products" : item.id;
+                  setActiveSection(target);
+                  clearSelection();
+                  setMobileMenuOpen(false);
+                }}
+                data-testid={`nav-${item.id}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  isActiveGroup
+                    ? 'bg-emerald-500/15 text-emerald-400 font-medium'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <item.icon className="w-4 h-4" /> {item.label}
+              </button>
+            );
+          })}
         </nav>
         <div className="p-3 border-t border-slate-800 space-y-1">
           <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-white text-sm px-3 py-2 w-full"><LogOut className="w-4 h-4" /> Deconnexion</button>
@@ -946,8 +990,36 @@ export default function StockPage() {
             <Filter className="w-5 h-5" />
             <span className="text-sm font-medium">Menu</span>
           </button>
-          <span className="text-emerald-400 text-sm font-medium">{NAV_ITEMS.find(i => i.id === activeSection)?.label}</span>
+          <span className="text-emerald-400 text-sm font-medium">
+            {(() => {
+              if (PRODUCTS_RECIPES_IDS.includes(activeSection)) {
+                const sub = PRODUCTS_RECIPES_SUBTABS.find(t => t.id === activeSection);
+                return `Produits & Recettes · ${sub?.label || ''}`;
+              }
+              return NAV_ITEMS.find(i => i.id === activeSection)?.label;
+            })()}
+          </span>
         </div>
+
+        {/* Sub-navigation when in "Produits & Recettes" group */}
+        {PRODUCTS_RECIPES_IDS.includes(activeSection) && (
+          <div className="mb-4 flex items-center gap-2 flex-wrap border-b border-slate-800 pb-2 overflow-x-auto" data-testid="products-recipes-subnav">
+            {PRODUCTS_RECIPES_SUBTABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setActiveSection(t.id); clearSelection(); }}
+                data-testid={`subnav-${t.id}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap ${
+                  activeSection === t.id
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                <t.icon className="w-4 h-4" /> {t.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/* DASHBOARD */}
         {activeSection === "dashboard" && (
           <div className="space-y-4 md:space-y-6">
@@ -1767,11 +1839,146 @@ export default function StockPage() {
         {/* MOVEMENTS */}
         {activeSection === "movements" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">Mouvements de Stock</h2>
-              <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setShowMovementModal(true); }}
-                className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Mouvements de Stock</h2>
+                <p className="text-slate-500 text-xs mt-0.5">Historique complet · {movements.length} ligne(s) affichée(s)</p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  onClick={() => {
+                    // Export CSV of current view
+                    const headers = ["Date", "Produit", "Type", "Quantité", "Unité", "Avant", "Après", "Motif", "Utilisateur"];
+                    const rows = movements.map(m => [
+                      new Date(m.created_at).toLocaleString('fr-FR'),
+                      m.product_name || "",
+                      MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type,
+                      m.quantity,
+                      m.unit || "",
+                      m.previous_quantity,
+                      m.new_quantity,
+                      (m.reason || "").replace(/[\n\r,;]/g, " "),
+                      m.user_name || "",
+                    ]);
+                    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+                    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `mouvements_stock_${new Date().toISOString().slice(0,10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  data-testid="movements-export-csv"
+                >
+                  <FileText className="w-4 h-4 mr-1" /> Exporter CSV
+                </Button>
+                <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setShowMovementModal(true); }}
+                  className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
+              </div>
             </div>
+
+            {/* Filters bar */}
+            <Card className="bg-slate-900/60 border-slate-800">
+              <CardContent className="p-3">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                  <div>
+                    <Label className="text-slate-400 text-xs uppercase">Produit</Label>
+                    <select
+                      value={movementFilters.product_id}
+                      onChange={e => setMovementFilters(p => ({ ...p, product_id: e.target.value }))}
+                      className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded px-2 py-1.5"
+                      data-testid="movements-filter-product"
+                    >
+                      <option value="">Tous les produits</option>
+                      {[...products].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs uppercase">Type</Label>
+                    <select
+                      value={movementFilters.movement_type}
+                      onChange={e => setMovementFilters(p => ({ ...p, movement_type: e.target.value }))}
+                      className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded px-2 py-1.5"
+                      data-testid="movements-filter-type"
+                    >
+                      <option value="">Tous types</option>
+                      {MOVEMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs uppercase">Du</Label>
+                    <Input
+                      type="date"
+                      value={movementFilters.date_from}
+                      onChange={e => setMovementFilters(p => ({ ...p, date_from: e.target.value }))}
+                      className="bg-slate-900 border-slate-700 text-white h-9 text-sm"
+                      data-testid="movements-filter-from"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs uppercase">Au</Label>
+                    <Input
+                      type="date"
+                      value={movementFilters.date_to}
+                      onChange={e => setMovementFilters(p => ({ ...p, date_to: e.target.value }))}
+                      className="bg-slate-900 border-slate-700 text-white h-9 text-sm"
+                      data-testid="movements-filter-to"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button
+                      onClick={fetchMovements}
+                      className="bg-emerald-600 hover:bg-emerald-700 flex-1"
+                      data-testid="movements-filter-apply"
+                    >
+                      Appliquer
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setMovementFilters({ product_id: "", movement_type: "", date_from: "", date_to: "", limit: 200 });
+                      }}
+                      className="border-slate-700 text-slate-400 hover:bg-slate-800"
+                      data-testid="movements-filter-reset"
+                      title="Réinitialiser"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </div>
+                {(movementFilters.product_id || movementFilters.movement_type || movementFilters.date_from || movementFilters.date_to) && (
+                  <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2 flex-wrap text-xs text-slate-400">
+                    <span>Filtres actifs :</span>
+                    {movementFilters.product_id && (
+                      <Badge className="bg-emerald-500/20 text-emerald-300">
+                        Produit : {products.find(p => p.id === movementFilters.product_id)?.name || "—"}
+                      </Badge>
+                    )}
+                    {movementFilters.movement_type && (
+                      <Badge className="bg-blue-500/20 text-blue-300">
+                        Type : {MOVEMENT_TYPES.find(t => t.value === movementFilters.movement_type)?.label}
+                      </Badge>
+                    )}
+                    {movementFilters.date_from && (
+                      <Badge className="bg-purple-500/20 text-purple-300">
+                        Du : {movementFilters.date_from}
+                      </Badge>
+                    )}
+                    {movementFilters.date_to && (
+                      <Badge className="bg-purple-500/20 text-purple-300">
+                        Au : {movementFilters.date_to}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {isAdmin && <BulkBar count={selectedItems.filter(id => movements.some(m => m.id === id)).length} label="mouvement(s)" endpoint="movements/delete-bulk" ids={selectedItems.filter(id => movements.some(m => m.id === id))} refreshFn={fetchMovements} />}
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
