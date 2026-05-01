@@ -3513,6 +3513,160 @@ async def smart_link_caisse_products_to_stock(dry_run: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/caisse/products/health-check")
+async def caisse_stock_health_check():
+    """Diagnostique la santé des liaisons Caisse↔Stock.
+
+    Retourne :
+    - `unlinked`       : produits Caisse actifs sans stock_links/stock_recipe_id (sauf no_stock_tracking)
+    - `orphans`        : produits Caisse dont les stock_links pointent vers des stock_products inexistants/inactifs
+    - `duplicates`     : cas où plusieurs produits Caisse pointent vers le même stock_product (risque de double déduction si mal géré)
+    - `stock_unused`   : produits Stock actifs non liés à aucun produit Caisse (si `storage_zone=cuisine`)
+    """
+    try:
+        caisse_products = await db.caisse_products.find({"is_active": {"$ne": False}}, {"_id": 0}).to_list(2000)
+        stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(2000)
+        stock_ids = {sp["id"] for sp in stock_products}
+        stock_by_id = {sp["id"]: sp for sp in stock_products}
+
+        unlinked = []       # [{id, name, category}]
+        orphans = []        # [{caisse_id, caisse_name, broken_link_ids: [..]}]
+        duplicates_map = {}  # stock_id -> [caisse_product summary]
+
+        for cp in caisse_products:
+            if cp.get("no_stock_tracking"):
+                continue
+            links = cp.get("stock_links") or []
+            if not links and cp.get("stock_product_id"):
+                links = [cp["stock_product_id"]]
+            recipe = cp.get("stock_recipe_id")
+
+            if not links and not recipe:
+                unlinked.append({
+                    "id": cp.get("id"),
+                    "name": cp.get("name"),
+                    "category": cp.get("category", ""),
+                    "price": cp.get("price", 0),
+                })
+                continue
+
+            broken = [lid for lid in links if lid not in stock_ids]
+            if broken:
+                orphans.append({
+                    "caisse_id": cp.get("id"),
+                    "caisse_name": cp.get("name"),
+                    "broken_link_ids": broken,
+                    "valid_link_ids": [lid for lid in links if lid in stock_ids],
+                })
+
+            # Track duplicates
+            for lid in links:
+                if lid in stock_ids:
+                    duplicates_map.setdefault(lid, []).append({
+                        "caisse_id": cp.get("id"),
+                        "caisse_name": cp.get("name"),
+                        "category": cp.get("category", ""),
+                    })
+
+        duplicates = []
+        for sid, consumers in duplicates_map.items():
+            if len(consumers) > 1:
+                sp = stock_by_id.get(sid, {})
+                duplicates.append({
+                    "stock_id": sid,
+                    "stock_name": sp.get("name"),
+                    "consumers": consumers,
+                    "count": len(consumers),
+                })
+
+        # Unused stock products (cuisine only — magasin is detached by design)
+        linked_stock_ids = set()
+        for cp in caisse_products:
+            for lid in (cp.get("stock_links") or []):
+                linked_stock_ids.add(lid)
+            if cp.get("stock_product_id"):
+                linked_stock_ids.add(cp["stock_product_id"])
+        stock_unused = [
+            {"id": sp["id"], "name": sp["name"], "code": sp.get("code", ""), "quantity": sp.get("quantity", 0)}
+            for sp in stock_products
+            if sp.get("storage_zone", "cuisine") == "cuisine" and sp["id"] not in linked_stock_ids
+        ]
+
+        return {
+            "summary": {
+                "caisse_products_active": len(caisse_products),
+                "stock_products_active": len(stock_products),
+                "unlinked_count": len(unlinked),
+                "orphans_count": len(orphans),
+                "duplicates_count": len(duplicates),
+                "stock_unused_count": len(stock_unused),
+                "health_score": _compute_health_score(len(caisse_products), len(unlinked), len(orphans)),
+            },
+            "unlinked": unlinked,
+            "orphans": orphans,
+            "duplicates": duplicates,
+            "stock_unused": stock_unused,
+        }
+    except Exception as e:
+        logger.error(f"Health-check caisse/stock error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _compute_health_score(total_caisse: int, unlinked: int, orphans: int) -> int:
+    """Score 0-100 basé sur le ratio de produits Caisse bien liés."""
+    if total_caisse == 0:
+        return 100
+    issues = unlinked + orphans * 2  # les orphans pèsent plus lourd
+    ratio = max(0.0, 1.0 - (issues / (total_caisse * 2)))
+    return int(round(ratio * 100))
+
+
+@api_router.post("/caisse/products/health-repair-orphans")
+async def repair_orphan_links(dry_run: bool = False):
+    """Nettoie les `stock_links` qui pointent vers des stock_products inexistants/inactifs."""
+    try:
+        stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0, "id": 1}).to_list(2000)
+        valid_ids = {sp["id"] for sp in stock_products}
+        caisse_products = await db.caisse_products.find({"is_active": {"$ne": False}}, {"_id": 0}).to_list(2000)
+
+        repaired = []
+        for cp in caisse_products:
+            links = cp.get("stock_links") or []
+            broken = [lid for lid in links if lid not in valid_ids]
+            if not broken:
+                # Also clean legacy stock_product_id if broken
+                spid = cp.get("stock_product_id")
+                if spid and spid not in valid_ids:
+                    if not dry_run:
+                        await db.caisse_products.update_one(
+                            {"id": cp["id"]},
+                            {"$set": {"stock_product_id": "", "updated_at": datetime.now(timezone.utc).isoformat()}},
+                        )
+                    repaired.append({"caisse_id": cp["id"], "caisse_name": cp["name"], "cleaned_legacy_id": spid})
+                continue
+            kept = [lid for lid in links if lid in valid_ids]
+            if not dry_run:
+                await db.caisse_products.update_one(
+                    {"id": cp["id"]},
+                    {"$set": {
+                        "stock_links": kept,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+            repaired.append({
+                "caisse_id": cp["id"],
+                "caisse_name": cp["name"],
+                "removed_links": broken,
+                "kept_links": kept,
+            })
+        return {"success": True, "repaired_count": len(repaired), "repaired": repaired, "dry_run": dry_run}
+    except Exception as e:
+        logger.error(f"Repair orphans error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 @api_router.get("/caisse/products/stock-suggestions")
 async def stock_suggestions_for_caisse_product(
     name: str,

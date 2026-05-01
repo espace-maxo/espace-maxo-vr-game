@@ -300,6 +300,9 @@ export default function StockPage() {
   const [filterZone, setFilterZone] = useState("all");          // all | cuisine | magasin
   const [filterSupplier, setFilterSupplier] = useState("all");  // all | <supplier_id>
   const [filterRenseigned, setFilterRenseigned] = useState("all"); // all | yes | no
+  // Pagination Phase 4 (perf) — 50 lignes à la fois
+  const [productPage, setProductPage] = useState(1);
+  const PRODUCTS_PER_PAGE = 50;
 
   // Modals
   const [showProductModal, setShowProductModal] = useState(false);
@@ -665,6 +668,17 @@ export default function StockPage() {
     }
     return arr.sort((a, b) => score(b) - score(a));
   }, [products, filterZone, filterSupplier, filterRenseigned]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setProductPage(1);
+  }, [searchQuery, filterCategory, filterAlert, filterZone, filterSupplier, filterRenseigned]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PRODUCTS_PER_PAGE));
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * PRODUCTS_PER_PAGE;
+    return sortedProducts.slice(start, start + PRODUCTS_PER_PAGE);
+  }, [sortedProducts, productPage]);
 
   const activeFiltersCount = useMemo(() => {
     let c = 0;
@@ -1920,7 +1934,7 @@ export default function StockPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedProducts.map((p, idx) => {
+                      {paginatedProducts.map((p, idx) => {
                         const status = stockStatus(p);
                         const isEmpty = !(p.quantity > 0) && !(p.purchase_price > 0);
                         const stockMax = Math.max(p.stock_max || 0, p.stock_min * 4 || 20, p.quantity || 0);
@@ -2039,6 +2053,24 @@ export default function StockPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination (Phase 4 perf) */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between p-3 border-t border-slate-700/50 bg-slate-900/30" data-testid="products-pagination">
+                    <span className="text-slate-400 text-sm">
+                      Page <span className="text-white font-medium">{productPage}</span> / {totalPages}
+                      <span className="text-slate-500 text-xs ml-2">
+                        ({((productPage - 1) * PRODUCTS_PER_PAGE) + 1}-{Math.min(productPage * PRODUCTS_PER_PAGE, sortedProducts.length)} sur {sortedProducts.length})
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setProductPage(1)} disabled={productPage === 1} className="border-slate-600 text-slate-300 h-8" data-testid="pagination-first">«</Button>
+                      <Button size="sm" variant="outline" onClick={() => setProductPage(p => Math.max(1, p - 1))} disabled={productPage === 1} className="border-slate-600 text-slate-300 h-8" data-testid="pagination-prev">Précédent</Button>
+                      <Button size="sm" variant="outline" onClick={() => setProductPage(p => Math.min(totalPages, p + 1))} disabled={productPage === totalPages} className="border-slate-600 text-slate-300 h-8" data-testid="pagination-next">Suivant</Button>
+                      <Button size="sm" variant="outline" onClick={() => setProductPage(totalPages)} disabled={productPage === totalPages} className="border-slate-600 text-slate-300 h-8" data-testid="pagination-last">»</Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
             )}

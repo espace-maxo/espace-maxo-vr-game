@@ -4,6 +4,41 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Stock : Refonte Phase 4 — Diagnostic santé Caisse↔Stock + Pagination (DONE)
+
+### Diagnostic santé (outil de vérification des liaisons)
+
+**Backend** (`/app/backend/server.py`, après `smart-link-to-stock`) :
+- **`GET /api/caisse/products/health-check`** : analyse la santé des liaisons Caisse↔Stock et retourne :
+  - `summary` : `health_score` (0-100), compteurs de chaque catégorie d'anomalie.
+  - `unlinked` : produits Caisse actifs sans liaison ni recette (hors `no_stock_tracking`).
+  - `orphans` : produits Caisse avec `stock_links` pointant vers des stock_products inexistants/inactifs.
+  - `duplicates` : stock partagé par plusieurs produits Caisse (info, pas forcément un bug).
+  - `stock_unused` : produits Stock "cuisine" actifs non liés à aucun produit Caisse.
+- **`POST /api/caisse/products/health-repair-orphans`** (`?dry_run=true` possible) : nettoie les `stock_links` cassés + le `stock_product_id` legacy invalide. Retourne la liste des produits réparés.
+- Helper `_compute_health_score(total, unlinked, orphans)` : score 0-100, les orphelins pèsent 2×.
+
+**Frontend** (`/app/frontend/src/pages/stock/components/CaisseStockLinksOverview.jsx`) :
+- Nouvelle carte "Diagnostic santé" avec bordure colorée dynamique (vert ≥90, ambre ≥70, rouge <70).
+- 3 boutons d'action : **Rediagnostiquer** · **Auto-lier (N)** (déclenche `smart-link-to-stock` existant) · **Réparer orphelins (N)** (déclenche `health-repair-orphans`).
+- Zone détails dépliable : liste des produits non liés (badges rouges), orphelins (format "X → N liaisons cassées"), stock partagés (format "Stock ← plat1 · plat2").
+- Premier diagnostic réel : **76/100** · 41 non liés · 11 doublons · 452 stock inutilisés (ingrédients bruts normalement non liés).
+
+### Pagination Produits (perf)
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- `PRODUCTS_PER_PAGE = 50`, état `productPage` auto-reset à 1 quand un filtre change.
+- `paginatedProducts` via `useMemo` à partir de `sortedProducts`.
+- Barre de pagination en bas de la table : affichage `Page 1/10 (1-50 sur 470)` + boutons `« · Précédent · Suivant · »`.
+- Impact : rendu initial passe de 470 lignes (avec miniatures photo, badges, barres de progression) à 50 lignes → **chargement ~10× plus fluide**.
+- Note : le "select all" et les stats restent basés sur `sortedProducts` (tous les filtrés, pas juste la page courante) — comportement attendu.
+
+**Tests** Playwright **6/6** : pagination visible + navigable sur 470 produits, carte diagnostic + boutons Auto-lier/Réparer/Rediagnostiquer + détails dépliables OK.
+
+**Phase 4 livrée. Refonte module Stock COMPLÈTE (phases 1→4).**
+
+
+
 ## 01/05/2026 — Stock : Refonte Phase 3 — Photos produits (DONE)
 
 **Modifications** (`/app/frontend/src/pages/StockPage.jsx`) :

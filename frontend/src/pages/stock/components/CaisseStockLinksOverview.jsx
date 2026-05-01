@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Link2, RefreshCw, Search, ArrowRightLeft, Package, ShoppingBasket,
-  Save, X, Check, AlertTriangle, BookOpen,
+  Save, X, Check, AlertTriangle, BookOpen, Activity, ChevronDown, Wrench, Stethoscope, Zap
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +25,12 @@ export default function CaisseStockLinksOverview() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState("caisse_to_stock"); // 'caisse_to_stock' | 'stock_to_caisse'
   const [search, setSearch] = useState("");
+
+  // Health check state
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthExpanded, setHealthExpanded] = useState(false);
+  const [repairing, setRepairing] = useState(false);
 
   // Edit modal state
   const [editTarget, setEditTarget] = useState(null); // { side, item }
@@ -60,9 +66,50 @@ export default function CaisseStockLinksOverview() {
     }
   };
 
+  const fetchHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const r = await axios.get(`${API}/caisse/products/health-check`);
+      setHealth(r.data);
+    } catch {
+      toast.error("Erreur diagnostic santé");
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const repairOrphans = async () => {
+    if (!window.confirm("Nettoyer les liaisons orphelines (qui pointent vers des stock_products supprimés) ?\n\nAction sûre : ne supprime que les références cassées.")) return;
+    setRepairing(true);
+    try {
+      const r = await axios.post(`${API}/caisse/products/health-repair-orphans`);
+      toast.success(`${r.data.repaired_count} produit(s) nettoyé(s)`);
+      await Promise.all([fetchHealth(), fetchData()]);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const runSmartLink = async () => {
+    if (!window.confirm("Lancer l'auto-liaison intelligente pour tous les produits Caisse non liés ?\n\nUtilise un dictionnaire de mots-clés (poulet, bœuf, poisson, etc.) pour faire les liaisons probables. Vous pourrez toujours ajuster manuellement après.")) return;
+    setRepairing(true);
+    try {
+      const r = await axios.post(`${API}/caisse/products/smart-link-to-stock`);
+      toast.success(`${r.data.linked_count || 0} produit(s) auto-liés · ${r.data.no_match_count || 0} sans correspondance`);
+      await Promise.all([fetchHealth(), fetchData()]);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchProducts();
+    fetchHealth();
   }, []);
 
   const filteredCaisse = useMemo(() => {
@@ -256,6 +303,109 @@ export default function CaisseStockLinksOverview() {
           )}
         </CardContent>
       </Card>
+
+      {/* Diagnostic Santé Caisse↔Stock (Phase 4) */}
+      {health && (
+        <Card className={`border ${
+          health.summary.health_score >= 90 ? 'bg-emerald-900/10 border-emerald-500/30'
+          : health.summary.health_score >= 70 ? 'bg-amber-900/10 border-amber-500/30'
+          : 'bg-red-900/10 border-red-500/30'
+        }`} data-testid="health-check-card">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
+              <div className="flex items-center gap-3">
+                <Stethoscope className={`w-7 h-7 ${
+                  health.summary.health_score >= 90 ? 'text-emerald-400'
+                  : health.summary.health_score >= 70 ? 'text-amber-400'
+                  : 'text-red-400'
+                }`} />
+                <div>
+                  <p className="text-white font-bold text-lg">
+                    Diagnostic santé : <span className={`${
+                      health.summary.health_score >= 90 ? 'text-emerald-300'
+                      : health.summary.health_score >= 70 ? 'text-amber-300'
+                      : 'text-red-300'
+                    }`}>{health.summary.health_score}/100</span>
+                  </p>
+                  <p className="text-slate-400 text-xs">
+                    {health.summary.unlinked_count} non liés · {health.summary.orphans_count} orphelins · {health.summary.duplicates_count} doublons · {health.summary.stock_unused_count} stock inutilisés
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button onClick={fetchHealth} variant="outline" size="sm" disabled={healthLoading} className="border-slate-600 text-slate-300 hover:bg-slate-800" data-testid="health-refresh-btn">
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${healthLoading ? 'animate-spin' : ''}`} /> Rediagnostiquer
+                </Button>
+                {health.summary.unlinked_count > 0 && (
+                  <Button onClick={runSmartLink} size="sm" disabled={repairing} className="bg-violet-600 hover:bg-violet-700" data-testid="smart-link-btn">
+                    <Zap className="w-3.5 h-3.5 mr-1" /> Auto-lier ({health.summary.unlinked_count})
+                  </Button>
+                )}
+                {health.summary.orphans_count > 0 && (
+                  <Button onClick={repairOrphans} size="sm" disabled={repairing} className="bg-amber-600 hover:bg-amber-700" data-testid="repair-orphans-btn">
+                    <Wrench className="w-3.5 h-3.5 mr-1" /> Réparer orphelins ({health.summary.orphans_count})
+                  </Button>
+                )}
+                <Button onClick={() => setHealthExpanded(v => !v)} variant="ghost" size="sm" className="text-slate-400 hover:text-white" data-testid="health-toggle-btn">
+                  <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${healthExpanded ? 'rotate-180' : ''}`} />
+                  {healthExpanded ? "Masquer détails" : "Voir détails"}
+                </Button>
+              </div>
+            </div>
+
+            {healthExpanded && (
+              <div className="space-y-3 mt-3 border-t border-slate-700/50 pt-3">
+                {health.unlinked.length > 0 && (
+                  <div data-testid="health-unlinked-list">
+                    <p className="text-red-300 text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Produits Caisse non liés ({health.unlinked.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                      {health.unlinked.slice(0, 50).map(p => (
+                        <span key={p.id} className="bg-red-500/15 border border-red-500/40 text-red-200 text-[11px] rounded-full px-2 py-0.5">{p.name}</span>
+                      ))}
+                      {health.unlinked.length > 50 && (
+                        <span className="text-slate-500 text-[10px]">… +{health.unlinked.length - 50} autres</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {health.orphans.length > 0 && (
+                  <div data-testid="health-orphans-list">
+                    <p className="text-amber-300 text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Liaisons cassées ({health.orphans.length})
+                    </p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {health.orphans.slice(0, 20).map(o => (
+                        <div key={o.caisse_id} className="text-xs text-amber-200">
+                          <strong>{o.caisse_name}</strong> → {o.broken_link_ids.length} liaison(s) cassée(s)
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {health.duplicates.length > 0 && (
+                  <div data-testid="health-duplicates-list">
+                    <p className="text-violet-300 text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <Activity className="w-3.5 h-3.5" /> Stock partagés ({health.duplicates.length})
+                      <span className="text-slate-500 text-[10px] font-normal ml-1">(info, pas forcément un bug)</span>
+                    </p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {health.duplicates.slice(0, 20).map(d => (
+                        <div key={d.stock_id} className="text-xs text-violet-200">
+                          <strong>{d.stock_name}</strong> ← {d.consumers.map(c => c.caisse_name).join(" · ")}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* View toggle */}
       <div className="flex gap-2 flex-wrap">
