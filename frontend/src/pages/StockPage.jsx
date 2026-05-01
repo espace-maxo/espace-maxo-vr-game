@@ -296,6 +296,10 @@ export default function StockPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterAlert, setFilterAlert] = useState("all");
+  // Filtres additionnels (Phase 2) - appliqués côté client après fetch
+  const [filterZone, setFilterZone] = useState("all");          // all | cuisine | magasin
+  const [filterSupplier, setFilterSupplier] = useState("all");  // all | <supplier_id>
+  const [filterRenseigned, setFilterRenseigned] = useState("all"); // all | yes | no
 
   // Modals
   const [showProductModal, setShowProductModal] = useState(false);
@@ -645,8 +649,41 @@ export default function StockPage() {
   // Array.prototype.sort is stable (ES2019+) so original order is kept within each score group.
   const sortedProducts = useMemo(() => {
     const score = (p) => (p.quantity > 0 ? 1 : 0) + (p.purchase_price > 0 ? 1 : 0);
-    return [...products].sort((a, b) => score(b) - score(a));
-  }, [products]);
+    let arr = [...products];
+    // Filtres additionnels (Phase 2, côté client)
+    if (filterZone !== "all") {
+      arr = arr.filter(p => (p.storage_zone || "cuisine") === filterZone);
+    }
+    if (filterSupplier !== "all") {
+      arr = arr.filter(p => (p.supplier_id || "") === filterSupplier);
+    }
+    if (filterRenseigned === "yes") {
+      arr = arr.filter(p => p.quantity > 0 || p.purchase_price > 0);
+    } else if (filterRenseigned === "no") {
+      arr = arr.filter(p => !(p.quantity > 0) && !(p.purchase_price > 0));
+    }
+    return arr.sort((a, b) => score(b) - score(a));
+  }, [products, filterZone, filterSupplier, filterRenseigned]);
+
+  const activeFiltersCount = useMemo(() => {
+    let c = 0;
+    if (searchQuery) c++;
+    if (filterCategory !== "all") c++;
+    if (filterAlert !== "all") c++;
+    if (filterZone !== "all") c++;
+    if (filterSupplier !== "all") c++;
+    if (filterRenseigned !== "all") c++;
+    return c;
+  }, [searchQuery, filterCategory, filterAlert, filterZone, filterSupplier, filterRenseigned]);
+
+  const resetAllFilters = () => {
+    setSearchQuery("");
+    setFilterCategory("all");
+    setFilterAlert("all");
+    setFilterZone("all");
+    setFilterSupplier("all");
+    setFilterRenseigned("all");
+  };
 
   // Auto-seed if database is empty on first load
   useEffect(() => {
@@ -1763,31 +1800,70 @@ export default function StockPage() {
             })()}
 
             {/* Filters */}
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un produit..."
                   className="bg-slate-900 border-slate-700 text-white pl-9" data-testid="product-search" />
               </div>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[200px]"><SelectValue placeholder="Categorie" /></SelectTrigger>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-category"><SelectValue placeholder="Categorie" /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">Toutes les categories</SelectItem>
+                  <SelectItem value="all" className="text-white">Toutes catégories</SelectItem>
                   {categories.map(c => <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterAlert} onValueChange={setFilterAlert}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]"><SelectValue placeholder="Alerte" /></SelectTrigger>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[160px]" data-testid="filter-alert"><SelectValue placeholder="Alerte" /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   <SelectItem value="all" className="text-white">Tous niveaux</SelectItem>
                   <SelectItem value="rupture" className="text-red-400">Rupture</SelectItem>
                   <SelectItem value="faible" className="text-orange-400">Stock faible</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={filterZone} onValueChange={setFilterZone}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[140px]" data-testid="filter-zone"><SelectValue placeholder="Zone" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Toutes zones</SelectItem>
+                  <SelectItem value="cuisine" className="text-emerald-400">Restau</SelectItem>
+                  <SelectItem value="magasin" className="text-cyan-400">Magasin</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-supplier"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
+                  <SelectItem value="all" className="text-white">Tous fournisseurs</SelectItem>
+                  {suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-white">{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterRenseigned} onValueChange={setFilterRenseigned}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[150px]" data-testid="filter-renseigned"><SelectValue placeholder="État" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">Tous</SelectItem>
+                  <SelectItem value="yes" className="text-emerald-400">Renseignés</SelectItem>
+                  <SelectItem value="no" className="text-slate-400">Non renseignés</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetAllFilters}
+                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                  data-testid="filter-reset"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Réinitialiser
+                  <Badge className="ml-1.5 bg-amber-500/20 text-amber-300 text-[10px]">{activeFiltersCount}</Badge>
+                </Button>
+              )}
             </div>
 
             <div className="text-slate-500 text-sm flex items-center gap-3">
-              <span>{products.length} produit(s)</span>
+              <span>
+                {sortedProducts.length === products.length
+                  ? `${products.length} produit${products.length > 1 ? 's' : ''}`
+                  : `${sortedProducts.length} / ${products.length} produit${products.length > 1 ? 's' : ''} (filtré${sortedProducts.length > 1 ? 's' : ''})`}
+              </span>
               {isAdmin && (() => {
                 const sel = selectedItems.filter(id => products.some(p => p.id === id));
                 return sel.length > 0 ? (

@@ -4,6 +4,23 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Stock : Refonte Phase 2 — Filtres enrichis sur Produits (DONE)
+
+**Modifications** (`/app/frontend/src/pages/StockPage.jsx`) :
+- **3 nouveaux filtres** côté client dans la section Catalogue → Produits (en complément des 3 existants Recherche/Catégorie/Alerte) :
+  - **Zone** : Toutes zones / Restau / Magasin (via `storage_zone`)
+  - **Fournisseur** : Tous / liste dynamique (via `supplier_id`)
+  - **État** : Tous / Renseignés / Non renseignés (détecte les produits avec `quantity=0 && purchase_price=0`)
+- **Bouton "Réinitialiser"** ambré, visible uniquement quand ≥1 filtre actif, avec badge comptant les filtres actifs.
+- **Compteur intelligent** : "X produits" devient "X / Y produits (filtrés)" quand un filtre est actif.
+- `useMemo` pour `sortedProducts` (applique les 3 filtres clients après le sort), plus `activeFiltersCount` + `resetAllFilters` helpers.
+
+**Tests** Playwright **8/8** : tous les filtres présents, bouton reset apparaît à l'activation d'un filtre, disparaît au reset.
+
+**Note** : Les Mouvements ont déjà un système de filtres complet (produit, type, dates) — pas touché. Les autres sections (Magasin, Achats, Fournisseurs) seront auditées en Phase 2.b si besoin.
+
+
+
 ## 01/05/2026 — Stock : Refonte Phase 1 — Navigation simplifiée (DONE)
 
 **Demande utilisateur** : Refonte du module Stock. Insatisfactions relevées : sections trop nombreuses, cards/tableaux peu lisibles, filtres insuffisants, pas de photos, sync Caisse↔Stock pas fiable, performance lente. Plan en 4 phases validé. **Phase 1** = simplification nav.
