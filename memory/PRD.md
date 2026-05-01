@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Stock Mouvements : Séparation Boissons / Autres produits (DONE)
+
+**Demande utilisateur** : « Donne les mouvements des boissons à part et des autres produits à part. »
+
+**Frontend** (`/app/frontend/src/pages/StockPage.jsx`) :
+- Nouveau state `movementCategoryView` ∈ {`all`, `boissons`, `autres`}.
+- Fonction de classification `isBeverage(m)` côté client, basée sur :
+  - Unités de conditionnement typiques boisson : `bouteille`, `brique`, `canette`, `litre`, `cl`, `l`.
+  - Regex de mots-clés sur le nom : coca, fanta, sprite, pepsi, schweppes, jus, eau, bière, vin, whisky, rhum, gin, vodka, champagne, cognac, martini, cocktail, soda, limonade, smoothie, café, thé, lait, yaourt, boisson.
+- Barre de 3 boutons de toggle au-dessus des filtres :
+  - **Tout (N)** — badge slate
+  - **🍹 Boissons (M)** — badge orange
+  - **🍽️ Autres produits (N−M)** — badge emerald
+- Sélecteur actif coloré selon la catégorie, libellé explicatif ("Classification automatique par unité…").
+- Le compteur de la bannière "Historique restaurant · X ligne(s) affichée(s)" s'adapte à la catégorie.
+- Le tri DESC + auto-refresh 60s sont conservés.
+
+**Validation** : testing agent → **11/11 tests frontend PASSED** (100 %). Sur les 180 mouvements visibles : 16 boissons + 164 autres = 180 ✓.
+
+
 ## 02/05/2026 — Enhancement : Avances Gérante visibles dans le Compte Courant (DONE)
 
 **Demande utilisateur** : Oui à la suggestion « avances non remboursées apparaissent aussi dans le Compte Courant Gérante comme une ligne 'Dette caisse → Gérante' ».
