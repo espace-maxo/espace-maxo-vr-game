@@ -376,6 +376,229 @@ async def destock_live_dashboard(limit: int = 50):
         days (suspected misconfig OR slow-mover).
     """
     now = datetime.now(timezone.utc)
+
+@router.get("/products/{product_id}/analysis")
+async def product_period_analysis(product_id: str, start_date: str, end_date: str):
+    """Analyse entrées/sorties d'un produit sur une période donnée.
+
+    Retourne :
+    - Solde avant période (calculé à rebours sur l'historique)
+    - Total entrées / sorties / pertes / ajustements / inventaires
+    - Solde théorique (début + entrées - sorties - pertes ± ajustements)
+    - Solde réel actuel (depuis stock_products)
+    - Écart (théorique vs réel)
+    - Détection d'anomalies : gaspillage, sur-consommation, écart inexpliqué
+    - Breakdown quotidien
+    """
+    try:
+        product = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail="Produit introuvable")
+
+        # Validate dates
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Dates invalides (format YYYY-MM-DD requis)")
+
+        start_iso = start_date + "T00:00:00"
+        end_iso = end_date + "T23:59:59"
+
+        # All movements during the period
+        movements_period = await db.stock_movements.find(
+            {"product_id": product_id, "created_at": {"$gte": start_iso, "$lte": end_iso}},
+            {"_id": 0}
+        ).sort("created_at", 1).to_list(5000)
+
+        # Movements BEFORE period (to compute opening balance)
+        # opening_balance = current_quantity - (sum of all movement deltas after beginning of period)
+        # Simplification: use the first movement in the period's `previous_quantity` if available,
+        # else fallback to current product quantity minus period net change.
+        opening_balance = None
+        if movements_period:
+            first = movements_period[0]
+            if "previous_quantity" in first:
+                opening_balance = float(first.get("previous_quantity", 0) or 0)
+        current_quantity = float(product.get("quantity", 0) or 0)
+
+        # Aggregation by type
+        def _qty_of(m):
+            return float(m.get("quantity", 0) or 0)
+
+        totals = {
+            "entree": 0.0, "sortie": 0.0, "perte": 0.0, "casse": 0.0,
+            "retour_fournisseur": 0.0, "ajustement_positif": 0.0,
+            "ajustement_negatif": 0.0, "inventaire": 0.0,
+            "transfert_entree": 0.0, "transfert_sortie": 0.0,
+        }
+        sorties_detail = {"auto_facture": 0.0, "manuel": 0.0, "transfert": 0.0, "autre_sortie": 0.0}
+        for m in movements_period:
+            mt = m.get("movement_type", "")
+            q = _qty_of(m)
+            if mt == "ajustement":
+                # Distinguer positif/négatif via delta previous → new
+                new_q = float(m.get("new_quantity", 0) or 0)
+                prev_q = float(m.get("previous_quantity", 0) or 0)
+                if new_q >= prev_q:
+                    totals["ajustement_positif"] += (new_q - prev_q)
+                else:
+                    totals["ajustement_negatif"] += (prev_q - new_q)
+            elif mt in totals:
+                totals[mt] += q
+            # Breakdown des sorties
+            if mt == "sortie":
+                reason = (m.get("reason") or "").lower()
+                if "facture" in reason or "auto" in reason or m.get("invoice_id"):
+                    sorties_detail["auto_facture"] += q
+                elif "transfert" in reason:
+                    sorties_detail["transfert"] += q
+                elif m.get("user_name"):
+                    sorties_detail["manuel"] += q
+                else:
+                    sorties_detail["autre_sortie"] += q
+
+        total_entrees = totals["entree"] + totals["retour_fournisseur"] + totals["transfert_entree"] + totals["ajustement_positif"]
+        total_sorties = totals["sortie"] + totals["perte"] + totals["casse"] + totals["transfert_sortie"] + totals["ajustement_negatif"]
+
+        # Solde théorique (approximation : dernier mouvement reflète la réalité via new_quantity)
+        closing_theorical = None
+        closing_real_end = None
+        if movements_period:
+            closing_real_end = float(movements_period[-1].get("new_quantity", 0) or 0)
+            if opening_balance is not None:
+                closing_theorical = opening_balance + total_entrees - total_sorties
+        else:
+            # Aucun mouvement sur la période
+            opening_balance = current_quantity
+            closing_theorical = current_quantity
+            closing_real_end = current_quantity
+
+        ecart = None
+        if closing_theorical is not None and closing_real_end is not None:
+            ecart = round(closing_real_end - closing_theorical, 3)
+
+        # Détection anomalies
+        anomalies = []
+        severity = "ok"  # ok | warning | critical
+
+        # 1. Écart inexpliqué entre théorique et réel
+        if ecart is not None and abs(ecart) > 0.1:
+            anomalies.append({
+                "type": "ecart_stock",
+                "severity": "warning" if abs(ecart) < max(1, total_entrees * 0.05) else "critical",
+                "message": f"Écart de {ecart:+.2f} {product.get('unit', '')} entre solde théorique et réel",
+                "value": ecart,
+            })
+
+        # 2. Pertes / casse élevées
+        pertes_total = totals["perte"] + totals["casse"]
+        if pertes_total > 0 and total_entrees > 0:
+            ratio_pertes = pertes_total / total_entrees
+            if ratio_pertes > 0.15:
+                anomalies.append({
+                    "type": "pertes_elevees",
+                    "severity": "critical",
+                    "message": f"Pertes/casses représentent {ratio_pertes*100:.1f}% des entrées ({pertes_total:.2f} perdu(s))",
+                    "value": ratio_pertes,
+                })
+            elif ratio_pertes > 0.05:
+                anomalies.append({
+                    "type": "pertes_moderees",
+                    "severity": "warning",
+                    "message": f"Pertes/casses à {ratio_pertes*100:.1f}% des entrées",
+                    "value": ratio_pertes,
+                })
+
+        # 3. Sortie sans entrée correspondante (stock négatif évité)
+        if total_sorties > (opening_balance or 0) + total_entrees + 0.01:
+            anomalies.append({
+                "type": "sorties_sans_couverture",
+                "severity": "critical",
+                "message": "Sorties supérieures au stock disponible (entrées + solde initial) — incohérence",
+                "value": total_sorties - ((opening_balance or 0) + total_entrees),
+            })
+
+        # 4. Rupture actuelle
+        stock_min = float(product.get("stock_min", 5) or 0)
+        if current_quantity <= 0:
+            anomalies.append({"type": "rupture", "severity": "critical", "message": "Produit en rupture de stock actuellement", "value": current_quantity})
+        elif current_quantity <= stock_min:
+            anomalies.append({"type": "stock_faible", "severity": "warning", "message": f"Stock actuel ({current_quantity}) sous le minimum ({stock_min})", "value": current_quantity})
+
+        # 5. Aucun mouvement sur la période = produit "dormant"
+        if len(movements_period) == 0:
+            anomalies.append({
+                "type": "produit_dormant",
+                "severity": "warning",
+                "message": "Aucun mouvement sur la période — produit inactif",
+                "value": 0,
+            })
+
+        # Severity globale
+        if any(a["severity"] == "critical" for a in anomalies):
+            severity = "critical"
+        elif any(a["severity"] == "warning" for a in anomalies):
+            severity = "warning"
+
+        # Breakdown quotidien (simple)
+        from collections import defaultdict
+        daily = defaultdict(lambda: {"date": "", "entrees": 0.0, "sorties": 0.0, "net": 0.0})
+        for m in movements_period:
+            d = (m.get("created_at") or "")[:10]
+            daily[d]["date"] = d
+            q = _qty_of(m)
+            mt = m.get("movement_type", "")
+            if mt in ("entree", "retour_fournisseur", "transfert_entree"):
+                daily[d]["entrees"] += q
+                daily[d]["net"] += q
+            elif mt in ("sortie", "perte", "casse", "transfert_sortie"):
+                daily[d]["sorties"] += q
+                daily[d]["net"] -= q
+            elif mt == "ajustement":
+                delta = float(m.get("new_quantity", 0) or 0) - float(m.get("previous_quantity", 0) or 0)
+                if delta >= 0:
+                    daily[d]["entrees"] += delta
+                else:
+                    daily[d]["sorties"] += abs(delta)
+                daily[d]["net"] += delta
+        daily_list = sorted(daily.values(), key=lambda x: x["date"])
+
+        return {
+            "product": {
+                "id": product.get("id"),
+                "name": product.get("name"),
+                "code": product.get("code", ""),
+                "unit": product.get("unit", ""),
+                "stock_min": stock_min,
+                "current_quantity": current_quantity,
+                "storage_zone": product.get("storage_zone", "cuisine"),
+            },
+            "period": {"start_date": start_date, "end_date": end_date, "movements_count": len(movements_period)},
+            "balance": {
+                "opening": round(opening_balance or 0, 3),
+                "current": round(current_quantity, 3),
+                "theorical_at_end": round(closing_theorical or 0, 3) if closing_theorical is not None else None,
+                "real_at_end": round(closing_real_end or 0, 3) if closing_real_end is not None else None,
+                "ecart": ecart,
+            },
+            "totals": {k: round(v, 3) for k, v in totals.items()},
+            "total_entrees": round(total_entrees, 3),
+            "total_sorties": round(total_sorties, 3),
+            "net_movement": round(total_entrees - total_sorties, 3),
+            "sorties_breakdown": {k: round(v, 3) for k, v in sorties_detail.items()},
+            "anomalies": anomalies,
+            "severity": severity,
+            "daily": daily_list,
+            "movements": movements_period[-50:],  # Derniers 50 mouvements
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
     cutoff_iso = (now - timedelta(days=30)).isoformat()
 
     # Auto-trigger daily deductions (silent, idempotent: only applies if elapsed days >= 1)

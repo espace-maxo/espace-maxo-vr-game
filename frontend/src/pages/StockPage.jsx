@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import CaisseStockLinksOverview from "./stock/components/CaisseStockLinksOverview";
 import PortionnementTab from "./stock/components/PortionnementTab";
+import ProductAnalysisView from "./stock/components/ProductAnalysisView";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
@@ -130,6 +131,7 @@ const NAV_GROUPS = [
     icon: FileText,
     subtabs: [
       { id: "reports", label: "Rapports", icon: FileText },
+      { id: "product_analysis", label: "Analyse produit", icon: BarChart3 },
       { id: "users", label: "Utilisateurs", icon: Users, adminOnly: true },
     ],
   },
@@ -2851,6 +2853,11 @@ export default function StockPage() {
           </div>
         )}
 
+
+        {/* PRODUCT ANALYSIS — flux entrées/sorties + détection anomalies */}
+        {activeSection === "product_analysis" && (
+          <ProductAnalysisView />
+        )}
 
         {/* REPORTS / RAPPORTS */}
         {activeSection === "reports" && (

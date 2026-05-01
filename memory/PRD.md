@@ -4,6 +4,44 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Stock : Menu Analyse produit (entrées/sorties + détection anomalies) (DONE)
+
+**Demande utilisateur** : « Crée un menu pour permettre d'avoir toutes les quantités sorties et entrées d'un produit selon une période donnée et voir s'il y a gaspillage ou pas, anormal, alerte ou pas. »
+
+**Backend** (`/app/backend/routers/stock.py`) :
+- Nouvel endpoint **`GET /api/stock/products/{id}/analysis?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`** :
+  - Agrège tous les `stock_movements` du produit sur la période.
+  - Calcule : solde d'ouverture (via `previous_quantity` du premier mouvement), solde théorique (ouverture + entrées − sorties), solde réel à la fin (`new_quantity` du dernier mouvement), **écart théorique vs réel**.
+  - Breakdown par type : entree / retour_fournisseur / transfert_entree / ajustement_positif / sortie / perte / casse / transfert_sortie / ajustement_negatif / inventaire.
+  - Breakdown des sorties : auto (facture), manuelles, transferts, autres.
+  - Évolution quotidienne (jours avec mouvements).
+  - **5 règles d'anomalies automatiques** :
+    1. `ecart_stock` (critical si > 5% des entrées, sinon warning)
+    2. `pertes_elevees` (>15% critical, >5% warning)
+    3. `sorties_sans_couverture` (critical — incohérence)
+    4. `rupture` (critical, stock actuel ≤ 0) / `stock_faible` (warning, ≤ stock_min)
+    5. `produit_dormant` (warning — aucun mouvement sur la période)
+  - `severity` globale : `ok` | `warning` | `critical`.
+
+**Frontend** :
+- Nouveau composant `/app/frontend/src/pages/stock/components/ProductAnalysisView.jsx` (~260 lignes).
+  - Sélecteur produit avec recherche en direct + filtre top 50.
+  - 4 presets de période : 7 jours · 30 jours · Mois en cours · 90 jours + inputs de dates custom.
+  - **Banner sévérité** (vert/ambre/rouge) avec liste des anomalies détaillées.
+  - **5 KPI cards** : Entrées · Sorties · Net · Solde actuel · Écart (couleur dynamique selon signe/valeur).
+  - Grille 10 types de mouvements avec code couleur.
+  - Répartition visuelle des sorties (4 badges).
+  - Tableau "Évolution quotidienne" (date + entrées + sorties + net).
+- Intégré dans la sidebar via `NAV_GROUPS` → "Rapports & Admin" → **"Analyse produit"** (icône `BarChart3`).
+
+**Test réel sur "Abats de boeuf"** (période 2026) :
+- 🔴 3 anomalies détectées : écart +1.00, sorties > disponible, rupture actuelle.
+- 1 entrée, 3 sorties (100% auto factures), net -2, solde 0, min 3.
+
+**Tests** Playwright **12/12** : navigation → sous-onglet visible → controls présents → recherche → sélection produit → presets → run → banner + KPIs + détails + daily table tous rendus.
+
+
+
 ## 01/05/2026 — Stock : Refonte Phase 4 — Diagnostic santé Caisse↔Stock + Pagination (DONE)
 
 ### Diagnostic santé (outil de vérification des liaisons)
