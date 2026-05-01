@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, Wallet, TrendingDown, Calendar, AlertTriangle,
   CheckCircle, DollarSign, ChevronDown, ChevronUp, Banknote, Save, X,
+  HandCoins, ExternalLink,
 } from "lucide-react";
 
 const API = (process.env.REACT_APP_BACKEND_URL || "") + "/api";
@@ -62,6 +63,33 @@ const CurrentAccountsTab = () => {
   }, []);
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+
+  // ============ GÉRANTE ADVANCES (read-only view, actions in Point Caisse) ============
+  const [geranteAdvances, setGeranteAdvances] = useState([]);
+  const [geranteFilter, setGeranteFilter] = useState("pending"); // pending | reimbursed | all
+  const [geranteExpanded, setGeranteExpanded] = useState(false);
+
+  const fetchGeranteAdvances = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/gerante-advances`, { params: { status: geranteFilter, limit: 500 } });
+      setGeranteAdvances(r.data.advances || []);
+    } catch {
+      // silent
+    }
+  }, [geranteFilter]);
+
+  useEffect(() => { fetchGeranteAdvances(); }, [fetchGeranteAdvances]);
+
+  const geranteStats = React.useMemo(() => {
+    const pending = geranteAdvances.filter((a) => a.status === "pending");
+    const reimbursed = geranteAdvances.filter((a) => a.status === "reimbursed");
+    return {
+      pending_total: pending.reduce((s, a) => s + (a.amount || 0), 0),
+      pending_count: pending.length,
+      reimbursed_total: reimbursed.reduce((s, a) => s + (a.amount || 0), 0),
+      reimbursed_count: reimbursed.length,
+    };
+  }, [geranteAdvances]);
 
   // ---- Account CRUD ----
   const openAccountCreate = () => {
@@ -310,6 +338,139 @@ const CurrentAccountsTab = () => {
           </Button>
         </div>
       </div>
+
+      {/* ============ DETTE CAISSE → GÉRANTE (avances Gérante pour monnaie) ============ */}
+      <Card
+        className={`border ${geranteStats.pending_total > 0 ? "bg-gradient-to-br from-purple-900/30 to-fuchsia-900/10 border-purple-500/50" : "bg-slate-900/40 border-slate-700"}`}
+        data-testid="gerante-debt-card"
+      >
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${geranteStats.pending_total > 0 ? "bg-purple-500/30 text-purple-200" : "bg-slate-700/50 text-slate-400"}`}>
+                <HandCoins className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-purple-200 flex items-center gap-2">
+                  Dette caisse → Gérante
+                  {geranteStats.pending_total > 0 && (
+                    <Badge className="bg-purple-500/30 text-purple-100">
+                      {formatPrice(geranteStats.pending_total)} F dû
+                    </Badge>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Avances personnelles de la Gérante pour rendre la monnaie aux clients
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Select value={geranteFilter} onValueChange={setGeranteFilter}>
+                <SelectTrigger className="w-[180px] h-8 bg-slate-800 border-slate-700 text-white text-xs" data-testid="gerante-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 text-white border-slate-700">
+                  <SelectItem value="pending">Dettes en cours</SelectItem>
+                  <SelectItem value="reimbursed">Remboursées</SelectItem>
+                  <SelectItem value="all">Tout l'historique</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { window.location.hash = "point-caisse"; toast.info("Allez dans l'onglet 'Point de la caisse' pour gérer les avances"); }}
+                className="border-purple-500/50 text-purple-200 hover:bg-purple-500/10 h-8"
+                data-testid="gerante-manage-link"
+              >
+                <ExternalLink className="w-3.5 h-3.5 mr-1" /> Gérer
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setGeranteExpanded((v) => !v)}
+                className="text-slate-300 hover:bg-slate-800 h-8"
+                data-testid="gerante-toggle-history"
+              >
+                {geranteExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <span className="ml-1 text-xs">{geranteExpanded ? "Masquer" : "Détails"}</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* KPI row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded p-2">
+              <p className="text-[10px] text-purple-300/80 uppercase">En cours</p>
+              <p className="text-lg font-bold text-purple-300">{formatPrice(geranteStats.pending_total)} F</p>
+              <p className="text-[10px] text-slate-500">{geranteStats.pending_count} avance(s)</p>
+            </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded p-2">
+              <p className="text-[10px] text-emerald-300/80 uppercase">Remboursées (vue)</p>
+              <p className="text-lg font-bold text-emerald-300">{formatPrice(geranteStats.reimbursed_total)} F</p>
+              <p className="text-[10px] text-slate-500">{geranteStats.reimbursed_count} avance(s)</p>
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700 rounded p-2">
+              <p className="text-[10px] text-slate-400 uppercase">Total cumulé</p>
+              <p className="text-lg font-bold text-slate-200">
+                {formatPrice(geranteStats.pending_total + geranteStats.reimbursed_total)} F
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {geranteStats.pending_count + geranteStats.reimbursed_count} avance(s)
+              </p>
+            </div>
+            <div className={`border rounded p-2 ${geranteStats.pending_total > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-slate-800/60 border-slate-700"}`}>
+              <p className={`text-[10px] uppercase ${geranteStats.pending_total > 0 ? "text-amber-300" : "text-slate-400"}`}>Statut</p>
+              <p className={`text-sm font-bold ${geranteStats.pending_total > 0 ? "text-amber-300" : "text-emerald-300"}`}>
+                {geranteStats.pending_total > 0 ? "Dette active" : "Tout est réglé ✓"}
+              </p>
+            </div>
+          </div>
+
+          {/* Expanded history */}
+          {geranteExpanded && (
+            <div className="bg-slate-900/60 border border-slate-700 rounded" data-testid="gerante-history">
+              {geranteAdvances.length === 0 ? (
+                <p className="text-slate-500 text-sm italic text-center py-6">
+                  Aucune avance{geranteFilter === "pending" ? " en cours" : geranteFilter === "reimbursed" ? " remboursée" : ""}.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-400 border-b border-slate-700 bg-slate-900/80">
+                        <th className="p-2">Date</th>
+                        <th className="p-2">Motif</th>
+                        <th className="p-2 text-right">Montant</th>
+                        <th className="p-2">Statut</th>
+                        <th className="p-2">Remboursée le</th>
+                        <th className="p-2">Par</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {geranteAdvances.map((a) => (
+                        <tr key={a.id} className="border-b border-slate-800/50 hover:bg-slate-800/40" data-testid={`gerante-debt-row-${a.id}`}>
+                          <td className="p-2 text-slate-400">{(a.created_at || "").slice(0, 16).replace("T", " ")}</td>
+                          <td className="p-2 text-white">{a.reason || <em className="text-slate-500">—</em>}</td>
+                          <td className="p-2 text-right font-bold text-purple-300">{formatPrice(a.amount)} F</td>
+                          <td className="p-2">
+                            {a.status === "pending" ? (
+                              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40">En cours</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40">Remboursée</Badge>
+                            )}
+                          </td>
+                          <td className="p-2 text-slate-400">{a.reimbursed_at ? a.reimbursed_at.slice(0, 16).replace("T", " ") : "—"}</td>
+                          <td className="p-2 text-slate-500">{a.reimbursed_by || a.created_by || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
