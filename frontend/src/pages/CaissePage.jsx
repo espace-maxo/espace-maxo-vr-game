@@ -4975,8 +4975,8 @@ _Gérante - Espace Maxo_
                 <NotifBadge count={effectiveCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
-            {/* 8.5 POINT DE LA CAISSE (Admin only) — remplace Analytics */}
-            {currentUser?.role === 'admin' && (
+            {/* 8.5 POINT DE LA CAISSE (Admin + Gérante) — remplace Analytics */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="point_caisse" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-caisse">
                 <Receipt className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Point de la Caisse</span>
               </TabsTrigger>
@@ -5895,8 +5895,8 @@ _Gérante - Espace Maxo_
             />
           </TabsContent>
 
-          {/* ==================== POINT DE LA CAISSE TAB (Admin only) — remplace Analytics ==================== */}
-          {currentUser?.role === 'admin' && (
+          {/* ==================== POINT DE LA CAISSE TAB (Admin + Gérante) — remplace Analytics ==================== */}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
           <TabsContent value="point_caisse">
             <PointCaisseTab currentUser={currentUser} />
           </TabsContent>

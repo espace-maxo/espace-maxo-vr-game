@@ -4,6 +4,18 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Caisse : "Point de la Caisse" visible pour la Gérante (DONE)
+
+**Demande utilisateur** : « Point de la caisse à rendre visible chez la gérante. »
+
+**Fix** (`/app/frontend/src/pages/CaissePage.jsx`) :
+- Ligne ~4979 : condition `TabsTrigger` passée de `currentUser?.role === 'admin'` à `(currentUser?.role === 'admin' || currentUser?.role === 'manager')`.
+- Ligne ~5899 : même changement pour le `TabsContent` (le contenu n'était rendu que si admin).
+- `PointCaisseTab` ne contient aucune autre restriction interne → la Gérante a accès à toutes les fonctionnalités (snapshot live, clôture Z, avances Gérante, historique).
+
+**Validation** : lint + compile OK. Changement minimal et ciblé, pas besoin du testing agent.
+
+
 ## 02/05/2026 — Stock Mouvements : Séparation Boissons / Autres produits (DONE)
 
 **Demande utilisateur** : « Donne les mouvements des boissons à part et des autres produits à part. »
