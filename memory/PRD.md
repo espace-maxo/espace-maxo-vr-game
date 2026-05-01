@@ -4,6 +4,39 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Archivage automatique des factures D.G. impayées post-signature (DONE)
+
+**Demande utilisateur** : « Une fois le point effectué et qui englobe les bons de la directrice générale, le point des impayés disparaissent et vont se loger dans un autre sous menu de l'administrateur dénommé Factures impayées D.G. »
+
+**Mécanique** :
+- Lorsqu'une gérante **signe** un point financier (`POST /api/financial-points/{id}/sign`), un **hook** archive automatiquement toutes les commandes Mme la D.G. en statut `non_regle` dont la date (`created_at`) tombe dans la période couverte (`date` → `end_date`).
+- Les commandes archivées disparaissent de l'onglet "Mme la Directrice Générale" (filtré par défaut).
+- Elles apparaissent dans un nouveau sous-onglet **admin uniquement** "FACTURES IMPAYÉES D.G." avec possibilité de **« Remettre en actif »** pour relancer le règlement via le flux normal.
+
+**Backend** :
+- `/app/backend/server.py` :
+  - `GET /api/monsieur-orders` accepte `?include_archived=true` (défaut: `false`) → exclut désormais les archivées.
+  - Nouveau `GET /api/monsieur-orders/archived` → liste admin des archivées + stats.
+  - Nouveau `POST /api/monsieur-orders/archive-for-point` (idempotent, body: `point_id`, `point_date`, `end_date`).
+  - Nouveau `POST /api/monsieur-orders/{id}/unarchive` (admin remet en actif).
+  - Champs MongoDB ajoutés sur `monsieur_orders` : `archived_after_point` (bool), `archived_point_id`, `archived_at`, `unarchived_at`.
+- `/app/backend/routers/financial_points.py` :
+  - Hook dans `sign_financial_point` qui exécute `update_many({status: "non_regle", date in [point_date, end_date]}, {archived_after_point: true, ...})`. Erreur d'archivage non bloquante (logguée).
+
+**Frontend** :
+- Nouveau composant : `/app/frontend/src/pages/caisse/components/ArchivedDGTab.jsx` (~140 lignes).
+  - Header ambre + badge "Archives admin · post-signature".
+  - 3 cartes stats (Total impayé / Commandes archivées / Non réglées).
+  - Bouton "Remettre en actif" par commande (toast + refresh).
+  - État vide propre.
+- `BonsTab.jsx` : nouveau 5ᵉ sous-onglet "FACTURES IMPAYÉES D.G." (orange ambré, icône `FileWarning`, **`isAdmin` only**).
+
+**Tests** :
+- Backend curl 8/8 : création commande D.G. impayée → visible en actif → invisible en archivé. Création + signature point → commande disparaît de l'actif → apparaît en archivé (5 000 F). Unarchive → revient en actif.
+- Frontend Playwright 4/4 : sous-onglet visible, page chargée, bouton actualiser, carte total.
+
+
+
 ## 01/05/2026 — Caisse : Banner « Crédits sur salaires du mois » (admin only) (DONE)
 
 **Demande utilisateur** : OK pour la suggestion de mini tableau de bord, **uniquement sur le profil administrateur**.

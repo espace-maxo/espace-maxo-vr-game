@@ -197,7 +197,9 @@ async def admin_validate_financial_point(point_id: str, admin_name: str = Body(.
 
 @router.post("/financial-points/{point_id}/sign")
 async def sign_financial_point(point_id: str, signer_name: str = Body(...), consent_text: str = Body(default="Je certifie l'exactitude des montants")):
-    """Manager signs a financial point with consent (before admin validation)"""
+    """Manager signs a financial point with consent (before admin validation).
+    On signing, all unpaid DG (Mme la D.G.) orders dated within the point's period
+    are auto-archived to the admin-only "Factures impayées D.G." sub-tab."""
     try:
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
@@ -216,6 +218,33 @@ async def sign_financial_point(point_id: str, signer_name: str = Body(...), cons
                 "status": "signed"
             }}
         )
+
+        # Auto-archive unpaid DG orders dated within the point's period
+        try:
+            point_date = point.get("date")
+            end_date = point.get("end_date") or point_date
+            if point_date:
+                arch_result = await db.monsieur_orders.update_many(
+                    {
+                        "status": "non_regle",
+                        "archived_after_point": {"$ne": True},
+                        "$expr": {
+                            "$and": [
+                                {"$gte": [{"$substr": ["$created_at", 0, 10]}, point_date]},
+                                {"$lte": [{"$substr": ["$created_at", 0, 10]}, end_date]},
+                            ]
+                        },
+                    },
+                    {"$set": {
+                        "archived_after_point": True,
+                        "archived_point_id": point_id,
+                        "archived_at": datetime.now(timezone.utc).isoformat(),
+                    }}
+                )
+                logger.info(f"Sign hook: archived {arch_result.modified_count} unpaid DG orders for point {point_id} ({point_date} → {end_date})")
+        except Exception as _e:
+            # On laisse passer la signature même si l'archivage échoue (audit dans logs)
+            logger.error(f"Auto-archive on sign failed for point {point_id}: {_e}")
 
         updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
         logger.info(f"Financial point {point_id} signed by {signer_name}")

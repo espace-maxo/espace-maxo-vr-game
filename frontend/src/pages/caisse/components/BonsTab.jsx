@@ -11,12 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Printer, UserCircle, AlertTriangle, Edit2, CheckCircle, Eye,
-  Trash2, Wine, Gamepad2, FileText, Users, UserCog
+  Trash2, Wine, Gamepad2, FileText, Users, UserCog, FileWarning
 } from 'lucide-react';
 import MonsieurTab from './MonsieurTab';
 import EmployeeOrdersTab from './EmployeeOrdersTab';
 import ManagerOrdersTab from './ManagerOrdersTab';
 import SalaryCreditsBanner from './SalaryCreditsBanner';
+import ArchivedDGTab from './ArchivedDGTab';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -83,6 +84,12 @@ const BonsTab = ({
           <TabsTrigger value="bons-gerante" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white" data-testid="tab-bons-gerante">
             <UserCog className="w-4 h-4 mr-2" />
             GÉRANTE
+          </TabsTrigger>
+        )}
+        {isAdmin && (
+          <TabsTrigger value="bons-archived-dg" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="tab-bons-archived-dg">
+            <FileWarning className="w-4 h-4 mr-2" />
+            FACTURES IMPAYÉES D.G.
           </TabsTrigger>
         )}
       </TabsList>
@@ -314,6 +321,13 @@ const BonsTab = ({
             formatPrice={formatPrice}
             products={products}
           />
+        </TabsContent>
+      )}
+
+      {/* Archived DG (admin only) sub-tab */}
+      {isAdmin && (
+        <TabsContent value="bons-archived-dg">
+          <ArchivedDGTab formatPrice={formatPrice} />
         </TabsContent>
       )}
     </Tabs>

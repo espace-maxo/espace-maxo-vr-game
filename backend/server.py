@@ -4843,15 +4843,16 @@ async def detect_weekly_duplicates(week_start: str):
 # ============== MONSIEUR ORDERS (Owner's meal orders) ==============
 
 @api_router.get("/monsieur-orders")
-async def get_monsieur_orders():
-    """Get all owner meal orders tracked by manager"""
+async def get_monsieur_orders(include_archived: bool = False):
+    """Get all owner meal orders tracked by manager. By default excludes archived
+    (orders that were unpaid when a financial point was signed → moved to admin-only view)."""
     try:
-        orders = await db.monsieur_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
-        
-        # Calculate totals
+        q = {} if include_archived else {"archived_after_point": {"$ne": True}}
+        orders = await db.monsieur_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
         total_unpaid = sum(o.get("total", 0) for o in orders if o.get("status") == "non_regle")
         total_paid = sum(o.get("total", 0) for o in orders if o.get("status") == "regle")
-        
+
         return {
             "orders": orders,
             "stats": {
@@ -4864,6 +4865,86 @@ async def get_monsieur_orders():
         }
     except Exception as e:
         logger.error(f"Error fetching monsieur orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/monsieur-orders/archived")
+async def get_archived_monsieur_orders():
+    """Admin-only view of archived unpaid DG orders (moved here when a point was signed)."""
+    try:
+        orders = await db.monsieur_orders.find({"archived_after_point": True}, {"_id": 0}).sort("archived_at", -1).to_list(2000)
+        return {
+            "orders": orders,
+            "stats": {
+                "count": len(orders),
+                "total": sum(o.get("total", 0) for o in orders if o.get("status") == "non_regle"),
+                "count_unpaid": len([o for o in orders if o.get("status") == "non_regle"]),
+                "count_paid": len([o for o in orders if o.get("status") == "regle"]),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching archived monsieur orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/monsieur-orders/archive-for-point")
+async def archive_monsieur_orders_for_point(
+    point_id: str = Body(...),
+    point_date: str = Body(...),         # YYYY-MM-DD (debut de la periode)
+    end_date: Optional[str] = Body(None),  # YYYY-MM-DD (fin inclusif), defaut = point_date
+):
+    """Archive all NON-PAID DG orders dated within the period covered by a financial point.
+    Idempotent: if an order is already archived, it stays archived (no double-archiving)."""
+    try:
+        if not point_id or not point_date:
+            raise HTTPException(status_code=400, detail="point_id et point_date requis")
+        end = end_date or point_date
+        # On compare sur la date YYYY-MM-DD du created_at ISO (les 10 premiers chars)
+        q = {
+            "status": "non_regle",
+            "archived_after_point": {"$ne": True},
+            "$expr": {
+                "$and": [
+                    {"$gte": [{"$substr": ["$created_at", 0, 10]}, point_date]},
+                    {"$lte": [{"$substr": ["$created_at", 0, 10]}, end]},
+                ]
+            },
+        }
+        now_iso = datetime.now(timezone.utc).isoformat()
+        result = await db.monsieur_orders.update_many(
+            q,
+            {"$set": {
+                "archived_after_point": True,
+                "archived_point_id": point_id,
+                "archived_at": now_iso,
+            }}
+        )
+        logger.info(f"Archived {result.modified_count} unpaid DG orders for point {point_id} ({point_date} → {end})")
+        return {"success": True, "archived_count": result.modified_count, "point_id": point_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error archiving DG orders for point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/monsieur-orders/{order_id}/unarchive")
+async def unarchive_monsieur_order(order_id: str):
+    """Admin-only: send an archived DG order back to the active 'Mme la D.G.' tab
+    (e.g. if the admin wants to settle it via the normal flow)."""
+    try:
+        order = await db.monsieur_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        await db.monsieur_orders.update_one(
+            {"id": order_id},
+            {"$set": {"archived_after_point": False, "unarchived_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unarchiving DG order: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/monsieur-orders")
