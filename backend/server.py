@@ -5206,8 +5206,13 @@ async def delete_monsieur_purchase(purchase_id: str):
 # ============== WEEKLY SUMMARY ENDPOINT ==============
 
 @api_router.get("/reports/weekly")
-async def get_weekly_report(week_start: Optional[str] = None):
-    """Get weekly summary: sales, expenses, and result - DAY BY DAY"""
+async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional[str] = None):
+    """Get summary (sales + expenses + result) day-by-day.
+
+    - `week_start` : start date (default = current Monday). If `end_date` is omitted, span = 7 days.
+    - `end_date`   : optional custom end date → enables 1-day / custom-range reports
+                     (YYYY-MM-DD, inclusive). If provided, `week_start` becomes required.
+    """
     try:
         # Calculate week start (Monday) if not provided
         if week_start:
@@ -5215,13 +5220,21 @@ async def get_weekly_report(week_start: Optional[str] = None):
         else:
             today = datetime.now(timezone.utc)
             start_date = today - timedelta(days=today.weekday())  # Monday
-        
+
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
-        
+
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except Exception:
+                raise HTTPException(400, f"end_date invalide: {end_date}")
+            end_date_computed = end_dt.replace(hour=23, minute=59, second=59, microsecond=0)
+        else:
+            end_date_computed = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+
         # Use date strings without timezone for comparison (format: YYYY-MM-DD)
         start_str = start_date.strftime("%Y-%m-%d")
-        end_str = end_date.strftime("%Y-%m-%d") + "T23:59:59"
+        end_str = end_date_computed.strftime("%Y-%m-%d") + "T23:59:59"
         
         # Get validated invoices (sales) for the week
         # Strategy: 2 queries then merge
@@ -5294,15 +5307,17 @@ async def get_weekly_report(week_start: Optional[str] = None):
                 seen_exp.add(eid)
                 all_expenses.append(exp)
         
-        # Initialize daily data for each day of the week
+        # Initialize daily data for each day of the range
         daily_data = {}
         day_names_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
-        
-        for i in range(7):
+
+        # Number of days covered by the report (1 to 31)
+        nb_days = max(1, (end_date_computed.date() - start_date.date()).days + 1)
+        for i in range(nb_days):
             day_date = start_date + timedelta(days=i)
             date_str = day_date.strftime("%Y-%m-%d")
             daily_data[date_str] = {
-                "day_name": day_names_fr[i],
+                "day_name": day_names_fr[day_date.weekday()],
                 "date": date_str,
                 "date_formatted": day_date.strftime("%d/%m/%Y"),
                 "sales": {"count": 0, "total": 0, "items": []},
