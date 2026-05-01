@@ -376,6 +376,80 @@ async def destock_live_dashboard(limit: int = 50):
         days (suspected misconfig OR slow-mover).
     """
     now = datetime.now(timezone.utc)
+    cutoff_iso = (now - timedelta(days=30)).isoformat()
+
+    # Auto-trigger daily deductions (silent, idempotent: only applies if elapsed days >= 1)
+    try:
+        await _apply_daily_deductions_internal(silent=True)
+    except Exception as e:
+        logger.warning(f"Daily deduction auto-trigger failed: {e}")
+
+    # Recent sales (movements tied to invoices)
+    recent_sales = await db.stock_movements.find(
+        {"invoice_id": {"$exists": True, "$ne": None}, "movement_type": "sortie"},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(limit)
+
+    # Caisse products linkage state — uses NEW stock_links array (multi-link), with legacy fallback to stock_product_id.
+    # Products marked as "no_stock_tracking" (services/games/fees) are excluded from the linked/unlinked stats entirely.
+    caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+    trackable_products = [cp for cp in caisse_products if not cp.get("no_stock_tracking")]
+    service_products = [cp for cp in caisse_products if cp.get("no_stock_tracking")]
+    total_caisse = len(trackable_products)
+    def _is_linked(cp):
+        return bool(cp.get("stock_links")) or bool(cp.get("stock_product_id")) or bool(cp.get("stock_recipe_id"))
+    linked = [cp for cp in trackable_products if _is_linked(cp)]
+    unlinked = [cp for cp in trackable_products if not _is_linked(cp)]
+
+    # For linked products, find last sale movement (using caisse_product_id)
+    sales_by_caisse_id = {}
+    movs_with_caisse = await db.stock_movements.find(
+        {"caisse_product_id": {"$exists": True, "$ne": None}, "movement_type": "sortie"},
+        {"_id": 0, "caisse_product_id": 1, "created_at": 1, "quantity": 1},
+    ).sort("created_at", -1).to_list(5000)
+    for m in movs_with_caisse:
+        cp_id = m.get("caisse_product_id")
+        if cp_id and cp_id not in sales_by_caisse_id:
+            sales_by_caisse_id[cp_id] = m.get("created_at")
+
+    linked_no_sales = []
+    linked_with_sales = []
+    for cp in linked:
+        last_sale = sales_by_caisse_id.get(cp.get("id"))
+        # Resolve effective stock links (multi → list, legacy single → wrap)
+        effective_links = cp.get("stock_links") or ([cp["stock_product_id"]] if cp.get("stock_product_id") else [])
+        info = {
+            "id": cp.get("id"),
+            "name": cp.get("name"),
+            "category": cp.get("category"),
+            "stock_product_id": cp.get("stock_product_id"),  # legacy field, kept for backwards compat
+            "stock_links": effective_links,
+            "stock_recipe_id": cp.get("stock_recipe_id") or "",
+            "last_sale_at": last_sale,
+        }
+        if not last_sale or last_sale < cutoff_iso:
+            linked_no_sales.append(info)
+        else:
+            linked_with_sales.append(info)
+
+    return {
+        "recent_sales": recent_sales,
+        "summary": {
+            "total_caisse_products": total_caisse,
+            "linked_count": len(linked),
+            "unlinked_count": len(unlinked),
+            "linked_no_sales_count": len(linked_no_sales),
+            "linked_with_recent_sales_count": len(linked_with_sales),
+            "recent_sales_count": len(recent_sales),
+            "service_products_count": len(service_products),
+        },
+        "unlinked_caisse_products": [
+            {"id": cp.get("id"), "name": cp.get("name"), "category": cp.get("category"), "price": cp.get("price")}
+            for cp in unlinked
+        ],
+        "linked_no_sales": linked_no_sales,
+    }
+
 
 @router.get("/products/{product_id}/analysis")
 async def product_period_analysis(product_id: str, start_date: str, end_date: str):

@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — BUGFIX : Restauration du corps de `destock_live_dashboard` (DONE)
+
+**Rapport utilisateur** : « Les mouvements ne sont plus ordonnés et je retrouve d'anciens mouvements en tête. »
+
+**Root cause** : Lors de l'ajout de l'endpoint `/api/stock/products/{id}/analysis` (menu Analyse produit), l'outil `mcp_insert_text` a injecté le nouveau code à la ligne 378 mais a écrasé ~85 lignes du corps de la fonction `destock_live_dashboard()` juste au-dessus. Résultat :
+- `/api/stock/destock-live` renvoyait silencieusement `None` ou échouait (le front affichait des données figées / partielles).
+- Les mouvements récents d'auto-déductions journalières n'étaient plus déclenchés (la fonction `_apply_daily_deductions_internal(silent=True)` ne s'exécutait plus → les déstockages automatiques quotidiens n'étaient plus créés → l'utilisateur voyait uniquement les anciens mouvements manuels en tête).
+
+**Fix** :
+- Extraction du corps original de la fonction depuis `git show f37edbd:backend/routers/stock.py`.
+- Re-injection du corps complet (88 lignes) entre la signature et l'endpoint `/analysis` via script Python (remplacement contrôlé par markers `async def destock_live_dashboard` et `@router.get("/products/{product_id}/analysis")`).
+- Syntaxe vérifiée (`python -m py_compile` OK).
+
+**Validation** :
+- `GET /api/stock/destock-live` : renvoie correctement `recent_sales`, `linked_count`, `unlinked_caisse_products`, etc.
+- `GET /api/stock/movements?limit=5` : ordre confirmé DESC sur `created_at` — top = `2026-05-01 00:01:17`, plus récent à ancien.
+- `GET /api/stock/products/{id}/analysis` : non impacté, fonctionne toujours.
+- Distribution des mouvements par date vérifiée en base : cohérente, aucun pattern anormal.
+
+
+
 ## 01/05/2026 — Stock : Menu Analyse produit (entrées/sorties + détection anomalies) (DONE)
 
 **Demande utilisateur** : « Crée un menu pour permettre d'avoir toutes les quantités sorties et entrées d'un produit selon une période donnée et voir s'il y a gaspillage ou pas, anormal, alerte ou pas. »
