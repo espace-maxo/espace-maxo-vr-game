@@ -4,6 +4,33 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Caisse : Avances Gérante sur fonds personnels (DONE)
+
+**Demande utilisateur** : « Dans le point de la caisse prévoir la possibilité de faire de la monnaie par la gérante. Par exemple pour rendre la monnaie au client, la gérante peut recourir à ses propres fonds et les soustraire par la suite. Ex, elle doit rendre 2 000 mais le restau n'en a pas donc elle utilise ses 2 000 et après se fait rembourser. »
+
+**Backend** :
+- Nouveau router `/app/backend/routers/gerante_advances.py` + collection MongoDB `gerante_advances`.
+- Endpoints :
+  - `POST /api/gerante-advances` — créer (montant, motif, statut `pending`)
+  - `GET /api/gerante-advances?status=pending|reimbursed|all&date=...`
+  - `GET /api/gerante-advances/summary` — pending total, reimbursed today, etc.
+  - `POST /api/gerante-advances/{id}/reimburse` — marque comme remboursée (409 si déjà faite)
+  - `POST /api/gerante-advances/reimburse-all` — tout rembourser d'un coup
+  - `DELETE /api/gerante-advances/{id}` — suppression
+- `cash_closures.py` : `_compute_live_snapshot()` étendu avec `gerante_pending_total`, `gerante_reimbursed_today_total`, et **`expected_cash_in_drawer` = per_method.cash.amount + gerante_pending_total − gerante_reimbursed_today_total**. `create_cash_closure` utilise cet `expected_cash_in_drawer` pour calculer le `gap_cash`.
+- Router branché dans `server.py` (import + set_db + include_router).
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/PointCaisseTab.jsx`) :
+- Nouvelle Card violette **"Avances de la Gérante (monnaie sur fonds personnels)"** insérée entre la Synthèse et la Clôture.
+- Formulaire inline "+ Nouvelle avance" (montant + motif).
+- Liste des avances en attente avec boutons **Rembourser** (individuel) et **Tout rembourser** (en masse).
+- Affichage "Espèces attendues dans la caisse" remplace l'ancien "Espèces théoriques" avec explication dynamique : `= X F encaissés + Y F avance(s) Gérante en attente − Z F remboursement(s) du jour`.
+- Compteur "N avance(s) déjà remboursée(s) aujourd'hui pour total Y F".
+- Le calcul de l'écart prévu à la clôture est automatique et correct.
+
+**Validation** : testing agent → **15/15 backend PASSED + tous les tests frontend PASSED** (100 %).
+
+
 ## 02/05/2026 — Module Vente : Statistiques de ventes par produit (DONE)
 
 **Demande utilisateur** : « Dans le module vente, donne la possibilité d'avoir des statistiques de vente par produit (en quantité et en valeur). »
