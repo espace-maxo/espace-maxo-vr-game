@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Banner « Crédits sur salaires du mois » (admin only) (DONE)
+
+**Demande utilisateur** : OK pour la suggestion de mini tableau de bord, **uniquement sur le profil administrateur**.
+
+**Modifications** :
+- Nouveau composant : `/app/frontend/src/pages/caisse/components/SalaryCreditsBanner.jsx` (~110 lignes).
+  - Fetch parallèle des collections `employee-orders` et `manager-orders` du mois courant.
+  - Auto-refresh toutes les 30 secondes (live).
+  - Cache automatique si 0 commande dans le mois (pas de bruit visuel).
+  - 3 cellules colorées :
+    - **EMPLOYÉS** (rose) : montant `authorized_total` + complément `pending_total` "en attente".
+    - **GÉRANTE** (violet) : idem.
+    - **TOTAL À RETENIR** (vert émeraude, bordure double) : somme des 2 catégories autorisées + alerte si pending.
+- Intégration dans `BonsTab.jsx` : rendu conditionnel `{isAdmin && <SalaryCreditsBanner />}` au-dessus de `TabsList`.
+
+**Tests** :
+- Frontend Playwright : banner VISIBLE pour admin avec montants exacts (3 000 F employés autorisés + 2 000 F pending, 6 000 F gérante autorisés + 4 000 F pending, total 9 000 F + 6 000 F en attente). Banner ABSENT pour la gérante (`role=manager`).
+
+
+
 ## 01/05/2026 — Caisse : Bons GÉRANTE (jumeau de EMPLOYÉS, plafond 25 000 F/mois) (DONE)
 
 **Demande utilisateur** : « Crée un autre sous menu pour la gérante dans les mêmes formes que pour les employés mais avec un plafond de 25.000 F. »

@@ -16,6 +16,7 @@ import {
 import MonsieurTab from './MonsieurTab';
 import EmployeeOrdersTab from './EmployeeOrdersTab';
 import ManagerOrdersTab from './ManagerOrdersTab';
+import SalaryCreditsBanner from './SalaryCreditsBanner';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -54,6 +55,8 @@ const BonsTab = ({
 
   return (
     <Tabs defaultValue="bons-factures" className="w-full" data-testid="bons-tab">
+      {/* Admin-only banner: aperçu des crédits salaires du mois */}
+      {isAdmin && <SalaryCreditsBanner formatPrice={formatPrice} />}
       <TabsList className="bg-slate-800/50 border-b border-slate-700 w-full justify-start mb-4">
         <TabsTrigger value="bons-factures" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
           <Printer className="w-4 h-4 mr-2" />
