@@ -508,6 +508,8 @@ export default function StockPage() {
     date_to: "",
     limit: 200,
   });
+  // Boissons vs Autres produits filter ("all" | "boissons" | "autres")
+  const [movementCategoryView, setMovementCategoryView] = useState("all");
 
   // "Stock magasin" zone (manual-only stock — no auto-destock from invoices)
   const [magasinProducts, setMagasinProducts] = useState([]);
@@ -2401,11 +2403,32 @@ export default function StockPage() {
           // We exclude movements whose product is in magasin zone AND transfert_sortie (magasin outflow of a transfer).
           // transfert_entree stays visible because it is a legitimate cuisine inflow.
           const magIds = new Set(magasinProducts.map(p => p.id));
-          const visibleMovements = movements
+
+          // ====== Classification Boissons vs Autres ======
+          // Heuristique : unité de conditionnement typiquement "boisson" OU mot-clé dans le nom.
+          const BEVERAGE_UNITS = new Set(["bouteille", "brique", "canette", "litre", "cl", "l"]);
+          const BEVERAGE_KEYWORDS = /\b(coca|fanta|sprite|pepsi|schweppes|jus|eau|bi[eè]re|biere|vin|whisky|whiskey|rhum|gin|vodka|champagne|cognac|martini|cocktail|soda|limonade|smoothie|caf[eé]|th[eé]|th\b|lait|yaourt|boisson)\b/i;
+          const isBeverage = (m) => {
+            const u = String(m.unit || "").toLowerCase().trim();
+            if (BEVERAGE_UNITS.has(u)) return true;
+            if (BEVERAGE_KEYWORDS.test(m.product_name || "")) return true;
+            return false;
+          };
+
+          const allVisible = movements
             .filter(m => !magIds.has(m.product_id) && m.movement_type !== "transfert_sortie")
-            // Safety net: ensure DESC sort by created_at even if the backend ever returns mixed order
             .slice()
             .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+
+          const beverageMovements = allVisible.filter(isBeverage);
+          const otherMovements = allVisible.filter(m => !isBeverage(m));
+
+          const categoryView = movementCategoryView || "all";
+          const visibleMovements =
+            categoryView === "boissons" ? beverageMovements :
+            categoryView === "autres" ? otherMovements :
+            allVisible;
+
           return (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -2413,9 +2436,9 @@ export default function StockPage() {
                 <h2 className="text-2xl font-bold text-white">Mouvements de Stock</h2>
                 <p className="text-slate-500 text-xs mt-0.5">
                   Historique restaurant · {visibleMovements.length} ligne(s) affichée(s)
-                  {movements.length - visibleMovements.length > 0 && (
+                  {movements.length - allVisible.length > 0 && (
                     <span className="ml-2 text-amber-400">
-                      ({movements.length - visibleMovements.length} mouvement(s) magasin masqué(s) — voir <em>Stock magasin</em>)
+                      ({movements.length - allVisible.length} mouvement(s) magasin masqué(s) — voir <em>Stock magasin</em>)
                     </span>
                   )}
                 </p>
@@ -2521,6 +2544,41 @@ export default function StockPage() {
                 <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setShowMovementModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
               </div>
+            </div>
+
+            {/* Category view toggle: Tout | Boissons | Autres produits */}
+            <div className="flex flex-wrap gap-2 items-center" data-testid="movements-category-toggle">
+              <span className="text-slate-500 text-xs uppercase mr-1">Catégorie :</span>
+              <Button
+                size="sm"
+                variant={movementCategoryView === "all" ? "default" : "outline"}
+                onClick={() => setMovementCategoryView("all")}
+                className={movementCategoryView === "all" ? "bg-slate-700 hover:bg-slate-600 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
+                data-testid="movements-cat-all"
+              >
+                Tout ({allVisible.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={movementCategoryView === "boissons" ? "default" : "outline"}
+                onClick={() => setMovementCategoryView("boissons")}
+                className={movementCategoryView === "boissons" ? "bg-orange-600 hover:bg-orange-700 text-white" : "border-orange-500/50 text-orange-300 hover:bg-orange-500/10"}
+                data-testid="movements-cat-boissons"
+              >
+                🍹 Boissons ({beverageMovements.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={movementCategoryView === "autres" ? "default" : "outline"}
+                onClick={() => setMovementCategoryView("autres")}
+                className={movementCategoryView === "autres" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"}
+                data-testid="movements-cat-autres"
+              >
+                🍽️ Autres produits ({otherMovements.length})
+              </Button>
+              <span className="text-slate-500 text-[11px] ml-2 italic">
+                Classification automatique par unité (bouteille/brique/canette/litre/cl) et mots-clés
+              </span>
             </div>
 
             {/* Filters bar */}

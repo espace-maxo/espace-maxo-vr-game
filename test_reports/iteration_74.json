@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 74 - Frontend testing of 'Boissons vs Autres produits' category toggle in Stock Mouvements tab. All 11 test cases passed. The new 3-button toggle (Tout/Boissons/Autres produits) correctly filters movements based on unit type (bouteille/brique/canette/litre/cl) and beverage keywords.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "StockPage - Mouvements tab",
+        "issues": ["Minor React hydration warnings: '<tr> cannot be a child of <span>' - This is a React internal warning from the preview environment that doesn't affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_74.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Frontend: StockPage.jsx correctly implements the 3-button category toggle at line ~2549",
+    "Frontend: isBeverage() classification function at line ~2411 uses BEVERAGE_UNITS Set and BEVERAGE_KEYWORDS regex",
+    "Frontend: Counts correctly add up: Boissons (16) + Autres (164) = Tout (180)",
+    "Frontend: Banner 'Historique restaurant · X ligne(s) affichée(s)' updates correctly with filtered count",
+    "Frontend: Button styling correct - Boissons=orange (bg-orange-600), Autres=emerald (bg-emerald-600), Tout=slate (bg-slate-700)",
+    "Frontend: Date sorting DESC maintained across all category views",
+    "Frontend: Auto-refresh indicator shows '60s' interval and last sync time",
+    "Frontend: Classification explanation text visible: 'Classification automatique par unité (bouteille/brique/canette/litre/cl) et mots-clés'"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (skipped per request - frontend only)",
+    "frontend": "100% (all 11 test cases passed)"
+  },
+  "test_credentials": {
+    "stock_admin": {"username": "admin", "password": "Admin2026"}
+  },
+  "seed_data_creation": "Pre-existing data used: 183 movements total (180 visible in restaurant view, 3 magasin movements hidden)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 74 verified the new 'Boissons vs Autres produits' category toggle in Stock Mouvements tab. Key data-testids: movements-category-toggle (container), movements-cat-all, movements-cat-boissons, movements-cat-autres. Classification uses unit ∈ {bouteille, brique, canette, litre, cl, l} + regex keywords. Note: Stock login uses admin/Admin2026 (not Caisse2026 as mentioned in review request).",
+  "features_verified": {
+    "frontend": [
+      "Login Stock via /stock (admin / Admin2026) - PASSED",
+      "Navigate to 'Mouvements' tab (sidebar Stocks > Mouvements) - PASSED",
+      "Category toggle container present (data-testid='movements-category-toggle') - PASSED",
+      "3 buttons present: movements-cat-all, movements-cat-boissons, movements-cat-autres - PASSED",
+      "'Tout (180)' shows total count - PASSED",
+      "'Boissons (16)' + 'Autres produits (164)' = 180 (counts add up) - PASSED",
+      "Click 'Boissons' → filters to beverage movements only - PASSED",
+      "Click 'Autres produits' → filters to non-beverage movements - PASSED",
+      "Click 'Tout' → resets to all movements - PASSED",
+      "Banner 'Historique restaurant · X ligne(s) affichée(s)' updates with category count - PASSED",
+      "Button active styles: Boissons=orange, Autres=emerald, Tout=slate - PASSED",
+      "Date sorting DESC maintained across all views - PASSED",
+      "Auto-refresh 60s indicator visible - PASSED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Frontend: Login → Stocks nav → Mouvements subnav → Verify toggle buttons → Check counts → Click Boissons → Verify orange style + banner update → Click Autres → Verify emerald style + banner update → Click Tout → Verify slate style + banner reset → Verify date sorting DESC - ALL PASSED"
+  ],
+  "credential_note": "Review request mentioned 'admin/Caisse2026' but actual working credentials are 'admin/Admin2026' as per test_credentials.md"
+}
