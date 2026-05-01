@@ -5,7 +5,7 @@
  *   - Z journalier : clôture du jour avec déclaration des espèces comptées + écart auto
  *   - Historique : Z des derniers jours (max 60), consultable + suppression admin
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Banknote, Smartphone, CreditCard, Building2, Wallet, Receipt,
   TrendingUp, TrendingDown, Lock, Unlock, History, RefreshCw, Trash2, AlertTriangle, CheckCircle2,
+  HandCoins, Plus, Undo2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -61,6 +62,84 @@ const PointCaisseTab = ({ currentUser }) => {
   const [view, setView] = useState("live"); // live | history
   const [expandedId, setExpandedId] = useState(null);
 
+  // ============ Avances Gérante ============
+  const [advances, setAdvances] = useState([]);
+  const [advanceForm, setAdvanceForm] = useState({ amount: "", reason: "" });
+  const [showAdvanceForm, setShowAdvanceForm] = useState(false);
+  const [advanceLoading, setAdvanceLoading] = useState(false);
+
+  const fetchAdvances = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/gerante-advances`, { params: { status: "pending" } });
+      setAdvances(r.data.advances || []);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const createAdvance = async () => {
+    const amount = Number(advanceForm.amount);
+    if (!amount || amount <= 0) {
+      toast.error("Montant invalide");
+      return;
+    }
+    setAdvanceLoading(true);
+    try {
+      await axios.post(`${API}/gerante-advances`, {
+        amount,
+        reason: advanceForm.reason || "",
+        created_by: currentUser?.full_name || currentUser?.username || "Gérante",
+      });
+      toast.success(`Avance de ${fmt(amount)} F enregistrée`);
+      setAdvanceForm({ amount: "", reason: "" });
+      setShowAdvanceForm(false);
+      await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur enregistrement");
+    } finally {
+      setAdvanceLoading(false);
+    }
+  };
+
+  const reimburseAdvance = async (id, amount) => {
+    if (!confirm(`Rembourser ${fmt(amount)} F à la Gérante depuis la caisse ?\n\nCela retire cette somme du surplus espèces attendu.`)) return;
+    try {
+      await axios.post(`${API}/gerante-advances/${id}/reimburse`, {
+        reimbursed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+      });
+      toast.success("Avance remboursée");
+      await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur remboursement");
+    }
+  };
+
+  const reimburseAllAdvances = async () => {
+    if (advances.length === 0) return;
+    const totalPending = advances.reduce((s, a) => s + (a.amount || 0), 0);
+    if (!confirm(`Rembourser TOUTES les avances en attente (${advances.length} × total ${fmt(totalPending)} F) ?`)) return;
+    try {
+      const r = await axios.post(`${API}/gerante-advances/reimburse-all`, {
+        reimbursed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+      });
+      toast.success(`${r.data.count} avance(s) remboursée(s) · ${fmt(r.data.total_amount)} F`);
+      await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur remboursement groupé");
+    }
+  };
+
+  const deleteAdvance = async (id) => {
+    if (!confirm("Supprimer cette avance ?")) return;
+    try {
+      await axios.delete(`${API}/gerante-advances/${id}`);
+      toast.success("Avance supprimée");
+      await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
+    } catch (e) {
+      toast.error("Erreur suppression");
+    }
+  };
+
   const fetchSnapshot = async (d = date) => {
     setLoading(true);
     try {
@@ -85,6 +164,7 @@ const PointCaisseTab = ({ currentUser }) => {
   useEffect(() => {
     fetchSnapshot(date);
     fetchHistory();
+    fetchAdvances();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
@@ -164,7 +244,9 @@ const PointCaisseTab = ({ currentUser }) => {
 
   const s = snapshot;
   const isToday = date === today;
-  const cashGapPreview = (Number(declaredCash) || 0) - (s?.per_method?.cash?.amount || 0);
+  const expectedCash = s?.expected_cash_in_drawer ?? s?.per_method?.cash?.amount ?? 0;
+  const cashGapPreview = (Number(declaredCash) || 0) - expectedCash;
+  const pendingAdvancesTotal = advances.reduce((sum, a) => sum + (a.amount || 0), 0);
 
   return (
     <div className="space-y-4" data-testid="point-caisse-tab">
@@ -256,6 +338,142 @@ const PointCaisseTab = ({ currentUser }) => {
                 </CardContent>
               </Card>
 
+              {/* ============ AVANCES GÉRANTE ============ */}
+              <Card className="bg-gradient-to-br from-purple-900/20 to-fuchsia-900/10 border-purple-500/40" data-testid="gerante-advances-section">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle className="text-purple-200 flex items-center gap-2 text-base">
+                      <HandCoins className="w-5 h-5" />
+                      Avances de la Gérante (monnaie sur fonds personnels)
+                      {pendingAdvancesTotal > 0 && (
+                        <Badge className="bg-purple-500/30 text-purple-100 ml-1">
+                          {fmt(pendingAdvancesTotal)} F en attente
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      {advances.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={reimburseAllAdvances}
+                          className="border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"
+                          data-testid="reimburse-all-advances"
+                        >
+                          <Undo2 className="w-4 h-4 mr-1" /> Tout rembourser
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={() => setShowAdvanceForm((v) => !v)}
+                        className="bg-purple-600 hover:bg-purple-700"
+                        data-testid="toggle-advance-form"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Nouvelle avance
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Quand la caisse n'a pas de monnaie à rendre, la Gérante peut avancer ses propres fonds. Elle se fait rembourser plus tard depuis la caisse.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {showAdvanceForm && (
+                    <div className="grid grid-cols-1 md:grid-cols-[140px_1fr_auto] gap-2 p-3 bg-slate-900/60 border border-purple-500/30 rounded-lg">
+                      <div>
+                        <Label className="text-slate-300 text-xs">Montant (F)</Label>
+                        <Input
+                          type="number"
+                          value={advanceForm.amount}
+                          onChange={(e) => setAdvanceForm((f) => ({ ...f, amount: e.target.value }))}
+                          placeholder="2000"
+                          className="bg-slate-800 border-slate-700 text-white font-bold"
+                          data-testid="advance-amount-input"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-slate-300 text-xs">Motif (optionnel)</Label>
+                        <Input
+                          value={advanceForm.reason}
+                          onChange={(e) => setAdvanceForm((f) => ({ ...f, reason: e.target.value }))}
+                          placeholder="Ex: Monnaie client facture 0012"
+                          className="bg-slate-800 border-slate-700 text-white"
+                          data-testid="advance-reason-input"
+                        />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <Button
+                          onClick={createAdvance}
+                          disabled={advanceLoading}
+                          className="bg-purple-600 hover:bg-purple-700"
+                          data-testid="advance-save-btn"
+                        >
+                          {advanceLoading ? "…" : "Enregistrer"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => { setShowAdvanceForm(false); setAdvanceForm({ amount: "", reason: "" }); }}
+                          className="border-slate-700 text-slate-300"
+                        >
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {advances.length === 0 ? (
+                    <p className="text-slate-500 text-sm italic text-center py-3">Aucune avance en attente ✓</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {advances.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between p-2.5 bg-slate-900/50 border border-slate-700 rounded hover:bg-slate-900/80"
+                          data-testid={`advance-row-${a.id}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-medium">
+                              <span className="text-purple-300 font-bold">{fmt(a.amount)} F</span>
+                              {a.reason && <span className="text-slate-400 text-sm ml-2">— {a.reason}</span>}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {format(parseISO(a.created_at), "dd/MM HH:mm")} · par {a.created_by}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => reimburseAdvance(a.id, a.amount)}
+                              className="border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"
+                              data-testid={`reimburse-advance-${a.id}`}
+                            >
+                              <Undo2 className="w-4 h-4 mr-1" /> Rembourser
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => deleteAdvance(a.id)}
+                              className="border-rose-500/50 text-rose-300 hover:bg-rose-500/10"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {s.gerante_reimbursed_today_total > 0 && (
+                    <p className="text-xs text-emerald-300/80 flex items-center gap-1 pl-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {s.gerante_reimbursed_today_count} avance(s) déjà remboursée(s) aujourd'hui pour un total de {fmt(s.gerante_reimbursed_today_total)} F
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Clôture du jour */}
               {!s.already_closed && (
                 <Card className="bg-gradient-to-br from-emerald-900/30 to-blue-900/20 border-emerald-500/40">
@@ -267,10 +485,19 @@ const PointCaisseTab = ({ currentUser }) => {
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-slate-300 text-sm">Espèces théoriques (Caisse)</Label>
+                        <Label className="text-slate-300 text-sm">Espèces attendues dans la caisse</Label>
                         <div className="mt-1 px-3 py-2 bg-slate-900/60 border border-slate-700 rounded text-emerald-300 font-bold text-lg">
-                          {fmt(s.per_method.cash.amount)} F
+                          {fmt(expectedCash)} F
                         </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          = {fmt(s.per_method.cash.amount)} F encaissés
+                          {s.gerante_pending_total > 0 && (
+                            <> + {fmt(s.gerante_pending_total)} F avance(s) Gérante en attente</>
+                          )}
+                          {s.gerante_reimbursed_today_total > 0 && (
+                            <> − {fmt(s.gerante_reimbursed_today_total)} F remboursement(s) du jour</>
+                          )}
+                        </p>
                       </div>
                       <div>
                         <Label className="text-slate-300 text-sm">Espèces comptées physiquement *</Label>

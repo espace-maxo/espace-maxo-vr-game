@@ -154,6 +154,40 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
     net_cash_theoretical = per_method["cash"]["amount"] + tips_total - expenses_total
     net_balance = total_invoices + tips_total - expenses_total
 
+    # 4. Gerante personal advances (she lent cash from her pocket to give change)
+    # Pending advances means the register physically holds MORE cash than the
+    # theoretical "per_method.cash" because the customer paid full amount but the
+    # change went from her pocket, not from the register.
+    gerante_pending_total = 0.0
+    gerante_pending_count = 0
+    gerante_reimbursed_today_total = 0.0
+    gerante_reimbursed_today_count = 0
+    try:
+        pending_advances = await db.gerante_advances.find(
+            {"status": "pending"},
+            {"_id": 0},
+        ).to_list(5000)
+        gerante_pending_total = sum(float(a.get("amount") or 0) for a in pending_advances)
+        gerante_pending_count = len(pending_advances)
+
+        reimbursed_today = await db.gerante_advances.find(
+            {"status": "reimbursed", "reimbursed_at": {"$regex": f"^{date_iso}"}},
+            {"_id": 0},
+        ).to_list(1000)
+        gerante_reimbursed_today_total = sum(float(a.get("amount") or 0) for a in reimbursed_today)
+        gerante_reimbursed_today_count = len(reimbursed_today)
+    except Exception:
+        pass
+
+    # Expected physical cash in the drawer = theoretical cash from invoices
+    #   + pending Gérante advances (surplus she hasn't been reimbursed for yet)
+    #   - cash reimbursements she took today (already out of the drawer)
+    expected_cash_in_drawer = (
+        per_method["cash"]["amount"]
+        + gerante_pending_total
+        - gerante_reimbursed_today_total
+    )
+
     return {
         "date": date_iso,
         "per_method": per_method,
@@ -164,6 +198,11 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
         "expenses_count": expenses_count,
         "net_cash_theoretical": net_cash_theoretical,
         "net_balance": net_balance,
+        "gerante_pending_total": gerante_pending_total,
+        "gerante_pending_count": gerante_pending_count,
+        "gerante_reimbursed_today_total": gerante_reimbursed_today_total,
+        "gerante_reimbursed_today_count": gerante_reimbursed_today_count,
+        "expected_cash_in_drawer": expected_cash_in_drawer,
     }
 
 
@@ -210,7 +249,9 @@ async def create_cash_closure(payload: CashClosureCreate):
 
         snap = await _compute_live_snapshot(day)
         declared = float(payload.declared_cash or 0)
-        gap_cash = declared - snap["per_method"]["cash"]["amount"]
+        # Expected cash = theoretical cash + pending Gérante advances - her reimbursements today
+        expected_cash = snap.get("expected_cash_in_drawer", snap["per_method"]["cash"]["amount"])
+        gap_cash = declared - expected_cash
 
         doc = {
             "id": str(uuid.uuid4()),
