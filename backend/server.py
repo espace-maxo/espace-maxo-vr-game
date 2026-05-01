@@ -5203,6 +5203,493 @@ async def delete_monsieur_purchase(purchase_id: str):
         logger.error(f"Error deleting monsieur purchase: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# EMPLOYEE ORDERS (Bons EMPLOYÉS — repas employés à crédit sur salaire)
+# ============================================================================
+# Workflow :
+#   1. Gérante saisit la commande employé (nom + poste obligatoires)
+#   2. Status = "pending_manager" — Gérante doit autoriser en 1er
+#   3. Gérante autorise → status = "pending_director" — Directrice (admin) doit autoriser
+#   4. Directrice autorise → status = "authorized" → STOCK décrémenté
+#   5. Fin de mois → bouton "Clôturer le mois" → toutes les commandes "authorized"
+#      du mois passent en "settled" (déduites du salaire). Génère un PDF récap.
+# Règles :
+#   - Remise fixe : 50% (total = subtotal × 0.5)
+#   - Plafond mensuel : 10 000 F après remise par employé (compte toutes commandes
+#     non annulées du mois calendaire)
+
+EMPLOYEE_MONTHLY_CAP = 10000.0
+EMPLOYEE_DISCOUNT_RATE = 0.50  # 50%
+
+def _employee_month_key(dt: Optional[datetime] = None) -> str:
+    d = dt or datetime.now(timezone.utc)
+    return d.strftime("%Y-%m")
+
+async def _employee_month_used(employee_name: str, month_key: str, exclude_id: Optional[str] = None) -> float:
+    """Sum of total (after discount) for all non-cancelled orders of this employee for the given month."""
+    q = {
+        "employee_name": employee_name,
+        "month_period": month_key,
+        "status": {"$ne": "cancelled"},
+    }
+    if exclude_id:
+        q["id"] = {"$ne": exclude_id}
+    used = 0.0
+    async for o in db.employee_orders.find(q, {"_id": 0, "total": 1}):
+        used += float(o.get("total", 0) or 0)
+    return used
+
+
+@api_router.get("/employee-orders")
+async def get_employee_orders(
+    month: Optional[str] = None,           # YYYY-MM
+    employee_name: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    try:
+        q = {}
+        if month:
+            q["month_period"] = month
+        if employee_name:
+            q["employee_name"] = employee_name
+        if status:
+            q["status"] = status
+        orders = await db.employee_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+        # Stats globales
+        stats = {
+            "count_pending_manager": sum(1 for o in orders if o.get("status") == "pending_manager"),
+            "count_pending_director": sum(1 for o in orders if o.get("status") == "pending_director"),
+            "count_authorized": sum(1 for o in orders if o.get("status") == "authorized"),
+            "count_settled": sum(1 for o in orders if o.get("status") == "settled"),
+            "total_pending": sum(o.get("total", 0) for o in orders if o.get("status") in ("pending_manager", "pending_director")),
+            "total_authorized": sum(o.get("total", 0) for o in orders if o.get("status") == "authorized"),
+            "total_settled": sum(o.get("total", 0) for o in orders if o.get("status") == "settled"),
+        }
+        return {"orders": orders, "stats": stats}
+    except Exception as e:
+        logger.error(f"Error fetching employee orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/employee-orders/cap-status")
+async def get_employee_cap_status(employee_name: str, month: Optional[str] = None):
+    """Return monthly cap usage for a given employee."""
+    try:
+        if not employee_name or not employee_name.strip():
+            raise HTTPException(status_code=400, detail="employee_name requis")
+        month_key = month or _employee_month_key()
+        used = await _employee_month_used(employee_name.strip(), month_key)
+        return {
+            "employee_name": employee_name.strip(),
+            "month": month_key,
+            "max": EMPLOYEE_MONTHLY_CAP,
+            "used": round(used, 2),
+            "remaining": round(EMPLOYEE_MONTHLY_CAP - used, 2),
+            "is_capped": used >= EMPLOYEE_MONTHLY_CAP,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching employee cap status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/employee-orders")
+async def create_employee_order(
+    employee_name: str = Body(...),
+    employee_position: str = Body(...),
+    items: list = Body(...),
+    notes: str = Body(""),
+    created_by: str = Body(...),
+):
+    """Create an employee order. Validates monthly cap. Stock NOT yet deducted (waits for both authorizations)."""
+    try:
+        # Validations
+        if not employee_name or not employee_name.strip():
+            raise HTTPException(status_code=400, detail="Le nom de l'employé est obligatoire")
+        if not employee_position or not employee_position.strip():
+            raise HTTPException(status_code=400, detail="Le poste de l'employé est obligatoire")
+        if not items or not isinstance(items, list) or len(items) == 0:
+            raise HTTPException(status_code=400, detail="Au moins un article est requis")
+
+        # Compute amounts
+        subtotal = 0.0
+        for it in items:
+            qty = float(it.get("quantity", 0) or 0)
+            price = float(it.get("price", 0) or 0)
+            subtotal += qty * price
+        if subtotal <= 0:
+            raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
+        discount_amount = round(subtotal * EMPLOYEE_DISCOUNT_RATE, 2)
+        total_after_discount = round(subtotal - discount_amount, 2)
+
+        # Plafond mensuel — toutes commandes non annulées du mois
+        month_key = _employee_month_key()
+        used = await _employee_month_used(employee_name.strip(), month_key)
+        if used + total_after_discount > EMPLOYEE_MONTHLY_CAP + 0.01:  # tolérance flottante
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Plafond mensuel dépassé. Déjà utilisé : {used:.0f} F. "
+                    f"Cette commande : {total_after_discount:.0f} F. "
+                    f"Maximum : {int(EMPLOYEE_MONTHLY_CAP)} F après remise."
+                ),
+            )
+
+        order_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        order = {
+            "id": order_id,
+            "employee_name": employee_name.strip(),
+            "employee_position": employee_position.strip(),
+            "items": items,
+            "subtotal": round(subtotal, 2),
+            "discount_rate": int(EMPLOYEE_DISCOUNT_RATE * 100),
+            "discount_amount": discount_amount,
+            "total": total_after_discount,  # montant qui sera retenu sur le salaire
+            "month_period": month_key,
+            "status": "pending_manager",  # Gérante doit autoriser en 1er
+            "authorizations": {"manager": None, "director": None},
+            "stock_deducted": False,
+            "notes": notes or "",
+            "created_by": created_by,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "settled_at": None,
+            "settlement_batch_id": None,
+        }
+        await db.employee_orders.insert_one(order)
+        if "_id" in order:
+            del order["_id"]
+        return {"success": True, "order": order}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating employee order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/employee-orders/{order_id}")
+async def update_employee_order(
+    order_id: str,
+    employee_name: Optional[str] = Body(None),
+    employee_position: Optional[str] = Body(None),
+    items: Optional[list] = Body(None),
+    notes: Optional[str] = Body(None),
+):
+    """Edit an employee order. Only allowed while status == 'pending_manager' (before any authorization)."""
+    try:
+        order = await db.employee_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        if order.get("status") != "pending_manager":
+            raise HTTPException(status_code=423, detail="Cette commande ne peut plus être modifiée (déjà engagée dans le workflow d'autorisation)")
+
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if employee_name is not None:
+            if not employee_name.strip():
+                raise HTTPException(status_code=400, detail="Le nom de l'employé est obligatoire")
+            update_data["employee_name"] = employee_name.strip()
+        if employee_position is not None:
+            if not employee_position.strip():
+                raise HTTPException(status_code=400, detail="Le poste de l'employé est obligatoire")
+            update_data["employee_position"] = employee_position.strip()
+        if notes is not None:
+            update_data["notes"] = notes
+        if items is not None:
+            if not items or len(items) == 0:
+                raise HTTPException(status_code=400, detail="Au moins un article est requis")
+            subtotal = sum(float(it.get("quantity", 0) or 0) * float(it.get("price", 0) or 0) for it in items)
+            if subtotal <= 0:
+                raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
+            discount_amount = round(subtotal * EMPLOYEE_DISCOUNT_RATE, 2)
+            total_after_discount = round(subtotal - discount_amount, 2)
+            # Re-check cap (excluding this order)
+            target_employee = update_data.get("employee_name") or order.get("employee_name")
+            month_key = order.get("month_period") or _employee_month_key()
+            used_excl = await _employee_month_used(target_employee, month_key, exclude_id=order_id)
+            if used_excl + total_after_discount > EMPLOYEE_MONTHLY_CAP + 0.01:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(f"Plafond mensuel dépassé. Déjà utilisé (hors cette commande) : {used_excl:.0f} F. "
+                            f"Modification : {total_after_discount:.0f} F. Maximum : {int(EMPLOYEE_MONTHLY_CAP)} F."),
+                )
+            update_data["items"] = items
+            update_data["subtotal"] = round(subtotal, 2)
+            update_data["discount_amount"] = discount_amount
+            update_data["total"] = total_after_discount
+
+        await db.employee_orders.update_one({"id": order_id}, {"$set": update_data})
+        updated = await db.employee_orders.find_one({"id": order_id}, {"_id": 0})
+        return {"success": True, "order": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating employee order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/employee-orders/{order_id}/authorize")
+async def authorize_employee_order(
+    order_id: str,
+    by_role: str = Body(...),       # "manager" or "director"
+    signer_name: str = Body(...),
+):
+    """Sequential authorization. Manager FIRST, then Director.
+    Stock is deducted only when the second authorization (director) is given."""
+    try:
+        order = await db.employee_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        role = (by_role or "").strip().lower()
+        if role not in ("manager", "director"):
+            raise HTTPException(status_code=400, detail="by_role doit être 'manager' ou 'director'")
+        if not signer_name or not signer_name.strip():
+            raise HTTPException(status_code=400, detail="signer_name requis")
+
+        current_status = order.get("status")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        auths = order.get("authorizations") or {"manager": None, "director": None}
+
+        if role == "manager":
+            if current_status != "pending_manager":
+                raise HTTPException(status_code=409, detail="Autorisation Gérante déjà donnée ou commande à un autre stade")
+            auths["manager"] = {"name": signer_name.strip(), "at": now_iso}
+            new_status = "pending_director"
+        else:  # director
+            if current_status != "pending_director":
+                raise HTTPException(status_code=409, detail="La Gérante doit autoriser AVANT la Directrice Générale")
+            auths["director"] = {"name": signer_name.strip(), "at": now_iso}
+            new_status = "authorized"
+
+        update = {"authorizations": auths, "status": new_status, "updated_at": now_iso}
+
+        # Si on vient de passer en "authorized", on déduit le stock maintenant.
+        if new_status == "authorized" and not order.get("stock_deducted"):
+            for it in order.get("items", []) or []:
+                cp_id = it.get("product_id") or it.get("id")
+                qty = float(it.get("quantity", 1) or 1)
+                cp = None
+                if cp_id:
+                    cp = await db.caisse_products.find_one({"id": cp_id})
+                if not cp and it.get("name"):
+                    cp = await db.caisse_products.find_one({
+                        "name": {"$regex": f"^{re.escape(it['name'])}$", "$options": "i"}
+                    })
+                if not cp or cp.get("no_stock_tracking"):
+                    continue
+                link_ids = cp.get("stock_links") or []
+                if not link_ids and cp.get("stock_product_id"):
+                    link_ids = [cp["stock_product_id"]]
+                if not link_ids:
+                    continue
+                async for sp in db.stock_products.find({"id": {"$in": link_ids}, "is_active": True}, {"_id": 0}):
+                    old_qty = sp.get("quantity", 0)
+                    new_qty = max(0, old_qty - qty)
+                    smin = sp.get("stock_min", 5)
+                    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                    new_valeur = new_qty * sp.get("purchase_price", 0)
+                    await db.stock_movements.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "product_id": sp["id"],
+                        "product_name": sp["name"],
+                        "product_code": sp.get("code", ""),
+                        "movement_type": "sortie",
+                        "quantity": qty,
+                        "previous_quantity": old_qty,
+                        "new_quantity": new_qty,
+                        "unit": sp.get("unit", ""),
+                        "unit_price": sp.get("purchase_price", 0),
+                        "total_value": qty * sp.get("purchase_price", 0),
+                        "reason": f"Bon EMPLOYÉ {order.get('employee_name')} - #{order_id[:8]} (autorisé)",
+                        "user_name": signer_name.strip(),
+                        "employee_order_id": order_id,
+                        "created_at": now_iso,
+                    })
+                    await db.stock_products.update_one(
+                        {"id": sp["id"]},
+                        {"$set": {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": now_iso}},
+                    )
+            update["stock_deducted"] = True
+
+        await db.employee_orders.update_one({"id": order_id}, {"$set": update})
+        updated = await db.employee_orders.find_one({"id": order_id}, {"_id": 0})
+        return {"success": True, "order": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error authorizing employee order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/employee-orders/{order_id}")
+async def delete_employee_order(order_id: str, by_role: str = "admin"):
+    """Cancel/delete an employee order. If stock was deducted, the order is just marked 'cancelled'
+    (audit trail) — stock is not automatically restored (ops must do it manually if needed)."""
+    try:
+        order = await db.employee_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        if order.get("status") == "settled":
+            raise HTTPException(status_code=423, detail="Commande déjà clôturée (réglée sur salaire)")
+        if order.get("stock_deducted"):
+            await db.employee_orders.update_one(
+                {"id": order_id},
+                {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        else:
+            await db.employee_orders.delete_one({"id": order_id})
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting employee order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/employee-orders/close-month")
+async def close_employee_month(month: str = Body(...), closed_by: str = Body(...)):
+    """Bulk-settle all 'authorized' employee orders for a given month (YYYY-MM)."""
+    try:
+        if not month or len(month) != 7:
+            raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM")
+        batch_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor = db.employee_orders.find(
+            {"month_period": month, "status": "authorized"}, {"_id": 0}
+        )
+        affected = []
+        async for o in cursor:
+            affected.append(o)
+
+        if not affected:
+            return {"success": True, "settled_count": 0, "by_employee": [], "batch_id": None, "message": "Aucune commande autorisée à clôturer pour ce mois"}
+
+        await db.employee_orders.update_many(
+            {"month_period": month, "status": "authorized"},
+            {"$set": {"status": "settled", "settled_at": now_iso, "settlement_batch_id": batch_id}},
+        )
+
+        # Récap par employé
+        by_emp = {}
+        for o in affected:
+            key = o.get("employee_name", "?")
+            if key not in by_emp:
+                by_emp[key] = {
+                    "employee_name": key,
+                    "employee_position": o.get("employee_position", ""),
+                    "count": 0,
+                    "total_subtotal": 0,
+                    "total_after_discount": 0,
+                }
+            by_emp[key]["count"] += 1
+            by_emp[key]["total_subtotal"] += float(o.get("subtotal", 0) or 0)
+            by_emp[key]["total_after_discount"] += float(o.get("total", 0) or 0)
+        by_employee = sorted(by_emp.values(), key=lambda x: x["employee_name"])
+
+        # Trace
+        await db.employee_settlements.insert_one({
+            "id": batch_id,
+            "month": month,
+            "closed_at": now_iso,
+            "closed_by": closed_by,
+            "settled_count": len(affected),
+            "total_amount": round(sum(o.get("total", 0) for o in affected), 2),
+            "by_employee": by_employee,
+        })
+
+        return {
+            "success": True,
+            "settled_count": len(affected),
+            "total_amount": round(sum(o.get("total", 0) for o in affected), 2),
+            "by_employee": by_employee,
+            "batch_id": batch_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error closing employee month: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/employee-orders/closure-pdf")
+async def get_employee_closure_pdf(month: str):
+    """Generate an HTML/PDF summary of the month's settled employee orders, grouped by employee."""
+    try:
+        from fastapi.responses import HTMLResponse
+        if not month or len(month) != 7:
+            raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM")
+        orders = await db.employee_orders.find(
+            {"month_period": month, "status": "settled"}, {"_id": 0}
+        ).sort("employee_name", 1).to_list(2000)
+        # Regrouper par employé
+        by_emp = {}
+        for o in orders:
+            key = o.get("employee_name", "?")
+            if key not in by_emp:
+                by_emp[key] = {"position": o.get("employee_position", ""), "orders": []}
+            by_emp[key]["orders"].append(o)
+
+        # HTML simple imprimable (le client peut faire Ctrl+P → PDF)
+        rows_html = ""
+        grand_total = 0.0
+        for emp_name in sorted(by_emp.keys()):
+            data = by_emp[emp_name]
+            emp_total = sum(float(o.get("total", 0)) for o in data["orders"])
+            grand_total += emp_total
+            rows_html += f"""
+                <tr class="emp-header"><td colspan="4"><strong>{emp_name}</strong> — <em>{data['position']}</em></td></tr>
+            """
+            for o in data["orders"]:
+                items_str = ", ".join(f"{it.get('quantity', 1)}× {it.get('name', '')}" for it in (o.get("items") or []))
+                rows_html += f"""
+                <tr>
+                    <td>{o.get('created_at', '')[:10]}</td>
+                    <td>{items_str}</td>
+                    <td class="num">{o.get('subtotal', 0):,.0f} F</td>
+                    <td class="num">{o.get('total', 0):,.0f} F</td>
+                </tr>
+                """
+            rows_html += f"""
+                <tr class="emp-total"><td colspan="3"><strong>Total {emp_name}</strong></td>
+                <td class="num"><strong>{emp_total:,.0f} F</strong></td></tr>
+            """
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Clôture EMPLOYÉS - {month}</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; padding: 30px; color: #222; }}
+            h1 {{ color: #6d28d9; border-bottom: 2px solid #6d28d9; padding-bottom: 8px; }}
+            .meta {{ color: #555; font-size: 14px; margin-bottom: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th {{ background: #f3f0ff; color: #6d28d9; padding: 8px; text-align: left; border-bottom: 2px solid #6d28d9; }}
+            td {{ padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }}
+            .num {{ text-align: right; }}
+            .emp-header td {{ background: #ede9fe; }}
+            .emp-total td {{ background: #f9f5ff; font-weight: bold; }}
+            .grand {{ margin-top: 20px; padding: 12px; background: #6d28d9; color: white; border-radius: 6px; font-size: 18px; text-align: right; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #777; border-top: 1px dashed #ccc; padding-top: 10px; }}
+        </style></head><body>
+            <h1>Clôture mensuelle — Bons EMPLOYÉS</h1>
+            <p class="meta">Mois : <strong>{month}</strong> · Généré le {datetime.now(timezone.utc).strftime('%d/%m/%Y à %H:%M')}</p>
+            <table>
+                <thead><tr><th>Date</th><th>Articles</th><th class="num">Sous-total</th><th class="num">À retenir (-50%)</th></tr></thead>
+                <tbody>{rows_html or '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px">Aucune commande clôturée pour ce mois</td></tr>'}</tbody>
+            </table>
+            <div class="grand">Total à retenir sur les salaires : <strong>{grand_total:,.0f} F</strong></div>
+            <p class="footer">Ce document récapitule les bons EMPLOYÉS clôturés (déduits sur salaire). Espace Maxo.</p>
+        </body></html>"""
+        return HTMLResponse(content=html)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating closure PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 # ============== WEEKLY SUMMARY ENDPOINT ==============
 
 @api_router.get("/reports/weekly")

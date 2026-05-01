@@ -11,9 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Printer, UserCircle, AlertTriangle, Edit2, CheckCircle, Eye,
-  Trash2, Wine, Gamepad2, FileText
+  Trash2, Wine, Gamepad2, FileText, Users
 } from 'lucide-react';
 import MonsieurTab from './MonsieurTab';
+import EmployeeOrdersTab from './EmployeeOrdersTab';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -66,6 +67,12 @@ const BonsTab = ({
           <TabsTrigger value="bons-monsieur" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
             <UserCircle className="w-4 h-4 mr-2" />
             MME LA DIRECTRICE GÉNÉRALE
+          </TabsTrigger>
+        )}
+        {canManage && (
+          <TabsTrigger value="bons-employes" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white" data-testid="tab-bons-employes">
+            <Users className="w-4 h-4 mr-2" />
+            EMPLOYÉS
           </TabsTrigger>
         )}
       </TabsList>
@@ -271,6 +278,17 @@ const BonsTab = ({
       {canManage && (
         <TabsContent value="bons-monsieur">
           <MonsieurTab
+            currentUser={currentUser}
+            formatPrice={formatPrice}
+            products={products}
+          />
+        </TabsContent>
+      )}
+
+      {/* Employés sub-tab */}
+      {canManage && (
+        <TabsContent value="bons-employes">
+          <EmployeeOrdersTab
             currentUser={currentUser}
             formatPrice={formatPrice}
             products={products}

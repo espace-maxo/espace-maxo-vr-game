@@ -4,6 +4,47 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Bons EMPLOYÉS (crédit salaire avec plafond + double autorisation) (DONE)
+
+**Demande utilisateur** : « Dans les bons crée un sous menu EMPLOYÉS avec les mêmes caractéristiques que pour Mme la Directrice Générale. Mais le remboursement se fera sur les salaires versés en fin de mois. Dans ce menu impose que la vente débute nécessairement par le nom de l'employé et son poste. La vente sera facturée à 50% avec un maximum de 10.000 F par mois (après réduction). La vente sera autorisée par la gérante et la directrice générale. »
+
+**Choix utilisateur** :
+- Poste : liste prédéfinie (Serveur/Cuisinier/Caissier/Plongeur/Sécurité/Ménage/Manager) + option "Autre" → saisie libre.
+- Plafond 10 000 F/mois : compte TOUTES les commandes du mois (pending + autorisées + réglées) hors annulées.
+- Clôture : un bouton "Clôturer le mois" qui passe TOUTES les commandes autorisées à "Réglé sur salaire" + génère un PDF récap par employé.
+- Autorisations : SÉQUENTIELLES — Gérante d'abord, puis Directrice Générale.
+- Stock : décrémenté UNIQUEMENT après les 2 autorisations.
+
+**Backend** (`/app/backend/server.py`, +400 lignes après les endpoints `monsieur-purchases`) :
+- Nouvelle collection MongoDB : `employee_orders` + `employee_settlements` (audit clôtures).
+- Schéma : `id`, `employee_name`, `employee_position`, `items`, `subtotal`, `discount_rate=50`, `discount_amount`, `total` (= subtotal × 0.5, montant retenu sur salaire), `month_period` (YYYY-MM), `status`, `authorizations: {manager, director}`, `stock_deducted`, `created_by`, `settled_at`, `settlement_batch_id`.
+- Statuts : `pending_manager` → `pending_director` → `authorized` → `settled` (ou `cancelled`).
+- Endpoints :
+  - `GET /api/employee-orders` (filtres month/employee/status + stats globales)
+  - `GET /api/employee-orders/cap-status?employee_name=X&month=YYYY-MM`
+  - `POST /api/employee-orders` — valide nom+poste obligatoires, calcule remise 50%, vérifie plafond mensuel
+  - `PUT /api/employee-orders/{id}` (modif autorisée seulement si status=`pending_manager`)
+  - `PUT /api/employee-orders/{id}/authorize` (body: `by_role` + `signer_name`) — ordre séquentiel strict, déduit le stock à la 2ᵉ auth
+  - `DELETE /api/employee-orders/{id}` (annule, garde audit si stock déjà déduit)
+  - `POST /api/employee-orders/close-month` (batch settle + audit dans `employee_settlements`)
+  - `GET /api/employee-orders/closure-pdf?month=YYYY-MM` — HTML imprimable avec récap par employé
+- Constantes : `EMPLOYEE_MONTHLY_CAP = 10000.0`, `EMPLOYEE_DISCOUNT_RATE = 0.50`.
+
+**Frontend** :
+- Nouveau composant : `/app/frontend/src/pages/caisse/components/EmployeeOrdersTab.jsx` (~450 lignes).
+  - Header : titre "Bons EMPLOYÉS" + badge "Crédit salaire" + filtre mois (`<input type=month>`) + boutons "Nouvelle commande" et "Clôturer le mois" (admin only).
+  - 4 cartes stats : En attente (G+D) · Autorisés · Réglés sur salaire · Mois courant + plafond 10 000 F.
+  - Modale création : section dédiée "Identité de l'employé (obligatoire)" en HAUT du formulaire (nom + Select poste avec option "Autre" → input libre), puis recherche produits, panier avec récap (subtotal → remise 50% → total à retenir), barre de progression du plafond LIVE avec couleur dynamique (rose normal, rouge si dépassement projeté), bouton submit désactivé tant qu'incomplet.
+  - Liste : badges de statut colorés, montants, traîne d'autorisations (qui a signé + quand), boutons d'autorisation contextuels selon rôle/statut.
+  - Modale clôture : aperçu par employé (count + total) avant confirmation. Au clic "Confirmer", appel batch + ouverture PDF dans nouvel onglet.
+- Intégration : `/app/frontend/src/pages/caisse/components/BonsTab.jsx` — nouveau sous-onglet "EMPLOYÉS" (rose) à côté de "MME LA DIRECTRICE GÉNÉRALE".
+
+**Tests** :
+- Backend curl 9/9 : création → cap_status (3 000 F utilisés) → tentative auth Director-d'abord = 409 ✅ → Manager autorise = pending_director ✅ → Director autorise = authorized + stock déduit ✅ → tentative dépassement 10 000 F = HTTP 400 avec message clair ✅ → clôture mois batch (2 commandes settled) → PDF généré (HTML 200, contient noms employés et totaux).
+- Frontend Playwright 9/9 : sous-onglet EMPLOYÉS visible, page chargée, boutons Nouvelle commande + Clôturer le mois (admin), filtre mois, modale avec inputs nom/poste, bouton submit désactivé tant que poste non choisi.
+
+
+
 ## 01/05/2026 — Caisse : Récap. billetage détaillé sur la modale de signature (DONE)
 
 **Demande utilisateur** : OK pour l'amélioration suggérée — afficher un mini-récap visuel du billetage (denominations + total) avant que la gérante coche « Je certifie l'exactitude ».
