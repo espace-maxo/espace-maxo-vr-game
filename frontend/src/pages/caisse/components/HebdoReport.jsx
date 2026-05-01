@@ -476,7 +476,7 @@ const HebdoReport = ({
               <CardContent className="p-4 text-center">
                 <UserCircle className="w-6 h-6 text-violet-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-violet-400">{formatPrice((weeklyReport.manager_general?.orders_total || 0) + (weeklyReport.manager_general?.purchases_total || 0))} F</p>
-                <p className="text-xs text-slate-400">Manager General</p>
+                <p className="text-xs text-slate-400">Mme la Directrice Générale</p>
                 <div className="flex gap-1 justify-center mt-1">
                   {weeklyReport.manager_general.orders_unpaid > 0 && <Badge className="bg-red-500/20 text-red-400 text-xs">{formatPrice(weeklyReport.manager_general.orders_unpaid)} F impaye</Badge>}
                 </div>
@@ -505,7 +505,7 @@ const HebdoReport = ({
                       <th className="p-3 text-right text-purple-400">Locations</th>
                       <th className="p-3 text-right text-red-400">Dépenses</th>
                       <th className="p-3 text-right">Résultat</th>
-                      <th className="p-3 text-right text-violet-400">Manager G.</th>
+                      <th className="p-3 text-right text-violet-400">Mme la D.G.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -624,7 +624,7 @@ const HebdoReport = ({
                           {/* Manager General detail */}
                           {((data.manager_general?.orders_count || 0) > 0 || (data.manager_general?.purchases_count || 0) > 0) && (
                             <div>
-                              <p className="text-violet-400 text-xs font-medium mb-1">Manager General</p>
+                              <p className="text-violet-400 text-xs font-medium mb-1">Mme la Directrice Générale</p>
                               {data.manager_general?.orders_count > 0 && (
                                 <p className="text-slate-300 text-xs bg-violet-900/20 rounded px-3 py-1.5 mb-1">
                                   Commandes repas : {data.manager_general.orders_count} - <span className="text-violet-400 font-bold">{formatPrice(data.manager_general.orders_total)} F</span>
@@ -690,7 +690,7 @@ const HebdoReport = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-violet-400 flex items-center gap-2">
                   <UserCircle className="w-5 h-5" />
-                  Situation Manager General
+                  Situation Mme la Directrice Générale
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">

@@ -135,7 +135,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         toast.success("Commande modifiée avec succès");
       } else {
         await axios.post(`${API}/monsieur-orders`, orderData);
-        toast.success("Commande Manager General enregistrée");
+        toast.success("Commande Mme la Directrice Générale enregistrée");
       }
       
       setShowModal(false);
@@ -179,7 +179,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         paid_by: currentUser?.name || "Gérante",
         payment_method: paymentMethod,
       });
-      toast.success(`Réglée (${labelForMethod(paymentMethod)}) · ajoutée aux Factures du jour comme « Manager General »`);
+      toast.success(`Réglée (${labelForMethod(paymentMethod)}) · ajoutée aux Factures du jour comme « Mme la Directrice Générale »`);
       setPendingPayment(null);
       fetchOrders();
     } catch (error) {
@@ -200,7 +200,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const deleteOrder = async (orderId) => {
-    if (!confirm("Supprimer cette commande Manager General ?")) return;
+    if (!confirm("Supprimer cette commande Mme la Directrice Générale ?")) return;
     try {
       await axios.delete(`${API}/monsieur-orders/${orderId}`);
       toast.success("Commande supprimée");
@@ -215,8 +215,8 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
     if (!confirm(`Passer cette commande (${formatPrice(order.total)} F) en facture ?`)) return;
     try {
       const invoiceData = {
-        server_name: "Manager General",
-        created_by: currentUser?.full_name || currentUser?.name || "Manager General",
+        server_name: "Mme la Directrice Générale",
+        created_by: currentUser?.full_name || currentUser?.name || "Mme la Directrice Générale",
         items: (order.items || []).map(item => ({
           name: item.name,
           quantity: item.quantity,
@@ -228,7 +228,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
         total: order.total,
         discount: 0,
         discount_amount: 0,
-        client_name: "Manager General",
+        client_name: "Mme la Directrice Générale",
         notes: order.notes || ""
       };
       const resp = await axios.post(`${API}/invoices`, invoiceData);
@@ -249,10 +249,10 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
       `<tr><td>${i.quantity}x ${i.name}</td><td style="text-align:right">${formatPrice(i.price * i.quantity)} F</td></tr>`
     ).join('');
     w.document.write(`
-      <html><head><title>Bon Manager General</title>
+      <html><head><title>Bon Mme la Directrice Générale</title>
       <style>body{font-family:monospace;font-size:12px;padding:10px}table{width:100%;border-collapse:collapse}td{padding:3px 0}hr{border:none;border-top:1px dashed #000}.total{font-size:16px;font-weight:bold;text-align:center;margin:10px 0}</style>
       </head><body>
-      <div style="text-align:center"><strong>ESPACE MAXO</strong><br>Manager General</div>
+      <div style="text-align:center"><strong>ESPACE MAXO</strong><br>Mme la Directrice Générale</div>
       <hr>
       <p>Date: ${format(new Date(order.created_at), "dd/MM/yyyy HH:mm", { locale: fr })}</p>
       <p>Statut: ${order.status === 'regle' ? 'REGLE' : 'NON REGLE'}</p>
@@ -278,9 +278,9 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-purple-300 flex items-center gap-2">
           <UserCircle className="w-6 h-6" />
-          Commandes Manager General
+          Commandes Mme la Directrice Générale
           <Badge className="bg-purple-500/30 text-purple-300 ml-2">
-            Promoteur
+            Direction
           </Badge>
         </h2>
         <Button 
@@ -441,7 +441,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-purple-400">
               <UtensilsCrossed className="w-5 h-5" />
-              {editingOrder ? "Modifier la commande" : "Nouvelle commande Manager General"}
+              {editingOrder ? "Modifier la commande" : "Nouvelle commande Mme la Directrice Générale"}
             </DialogTitle>
           </DialogHeader>
           
@@ -563,7 +563,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
             <div className="bg-slate-800/40 border border-slate-700 rounded p-3 space-y-1">
               <p className="text-slate-400 text-xs">Total à encaisser</p>
               <p className="text-white text-2xl font-bold">{formatPrice(pendingPayment?.total || 0)} F CFA</p>
-              <p className="text-slate-500 text-xs">Sera ajoutée aux Factures du jour avec le client « Manager General »</p>
+              <p className="text-slate-500 text-xs">Sera ajoutée aux Factures du jour avec le client « Mme la Directrice Générale »</p>
             </div>
             <div>
               <Label className="text-slate-300 text-sm mb-2 block">Mode de règlement</Label>

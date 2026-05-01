@@ -4928,7 +4928,7 @@ async def create_monsieur_order(
                     "unit": sp.get("unit", ""),
                     "unit_price": sp.get("purchase_price", 0),
                     "total_value": qty * sp.get("purchase_price", 0),
-                    "reason": f"Manager General - Commande #{order_id[:8]} (stock auto)",
+                    "reason": f"Mme la Directrice Générale - Commande #{order_id[:8]} (stock auto)",
                     "user_name": created_by,
                     "monsieur_order_id": order_id,
                     "created_at": now_iso,
@@ -4986,7 +4986,7 @@ async def update_monsieur_order(
                         "validation_status": "cancelled",
                         "status": "cancelled",
                         "cancelled_at": datetime.now(timezone.utc).isoformat(),
-                        "cancellation_reason": f"Annulation règlement Manager General #{order_id[:8]}",
+                        "cancellation_reason": f"Annulation règlement Mme la Directrice Générale #{order_id[:8]}",
                     }}
                 )
             update_data["status"] = "non_regle"
@@ -5016,8 +5016,8 @@ async def update_monsieur_order(
             invoice_doc = {
                 "id": inv_id,
                 "invoice_number": inv_number,
-                "customer_name": "Manager General",
-                "client_name": "Manager General",
+                "customer_name": "Mme la Directrice Générale",
+                "client_name": "Mme la Directrice Générale",
                 "items": inv_items,
                 "subtotal": order.get("total", 0),
                 "total": order.get("total", 0),

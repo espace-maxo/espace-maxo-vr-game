@@ -4,6 +4,35 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Billetage obligatoire + renommage Mme la Directrice Générale (DONE)
+
+**Demandes utilisateur** :
+1. « Lorsque la gérante finit son point, en cliquant sur OK, que l'application la renvoie nécessairement sur le billetage avant que le point ne se transmette à l'administrateur et que son point soit complet. »
+2. « Change le nom du Manager Général par Mme la Directrice Générale. »
+
+**1. Billetage obligatoire avant signature** (`/app/frontend/src/pages/caisse/components/PointFinancierTab.jsx`) :
+- Nouveau handler `handleSignClick()` intercepte le bouton "Signer (Gérante)".
+- Règle : si `cash_amount > 0` mais `billettageTotal === 0` → ouvre la section Billettage, scroll dessus, toast d'avertissement, **bloque la modale de signature**.
+- Si billetage saisi mais ≠ cash_amount (utilisateur a oublié "Appliquer aux Espèces") → idem avec scroll vers le bouton Appliquer.
+- Sinon → ouvre la modale de consentement comme avant.
+- **Bouton dynamique** : libellé "Compléter le billetage" (ambre) tant que billetage incomplet, puis "Signer (Gerante)" (vert) une fois cohérent. Logique basée sur `cashMatches = billettageTotal === cash_amount`.
+- Aucun changement backend (le payload `billettage` était déjà envoyé via `savePoint`).
+
+**2. Renommage Manager Général → Mme la Directrice Générale** (UI display only, schémas DB inchangés) :
+- Frontend :
+  - `BonsTab.jsx` : sous-onglet "MANAGER GENERAL" → "MME LA DIRECTRICE GÉNÉRALE".
+  - `MonsieurTab.jsx` : header "Commandes Manager General", titres modaux, toasts, badge "Promoteur" → "Direction", title PDF/print, libellé info.
+  - `HebdoReport.jsx` : carte résumé, colonne "Manager G." → "Mme la D.G.", section détail jour, titre "Situation Manager General".
+- Backend (`server.py`) : défauts pour les NOUVELLES factures Manager → "Mme la Directrice Générale" (`customer_name`, `client_name`, `reason` mouvement stock, `cancellation_reason`).
+- Les enregistrements historiques (anciennes factures avec `customer_name="Manager General"`) restent intacts en base.
+
+**Tests** :
+- Frontend Playwright 4/4 (renommage UI) : sous-onglet, colonne "Mme la D.G.", absence de l'ancien libellé "Manager G."
+- Frontend Playwright 7/7 (flux billetage) : sauvegarde sans billetage, bouton "Compléter le billetage" affiché, modale bloquée, section billetage auto-ouverte, billetage rempli + appliqué + sauvegardé, bouton repasse à "Signer (Gerante)", modale s'ouvre normalement.
+- Test point créé/supprimé proprement après tests.
+
+
+
 ## 01/05/2026 — Caisse : « Faire le point » (renommé Hebdo) avec plages de dates (DONE)
 
 **Demande utilisateur** : « dans le module caisse, renommer Hebdo par Faire le point. Dans ce menu, donne la possibilité de faire le point journalier, le point d'une période a choisir, ou hebdomadaire ».

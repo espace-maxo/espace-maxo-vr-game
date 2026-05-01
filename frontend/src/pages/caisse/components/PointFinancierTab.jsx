@@ -158,6 +158,41 @@ export default function PointFinancierTab({ currentUser }) {
     finally { setLoading(false); }
   };
 
+  // Avant la signature, on force la gerante a effectuer (et appliquer) le billetage des especes.
+  // Regle : si cash_amount > 0 (il y a des especes a verser), le billetage doit etre saisi
+  // ET coherent (billettageTotal === cash_amount, apres "Appliquer aux Especes").
+  const billettageRequired = parseFloat(form.cash_amount || 0) > 0;
+  const cashMatches = billettageRequired
+    ? (billettageTotal > 0 && billettageTotal === parseFloat(form.cash_amount || 0))
+    : true; // Pas d'especes -> billetage pas necessaire
+
+  const handleSignClick = () => {
+    // 1. Especes > 0 mais aucune saisie de billetage → on ouvre la section et on scrolle dessus.
+    if (billettageRequired && billettageTotal === 0) {
+      setShowBillettage(true);
+      toast.warning("Veuillez d'abord effectuer le billettage des especes avant de signer.");
+      setTimeout(() => {
+        const el = document.querySelector('[data-testid="fp-billettage-section"]');
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+      return;
+    }
+    // 2. Billetage saisi mais pas applique (ou modifie apres application) → demande de confirmation
+    if (billettageRequired && billettageTotal !== parseFloat(form.cash_amount || 0)) {
+      setShowBillettage(true);
+      toast.warning("Le billetage ne correspond pas au montant des especes — cliquez 'Appliquer aux Especes'.");
+      setTimeout(() => {
+        const el = document.querySelector('[data-testid="fp-apply-billettage"]');
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+      return;
+    }
+    // 3. Tout est bon → ouvrir la modale de signature
+    setConsentChecked(false);
+    setShowConsentModal(true);
+  };
+
+
   const adminValidate = async () => {
     if (!currentPoint || !isAdmin) return;
     setLoading(true);
@@ -473,7 +508,7 @@ export default function PointFinancierTab({ currentUser }) {
       <div className="flex flex-wrap gap-3 justify-end">
         {isAdmin && currentPoint && <Button data-testid="fp-delete-btn" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deletePoint} disabled={loading}><X className="w-4 h-4 mr-1" /> Supprimer</Button>}
         {canEdit && !isSigned && <Button data-testid="fp-save-btn" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={savePoint} disabled={loading}><Save className="w-4 h-4 mr-1" /> {currentPoint ? "Mettre a jour" : "Enregistrer"}</Button>}
-        {currentPoint && !isSigned && canEdit && <Button data-testid="fp-sign-btn" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setConsentChecked(false); setShowConsentModal(true); }} disabled={loading}><ShieldCheck className="w-4 h-4 mr-1" /> Signer (Gerante)</Button>}
+        {currentPoint && !isSigned && canEdit && <Button data-testid="fp-sign-btn" className={cashMatches ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"} onClick={handleSignClick} disabled={loading}><ShieldCheck className="w-4 h-4 mr-1" /> {cashMatches ? "Signer (Gerante)" : "Completer le billetage"}</Button>}
       </div>
 
       {!currentPoint && (<Card className="bg-slate-800/30 border-slate-700"><CardContent className="p-6 text-center"><AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" /><p className="text-slate-400">Aucun reversement pour cette periode.</p>{canEdit && <p className="text-slate-500 text-sm mt-1">Saisissez les montants et enregistrez.</p>}</CardContent></Card>)}
