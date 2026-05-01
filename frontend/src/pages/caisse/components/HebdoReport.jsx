@@ -18,6 +18,8 @@ const HebdoReport = ({
   weeklyReport, 
   weekStartDate, 
   setWeekStartDate, 
+  weekEndDate,
+  setWeekEndDate,
   generateWeeklyPDF, 
   sendWeeklyWhatsApp, 
   formatPrice,
@@ -39,6 +41,8 @@ const HebdoReport = ({
   const [transferType, setTransferType] = useState("sales");
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  // Preset actif : "today" | "week" | "month" | "custom"
+  const [periodPreset, setPeriodPreset] = useState("week");
 
   const searchUnlinked = async () => {
     if (!attachDateFrom) { toast.error("Selectionnez une date de debut"); return; }
@@ -180,119 +184,75 @@ const HebdoReport = ({
     return weeks;
   }, []);
 
-  // Ensure weekStartDate is always a Monday
-  const handleWeekChange = (newDate) => {
-    const date = new Date(newDate);
-    const monday = startOfWeek(date, { weekStartsOn: 1 });
-    setWeekStartDate(format(monday, "yyyy-MM-dd"));
+  // Applique un preset de periode (Aujourd'hui / Semaine / Mois / Personnalise)
+  const applyPreset = (preset) => {
+    setPeriodPreset(preset);
+    const now = new Date();
+    if (preset === "today") {
+      const d = format(now, "yyyy-MM-dd");
+      setWeekStartDate(d);
+      setWeekEndDate(d);
+    } else if (preset === "week") {
+      const monday = startOfWeek(now, { weekStartsOn: 1 });
+      const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+      setWeekStartDate(format(monday, "yyyy-MM-dd"));
+      setWeekEndDate(format(sunday, "yyyy-MM-dd"));
+    } else if (preset === "month") {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      setWeekStartDate(format(first, "yyyy-MM-dd"));
+      setWeekEndDate(format(last, "yyyy-MM-dd"));
+    }
+    // "custom" : on laisse les dates actuelles, l'utilisateur pilote les inputs
   };
 
-  // Navigate to previous/next week
-  const navigateWeek = (direction) => {
-    const currentDate = new Date(weekStartDate);
-    const newDate = direction === 'prev' 
-      ? subWeeks(currentDate, 1) 
-      : addWeeks(currentDate, 1);
-    setWeekStartDate(format(newDate, "yyyy-MM-dd"));
+  // Navigate to previous/next period (shift by same delta as current range)
+  const navigatePeriod = (direction) => {
+    const start = new Date(weekStartDate);
+    const end = weekEndDate ? new Date(weekEndDate) : new Date(new Date(weekStartDate).setDate(start.getDate() + 6));
+    const delta = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1; // inclusive
+    const shift = direction === 'prev' ? -delta : delta;
+    const newStart = new Date(start); newStart.setDate(start.getDate() + shift);
+    const newEnd = new Date(end); newEnd.setDate(end.getDate() + shift);
+    setWeekStartDate(format(newStart, "yyyy-MM-dd"));
+    setWeekEndDate(format(newEnd, "yyyy-MM-dd"));
+    setPeriodPreset("custom");
   };
 
-  // Get current week label for display
-  const getCurrentWeekLabel = () => {
-    const weekStart = new Date(weekStartDate);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    return `Lun ${format(weekStart, "dd/MM")} → Dim ${format(weekEnd, "dd/MM/yyyy")}`;
+  // Libelle lisible de la periode courante
+  const getCurrentPeriodLabel = () => {
+    const s = new Date(weekStartDate);
+    const e = weekEndDate ? new Date(weekEndDate) : new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6);
+    if (format(s, "yyyy-MM-dd") === format(e, "yyyy-MM-dd")) {
+      return format(s, "EEEE dd MMM yyyy", { locale: fr });
+    }
+    return `${format(s, "dd MMM", { locale: fr })} → ${format(e, "dd MMM yyyy", { locale: fr })}`;
   };
 
   return (
     <div className="space-y-4">
-      {/* Header avec boutons d'action */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Header avec titre et boutons d'action */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-cyan-300 flex items-center gap-2">
           <BarChart3 className="w-6 h-6" />
-          Point Hebdomadaire
+          Faire le point
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => navigateWeek('prev')}
-            className="border-slate-600 text-slate-300"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          
-          {/* Week Selector Dropdown */}
-          <Select value={weekStartDate} onValueChange={handleWeekChange}>
-            <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-[220px]">
-              <Calendar className="w-4 h-4 mr-2 text-cyan-400" />
-              <SelectValue placeholder="Sélectionner une semaine">
-                {getCurrentWeekLabel()}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
-              {weekOptions.map((week) => (
-                <SelectItem 
-                  key={week.value} 
-                  value={week.value}
-                  className="text-white hover:bg-slate-700 focus:bg-slate-700"
-                >
-                  <div className="flex items-center gap-2">
-                    {week.isCurrentWeek && (
-                      <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">Cette semaine</Badge>
-                    )}
-                    <span>{week.label}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => navigateWeek('next')}
-            className="border-slate-600 text-slate-300"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
           {weeklyReport && (
             <>
-              <Button 
-                size="sm"
-                onClick={() => generateWeeklyPDF()}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Download className="w-4 h-4 mr-1" />
-                PDF
+              <Button size="sm" onClick={() => generateWeeklyPDF()} className="bg-red-600 hover:bg-red-700" data-testid="fairepoint-pdf-btn">
+                <Download className="w-4 h-4 mr-1" /> PDF
               </Button>
-              <Button 
-                size="sm"
-                onClick={() => sendWeeklyWhatsApp()}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <MessageCircle className="w-4 h-4 mr-1" />
-                WhatsApp
+              <Button size="sm" onClick={() => sendWeeklyWhatsApp()} className="bg-green-600 hover:bg-green-700" data-testid="fairepoint-whatsapp-btn">
+                <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
               </Button>
               {isAdmin && (
               <>
-              <Button 
-                size="sm"
-                onClick={() => setShowAttach(!showAttach)}
-                className={showAttach ? "bg-cyan-700 hover:bg-cyan-800" : "bg-cyan-600 hover:bg-cyan-700"}
-                data-testid="attach-btn"
-              >
-                <Link className="w-4 h-4 mr-1" />
-                Rattacher
+              <Button size="sm" onClick={() => setShowAttach(!showAttach)} className={showAttach ? "bg-cyan-700 hover:bg-cyan-800" : "bg-cyan-600 hover:bg-cyan-700"} data-testid="attach-btn">
+                <Link className="w-4 h-4 mr-1" /> Rattacher
               </Button>
-              <Button 
-                size="sm"
-                onClick={detectDuplicates}
-                className="bg-amber-600 hover:bg-amber-700"
-                data-testid="duplicates-btn"
-              >
-                <AlertCircle className="w-4 h-4 mr-1" />
-                Doublons
+              <Button size="sm" onClick={detectDuplicates} className="bg-amber-600 hover:bg-amber-700" data-testid="duplicates-btn">
+                <AlertCircle className="w-4 h-4 mr-1" /> Doublons
               </Button>
               </>
               )}
@@ -300,6 +260,65 @@ const HebdoReport = ({
           )}
         </div>
       </div>
+
+      {/* Selecteur de periode : presets + plage personnalisee */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            {/* Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap" data-testid="period-presets">
+              <Button size="sm" variant={periodPreset === "today" ? "default" : "outline"} onClick={() => applyPreset("today")} className={periodPreset === "today" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-today">
+                Aujourd'hui
+              </Button>
+              <Button size="sm" variant={periodPreset === "week" ? "default" : "outline"} onClick={() => applyPreset("week")} className={periodPreset === "week" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-week">
+                Cette semaine
+              </Button>
+              <Button size="sm" variant={periodPreset === "month" ? "default" : "outline"} onClick={() => applyPreset("month")} className={periodPreset === "month" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-month">
+                Mois en cours
+              </Button>
+              <Button size="sm" variant={periodPreset === "custom" ? "default" : "outline"} onClick={() => setPeriodPreset("custom")} className={periodPreset === "custom" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-custom">
+                Personnalisée
+              </Button>
+            </div>
+
+            {/* Plage de dates */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <label className="text-slate-400 text-xs">Du</label>
+                <Input
+                  type="date"
+                  value={weekStartDate}
+                  onChange={(e) => { setWeekStartDate(e.target.value); setPeriodPreset("custom"); }}
+                  className="bg-slate-800 border-slate-700 text-white h-8 w-[150px]"
+                  data-testid="period-start-date"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-slate-400 text-xs">Au</label>
+                <Input
+                  type="date"
+                  value={weekEndDate || ""}
+                  min={weekStartDate}
+                  onChange={(e) => { setWeekEndDate(e.target.value); setPeriodPreset("custom"); }}
+                  className="bg-slate-800 border-slate-700 text-white h-8 w-[150px]"
+                  data-testid="period-end-date"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigatePeriod('prev')} className="border-slate-600 text-slate-300 h-8" data-testid="period-prev-btn">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigatePeriod('next')} className="border-slate-600 text-slate-300 h-8" data-testid="period-next-btn">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="text-xs text-slate-400 lg:ml-auto flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-cyan-300" data-testid="period-current-label">{getCurrentPeriodLabel()}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Attach panel */}
       {showAttach && (

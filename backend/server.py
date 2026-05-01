@@ -5568,7 +5568,7 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         return {
             "week_start": start_str,
             "week_end": end_str[:10],
-            "week_label": f"Semaine du {start_date.strftime('%d/%m')} au {end_date.strftime('%d/%m/%Y')}",
+            "week_label": f"Période du {start_date.strftime('%d/%m')} au {end_date_computed.strftime('%d/%m/%Y')}",
             "sales": {
                 "total": total_sales,
                 "count": len(invoices),
@@ -5603,6 +5603,8 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             "result": result,
             "is_profitable": result >= 0
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error generating weekly report: {e}")
         raise HTTPException(status_code=500, detail=str(e))

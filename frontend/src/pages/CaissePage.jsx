@@ -395,9 +395,15 @@ const CaissePage = () => {
   const [showWeekAssignModal, setShowWeekAssignModal] = useState(false);
   const [expenseToAssign, setExpenseToAssign] = useState(null);
 
-  // ============== WEEKLY REPORT (Point Hebdomadaire) ==============
+  // ============== FAIRE LE POINT (Rapport période : jour / semaine / personnalisé) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  // End date (inclusive). Par défaut = dimanche de la semaine courante (preset "Cette semaine").
+  const [weekEndDate, setWeekEndDate] = useState(() => {
+    const d = startOfWeek(new Date(), { weekStartsOn: 1 });
+    d.setDate(d.getDate() + 6);
+    return format(d, "yyyy-MM-dd");
+  });
   const [expenseRatioAlert, setExpenseRatioAlert] = useState(null);
 
   // ============== TABLE STATUS (Suivi Tables) ==============
@@ -2848,7 +2854,9 @@ const CaissePage = () => {
   
   const fetchWeeklyReport = async () => {
     try {
-      const res = await axios.get(`${API}/reports/weekly`, { params: { week_start: weekStartDate } });
+      const params = { week_start: weekStartDate };
+      if (weekEndDate) params.end_date = weekEndDate;
+      const res = await axios.get(`${API}/reports/weekly`, { params });
       setWeeklyReport(res.data);
       
       // Check expense ratio for admin alert (> 40%)
@@ -2907,7 +2915,7 @@ const CaissePage = () => {
     
     const html = `<!DOCTYPE html>
     <html><head>
-      <title>Point Hebdomadaire - ${weeklyReport.week_label}</title>
+      <title>Faire le point - ${weeklyReport.week_label}</title>
       <meta charset="UTF-8">
       <style>
         @page { size: A4; margin: 15mm; }
@@ -2944,7 +2952,7 @@ const CaissePage = () => {
       <div class="header">
         <div class="logo"><img src="${LOGO_BASE64}" alt="Logo" /></div>
         <div class="header-center">
-          <div class="header-title">Point Hebdomadaire</div>
+          <div class="header-title">Faire le point</div>
           <div class="header-period">${weeklyReport.week_label}</div>
         </div>
         <div class="header-right">
@@ -3068,7 +3076,7 @@ const CaissePage = () => {
     if (isAuthenticated && activeTab === "hebdo") {
       fetchWeeklyReport();
     }
-  }, [weekStartDate, activeTab, isAuthenticated]);
+  }, [weekStartDate, weekEndDate, activeTab, isAuthenticated]);
 
   // Check expense ratio when on Achats tab (admin only)
   useEffect(() => {
@@ -4982,7 +4990,7 @@ _Gérante - Espace Maxo_
             {/* 9. HEBDO */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
-                <BarChart3 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Hebdo</span>
+                <BarChart3 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Faire le point</span>
               </TabsTrigger>
             )}
             {/* 10. PRODUITS */}
@@ -5806,7 +5814,7 @@ _Gérante - Espace Maxo_
               <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
                 <TabsTrigger value="point-hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
                   <BarChart3 className="w-4 h-4 mr-2" />
-                  Point Hebdomadaire
+                  Faire le point
                 </TabsTrigger>
                 <TabsTrigger value="point-financier" className="data-[state=active]:bg-green-600 data-[state=active]:text-white px-2 sm:px-3">
                   <Banknote className="w-4 h-4 mr-2" />
@@ -5819,6 +5827,8 @@ _Gérante - Espace Maxo_
                   weeklyReport={weeklyReport}
                   weekStartDate={weekStartDate}
                   setWeekStartDate={setWeekStartDate}
+                  weekEndDate={weekEndDate}
+                  setWeekEndDate={setWeekEndDate}
                   generateWeeklyPDF={generateWeeklyPDF}
                   sendWeeklyWhatsApp={sendWeeklyWhatsApp}
                   formatPrice={formatPrice}

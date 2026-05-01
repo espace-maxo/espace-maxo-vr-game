@@ -4,6 +4,38 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : « Faire le point » (renommé Hebdo) avec plages de dates (DONE)
+
+**Demande utilisateur** : « dans le module caisse, renommer Hebdo par Faire le point. Dans ce menu, donne la possibilité de faire le point journalier, le point d'une période a choisir, ou hebdomadaire ».
+
+**Backend** (`/app/backend/server.py`) :
+- `GET /api/reports/weekly` accepte un nouveau paramètre optionnel `end_date` (YYYY-MM-DD, inclusif). Sans `end_date`, le comportement reste 7 jours (Lundi → Dimanche). Avec `end_date`, la plage est de 1 à 31 jours.
+- Refactor `nb_days = (end_date - start_date).days + 1` pour que toutes les boucles (`daily_data`, agrégation jours) supportent dynamiquement la plage.
+- **Bugfix critique** (L5571) : `end_date.strftime` (paramètre str/None) → `end_date_computed.strftime` (datetime calculé). L'endpoint était cassé en HTTP 500 « 'NoneType'/'str' object has no attribute strftime ».
+- `week_label` mis à jour : « Période du 27/04 au 03/05/2026 » (au lieu de « Semaine du… »).
+- Ajout `except HTTPException: raise` pour préserver les `400` (validation `end_date` invalide).
+
+**Frontend** :
+- `CaissePage.jsx` :
+  - Nouvel état `weekEndDate` (par défaut = dimanche de la semaine courante).
+  - `fetchWeeklyReport()` envoie `end_date` quand renseigné.
+  - `useEffect` re-fetch sur changement de `weekStartDate || weekEndDate`.
+  - Tab trigger renommé « Hebdo » → « **Faire le point** » (label uniquement, value `hebdo` conservée pour compat).
+  - Sous-onglet renommé « Point Hebdomadaire » → « **Faire le point** ».
+  - Titre PDF mis à jour idem.
+- `caisse/components/HebdoReport.jsx` :
+  - Nouvelle UI **Card de période** : 4 boutons presets (Aujourd'hui / Cette semaine / Mois en cours / Personnalisée) + 2 inputs de date (Du / Au) + flèches navigation prev/next + libellé courant lisible.
+  - `applyPreset(preset)` : règle weekStart/weekEnd selon le preset.
+  - `navigatePeriod(direction)` : décale la plage de N jours = taille de la plage actuelle (cohérent pour journalier, hebdo et custom).
+  - Title H2 « Point Hebdomadaire » → « Faire le point ».
+  - Tous les éléments ont `data-testid` (preset-today/week/month/custom, period-start-date, period-end-date, period-prev-btn, period-next-btn, period-current-label).
+
+**Tests** :
+- Backend curl 7/7 : default (7j), week_start only (7j), single day (1j), 15 jours, 31 jours, end_date invalide (HTTP 400 propre), régression ISO format.
+- Frontend Playwright 17/17 : login admin, libellé « Faire le point » présent, 4 presets + inputs présents, click Aujourd'hui = 1 jour, Cette semaine = 7j, Mois en cours = 1er→fin de mois, plage custom rendue correctement, navigation prev décale bien la plage entière.
+
+
+
 ## 29/04/2026 — Manager Général : masquer les commandes réglées (DONE)
 
 **Demande utilisateur** : « les factures reglees doivent disparaître seules les non reglees restent ».
