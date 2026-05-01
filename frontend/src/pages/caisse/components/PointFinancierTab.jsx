@@ -528,6 +528,40 @@ export default function PointFinancierTab({ currentUser }) {
               <p className="text-slate-400">Destination : <span className="text-white">{destLabel(form.destination)}</span></p>
               {form.momo_number && <p className="text-slate-400">Momo : <span className="text-orange-400">{form.momo_number}</span></p>}
             </div>
+
+            {/* Recap detaille du billetage des especes (si applicable) */}
+            {billettageRequired && billettageTotal > 0 && (
+              <div className="bg-emerald-900/15 border border-emerald-500/30 rounded-lg p-3 text-xs" data-testid="fp-billettage-recap">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-emerald-400 font-bold uppercase tracking-wider text-[11px]">Récap. billetage des espèces</p>
+                  <Badge className={`${billettageTotal === parseFloat(form.cash_amount || 0) ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'} text-[10px]`}>
+                    {billettageTotal === parseFloat(form.cash_amount || 0) ? 'Cohérent' : 'Écart'}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  {ALL_DENOMS.filter(d => parseInt(billettage[d.value] || 0) > 0).map(d => {
+                    const qty = parseInt(billettage[d.value] || 0);
+                    const sub = qty * d.value;
+                    const isBill = d.type === 'billet';
+                    return (
+                      <div key={d.value} className="flex items-center justify-between py-0.5">
+                        <span className="text-slate-300">
+                          <span className={isBill ? 'text-green-400' : 'text-amber-400'}>{qty}</span>
+                          {' '}{isBill ? (qty > 1 ? 'billets' : 'billet') : (qty > 1 ? 'pièces' : 'pièce')} de{' '}
+                          <span className="text-white font-medium">{d.label} F</span>
+                        </span>
+                        <span className={`font-medium ${isBill ? 'text-green-400' : 'text-amber-400'}`}>{formatPrice(sub)} F</span>
+                      </div>
+                    );
+                  })}
+                  <div className="border-t border-emerald-500/20 pt-1.5 mt-1.5 flex items-center justify-between">
+                    <span className="text-emerald-300 font-bold">Total billetage</span>
+                    <span className="text-emerald-300 font-bold text-sm">{formatPrice(billettageTotal)} F</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-slate-700 hover:border-emerald-500/40 transition-colors" data-testid="fp-consent-label">
               <input type="checkbox" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)}
                 className="mt-1 w-5 h-5 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500" data-testid="fp-consent-checkbox" />

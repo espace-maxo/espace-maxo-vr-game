@@ -4,6 +4,30 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Récap. billetage détaillé sur la modale de signature (DONE)
+
+**Demande utilisateur** : OK pour l'amélioration suggérée — afficher un mini-récap visuel du billetage (denominations + total) avant que la gérante coche « Je certifie l'exactitude ».
+
+**Modifications** (`/app/frontend/src/pages/caisse/components/PointFinancierTab.jsx`) :
+- Nouvelle section `[data-testid="fp-billettage-recap"]` ajoutée dans la modale de signature.
+- Visible uniquement si `billettageRequired && billettageTotal > 0` (espèces > 0 ET billetage saisi).
+- Liste ligne par ligne chaque dénomination utilisée avec :
+  - Quantité + label "billet"/"pièce" (singulier/pluriel auto) + valeur faciale + sous-total.
+  - Couleur verte pour billets (10000/5000/2000/1000/500), ambre pour pièces (200/100/50/25/10/5).
+- Badge dynamique « Cohérent » (vert) ou « Écart » (ambre) selon `billettageTotal === cash_amount`.
+- Total billetage affiché en gras avec séparateur visuel.
+
+**Test** Playwright 6/7 passés (1 faux négatif sur recherche "6500" vs "6 500" avec espace insécable français — le rendu est correct). Vérifié visuellement via `inner_text()` :
+```
+RÉCAP. BILLETAGE DES ESPÈCES                  [Cohérent]
+1 billet de 5 000 F                            5 000 F
+1 billet de 1 000 F                            1 000 F
+1 pièce de 500 F                                 500 F
+Total billetage                                6 500 F
+```
+
+
+
 ## 01/05/2026 — Caisse : Billetage obligatoire + renommage Mme la Directrice Générale (DONE)
 
 **Demandes utilisateur** :
