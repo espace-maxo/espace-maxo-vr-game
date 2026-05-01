@@ -11,10 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Printer, UserCircle, AlertTriangle, Edit2, CheckCircle, Eye,
-  Trash2, Wine, Gamepad2, FileText, Users
+  Trash2, Wine, Gamepad2, FileText, Users, UserCog
 } from 'lucide-react';
 import MonsieurTab from './MonsieurTab';
 import EmployeeOrdersTab from './EmployeeOrdersTab';
+import ManagerOrdersTab from './ManagerOrdersTab';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -73,6 +74,12 @@ const BonsTab = ({
           <TabsTrigger value="bons-employes" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white" data-testid="tab-bons-employes">
             <Users className="w-4 h-4 mr-2" />
             EMPLOYÉS
+          </TabsTrigger>
+        )}
+        {canManage && (
+          <TabsTrigger value="bons-gerante" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white" data-testid="tab-bons-gerante">
+            <UserCog className="w-4 h-4 mr-2" />
+            GÉRANTE
           </TabsTrigger>
         )}
       </TabsList>
@@ -289,6 +296,17 @@ const BonsTab = ({
       {canManage && (
         <TabsContent value="bons-employes">
           <EmployeeOrdersTab
+            currentUser={currentUser}
+            formatPrice={formatPrice}
+            products={products}
+          />
+        </TabsContent>
+      )}
+
+      {/* Gérante sub-tab */}
+      {canManage && (
+        <TabsContent value="bons-gerante">
+          <ManagerOrdersTab
             currentUser={currentUser}
             formatPrice={formatPrice}
             products={products}

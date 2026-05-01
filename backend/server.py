@@ -5689,6 +5689,391 @@ async def get_employee_closure_pdf(month: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# MANAGER ORDERS (Bons GÉRANTE — repas gérante à crédit sur salaire)
+# ============================================================================
+# Même workflow que les bons EMPLOYÉS, plafond mensuel = 25 000 F (après remise 50%).
+# Collection MongoDB : `manager_orders`. Endpoints sous /api/manager-orders.
+
+MANAGER_MONTHLY_CAP = 25000.0
+MANAGER_DISCOUNT_RATE = 0.50
+
+async def _manager_month_used(employee_name: str, month_key: str, exclude_id: Optional[str] = None) -> float:
+    q = {"employee_name": employee_name, "month_period": month_key, "status": {"$ne": "cancelled"}}
+    if exclude_id:
+        q["id"] = {"$ne": exclude_id}
+    used = 0.0
+    async for o in db.manager_orders.find(q, {"_id": 0, "total": 1}):
+        used += float(o.get("total", 0) or 0)
+    return used
+
+
+@api_router.get("/manager-orders")
+async def get_manager_orders(month: Optional[str] = None, employee_name: Optional[str] = None, status: Optional[str] = None):
+    try:
+        q = {}
+        if month: q["month_period"] = month
+        if employee_name: q["employee_name"] = employee_name
+        if status: q["status"] = status
+        orders = await db.manager_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        stats = {
+            "count_pending_manager": sum(1 for o in orders if o.get("status") == "pending_manager"),
+            "count_pending_director": sum(1 for o in orders if o.get("status") == "pending_director"),
+            "count_authorized": sum(1 for o in orders if o.get("status") == "authorized"),
+            "count_settled": sum(1 for o in orders if o.get("status") == "settled"),
+            "total_pending": sum(o.get("total", 0) for o in orders if o.get("status") in ("pending_manager", "pending_director")),
+            "total_authorized": sum(o.get("total", 0) for o in orders if o.get("status") == "authorized"),
+            "total_settled": sum(o.get("total", 0) for o in orders if o.get("status") == "settled"),
+        }
+        return {"orders": orders, "stats": stats}
+    except Exception as e:
+        logger.error(f"Error fetching manager orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/manager-orders/cap-status")
+async def get_manager_cap_status(employee_name: str, month: Optional[str] = None):
+    try:
+        if not employee_name or not employee_name.strip():
+            raise HTTPException(status_code=400, detail="employee_name requis")
+        month_key = month or _employee_month_key()
+        used = await _manager_month_used(employee_name.strip(), month_key)
+        return {
+            "employee_name": employee_name.strip(),
+            "month": month_key,
+            "max": MANAGER_MONTHLY_CAP,
+            "used": round(used, 2),
+            "remaining": round(MANAGER_MONTHLY_CAP - used, 2),
+            "is_capped": used >= MANAGER_MONTHLY_CAP,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching manager cap status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/manager-orders")
+async def create_manager_order(
+    employee_name: str = Body(...),
+    employee_position: str = Body("Gérante"),
+    items: list = Body(...),
+    notes: str = Body(""),
+    created_by: str = Body(...),
+):
+    try:
+        if not employee_name or not employee_name.strip():
+            raise HTTPException(status_code=400, detail="Le nom de la gérante est obligatoire")
+        if not items or len(items) == 0:
+            raise HTTPException(status_code=400, detail="Au moins un article est requis")
+
+        subtotal = 0.0
+        for it in items:
+            qty = float(it.get("quantity", 0) or 0)
+            price = float(it.get("price", 0) or 0)
+            subtotal += qty * price
+        if subtotal <= 0:
+            raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
+        discount_amount = round(subtotal * MANAGER_DISCOUNT_RATE, 2)
+        total_after_discount = round(subtotal - discount_amount, 2)
+
+        month_key = _employee_month_key()
+        used = await _manager_month_used(employee_name.strip(), month_key)
+        if used + total_after_discount > MANAGER_MONTHLY_CAP + 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Plafond mensuel dépassé. Déjà utilisé : {used:.0f} F. "
+                        f"Cette commande : {total_after_discount:.0f} F. "
+                        f"Maximum : {int(MANAGER_MONTHLY_CAP)} F après remise."),
+            )
+
+        order_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        order = {
+            "id": order_id,
+            "employee_name": employee_name.strip(),
+            "employee_position": (employee_position or "Gérante").strip(),
+            "items": items,
+            "subtotal": round(subtotal, 2),
+            "discount_rate": int(MANAGER_DISCOUNT_RATE * 100),
+            "discount_amount": discount_amount,
+            "total": total_after_discount,
+            "month_period": month_key,
+            "status": "pending_manager",
+            "authorizations": {"manager": None, "director": None},
+            "stock_deducted": False,
+            "notes": notes or "",
+            "created_by": created_by,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "settled_at": None,
+            "settlement_batch_id": None,
+        }
+        await db.manager_orders.insert_one(order)
+        if "_id" in order:
+            del order["_id"]
+        return {"success": True, "order": order}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating manager order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/manager-orders/{order_id}")
+async def update_manager_order(
+    order_id: str,
+    employee_name: Optional[str] = Body(None),
+    employee_position: Optional[str] = Body(None),
+    items: Optional[list] = Body(None),
+    notes: Optional[str] = Body(None),
+):
+    try:
+        order = await db.manager_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        if order.get("status") != "pending_manager":
+            raise HTTPException(status_code=423, detail="Cette commande ne peut plus être modifiée")
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if employee_name is not None:
+            if not employee_name.strip():
+                raise HTTPException(status_code=400, detail="Le nom est obligatoire")
+            update_data["employee_name"] = employee_name.strip()
+        if employee_position is not None and employee_position.strip():
+            update_data["employee_position"] = employee_position.strip()
+        if notes is not None:
+            update_data["notes"] = notes
+        if items is not None:
+            if not items or len(items) == 0:
+                raise HTTPException(status_code=400, detail="Au moins un article est requis")
+            subtotal = sum(float(it.get("quantity", 0) or 0) * float(it.get("price", 0) or 0) for it in items)
+            if subtotal <= 0:
+                raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
+            discount_amount = round(subtotal * MANAGER_DISCOUNT_RATE, 2)
+            total_after_discount = round(subtotal - discount_amount, 2)
+            target = update_data.get("employee_name") or order.get("employee_name")
+            month_key = order.get("month_period") or _employee_month_key()
+            used_excl = await _manager_month_used(target, month_key, exclude_id=order_id)
+            if used_excl + total_after_discount > MANAGER_MONTHLY_CAP + 0.01:
+                raise HTTPException(status_code=400, detail=(f"Plafond mensuel dépassé. Déjà utilisé (hors cette commande) : {used_excl:.0f} F. Modification : {total_after_discount:.0f} F. Maximum : {int(MANAGER_MONTHLY_CAP)} F."))
+            update_data["items"] = items
+            update_data["subtotal"] = round(subtotal, 2)
+            update_data["discount_amount"] = discount_amount
+            update_data["total"] = total_after_discount
+        await db.manager_orders.update_one({"id": order_id}, {"$set": update_data})
+        updated = await db.manager_orders.find_one({"id": order_id}, {"_id": 0})
+        return {"success": True, "order": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating manager order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/manager-orders/{order_id}/authorize")
+async def authorize_manager_order(
+    order_id: str,
+    by_role: str = Body(...),
+    signer_name: str = Body(...),
+):
+    """Sequential authorization. Manager (Gérante self-confirms) FIRST, then Director.
+    Stock is deducted only when the second authorization (director) is given."""
+    try:
+        order = await db.manager_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        role = (by_role or "").strip().lower()
+        if role not in ("manager", "director"):
+            raise HTTPException(status_code=400, detail="by_role doit être 'manager' ou 'director'")
+        if not signer_name or not signer_name.strip():
+            raise HTTPException(status_code=400, detail="signer_name requis")
+        current_status = order.get("status")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        auths = order.get("authorizations") or {"manager": None, "director": None}
+        if role == "manager":
+            if current_status != "pending_manager":
+                raise HTTPException(status_code=409, detail="Auto-confirmation Gérante déjà donnée ou commande à un autre stade")
+            auths["manager"] = {"name": signer_name.strip(), "at": now_iso}
+            new_status = "pending_director"
+        else:
+            if current_status != "pending_director":
+                raise HTTPException(status_code=409, detail="La Gérante doit confirmer AVANT la Directrice Générale")
+            auths["director"] = {"name": signer_name.strip(), "at": now_iso}
+            new_status = "authorized"
+        update = {"authorizations": auths, "status": new_status, "updated_at": now_iso}
+        if new_status == "authorized" and not order.get("stock_deducted"):
+            for it in order.get("items", []) or []:
+                cp_id = it.get("product_id") or it.get("id")
+                qty = float(it.get("quantity", 1) or 1)
+                cp = None
+                if cp_id:
+                    cp = await db.caisse_products.find_one({"id": cp_id})
+                if not cp and it.get("name"):
+                    cp = await db.caisse_products.find_one({"name": {"$regex": f"^{re.escape(it['name'])}$", "$options": "i"}})
+                if not cp or cp.get("no_stock_tracking"):
+                    continue
+                link_ids = cp.get("stock_links") or []
+                if not link_ids and cp.get("stock_product_id"):
+                    link_ids = [cp["stock_product_id"]]
+                if not link_ids:
+                    continue
+                async for sp in db.stock_products.find({"id": {"$in": link_ids}, "is_active": True}, {"_id": 0}):
+                    old_qty = sp.get("quantity", 0)
+                    new_qty = max(0, old_qty - qty)
+                    smin = sp.get("stock_min", 5)
+                    new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+                    new_valeur = new_qty * sp.get("purchase_price", 0)
+                    await db.stock_movements.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "product_id": sp["id"], "product_name": sp["name"], "product_code": sp.get("code", ""),
+                        "movement_type": "sortie", "quantity": qty,
+                        "previous_quantity": old_qty, "new_quantity": new_qty,
+                        "unit": sp.get("unit", ""), "unit_price": sp.get("purchase_price", 0),
+                        "total_value": qty * sp.get("purchase_price", 0),
+                        "reason": f"Bon GÉRANTE {order.get('employee_name')} - #{order_id[:8]} (autorisé)",
+                        "user_name": signer_name.strip(),
+                        "manager_order_id": order_id,
+                        "created_at": now_iso,
+                    })
+                    await db.stock_products.update_one(
+                        {"id": sp["id"]},
+                        {"$set": {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": now_iso}},
+                    )
+            update["stock_deducted"] = True
+        await db.manager_orders.update_one({"id": order_id}, {"$set": update})
+        updated = await db.manager_orders.find_one({"id": order_id}, {"_id": 0})
+        return {"success": True, "order": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error authorizing manager order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/manager-orders/{order_id}")
+async def delete_manager_order(order_id: str, by_role: str = "admin"):
+    try:
+        order = await db.manager_orders.find_one({"id": order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande introuvable")
+        if order.get("status") == "settled":
+            raise HTTPException(status_code=423, detail="Commande déjà clôturée")
+        if order.get("stock_deducted"):
+            await db.manager_orders.update_one(
+                {"id": order_id},
+                {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        else:
+            await db.manager_orders.delete_one({"id": order_id})
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting manager order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/manager-orders/close-month")
+async def close_manager_month(month: str = Body(...), closed_by: str = Body(...)):
+    try:
+        if not month or len(month) != 7:
+            raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM")
+        batch_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        affected = []
+        async for o in db.manager_orders.find({"month_period": month, "status": "authorized"}, {"_id": 0}):
+            affected.append(o)
+        if not affected:
+            return {"success": True, "settled_count": 0, "by_employee": [], "batch_id": None, "message": "Aucune commande autorisée à clôturer"}
+        await db.manager_orders.update_many(
+            {"month_period": month, "status": "authorized"},
+            {"$set": {"status": "settled", "settled_at": now_iso, "settlement_batch_id": batch_id}},
+        )
+        by_emp = {}
+        for o in affected:
+            key = o.get("employee_name", "?")
+            if key not in by_emp:
+                by_emp[key] = {"employee_name": key, "employee_position": o.get("employee_position", ""), "count": 0, "total_subtotal": 0, "total_after_discount": 0}
+            by_emp[key]["count"] += 1
+            by_emp[key]["total_subtotal"] += float(o.get("subtotal", 0) or 0)
+            by_emp[key]["total_after_discount"] += float(o.get("total", 0) or 0)
+        by_employee = sorted(by_emp.values(), key=lambda x: x["employee_name"])
+        await db.manager_settlements.insert_one({
+            "id": batch_id, "month": month, "closed_at": now_iso, "closed_by": closed_by,
+            "settled_count": len(affected),
+            "total_amount": round(sum(o.get("total", 0) for o in affected), 2),
+            "by_employee": by_employee,
+        })
+        return {
+            "success": True, "settled_count": len(affected),
+            "total_amount": round(sum(o.get("total", 0) for o in affected), 2),
+            "by_employee": by_employee, "batch_id": batch_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error closing manager month: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/manager-orders/closure-pdf")
+async def get_manager_closure_pdf(month: str):
+    try:
+        from fastapi.responses import HTMLResponse
+        if not month or len(month) != 7:
+            raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM")
+        orders = await db.manager_orders.find({"month_period": month, "status": "settled"}, {"_id": 0}).sort("employee_name", 1).to_list(2000)
+        by_emp = {}
+        for o in orders:
+            key = o.get("employee_name", "?")
+            if key not in by_emp:
+                by_emp[key] = {"position": o.get("employee_position", ""), "orders": []}
+            by_emp[key]["orders"].append(o)
+        rows_html = ""
+        grand_total = 0.0
+        for emp_name in sorted(by_emp.keys()):
+            data = by_emp[emp_name]
+            emp_total = sum(float(o.get("total", 0)) for o in data["orders"])
+            grand_total += emp_total
+            rows_html += f"""<tr class="emp-header"><td colspan="4"><strong>{emp_name}</strong> — <em>{data['position']}</em></td></tr>"""
+            for o in data["orders"]:
+                items_str = ", ".join(f"{it.get('quantity', 1)}× {it.get('name', '')}" for it in (o.get("items") or []))
+                rows_html += f"""<tr><td>{o.get('created_at', '')[:10]}</td><td>{items_str}</td><td class="num">{o.get('subtotal', 0):,.0f} F</td><td class="num">{o.get('total', 0):,.0f} F</td></tr>"""
+            rows_html += f"""<tr class="emp-total"><td colspan="3"><strong>Total {emp_name}</strong></td><td class="num"><strong>{emp_total:,.0f} F</strong></td></tr>"""
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Clôture GÉRANTE - {month}</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; padding: 30px; color: #222; }}
+            h1 {{ color: #7c3aed; border-bottom: 2px solid #7c3aed; padding-bottom: 8px; }}
+            .meta {{ color: #555; font-size: 14px; margin-bottom: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th {{ background: #f3e8ff; color: #7c3aed; padding: 8px; text-align: left; border-bottom: 2px solid #7c3aed; }}
+            td {{ padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }}
+            .num {{ text-align: right; }}
+            .emp-header td {{ background: #ede9fe; }}
+            .emp-total td {{ background: #f5f3ff; font-weight: bold; }}
+            .grand {{ margin-top: 20px; padding: 12px; background: #7c3aed; color: white; border-radius: 6px; font-size: 18px; text-align: right; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #777; border-top: 1px dashed #ccc; padding-top: 10px; }}
+        </style></head><body>
+            <h1>Clôture mensuelle — Bons GÉRANTE</h1>
+            <p class="meta">Mois : <strong>{month}</strong> · Plafond mensuel : 25 000 F · Généré le {datetime.now(timezone.utc).strftime('%d/%m/%Y à %H:%M')}</p>
+            <table>
+                <thead><tr><th>Date</th><th>Articles</th><th class="num">Sous-total</th><th class="num">À retenir (-50%)</th></tr></thead>
+                <tbody>{rows_html or '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px">Aucune commande clôturée pour ce mois</td></tr>'}</tbody>
+            </table>
+            <div class="grand">Total à retenir sur le salaire : <strong>{grand_total:,.0f} F</strong></div>
+            <p class="footer">Ce document récapitule les bons GÉRANTE clôturés. Espace Maxo.</p>
+        </body></html>"""
+        return HTMLResponse(content=html)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating manager closure PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 
 # ============== WEEKLY SUMMARY ENDPOINT ==============
 

@@ -4,6 +4,37 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Bons GÉRANTE (jumeau de EMPLOYÉS, plafond 25 000 F/mois) (DONE)
+
+**Demande utilisateur** : « Crée un autre sous menu pour la gérante dans les mêmes formes que pour les employés mais avec un plafond de 25.000 F. »
+
+**Backend** (`/app/backend/server.py`, +330 lignes après les endpoints `employee-orders/closure-pdf`) :
+- Nouvelle collection MongoDB : `manager_orders` + `manager_settlements`.
+- Constantes : `MANAGER_MONTHLY_CAP = 25000.0`, `MANAGER_DISCOUNT_RATE = 0.50`.
+- 7 endpoints jumeaux des EMPLOYÉS, sous `/api/manager-orders` :
+  - `GET /api/manager-orders`, `GET /api/manager-orders/cap-status`
+  - `POST /api/manager-orders` (poste par défaut "Gérante")
+  - `PUT /api/manager-orders/{id}`, `PUT /api/manager-orders/{id}/authorize`
+  - `DELETE /api/manager-orders/{id}`
+  - `POST /api/manager-orders/close-month`, `GET /api/manager-orders/closure-pdf`
+- Workflow séquentiel identique : `pending_manager` (auto-confirmation Gérante) → `pending_director` → `authorized` (stock déduit) → `settled` (déduit du salaire mensuel).
+
+**Frontend** :
+- Nouveau composant : `/app/frontend/src/pages/caisse/components/ManagerOrdersTab.jsx` (~440 lignes), clone d'`EmployeeOrdersTab` adapté :
+  - Couleur violet/purple, icône `UserCog`.
+  - Plafond affiché : 25 000 F.
+  - Nom de la gérante auto-rempli depuis `currentUser.full_name` (modifiable).
+  - Poste verrouillé sur "Gérante" (input `disabled`).
+  - Statut `pending_manager` libellé "Auto-confirmation Gérante en attente".
+  - Bouton d'autorisation Gérante libellé "Auto-confirmer (Gérante)".
+- Intégration : `/app/frontend/src/pages/caisse/components/BonsTab.jsx` — 4ᵉ sous-onglet "GÉRANTE" après EMPLOYÉS.
+
+**Tests** :
+- Backend curl 7/7 : création (3 000 F après remise), cap_status (max=25 000), Director-d'abord = 409 ✅, workflow séquentiel OK, plafond 25 000 F respecté avec message clair ("Déjà utilisé : 14000 F. Cette commande : 15000 F. Maximum : 25000 F").
+- Frontend Playwright 8/8 : sous-onglet GÉRANTE visible, page chargée, badge "25 000 F/mois", boutons création + clôture, modale avec nom pré-rempli et poste verrouillé sur "Gérante".
+
+
+
 ## 01/05/2026 — Caisse : Bons EMPLOYÉS (crédit salaire avec plafond + double autorisation) (DONE)
 
 **Demande utilisateur** : « Dans les bons crée un sous menu EMPLOYÉS avec les mêmes caractéristiques que pour Mme la Directrice Générale. Mais le remboursement se fera sur les salaires versés en fin de mois. Dans ce menu impose que la vente débute nécessairement par le nom de l'employé et son poste. La vente sera facturée à 50% avec un maximum de 10.000 F par mois (après réduction). La vente sera autorisée par la gérante et la directrice générale. »
