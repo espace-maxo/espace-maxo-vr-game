@@ -4,6 +4,21 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Enhancement : Avances Gérante visibles dans le Compte Courant (DONE)
+
+**Demande utilisateur** : Oui à la suggestion « avances non remboursées apparaissent aussi dans le Compte Courant Gérante comme une ligne 'Dette caisse → Gérante' ».
+
+**Frontend** (`/app/frontend/src/pages/caisse/components/CurrentAccountsTab.jsx`) :
+- Nouvelle Card violette **"Dette caisse → Gérante"** placée en tout début de l'onglet "Compte courant", au-dessus du summary existant.
+- Affichage **lecture seule** (les actions CRUD restent dans "Point de la Caisse" pour éviter la duplication de source de vérité).
+- 4 KPIs : En cours · Remboursées (vue) · Total cumulé · Statut (badge "Dette active" ou "Tout est réglé ✓").
+- Filtre : Dettes en cours / Remboursées / Tout l'historique.
+- Historique expandable (bouton "Détails") avec table complète : Date · Motif · Montant · Statut · Remboursée le · Par.
+- Bouton "Gérer" qui redirige l'utilisateur vers l'onglet Point de la Caisse pour effectuer les actions.
+
+**Validation** : testing agent → **10/10 tests frontend PASSED** (100 %). Backend pas retesté (déjà 15/15 à l'itération 72).
+
+
 ## 02/05/2026 — Caisse : Avances Gérante sur fonds personnels (DONE)
 
 **Demande utilisateur** : « Dans le point de la caisse prévoir la possibilité de faire de la monnaie par la gérante. Par exemple pour rendre la monnaie au client, la gérante peut recourir à ses propres fonds et les soustraire par la suite. Ex, elle doit rendre 2 000 mais le restau n'en a pas donc elle utilise ses 2 000 et après se fait rembourser. »
