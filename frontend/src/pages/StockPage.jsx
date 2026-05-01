@@ -2215,7 +2215,7 @@ export default function StockPage() {
                     try {
                       toast.info("Re-sync en cours...");
                       const [r1, r2] = await Promise.all([
-                        axios.post(`${API}/invoices/resync-destockage`),
+                        axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage`),
                         axios.post(`${API}/stock/portionnement/apply-daily`),
                       ]);
                       await Promise.all([
@@ -2244,7 +2244,7 @@ export default function StockPage() {
                     if (!confirm("⚠️ Re-déstocker TOUTES les factures validées passées qui n'ont pas été synchronisées ?\n\nUtile après avoir créé/corrigé des recettes. Les factures déjà déstockées sont ignorées automatiquement.")) return;
                     try {
                       toast.info("Re-sync complet en cours...");
-                      const r = await axios.post(`${API}/invoices/resync-destockage?all_past=true`);
+                      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage?all_past=true`);
                       await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
                       const d = r.data || {};
                       toast.success(
