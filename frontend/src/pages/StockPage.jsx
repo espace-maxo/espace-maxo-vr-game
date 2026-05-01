@@ -80,29 +80,64 @@ const MOVEMENT_TYPES = [
   { value: "transfert_entree", label: "Transfert (entrée Restau)", color: "amber", icon: ArrowDown },
 ];
 
-const NAV_ITEMS = [
-  { id: "dashboard", label: "Tableau de bord", icon: BarChart3 },
-  { id: "destock_live", label: "Déstockage live", icon: Activity },
-  { id: "products_recipes", label: "Produits & Recettes", icon: Package },
-  { id: "magasin", label: "Stock magasin", icon: Warehouse },
-  { id: "movements", label: "Mouvements", icon: ArrowUpDown },
-  { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
-  { id: "purchases", label: "Achats", icon: ShoppingCart },
-  { id: "suppliers", label: "Fournisseurs", icon: Truck },
-  { id: "reports", label: "Rapports", icon: FileText },
-  { id: "users", label: "Utilisateurs", icon: Users },
+// ============================================================================
+// NAVIGATION : 5 groupes principaux avec sous-onglets (refonte Phase 1)
+// ============================================================================
+const NAV_GROUPS = [
+  {
+    id: "dashboard_group",
+    label: "Tableau de bord",
+    icon: BarChart3,
+    subtabs: [
+      { id: "dashboard", label: "Vue d'ensemble", icon: BarChart3 },
+      { id: "destock_live", label: "Déstockage live", icon: Activity },
+    ],
+  },
+  {
+    id: "catalogue",
+    label: "Catalogue",
+    icon: Package,
+    subtabs: [
+      { id: "products", label: "Produits", icon: Package },
+      { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
+      { id: "portionnement", label: "Portionnement", icon: Scale },
+      { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
+      { id: "categories", label: "Catégories", icon: ClipboardList },
+    ],
+  },
+  {
+    id: "stocks",
+    label: "Stocks",
+    icon: Warehouse,
+    subtabs: [
+      { id: "magasin", label: "Stock Magasin", icon: Warehouse },
+      { id: "movements", label: "Mouvements", icon: ArrowUpDown },
+      { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
+    ],
+  },
+  {
+    id: "approvisionnement",
+    label: "Approvisionnement",
+    icon: ShoppingCart,
+    subtabs: [
+      { id: "purchases", label: "Achats", icon: ShoppingCart },
+      { id: "suppliers", label: "Fournisseurs", icon: Truck },
+    ],
+  },
+  {
+    id: "admin_group",
+    label: "Rapports & Admin",
+    icon: FileText,
+    subtabs: [
+      { id: "reports", label: "Rapports", icon: FileText },
+      { id: "users", label: "Utilisateurs", icon: Users, adminOnly: true },
+    ],
+  },
 ];
 
-// Sub-tabs of "Produits & Recettes"
-const PRODUCTS_RECIPES_SUBTABS = [
-  { id: "products", label: "Produits", icon: Package },
-  { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
-  { id: "portionnement", label: "Portionnement", icon: Scale },
-  { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
-  { id: "categories", label: "Catégories", icon: ClipboardList },
-];
-
-const PRODUCTS_RECIPES_IDS = PRODUCTS_RECIPES_SUBTABS.map(t => t.id);
+// Helper : retrouve le groupe qui contient une section donnée
+const findGroupForSection = (sectionId) =>
+  NAV_GROUPS.find((g) => g.subtabs.some((s) => s.id === sectionId));
 
 const ROLES = [
   { value: "administrateur", label: "Administrateur", desc: "Acces complet" },
@@ -1019,33 +1054,29 @@ export default function StockPage() {
           <Badge className="bg-emerald-500/20 text-emerald-400 text-xs mt-1">{currentUser.role}</Badge>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {NAV_ITEMS.filter(item => {
-            if (item.id === "users") return isAdmin;
-            return true;
-          }).map(item => {
-            // Highlight "Produits & Recettes" when any of its sub-tabs is active
-            const isActiveGroup =
-              item.id === "products_recipes"
-                ? PRODUCTS_RECIPES_IDS.includes(activeSection)
-                : activeSection === item.id;
+          {NAV_GROUPS.map((group) => {
+            // Si le groupe ne contient que des onglets admin-only et qu'on n'est pas admin, on le filtre
+            const visibleSubtabs = group.subtabs.filter((s) => !s.adminOnly || isAdmin);
+            if (visibleSubtabs.length === 0) return null;
+
+            const isActiveGroup = visibleSubtabs.some((s) => s.id === activeSection);
             return (
               <button
-                key={item.id}
+                key={group.id}
                 onClick={() => {
-                  // When clicking the group entry, default to the first sub-tab
-                  const target = item.id === "products_recipes" ? "products" : item.id;
-                  setActiveSection(target);
+                  // Aller au premier sous-onglet visible du groupe
+                  setActiveSection(visibleSubtabs[0].id);
                   clearSelection();
                   setMobileMenuOpen(false);
                 }}
-                data-testid={`nav-${item.id}`}
+                data-testid={`nav-${group.id}`}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActiveGroup
                     ? 'bg-emerald-500/15 text-emerald-400 font-medium'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <item.icon className="w-4 h-4" /> {item.label}
+                <group.icon className="w-4 h-4" /> {group.label}
               </button>
             );
           })}
@@ -1072,34 +1103,38 @@ export default function StockPage() {
           </button>
           <span className="text-emerald-400 text-sm font-medium">
             {(() => {
-              if (PRODUCTS_RECIPES_IDS.includes(activeSection)) {
-                const sub = PRODUCTS_RECIPES_SUBTABS.find(t => t.id === activeSection);
-                return `Produits & Recettes · ${sub?.label || ''}`;
-              }
-              return NAV_ITEMS.find(i => i.id === activeSection)?.label;
+              const g = findGroupForSection(activeSection);
+              const s = g?.subtabs.find((x) => x.id === activeSection);
+              return g && s ? `${g.label} · ${s.label}` : (s?.label || activeSection);
             })()}
           </span>
         </div>
 
-        {/* Sub-navigation when in "Produits & Recettes" group */}
-        {PRODUCTS_RECIPES_IDS.includes(activeSection) && (
-          <div className="mb-4 flex items-center gap-2 flex-wrap border-b border-slate-800 pb-2 overflow-x-auto" data-testid="products-recipes-subnav">
-            {PRODUCTS_RECIPES_SUBTABS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => { setActiveSection(t.id); clearSelection(); }}
-                data-testid={`subnav-${t.id}`}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap ${
-                  activeSection === t.id
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/50'
-                }`}
-              >
-                <t.icon className="w-4 h-4" /> {t.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Sub-navigation : affichée pour tout groupe qui a 2+ sous-onglets visibles */}
+        {(() => {
+          const g = findGroupForSection(activeSection);
+          if (!g) return null;
+          const visibleSubtabs = g.subtabs.filter((s) => !s.adminOnly || isAdmin);
+          if (visibleSubtabs.length < 2) return null;
+          return (
+            <div className="mb-4 flex items-center gap-2 flex-wrap border-b border-slate-800 pb-2 overflow-x-auto" data-testid={`subnav-${g.id}`}>
+              {visibleSubtabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setActiveSection(t.id); clearSelection(); }}
+                  data-testid={`subnav-${t.id}`}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap ${
+                    activeSection === t.id
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  }`}
+                >
+                  <t.icon className="w-4 h-4" /> {t.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         {/* DASHBOARD */}
         {activeSection === "dashboard" && (
           <div className="space-y-4 md:space-y-6">

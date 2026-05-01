@@ -4,6 +4,36 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Stock : Refonte Phase 1 — Navigation simplifiée (DONE)
+
+**Demande utilisateur** : Refonte du module Stock. Insatisfactions relevées : sections trop nombreuses, cards/tableaux peu lisibles, filtres insuffisants, pas de photos, sync Caisse↔Stock pas fiable, performance lente. Plan en 4 phases validé. **Phase 1** = simplification nav.
+
+**Avant** : 10 sections en sidebar + 1 groupe implicite avec 5 sous-onglets.
+
+**Après** : 5 groupes logiques en sidebar, chacun avec sous-onglets affichés dans une barre horizontale :
+1. **Tableau de bord** → `Vue d'ensemble` · `Déstockage live`
+2. **Catalogue** → `Produits` · `Fiches Techniques` · `Portionnement` · `Liaisons Caisse↔Stock` · `Catégories`
+3. **Stocks** → `Stock Magasin` · `Mouvements` · `Inventaire`
+4. **Approvisionnement** → `Achats` · `Fournisseurs`
+5. **Rapports & Admin** → `Rapports` · `Utilisateurs` (admin only)
+
+**Modifications** (`/app/frontend/src/pages/StockPage.jsx`) :
+- Remplacement de `NAV_ITEMS` + `PRODUCTS_RECIPES_SUBTABS` + `PRODUCTS_RECIPES_IDS` par une structure unifiée `NAV_GROUPS = [{id, label, icon, subtabs: [...]}]`.
+- Helper `findGroupForSection(id)` pour retrouver le groupe parent d'une section.
+- Sidebar : boucle sur `NAV_GROUPS`, filtre les groupes vides après filtrage admin-only, click navigue vers le premier sous-onglet visible du groupe.
+- Sub-nav horizontale : désormais générique (affichée pour TOUT groupe ayant 2+ sous-onglets visibles), plus seulement pour Produits & Recettes.
+- Support admin-only au niveau sous-onglet (propriété `adminOnly: true` sur un sub-tab).
+- Aucune logique métier modifiée — les conditions `activeSection === "products"` etc. restent inchangées dans le body.
+
+**Tests** Playwright **18/18** : 5 groupes présents, tous les sous-onglets de chaque groupe accessibles, admin voit bien "Utilisateurs" dans Rapports & Admin, navigation fluide entre groupes.
+
+**Phases suivantes à venir** :
+- Phase 2 : Lisibilité tables/cards + Filtres combinables
+- Phase 3 : Photos produits (base64 + miniatures)
+- Phase 4 : Vérificateur de liaisons Caisse↔Stock + Refacto performance
+
+
+
 ## 01/05/2026 — Caisse : Réorganisation menu BONS (5 → 3 onglets) (DONE)
 
 **Demande utilisateur** : « Dans le menu BONS, réorganise les menus et sous-menus. Ce qu'on peut supprimer comme ce qu'on peut fusionner. »
