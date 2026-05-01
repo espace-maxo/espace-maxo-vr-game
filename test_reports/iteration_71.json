@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration 71 - Product Sales Statistics feature (Statistiques de ventes par produit). All backend and frontend tests passed. New endpoint GET /api/invoices/stats/by-product returns aggregated sales data per product with filters (date range, department, validated_only). Frontend ProductSalesTab component integrated into StatsTab with toggle view.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ProductSalesTab", "issues": ["Console warning about HTML nesting: <span> cannot be child of <tbody> - this is a React hydration warning from the visual editor wrapper, not a functional issue"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_product_sales_stats.py",
+    "/app/test_reports/pytest/product_sales_stats_results.xml",
+    "/app/test_reports/iteration_71.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend: Endpoint /api/invoices/stats/by-product correctly placed BEFORE /invoices/{invoice_id} to avoid route conflicts",
+    "Backend: Product structure includes all required fields (name, department, quantity_sold, revenue, invoice_count, avg_price, min_price, max_price, revenue_share_pct, first_sold_at, last_sold_at)",
+    "Backend: revenue_share_pct sums to ~100% (100.01% due to rounding)",
+    "Frontend: ProductSalesTab.jsx uses proper data-testid attributes for all interactive elements",
+    "Frontend: Toggle between 'Vue mensuelle & rapport' and 'Ventes par produit' works correctly with useState"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_product_sales_stats.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "caisse_admin": {"username": "Admin", "password": "Caisse2026"}
+  },
+  "seed_data_creation": "No new seed data created - used existing invoice data (19 validated invoices, 17 products, 101000 F total revenue)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 71 added product sales statistics feature. Backend endpoint: GET /api/invoices/stats/by-product with optional filters (start_date, end_date, department, validated_only). Frontend: ProductSalesTab component accessible via 'Statistiques & Rapport' tab → 'Ventes par produit' toggle (data-testid='stats-view-by-product'). Features: KPI cards, department breakdown, sortable product table, search, department filter, date presets (7j, 30j, Mois en cours, Mois précédent, 90j), Export CSV.",
+  "features_verified": {
+    "backend": [
+      "GET /api/invoices/stats/by-product without filters - PASSED",
+      "GET /api/invoices/stats/by-product with date filter (start_date, end_date) - PASSED",
+      "GET /api/invoices/stats/by-product with department filter (bar) - PASSED",
+      "GET /api/invoices/stats/by-product with validated_only=false - PASSED",
+      "Product structure has all required fields - PASSED",
+      "revenue_share_pct sums to ~100% - PASSED",
+      "by_department breakdown structure - PASSED",
+      "Products sorted by revenue descending - PASSED",
+      "Route not conflicting with /invoices/{invoice_id} - PASSED"
+    ],
+    "frontend": [
+      "Login as Admin - PASSED",
+      "Navigate to 'Statistiques & Rapport' tab - PASSED",
+      "Default view is 'Vue mensuelle & rapport' - PASSED",
+      "Toggle to 'Ventes par produit' view - PASSED",
+      "ProductSalesTab component visible - PASSED",
+      "KPI cards displayed (CA, Quantité, Produits distincts, Panier moyen) - PASSED",
+      "Product table with rows - PASSED",
+      "Preset buttons (7j, 30j, Mois en cours, Mois précédent, 90j) - PASSED",
+      "Search input filters products - PASSED",
+      "Department filter (Bar) - PASSED",
+      "Sort by quantity - PASSED",
+      "Sort by invoice count - PASSED",
+      "Sort by average price - PASSED",
+      "Export CSV button - PASSED",
+      "Revenue share progress bars - PASSED"
+    ]
+  },
+  "test_scenarios_executed": [
+    "Backend: 9 pytest tests - ALL PASSED",
+    "Frontend: Login → Stats tab → Toggle to 'Ventes par produit' → Verify all UI elements → Test filters → Test sort → Test export - ALL PASSED"
+  ]
+}

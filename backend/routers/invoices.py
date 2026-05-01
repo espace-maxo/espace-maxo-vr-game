@@ -188,6 +188,142 @@ async def get_invoices(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/invoices/stats/by-product")
+async def get_sales_stats_by_product(
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    department: Optional[str] = Query(None),
+    validated_only: bool = Query(True),
+):
+    """Statistiques de vente par produit sur une période.
+
+    Agrège les items de toutes les factures (par défaut : uniquement validées) et
+    retourne pour chaque produit : quantité totale vendue, chiffre d'affaires,
+    nombre de factures distinctes, prix moyen, dernière vente, département, etc.
+
+    Filtres optionnels :
+      - start_date / end_date (inclusive)
+      - department (salle_jardin, bar, jeux, location, autres, accompagnements)
+      - validated_only (true par défaut ; mettre false pour inclure les pending)
+    """
+    query: Dict = {}
+    if validated_only:
+        query["validation_status"] = "validated"
+    if start_date or end_date:
+        date_q: Dict = {}
+        if start_date:
+            date_q["$gte"] = f"{start_date}T00:00:00"
+        if end_date:
+            date_q["$lte"] = f"{end_date}T23:59:59.999"
+        query["created_at"] = date_q
+
+    invoices = await db.invoices.find(query, {"_id": 0}).to_list(10000)
+
+    # Aggregate per (name + department) — same name across depts stays separate (rare but safe)
+    agg: Dict[str, Dict] = {}
+    for inv in invoices:
+        inv_id = inv.get("id")
+        inv_date = inv.get("created_at", "")
+        for item in inv.get("items") or []:
+            item_name = (item.get("name") or "").strip()
+            if not item_name:
+                continue
+            item_dept = item.get("department") or "autres"
+            if department and item_dept != department:
+                continue
+            try:
+                qty = float(item.get("quantity") or 0)
+            except Exception:
+                qty = 0.0
+            try:
+                price = float(item.get("price") or 0)
+            except Exception:
+                price = 0.0
+            revenue = qty * price
+            key = f"{item_name}::{item_dept}"
+            bucket = agg.get(key)
+            if not bucket:
+                bucket = {
+                    "name": item_name,
+                    "department": item_dept,
+                    "unit": item.get("unit") or "unité",
+                    "quantity_sold": 0.0,
+                    "revenue": 0.0,
+                    "invoice_ids": set(),
+                    "first_sold_at": inv_date,
+                    "last_sold_at": inv_date,
+                    "min_price": price if price > 0 else None,
+                    "max_price": price,
+                }
+                agg[key] = bucket
+            bucket["quantity_sold"] += qty
+            bucket["revenue"] += revenue
+            if inv_id:
+                bucket["invoice_ids"].add(inv_id)
+            if inv_date and inv_date > (bucket["last_sold_at"] or ""):
+                bucket["last_sold_at"] = inv_date
+            if inv_date and (not bucket["first_sold_at"] or inv_date < bucket["first_sold_at"]):
+                bucket["first_sold_at"] = inv_date
+            if price > 0:
+                bucket["min_price"] = price if bucket["min_price"] is None else min(bucket["min_price"], price)
+                bucket["max_price"] = max(bucket["max_price"] or 0, price)
+
+    # Flatten + compute derived fields
+    rows = []
+    total_qty = 0.0
+    total_revenue = 0.0
+    for b in agg.values():
+        inv_count = len(b["invoice_ids"])
+        qty = round(b["quantity_sold"], 3)
+        rev = round(b["revenue"], 2)
+        avg = round(rev / qty, 2) if qty > 0 else 0
+        total_qty += qty
+        total_revenue += rev
+        rows.append({
+            "name": b["name"],
+            "department": b["department"],
+            "unit": b["unit"],
+            "quantity_sold": qty,
+            "revenue": rev,
+            "invoice_count": inv_count,
+            "avg_price": avg,
+            "min_price": round(b["min_price"], 2) if b["min_price"] is not None else None,
+            "max_price": round(b["max_price"], 2) if b["max_price"] is not None else None,
+            "first_sold_at": b["first_sold_at"],
+            "last_sold_at": b["last_sold_at"],
+        })
+
+    # Share of revenue
+    total_revenue_f = float(total_revenue) if total_revenue > 0 else 1.0
+    for r in rows:
+        r["revenue_share_pct"] = round((r["revenue"] / total_revenue_f) * 100, 2) if total_revenue > 0 else 0
+
+    # Sort by revenue desc by default
+    rows.sort(key=lambda r: r["revenue"], reverse=True)
+
+    # Breakdown by department
+    by_department: Dict[str, Dict] = {}
+    for r in rows:
+        d = r["department"] or "autres"
+        agg_d = by_department.setdefault(d, {"quantity_sold": 0.0, "revenue": 0.0, "products": 0})
+        agg_d["quantity_sold"] = round(agg_d["quantity_sold"] + r["quantity_sold"], 3)
+        agg_d["revenue"] = round(agg_d["revenue"] + r["revenue"], 2)
+        agg_d["products"] += 1
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "department_filter": department,
+        "validated_only": validated_only,
+        "invoices_scanned": len(invoices),
+        "distinct_products": len(rows),
+        "total_quantity": round(total_qty, 3),
+        "total_revenue": round(total_revenue, 2),
+        "by_department": by_department,
+        "products": rows,
+    }
+
+
 @router.get("/invoices/{invoice_id}")
 async def get_invoice(invoice_id: str):
     """Get a single invoice by ID"""

@@ -4,6 +4,34 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Module Vente : Statistiques de ventes par produit (DONE)
+
+**Demande utilisateur** : « Dans le module vente, donne la possibilité d'avoir des statistiques de vente par produit (en quantité et en valeur). »
+
+**Backend** (`/app/backend/routers/invoices.py`) :
+- Nouvel endpoint **`GET /api/invoices/stats/by-product`** avec filtres : `start_date`, `end_date`, `department`, `validated_only` (défaut `true`).
+- Agrège les items de toutes les factures et retourne par produit : `quantity_sold`, `revenue`, `invoice_count`, `avg_price`, `min_price`, `max_price`, `revenue_share_pct`, `first_sold_at`, `last_sold_at`, `unit`, `department`.
+- Retourne aussi les totaux globaux + une répartition `by_department` (CA, quantité, nb produits).
+- Route placée AVANT `GET /invoices/{invoice_id}` pour éviter tout conflit dynamique.
+
+**Frontend** :
+- Nouveau composant `/app/frontend/src/pages/caisse/components/ProductSalesTab.jsx` (~340 lignes) :
+  - 5 presets rapides (7j · 30j · Mois en cours · Mois précédent · 90j) + sélection date custom.
+  - Filtres : département (tous + 6 départements), statut factures (validées uniquement / toutes).
+  - Recherche texte en direct sur le nom/département.
+  - Tri cliquable par Nom · Quantité · CA · Factures · Prix moyen.
+  - **4 KPI cards** : CA total · Quantité totale · Produits distincts · Panier moyen par unité.
+  - **Répartition visuelle par département** (6 cards colorées).
+  - Tableau avec **barre de progression de la part CA** par produit (%).
+  - Export CSV des résultats filtrés.
+- Intégré dans `StatsTab.jsx` via un **toggle de sous-vue** en haut ("Vue mensuelle & rapport" / "Ventes par produit") — aucun changement de navigation requis.
+
+**Validation** :
+- Backend testé via curl : 19 factures scannées → 17 produits distincts, CA cumulé 101 000 F sur mars-avril 2026. Top produit "Choukouya Mouton" = 4 unités / 20 000 F.
+- Frontend compile sans erreur (lint OK).
+- Default preset changé à "30 derniers jours" pour voir des données dès l'ouverture.
+
+
 ## 02/05/2026 — BUGFIX : Mouvements de stock non actualisés / vieux mouvements en premier (DONE)
 
 **Rapport utilisateur** : « Les mouvements de stock ne sont pas actualisés. Les vieux mouvements apparaissent en premier. »

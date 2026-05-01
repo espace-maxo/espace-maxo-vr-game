@@ -3,7 +3,7 @@
  * Affiche le CA du mois par département + le rapport journalier signable.
  * Toute la data vient en props depuis CaissePage.jsx.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import ProductSalesTab from './ProductSalesTab';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -31,8 +32,36 @@ const StatsTab = ({
   generateRapportPDF,
   sendRapportWhatsApp,
   viewServerDetail,
-}) => (
+}) => {
+  const [view, setView] = useState("overview"); // overview | by_product
+  return (
   <div className="space-y-4" data-testid="stats-tab">
+    {/* Sub-view toggle */}
+    <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+      <Button
+        variant={view === "overview" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setView("overview")}
+        className={view === "overview" ? "bg-amber-600 hover:bg-amber-700 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
+        data-testid="stats-view-overview"
+      >
+        <BarChart3 className="w-4 h-4 mr-1" /> Vue mensuelle & rapport
+      </Button>
+      <Button
+        variant={view === "by_product" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setView("by_product")}
+        className={view === "by_product" ? "bg-amber-600 hover:bg-amber-700 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
+        data-testid="stats-view-by-product"
+      >
+        <Package className="w-4 h-4 mr-1" /> Ventes par produit
+      </Button>
+    </div>
+
+    {view === "by_product" && <ProductSalesTab />}
+
+    {view === "overview" && (
+    <>
     {/* Month selector */}
     <div className="flex items-center gap-2">
       <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
@@ -279,7 +308,10 @@ const StatsTab = ({
         </Card>
       )}
     </div>
+    </>
+    )}
   </div>
-);
+  );
+};
 
 export default StatsTab;
