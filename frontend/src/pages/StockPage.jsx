@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,6 +303,7 @@ export default function StockPage() {
 
   // Modals
   const [showProductModal, setShowProductModal] = useState(false);
+  const [photoZoom, setPhotoZoom] = useState(null); // { url, name } | null
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
@@ -425,7 +426,7 @@ export default function StockPage() {
   };
 
   // Forms
-  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", storage_zone: "cuisine", date_achat: "", date_peremption: "", observation: "" });
+  const [productForm, setProductForm] = useState({ code: "", name: "", category_id: "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", storage_zone: "cuisine", date_achat: "", date_peremption: "", observation: "", photo_url: "" });
   const [movementForm, setMovementForm] = useState({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" });
   const [purchaseForm, setPurchaseForm] = useState({ supplier_id: "", supplier_name: "", purchase_date: "", items: [], notes: "" });
   const [purchaseItem, setPurchaseItem] = useState({ product_id: "", quantity: 0, unit_price: 0 });
@@ -714,7 +715,7 @@ export default function StockPage() {
 
   const openEditProduct = (p) => {
     setEditingItem(p);
-    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", storage_zone: p.storage_zone || "cuisine", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "" });
+    setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", storage_zone: p.storage_zone || "cuisine", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "", photo_url: p.photo_url || "" });
     setShowProductModal(true);
   };
 
@@ -1710,7 +1711,7 @@ export default function StockPage() {
                     <Package className="w-4 h-4 mr-1" /> Convertir par lot
                   </Button>
                 )}
-                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "" }); setShowProductModal(true); }}
+                <Button onClick={() => { setEditingItem(null); setProductForm({ code: "", name: "", category_id: categories[0]?.id || "", subcategory: "", unit: "kg", quantity: 0, stock_min: 5, stock_max: 100, purchase_price: 0, sale_price: 0, supplier_id: "", storage_location: "", date_achat: "", date_peremption: "", observation: "", photo_url: "" }); setShowProductModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-product-btn"><Plus className="w-4 h-4 mr-1" /> Nouveau Produit</Button>
               </div>
             </div>
@@ -1933,12 +1934,29 @@ export default function StockPage() {
                             data-testid={`product-row-${p.id}`}
                           >
                             {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selected} onChange={() => toggleSelect(p.id)} /></td>}
-                            {/* Produit: code + nom empilés */}
+                            {/* Produit: photo + code + nom */}
                             <td className="p-3">
-                              <div className="flex flex-col">
-                                <span className="text-white font-medium leading-tight">{p.name}</span>
-                                <span className="text-slate-500 font-mono text-[11px] mt-0.5">{p.code}</span>
-                                {isEmpty && <Badge className="bg-slate-700/60 text-slate-400 text-[9px] mt-1 w-fit border border-slate-600/40">Non renseigné</Badge>}
+                              <div className="flex items-center gap-3">
+                                {p.photo_url ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setPhotoZoom({ url: p.photo_url, name: p.name }); }}
+                                    className="w-10 h-10 rounded-md overflow-hidden border border-slate-700 hover:border-emerald-500 transition-colors flex-shrink-0"
+                                    data-testid={`product-thumb-${p.id}`}
+                                    title="Agrandir"
+                                  >
+                                    <img src={p.photo_url} alt={p.name} className="w-full h-full object-cover" />
+                                  </button>
+                                ) : (
+                                  <div className="w-10 h-10 rounded-md border border-dashed border-slate-700 bg-slate-800/40 flex items-center justify-center flex-shrink-0">
+                                    <ImageIcon className="w-4 h-4 text-slate-600" />
+                                  </div>
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-white font-medium leading-tight truncate">{p.name}</span>
+                                  <span className="text-slate-500 font-mono text-[11px] mt-0.5">{p.code}</span>
+                                  {isEmpty && <Badge className="bg-slate-700/60 text-slate-400 text-[9px] mt-1 w-fit border border-slate-600/40">Non renseigné</Badge>}
+                                </div>
                               </div>
                             </td>
                             {/* Catégorie + sous-cat */}
@@ -3472,8 +3490,107 @@ export default function StockPage() {
               <div><Label className="text-slate-300 text-xs">Date de peremption</Label><Input type="date" value={productForm.date_peremption} onChange={e => setProductForm(p => ({...p, date_peremption: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" /></div>
             </div>
             <div><Label className="text-slate-300 text-xs">Observation</Label><Textarea value={productForm.observation} onChange={e => setProductForm(p => ({...p, observation: e.target.value}))} className="bg-slate-800 border-slate-700 text-white" rows={2} placeholder="Remarques..." /></div>
+
+            {/* Photo produit (Phase 3) — upload base64 */}
+            <div>
+              <Label className="text-slate-300 text-xs flex items-center gap-1">
+                <ImageIcon className="w-3.5 h-3.5" /> Photo du produit (optionnel)
+              </Label>
+              <div className="mt-1 flex items-start gap-3">
+                {productForm.photo_url ? (
+                  <div className="relative">
+                    <img
+                      src={productForm.photo_url}
+                      alt="Aperçu"
+                      className="w-20 h-20 rounded-lg object-cover border border-slate-600"
+                      data-testid="product-photo-preview"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setProductForm(p => ({ ...p, photo_url: "" }))}
+                      className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow"
+                      data-testid="product-photo-remove"
+                      title="Retirer la photo"
+                    >×</button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-lg border border-dashed border-slate-600 flex items-center justify-center bg-slate-800/40">
+                    <ImageIcon className="w-6 h-6 text-slate-600" />
+                  </div>
+                )}
+                <div className="flex-1 space-y-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="product-photo-input"
+                    data-testid="product-photo-input"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.error("Image trop lourde (max 2 Mo). Réduisez-la avant d'uploader.");
+                        e.target.value = "";
+                        return;
+                      }
+                      // Compress to ~500px max width via canvas before storing as base64
+                      const img = new Image();
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        img.onload = () => {
+                          const canvas = document.createElement("canvas");
+                          const maxDim = 500;
+                          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
+                          canvas.width = Math.round(img.width * ratio);
+                          canvas.height = Math.round(img.height * ratio);
+                          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                          const b64 = canvas.toDataURL("image/jpeg", 0.8);
+                          setProductForm(p => ({ ...p, photo_url: b64 }));
+                          toast.success("Photo prête");
+                        };
+                        img.src = ev.target.result;
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => document.getElementById("product-photo-input").click()}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                    data-testid="product-photo-btn"
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1" />
+                    {productForm.photo_url ? "Remplacer" : "Charger une photo"}
+                  </Button>
+                  <p className="text-[10px] text-slate-500">
+                    JPEG / PNG, max 2 Mo. Redimensionnée à 500 px avant sauvegarde.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveProduct}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* Photo Zoom Modal — view product photo in full size */}
+      <Dialog open={!!photoZoom} onOpenChange={(v) => { if (!v) setPhotoZoom(null); }}>
+        <DialogContent className="bg-slate-900 border-slate-700 max-w-2xl p-4" data-testid="photo-zoom-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-emerald-400" /> {photoZoom?.name || "Photo produit"}
+            </DialogTitle>
+          </DialogHeader>
+          {photoZoom?.url && (
+            <div className="flex items-center justify-center bg-slate-950 rounded-lg border border-slate-700 overflow-hidden">
+              <img src={photoZoom.url} alt={photoZoom.name} className="max-h-[70vh] w-auto object-contain" />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

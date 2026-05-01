@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Stock : Refonte Phase 3 — Photos produits (DONE)
+
+**Modifications** (`/app/frontend/src/pages/StockPage.jsx`) :
+
+**Upload** :
+- Ajout du champ `photo_url` dans l'état `productForm` (initial, edit, reset).
+- Nouvelle section dans la modale Create/Edit produit : zone drop-photo 80×80 + preview + bouton "Charger une photo" / "Remplacer" + croix pour retirer.
+- Pipeline d'upload : FileReader → Canvas resize à 500 px max (conserve ratio) → JPEG qualité 80% → base64 stocké dans `productForm.photo_url`.
+- Validation : max 2 Mo avant compression, types JPEG/PNG.
+
+**Affichage** :
+- Nouvelle **miniature 40×40** en tête de la colonne "Produit" (placeholder pointillé + icône Image si pas de photo, sinon miniature cliquable).
+- **Modale Zoom** : au clic sur la miniature, image pleine taille (max 70vh) dans une `Dialog` noire, avec nom du produit dans le header.
+- État `photoZoom = { url, name } | null` pilote la modale.
+
+**Backend** : aucun changement — `photo_url` existait déjà sur `StockProductCreate` et `PUT /stock/products/{id}` accepte `data: dict`.
+
+**Tests** :
+- Backend curl : POST `/api/stock/products` avec `photo_url` base64 (118 chars) → stocké ✅ → PUT vide → effacé ✅ → DELETE ✅.
+- Frontend Playwright 3/3 : miniatures rendues sur 470 produits (placeholder), modale produit avec bouton upload + input file.
+
+**Limitation connue** : stockage base64 dans MongoDB. Acceptable pour la taille actuelle (500 px max → ~30-80 Ko/photo, 470 produits ≈ 40 Mo max). Si le besoin grandit, migration vers S3/Cloudinary en Phase 4+.
+
+
+
 ## 01/05/2026 — Stock : Refonte Phase 2 — Filtres enrichis sur Produits (DONE)
 
 **Modifications** (`/app/frontend/src/pages/StockPage.jsx`) :
