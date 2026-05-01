@@ -650,33 +650,49 @@ export default function StockPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
-  // Auto-refresh movements when entering the "Mouvements" tab:
+  // Auto-refresh movements when entering the "Mouvements" tab + polling every 60s while active:
   //  - trigger resync of today's invoices + daily portion deductions (idempotent)
   //  - refetch movements + products + dashboard to ensure freshness
-  // This prevents stale data from showing up when users navigate back.
+  // This prevents stale data from showing up when users navigate back or stay on the tab during service.
   const [movementsLastRefresh, setMovementsLastRefresh] = useState(null);
   const [movementsAutoSyncing, setMovementsAutoSyncing] = useState(false);
   useEffect(() => {
     if (activeSection !== "movements") return;
     let cancelled = false;
-    (async () => {
+
+    const runSync = async ({ withResync = true } = {}) => {
+      if (cancelled) return;
       setMovementsAutoSyncing(true);
       try {
-        // Kick off resync + daily deductions in parallel (best-effort, idempotent)
-        await Promise.allSettled([
-          axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage`),
-          axios.post(`${API}/stock/portionnement/apply-daily`),
-        ]);
+        if (withResync) {
+          await Promise.allSettled([
+            axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage`),
+            axios.post(`${API}/stock/portionnement/apply-daily`),
+          ]);
+        }
       } catch {}
       if (cancelled) return;
-      // Always refetch after resync so the UI reflects newly-created movements
       await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
       if (!cancelled) {
         setMovementsLastRefresh(new Date());
         setMovementsAutoSyncing(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    // Initial sync: full resync + refetch
+    runSync({ withResync: true });
+
+    // Polling every 60s: resync + refetch (kept lightweight - backend endpoints are idempotent)
+    const intervalId = setInterval(() => {
+      // Skip polling if tab is hidden to save bandwidth
+      if (document.visibilityState === "hidden") return;
+      runSync({ withResync: true });
+    }, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
@@ -2407,7 +2423,10 @@ export default function StockPage() {
                   {movementsAutoSyncing ? (
                     <span className="text-amber-400">⏳ Synchronisation en cours…</span>
                   ) : movementsLastRefresh ? (
-                    <>Dernière synchro : <span className="text-emerald-400">{movementsLastRefresh.toLocaleTimeString('fr-FR')}</span> — tri du plus récent au plus ancien</>
+                    <>
+                      Dernière synchro : <span className="text-emerald-400">{movementsLastRefresh.toLocaleTimeString('fr-FR')}</span>
+                      <span className="text-slate-500"> · auto toutes les 60s · tri du plus récent au plus ancien</span>
+                    </>
                   ) : (
                     <span className="text-slate-500">Chargement…</span>
                   )}
