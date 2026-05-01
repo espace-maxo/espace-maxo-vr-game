@@ -650,6 +650,36 @@ export default function StockPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
+  // Auto-refresh movements when entering the "Mouvements" tab:
+  //  - trigger resync of today's invoices + daily portion deductions (idempotent)
+  //  - refetch movements + products + dashboard to ensure freshness
+  // This prevents stale data from showing up when users navigate back.
+  const [movementsLastRefresh, setMovementsLastRefresh] = useState(null);
+  const [movementsAutoSyncing, setMovementsAutoSyncing] = useState(false);
+  useEffect(() => {
+    if (activeSection !== "movements") return;
+    let cancelled = false;
+    (async () => {
+      setMovementsAutoSyncing(true);
+      try {
+        // Kick off resync + daily deductions in parallel (best-effort, idempotent)
+        await Promise.allSettled([
+          axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage`),
+          axios.post(`${API}/stock/portionnement/apply-daily`),
+        ]);
+      } catch {}
+      if (cancelled) return;
+      // Always refetch after resync so the UI reflects newly-created movements
+      await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
+      if (!cancelled) {
+        setMovementsLastRefresh(new Date());
+        setMovementsAutoSyncing(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
+
   // Products sorted so that items with a filled quantity or purchase_price appear first.
   // "Filled" score: +2 if both quantity and price > 0, +1 if only one, 0 if empty.
   // Array.prototype.sort is stable (ES2019+) so original order is kept within each score group.
@@ -2355,9 +2385,11 @@ export default function StockPage() {
           // We exclude movements whose product is in magasin zone AND transfert_sortie (magasin outflow of a transfer).
           // transfert_entree stays visible because it is a legitimate cuisine inflow.
           const magIds = new Set(magasinProducts.map(p => p.id));
-          const visibleMovements = movements.filter(m =>
-            !magIds.has(m.product_id) && m.movement_type !== "transfert_sortie"
-          );
+          const visibleMovements = movements
+            .filter(m => !magIds.has(m.product_id) && m.movement_type !== "transfert_sortie")
+            // Safety net: ensure DESC sort by created_at even if the backend ever returns mixed order
+            .slice()
+            .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
           return (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -2369,6 +2401,15 @@ export default function StockPage() {
                     <span className="ml-2 text-amber-400">
                       ({movements.length - visibleMovements.length} mouvement(s) magasin masqué(s) — voir <em>Stock magasin</em>)
                     </span>
+                  )}
+                </p>
+                <p className="text-slate-500 text-[11px] mt-0.5" data-testid="movements-last-refresh">
+                  {movementsAutoSyncing ? (
+                    <span className="text-amber-400">⏳ Synchronisation en cours…</span>
+                  ) : movementsLastRefresh ? (
+                    <>Dernière synchro : <span className="text-emerald-400">{movementsLastRefresh.toLocaleTimeString('fr-FR')}</span> — tri du plus récent au plus ancien</>
+                  ) : (
+                    <span className="text-slate-500">Chargement…</span>
                   )}
                 </p>
               </div>

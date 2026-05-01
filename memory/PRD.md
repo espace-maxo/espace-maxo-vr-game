@@ -4,6 +4,20 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — BUGFIX : Mouvements de stock non actualisés / vieux mouvements en premier (DONE)
+
+**Rapport utilisateur** : « Les mouvements de stock ne sont pas actualisés. Les vieux mouvements apparaissent en premier. »
+
+**Root cause** : L'onglet "Mouvements" ne faisait PAS de fetch lors de son activation. `fetchMovements` n'était appelée qu'au montage initial du composant (`fetchAll`) ou manuellement via le bouton "Actualiser". Résultat : après création de factures via la Caisse (qui génère des mouvements en backend), l'utilisateur revenant sur l'onglet Mouvements voyait les données mises en cache (vieilles) avec les "nouveaux" mouvements backdatés par le resync mélangés au milieu de la liste → impression de "vieux mouvements en premier".
+
+**Fix** (`/app/frontend/src/pages/StockPage.jsx`) :
+1. **Auto-sync au passage sur l'onglet** : nouveau `useEffect` qui, lors de `activeSection === "movements"`, déclenche en parallèle `POST /invoices/resync-destockage` + `POST /stock/portionnement/apply-daily` (idempotents), puis rafraîchit `fetchMovements` + `fetchProducts` + `fetchDashboard`.
+2. **Tri DESC filet de sécurité côté client** : `visibleMovements` re-trie désormais explicitement par `created_at` desc, même si le backend renvoyait des dates mixtes ou si des mouvements sont backdatés.
+3. **Indicateur visuel** : affichage "⏳ Synchronisation en cours…" puis "Dernière synchro : HH:MM:SS — tri du plus récent au plus ancien" sous le titre (`data-testid="movements-last-refresh"`).
+
+**Validation** : compilation OK, lint OK. L'utilisateur verra désormais systématiquement les derniers mouvements en haut dès qu'il entre sur l'onglet.
+
+
 ## 01/05/2026 — BUGFIX : Restauration du corps de `destock_live_dashboard` (DONE)
 
 **Rapport utilisateur** : « Les mouvements ne sont plus ordonnés et je retrouve d'anciens mouvements en tête. »
