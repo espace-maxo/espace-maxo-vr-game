@@ -11,13 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Printer, UserCircle, AlertTriangle, Edit2, CheckCircle, Eye,
-  Trash2, Wine, Gamepad2, FileText, Users, UserCog, FileWarning
+  Trash2, Wine, Gamepad2, FileText, CreditCard
 } from 'lucide-react';
-import MonsieurTab from './MonsieurTab';
-import EmployeeOrdersTab from './EmployeeOrdersTab';
-import ManagerOrdersTab from './ManagerOrdersTab';
 import SalaryCreditsBanner from './SalaryCreditsBanner';
-import ArchivedDGTab from './ArchivedDGTab';
+import DGGroupedTab from './DGGroupedTab';
+import CreditOrdersGroupedTab from './CreditOrdersGroupedTab';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -69,27 +67,15 @@ const BonsTab = ({
           )}
         </TabsTrigger>
         {canManage && (
-          <TabsTrigger value="bons-monsieur" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
+          <TabsTrigger value="bons-monsieur" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white" data-testid="tab-bons-dg">
             <UserCircle className="w-4 h-4 mr-2" />
-            MME LA DIRECTRICE GÉNÉRALE
+            MME LA D.G.
           </TabsTrigger>
         )}
         {canManage && (
-          <TabsTrigger value="bons-employes" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white" data-testid="tab-bons-employes">
-            <Users className="w-4 h-4 mr-2" />
-            EMPLOYÉS
-          </TabsTrigger>
-        )}
-        {canManage && (
-          <TabsTrigger value="bons-gerante" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white" data-testid="tab-bons-gerante">
-            <UserCog className="w-4 h-4 mr-2" />
-            GÉRANTE
-          </TabsTrigger>
-        )}
-        {isAdmin && (
-          <TabsTrigger value="bons-archived-dg" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="tab-bons-archived-dg">
-            <FileWarning className="w-4 h-4 mr-2" />
-            FACTURES IMPAYÉES D.G.
+          <TabsTrigger value="bons-credit" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white" data-testid="tab-bons-credit">
+            <CreditCard className="w-4 h-4 mr-2" />
+            BONS À CRÉDIT
           </TabsTrigger>
         )}
       </TabsList>
@@ -291,10 +277,10 @@ const BonsTab = ({
         </div>
       </TabsContent>
 
-      {/* Monsieur sub-tab */}
+      {/* Mme la D.G. (groupé : Actives + Archivées) */}
       {canManage && (
         <TabsContent value="bons-monsieur">
-          <MonsieurTab
+          <DGGroupedTab
             currentUser={currentUser}
             formatPrice={formatPrice}
             products={products}
@@ -302,32 +288,14 @@ const BonsTab = ({
         </TabsContent>
       )}
 
-      {/* Employés sub-tab */}
+      {/* Bons à crédit (groupé : Employés + Gérante) */}
       {canManage && (
-        <TabsContent value="bons-employes">
-          <EmployeeOrdersTab
+        <TabsContent value="bons-credit">
+          <CreditOrdersGroupedTab
             currentUser={currentUser}
             formatPrice={formatPrice}
             products={products}
           />
-        </TabsContent>
-      )}
-
-      {/* Gérante sub-tab */}
-      {canManage && (
-        <TabsContent value="bons-gerante">
-          <ManagerOrdersTab
-            currentUser={currentUser}
-            formatPrice={formatPrice}
-            products={products}
-          />
-        </TabsContent>
-      )}
-
-      {/* Archived DG (admin only) sub-tab */}
-      {isAdmin && (
-        <TabsContent value="bons-archived-dg">
-          <ArchivedDGTab formatPrice={formatPrice} />
         </TabsContent>
       )}
     </Tabs>

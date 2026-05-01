@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 01/05/2026 — Caisse : Réorganisation menu BONS (5 → 3 onglets) (DONE)
+
+**Demande utilisateur** : « Dans le menu BONS, réorganise les menus et sous-menus. Ce qu'on peut supprimer comme ce qu'on peut fusionner. »
+
+**Audit & action** : 5 sous-onglets → 3 sous-onglets principaux + sous-onglets internes.
+
+**Avant** :
+1. Factures · 2. MME LA DIRECTRICE GÉNÉRALE · 3. EMPLOYÉS · 4. GÉRANTE · 5. FACTURES IMPAYÉES D.G.
+
+**Après** (3 onglets) :
+1. **Factures** (orange, inchangé)
+2. **MME LA D.G.** (violet) → onglets internes : `Actives` + `Archivées (admin)`
+3. **BONS À CRÉDIT** (rose, icône `CreditCard`) → onglets internes : `Employés (10 000 F/mois)` + `Gérante (25 000 F/mois)` (pills affichant les plafonds en libellé)
+
+**Modifications** :
+- Nouveau composant `/app/frontend/src/pages/caisse/components/DGGroupedTab.jsx` : wrapper avec inner `Tabs` rendant `MonsieurTab` (Actives) + `ArchivedDGTab` (Archivées, admin only).
+- Nouveau composant `/app/frontend/src/pages/caisse/components/CreditOrdersGroupedTab.jsx` : wrapper avec inner `Tabs` rendant `EmployeeOrdersTab` + `ManagerOrdersTab` (plafonds visibles dans les pills).
+- `BonsTab.jsx` : 4 imports remplacés par 2 wrappers, 4 `TabsTrigger` + 4 `TabsContent` réduits à 2 chacun. Imports inutilisés supprimés (`Users`, `UserCog`, `FileWarning`).
+- Aucune perte de fonctionnalité — la mécanique métier reste 100% intacte (workflow d'autorisation, plafonds, archivage post-signature, banner admin).
+
+**Tests** :
+- Frontend Playwright 9/9 : 3 onglets principaux présents, anciens onglets disparus, navigation interne D.G. (Actives↔Archivées) et Crédit (Employés↔Gérante) fonctionnelle, contenus chargent correctement.
+
+
+
 ## 01/05/2026 — Caisse : Archivage automatique des factures D.G. impayées post-signature (DONE)
 
 **Demande utilisateur** : « Une fois le point effectué et qui englobe les bons de la directrice générale, le point des impayés disparaissent et vont se loger dans un autre sous menu de l'administrateur dénommé Factures impayées D.G. »
