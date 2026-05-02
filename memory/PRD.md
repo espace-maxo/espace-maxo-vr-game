@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — UX Fix : Signature "Faire le point" en 1 clic (DONE)
+
+**Rapport utilisateur** : « Faire le point ne marche pas correctement » — la signature/clôture ne fonctionnait pas chez l'admin et la Gérante.
+
+**Root cause** (UX) : Le flux exigeait deux clics distincts :
+1. Saisir cash + billetage → cliquer **"Mettre à jour"**
+2. Puis cliquer **"Signer"** (qui sinon affichait un warning "Veuillez d'abord effectuer le billettage").
+
+Si l'utilisateur cliquait directement "Signer" après avoir saisi le billetage, le bouton vérifiait `billettageTotal === parseFloat(form.cash_amount)` (égalité stricte sur floats) — la condition était fausse et un warning s'affichait, donnant l'impression que la signature ne marchait pas.
+
+**Fix** (`/app/frontend/src/pages/caisse/components/PointFinancierTab.jsx`) :
+1. **Auto-save dans `signPoint()`** : avant l'appel `/sign`, si le formulaire est dirty (cash/mobile/cheque/wallet/momo/destination/notes/billettage) on appelle `savePoint(silent=true)` automatiquement et on récupère l'`id` retourné par le backend.
+2. **`savePoint(silent)`** retourne désormais le `financial_point` persisté et met à jour `currentPoint`/`form`/`billettage` immédiatement (plus besoin d'attendre le prochain `fetchPoints`).
+3. **Auto-ajustement du billetage** dans `handleSignClick()` : si `billettageTotal !== cash_amount`, on aligne `cash_amount = billettageTotal` au lieu de bloquer avec un warning. Toast : "Espèces ajustées au billetage : X F".
+4. **Tolérance float 0.5 F** sur la comparaison `cashMatches` (plus d'égalité stricte).
+5. **Bouton "Signer" toujours visible** dès que `canEdit && !isSigned && computedTotal > 0` (n'attend plus l'existence d'un `currentPoint`).
+
+**Validation** : testing agent → **100% PASSED**. Toutes les étapes vérifiées :
+- Admin : flow 1-clic (saisir + billetage → Signer) ✅
+- Gérante : même flow ✅
+- Edge cas : cash=0 (mobile money seul) → modale directe ✅
+- Edge cas : billetage vide alors que cash>0 → warning bloquant conservé ✅
+- Admin-validate après signature ✅
+
+
 ## 02/05/2026 — Caisse : "Point de la Caisse" visible pour la Gérante (DONE)
 
 **Demande utilisateur** : « Point de la caisse à rendre visible chez la gérante. »
