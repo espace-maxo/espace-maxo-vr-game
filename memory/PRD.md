@@ -4,6 +4,30 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Fix #2 : `planned_date` prioritaire pour l'attribution (DONE sur preview)
+
+**Rapport utilisateur après premier fix** : « Les charges demeurent toujours ».
+
+**Diagnostic** : 1 charge résiduelle sur 01/05 (58 500 F). Examen du document :
+```
+description  : "Achats communs - 12 article(s) - 02/05/2026"
+planned_date : 2026-05-02          ← date métier saisie
+created_at   : 2026-05-01T23:32    ← UTC (00:32 heure Bénin = 02/05 local)
+```
+→ La charge était créée le **2 mai à 00h32 heure locale** (Bénin UTC+1) mais stockée comme `2026-05-01T23:32 UTC` à cause du décalage horaire. Le fix #1 utilisait `created_at`, donc elle restait sur le 01/05.
+
+**Fix #2** (`server.py`) : priorité absolue à **`planned_date`** (date métier), fallback sur `created_at`. La query Mongo utilise `$or` pour filtrer correctement :
+- `planned_date` dans la période, OU
+- pas de `planned_date` ET `created_at` dans la période.
+
+La logique `expense_date` applique le même ordre : `planned_date > created_at`. `assigned_week` garde la priorité absolue si défini.
+
+**Validation preview** : 01/05/2026 → 0 F, 0 charge ✓.
+
+### ⚠️ Action requise : Redéployer à nouveau
+Comme le précédent fix, ce changement doit être redéployé via **Deploy** pour toucher `espacemaxo.com`.
+
+
 ## 02/05/2026 — BUG MAJEUR : Charges attribuées au mauvais jour (DONE sur preview)
 
 **Rapport utilisateur** : « Le point du 01/05/2026 a intégré des charges qui ne sont pas liées à cette journée. » Capture d'écran prouvant que 8 charges du 27/04, 30/04, 02/05 apparaissaient dans le point du 01/05 pour un total de 163 850 F (sur espacemaxo.com).

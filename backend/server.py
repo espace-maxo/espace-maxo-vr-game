@@ -6382,15 +6382,29 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 seen_ids.add(iid)
                 invoices.append(inv)
         
-        # Get ALL expenses for the week (same strategy)
-        # Important : nous utilisons UNIQUEMENT `created_at` comme date de rattachement.
-        # `completed_at` / `approved_at` sont des timestamps administratifs (validation/paiement)
-        # qui n'ont rien à voir avec la date RÉELLE de la dépense. Les utiliser causait
-        # l'apparition de charges validées tardivement dans un point d'un autre jour.
-        # 1. Expenses whose created_at falls in the period AND not assigned to another week.
+        # Get ALL expenses for the week.
+        # Règle d'attribution (par ordre de priorité) :
+        #   1. `planned_date`    : date métier saisie par l'utilisateur (ex: "Achat du 02/05")
+        #   2. `created_at`      : date de création technique (fallback)
+        # `completed_at` / `approved_at` ne sont JAMAIS utilisés (timestamps administratifs).
+        # 1. Expenses whose effective date falls in the period AND not assigned elsewhere.
+        #    MongoDB doesn't support "coalesce" directly in filters, so we accept BOTH
+        #    (planned_date in period) OR (no planned_date AND created_at in period).
         expenses_by_date = await db.expenses.find({
             "status": {"$in": ["completed", "approved", "pending", "revision_requested"]},
-            "created_at": {"$gte": start_str, "$lte": end_str},
+            "$or": [
+                {"planned_date": {"$gte": start_str, "$lte": end_str[:10]}},
+                {
+                    "$and": [
+                        {"$or": [
+                            {"planned_date": {"$exists": False}},
+                            {"planned_date": None},
+                            {"planned_date": ""},
+                        ]},
+                        {"created_at": {"$gte": start_str, "$lte": end_str}},
+                    ]
+                },
+            ],
             "$and": [
                 {"$or": [
                     {"assigned_week": {"$exists": False}},
@@ -6468,23 +6482,22 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         
         for expense in all_expenses:
             # Determine which day to attribute this expense to.
-            # RULE: always use `created_at` (= vraie date de la charge) unless the user has
-            # manually moved the expense to another week via `assigned_week`.
-            # `completed_at` / `approved_at` are administrative timestamps (payment/validation)
-            # and must NEVER be used for day attribution — otherwise a charge validated
-            # 2 days later is wrongly attributed to the validation day.
+            # ORDRE DE PRIORITÉ :
+            #   1. `assigned_week` (re-assignation manuelle par admin) - avec fallback
+            #      sur planned_date/created_at si cohérent avec la période cible.
+            #   2. `planned_date` (date métier saisie par l'utilisateur)
+            #   3. `created_at`  (date de création technique)
+            # `completed_at` / `approved_at` ne sont JAMAIS utilisés.
+            effective = (expense.get("planned_date") or "")[:10] or (expense.get("created_at") or "")[:10]
             expense_date = None
 
             if expense.get("assigned_week"):
-                # Manually re-assigned by admin: keep the created_at day if within the
-                # target period, otherwise snap to the assigned week's Monday.
-                creat = (expense.get("created_at") or "")[:10]
-                if creat and creat >= start_str and creat <= end_str[:10]:
-                    expense_date = creat
+                if effective and effective >= start_str and effective <= end_str[:10]:
+                    expense_date = effective
                 else:
                     expense_date = expense.get("assigned_week")[:10]
             else:
-                expense_date = (expense.get("created_at") or "")[:10]
+                expense_date = effective
             
             # Count completed AND approved expenses in totals (both are validated expenses)
             if expense.get("status") in ["completed", "approved"]:
