@@ -4,6 +4,29 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Renommage "Prévisions" → "Journal" + vue Réel (DONE)
+
+**Demande utilisateur** : Renommer + ajouter vue Réel auto + KPIs + alertes intelligentes (option B).
+
+**Backend** (`/app/backend/routers/journal.py` — nouveau) :
+- `GET /api/journal/dashboard?days=30` : solde actuel (somme factures validées − dépenses terminées/payées), projections 7j/30j (à partir des forecasts `prevu`), alertes intelligentes (`negative_balance`, `high_expense_ratio` >70%, `deficit_7d`, `deficit_30d`), catégorisation auto des sorties (cuisine/charges/salaires/divers).
+- `GET /api/journal/realtime?days=N&limit=M` : liste chronologique des opérations (factures + dépenses validées).
+- Branché dans `server.py` (import + set_db + include_router).
+
+**Frontend** (`JournalTab.jsx` — nouveau) :
+- Onglet "Prévisions" → "Journal" (icône `BookOpen`).
+- 4 KPI cards : Solde actuel · Solde 7j · Solde 30j · Sorties cumulées (avec ratio CA).
+- Bandeau alertes (codes critical/warning/info).
+- Toggle "Journal réel" / "Prévisionnel" (réutilise `ForecastsTab`).
+- Vue Réel : répartition par catégorie + liste chronologique des opérations.
+- Sélecteur horizon (7/30/60/90j).
+
+**Validation** : testing agent → **25/25 backend PASSED + tous frontend tests PASSED** (100%). Solde correct (43 500 F = 101 000 − 57 500). Alerte `deficit_7d` active correctement.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Achats : la Gérante ne voit JAMAIS le détail des terminés (DONE)
 
 **Demande utilisateur** : « La gérante ne peut pas voir aussi le détail des achats et prestations terminés ».
