@@ -4,6 +4,22 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Gérante : masquer les achats terminés (DONE)
+
+**Demande utilisateur** : « Fais disparaître les achats terminés du profil de la gérante. »
+
+**Fix** (`AchatsTab.jsx`) :
+1. Onglet **"Achats terminés"** maintenant rendu uniquement si `currentUser.role === 'admin'`.
+2. KPIs : pour la Gérante, le compteur "Validés" filtre uniquement les `status === 'approved'` (plus de `completed` cumulé). Pour l'admin, le comportement reste inchangé (Validés & terminés).
+3. KPI "Total général" calculé à partir d'une liste `visibleExpenses` (filtrée des `completed` pour la Gérante).
+4. Le libellé du KPI passe de "Validés & terminés" à "Validés" pour la Gérante.
+
+Lint OK, compile OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — UX : "Aujourd'hui" par défaut au lieu de "Cette semaine" (DONE)
 
 **Demande utilisateur** : « Affichage aujourd'hui par défaut pour faire mon point. »

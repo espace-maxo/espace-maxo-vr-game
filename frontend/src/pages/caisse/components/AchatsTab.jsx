@@ -454,6 +454,7 @@ const AchatsTab = ({ ctx }) => {
                     {expenses.filter(e => e.status === 'approved').length}
                   </Badge>
                 </button>
+                {currentUser?.role === 'admin' && (
                 <button
                   type="button"
                   onClick={() => setAchatsSubView('termines')}
@@ -470,6 +471,7 @@ const AchatsTab = ({ ctx }) => {
                     {expenses.filter(e => e.status === 'completed').length}
                   </Badge>
                 </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setAchatsSubView('rejetes')}
@@ -569,16 +571,21 @@ const AchatsTab = ({ ctx }) => {
 
               {/* === KPI Cards aérées (regroupement par état) === */}
               {expenses.length > 0 && (() => {
-                const sumBy = (statuses) => expenses
+                const isAdmin = currentUser?.role === 'admin';
+                // La Gérante ne voit pas les achats "completed" (terminés/payés) :
+                // ils ne la concernent plus une fois la dépense réglée par l'admin.
+                const visibleExpenses = isAdmin ? expenses : expenses.filter(e => e.status !== 'completed');
+                const sumBy = (statuses) => visibleExpenses
                   .filter(e => statuses.includes(e.status))
                   .reduce((s, e) => s + (e.amount || 0), 0);
-                const cntBy = (statuses) => expenses.filter(e => statuses.includes(e.status)).length;
+                const cntBy = (statuses) => visibleExpenses.filter(e => statuses.includes(e.status)).length;
                 const aTraiterAmount = sumBy(['pending', 'admin_review', 'revision_requested']);
                 const aTraiterCount = cntBy(['pending', 'admin_review', 'revision_requested']);
-                const validesAmount = sumBy(['approved', 'completed']);
-                const validesCount = cntBy(['approved', 'completed']);
-                const totalAmount = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-                const isAdmin = currentUser?.role === 'admin';
+                // Pour la Gérante : seulement "approved" (validés). Pour l'admin : approved + completed.
+                const validesStatuses = isAdmin ? ['approved', 'completed'] : ['approved'];
+                const validesAmount = sumBy(validesStatuses);
+                const validesCount = cntBy(validesStatuses);
+                const totalAmount = visibleExpenses.reduce((s, e) => s + (e.amount || 0), 0);
 
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="achats-kpi-cards">
@@ -616,7 +623,7 @@ const AchatsTab = ({ ctx }) => {
                         <CardContent className="py-4">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-green-300/80 text-xs uppercase tracking-wider font-medium">Validés &amp; terminés</p>
+                              <p className="text-green-300/80 text-xs uppercase tracking-wider font-medium">{isAdmin ? "Validés & terminés" : "Validés"}</p>
                               <p className="text-green-300 font-bold text-2xl mt-1" data-testid="kpi-valides-amount">
                                 {formatPrice(validesAmount)} <span className="text-base text-green-400/70">F</span>
                               </p>
