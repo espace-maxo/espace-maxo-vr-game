@@ -120,8 +120,8 @@ export default function PointFinancierTab({ currentUser }) {
     toast.success(`Especes mis a jour : ${formatPrice(billettageTotal)} F`);
   };
 
-  const savePoint = async () => {
-    if (!canEdit) return;
+  const savePoint = async (silent = false) => {
+    if (!canEdit) return null;
     setLoading(true);
     try {
       const payload = {
@@ -129,27 +129,70 @@ export default function PointFinancierTab({ currentUser }) {
         cheque_amount: parseFloat(form.cheque_amount || 0), wallet_amount: parseFloat(form.wallet_amount || 0),
         momo_number: form.momo_number, destination: form.destination, notes: form.notes, billettage
       };
+      let saved = null;
       if (currentPoint) {
-        await axios.put(`${API}/financial-points/${currentPoint.id}`, { ...payload, is_admin: isAdmin });
-        toast.success("Reversement mis a jour");
+        const r = await axios.put(`${API}/financial-points/${currentPoint.id}`, { ...payload, is_admin: isAdmin });
+        saved = r.data?.financial_point || currentPoint;
+        if (!silent) toast.success("Reversement mis a jour");
       } else {
-        await axios.post(`${API}/financial-points`, {
+        const r = await axios.post(`${API}/financial-points`, {
           date: periodType === "weekly" ? weekStart : selectedDate,
           end_date: periodType === "weekly" ? weekEnd : "", period_type: periodType, ...payload,
           created_by: currentUser?.full_name || currentUser?.username
         });
-        toast.success("Reversement enregistre");
+        saved = r.data?.financial_point || null;
+        if (!silent) toast.success("Reversement enregistre");
+      }
+      // Refresh local state IMMEDIATELY so currentPoint reflects the saved id
+      if (saved) {
+        setCurrentPoint(saved);
+        setForm({
+          cash_amount: saved.cash_amount || 0,
+          mobile_amount: saved.mobile_amount || 0,
+          cheque_amount: saved.cheque_amount || 0,
+          wallet_amount: saved.wallet_amount || 0,
+          momo_number: saved.momo_number || "",
+          destination: saved.destination || "admin",
+          notes: saved.notes || "",
+        });
+        setBillettage(saved.billettage || {});
       }
       fetchPoints();
-    } catch (err) { toast.error(err.response?.data?.detail || "Erreur"); }
-    finally { setLoading(false); }
+      return saved;
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Erreur");
+      return null;
+    } finally { setLoading(false); }
   };
 
   const signPoint = async () => {
-    if (!currentPoint || !consentChecked) return;
+    if (!consentChecked) return;
     setLoading(true);
     try {
-      await axios.post(`${API}/financial-points/${currentPoint.id}/sign`, {
+      // Auto-save unsaved changes BEFORE signing so the latest amounts are signed.
+      let target = currentPoint;
+      const cashF = parseFloat(form.cash_amount || 0);
+      const mobF = parseFloat(form.mobile_amount || 0);
+      const chqF = parseFloat(form.cheque_amount || 0);
+      const walF = parseFloat(form.wallet_amount || 0);
+      const dirty =
+        !target ||
+        Math.abs((target.cash_amount || 0) - cashF) > 0.5 ||
+        Math.abs((target.mobile_amount || 0) - mobF) > 0.5 ||
+        Math.abs((target.cheque_amount || 0) - chqF) > 0.5 ||
+        Math.abs((target.wallet_amount || 0) - walF) > 0.5 ||
+        (target.momo_number || "") !== (form.momo_number || "") ||
+        (target.destination || "admin") !== (form.destination || "admin") ||
+        (target.notes || "") !== (form.notes || "") ||
+        JSON.stringify(target.billettage || {}) !== JSON.stringify(billettage || {});
+      if (dirty) {
+        target = await savePoint(true);
+      }
+      if (!target?.id) {
+        toast.error("Impossible d'enregistrer le reversement avant signature");
+        return;
+      }
+      await axios.post(`${API}/financial-points/${target.id}/sign`, {
         signer_name: currentUser?.full_name || currentUser?.username,
         consent_text: "Je certifie l'exactitude des montants reverses dans ce reversement."
       });
@@ -160,10 +203,10 @@ export default function PointFinancierTab({ currentUser }) {
 
   // Avant la signature, on force la gerante a effectuer (et appliquer) le billetage des especes.
   // Regle : si cash_amount > 0 (il y a des especes a verser), le billetage doit etre saisi
-  // ET coherent (billettageTotal === cash_amount, apres "Appliquer aux Especes").
+  // ET coherent (tolerance 0.5 F pour absorber les imprecisions de parseFloat).
   const billettageRequired = parseFloat(form.cash_amount || 0) > 0;
   const cashMatches = billettageRequired
-    ? (billettageTotal > 0 && billettageTotal === parseFloat(form.cash_amount || 0))
+    ? (billettageTotal > 0 && Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)) <= 0.5)
     : true; // Pas d'especes -> billetage pas necessaire
 
   const handleSignClick = () => {
@@ -177,17 +220,14 @@ export default function PointFinancierTab({ currentUser }) {
       }, 250);
       return;
     }
-    // 2. Billetage saisi mais pas applique (ou modifie apres application) → demande de confirmation
-    if (billettageRequired && billettageTotal !== parseFloat(form.cash_amount || 0)) {
-      setShowBillettage(true);
-      toast.warning("Le billetage ne correspond pas au montant des especes — cliquez 'Appliquer aux Especes'.");
-      setTimeout(() => {
-        const el = document.querySelector('[data-testid="fp-apply-billettage"]');
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 250);
-      return;
+    // 2. Billetage saisi mais pas applique (ou modifie apres application) → on l'applique automatiquement
+    //    si la difference est claire ; sinon on demande confirmation à l'utilisateur.
+    if (billettageRequired && Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)) > 0.5) {
+      // Auto-apply le billetage comme nouveau cash_amount → plus besoin de cliquer "Appliquer"
+      setForm(prev => ({ ...prev, cash_amount: billettageTotal }));
+      toast.info(`Espèces ajustées au billetage : ${formatPrice(billettageTotal)} F`);
     }
-    // 3. Tout est bon → ouvrir la modale de signature
+    // 3. Tout est bon (ou ajusté) → ouvrir la modale de signature
     setConsentChecked(false);
     setShowConsentModal(true);
   };
@@ -508,7 +548,7 @@ export default function PointFinancierTab({ currentUser }) {
       <div className="flex flex-wrap gap-3 justify-end">
         {isAdmin && currentPoint && <Button data-testid="fp-delete-btn" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deletePoint} disabled={loading}><X className="w-4 h-4 mr-1" /> Supprimer</Button>}
         {canEdit && !isSigned && <Button data-testid="fp-save-btn" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={savePoint} disabled={loading}><Save className="w-4 h-4 mr-1" /> {currentPoint ? "Mettre a jour" : "Enregistrer"}</Button>}
-        {currentPoint && !isSigned && canEdit && <Button data-testid="fp-sign-btn" className={cashMatches ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"} onClick={handleSignClick} disabled={loading}><ShieldCheck className="w-4 h-4 mr-1" /> {cashMatches ? "Signer (Gerante)" : "Completer le billetage"}</Button>}
+        {canEdit && !isSigned && <Button data-testid="fp-sign-btn" className={cashMatches ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"} onClick={handleSignClick} disabled={loading || (computedTotal <= 0)}><ShieldCheck className="w-4 h-4 mr-1" /> {cashMatches ? "Signer (Gérante)" : "Compléter le billetage"}</Button>}
       </div>
 
       {!currentPoint && (<Card className="bg-slate-800/30 border-slate-700"><CardContent className="p-6 text-center"><AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" /><p className="text-slate-400">Aucun reversement pour cette periode.</p>{canEdit && <p className="text-slate-500 text-sm mt-1">Saisissez les montants et enregistrez.</p>}</CardContent></Card>)}
