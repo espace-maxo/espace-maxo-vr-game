@@ -42,8 +42,19 @@ const HebdoReport = ({
   const [transferType, setTransferType] = useState("sales");
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
-  // Preset actif : "today" | "week" | "month" | "custom"
-  const [periodPreset, setPeriodPreset] = useState("week");
+  // Preset actif : "today" | "week" | "month" | "custom" — par défaut = Aujourd'hui
+  const [periodPreset, setPeriodPreset] = useState("today");
+
+  // Au montage : si le parent a initialisé les dates sur la semaine complète,
+  // on les resynchronise sur "aujourd'hui" pour coller au preset par défaut.
+  React.useEffect(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    if (periodPreset === "today" && (weekStartDate !== today || weekEndDate !== today)) {
+      setWeekStartDate(today);
+      setWeekEndDate(today);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const searchUnlinked = async () => {
     if (!attachDateFrom) { toast.error("Selectionnez une date de debut"); return; }

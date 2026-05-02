@@ -4,6 +4,13 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — UX : "Aujourd'hui" par défaut au lieu de "Cette semaine" (DONE)
+
+**Demande utilisateur** : « Affichage aujourd'hui par défaut pour faire mon point. »
+
+**Fix** (`HebdoReport.jsx`) : `periodPreset` initialisé à `"today"` au lieu de `"week"`. Ajout d'un `useEffect` de montage qui resynchronise `weekStartDate`/`weekEndDate` sur la date du jour si elles diffèrent (compense les valeurs initiales du parent CaissePage). Lint OK, compile OK.
+
+
 ## 02/05/2026 — Nouveau sous-onglet "Historique" des reversements (DONE)
 
 **Demande utilisateur** : « Prévoir historique des points dans un sous-menu. »
