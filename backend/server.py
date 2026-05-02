@@ -6383,14 +6383,14 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 invoices.append(inv)
         
         # Get ALL expenses for the week (same strategy)
-        # 1. Expenses in date range NOT assigned to another week
+        # Important : nous utilisons UNIQUEMENT `created_at` comme date de rattachement.
+        # `completed_at` / `approved_at` sont des timestamps administratifs (validation/paiement)
+        # qui n'ont rien à voir avec la date RÉELLE de la dépense. Les utiliser causait
+        # l'apparition de charges validées tardivement dans un point d'un autre jour.
+        # 1. Expenses whose created_at falls in the period AND not assigned to another week.
         expenses_by_date = await db.expenses.find({
-            "$or": [
-                {"status": "completed", "completed_at": {"$gte": start_str, "$lte": end_str}},
-                {"status": "approved", "approved_at": {"$gte": start_str, "$lte": end_str}},
-                {"status": "pending", "created_at": {"$gte": start_str, "$lte": end_str}},
-                {"status": "revision_requested", "created_at": {"$gte": start_str, "$lte": end_str}}
-            ],
+            "status": {"$in": ["completed", "approved", "pending", "revision_requested"]},
+            "created_at": {"$gte": start_str, "$lte": end_str},
             "$and": [
                 {"$or": [
                     {"assigned_week": {"$exists": False}},
@@ -6467,27 +6467,24 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         expenses_by_status = {"completed": 0, "approved": 0, "pending": 0, "revision_requested": 0}
         
         for expense in all_expenses:
-            # Determine which day to attribute this expense to
-            # Priority: assigned_week > completed_at/approved_at > created_at
+            # Determine which day to attribute this expense to.
+            # RULE: always use `created_at` (= vraie date de la charge) unless the user has
+            # manually moved the expense to another week via `assigned_week`.
+            # `completed_at` / `approved_at` are administrative timestamps (payment/validation)
+            # and must NEVER be used for day attribution — otherwise a charge validated
+            # 2 days later is wrongly attributed to the validation day.
             expense_date = None
-            
+
             if expense.get("assigned_week"):
-                # If explicitly assigned to this week, use the approved_at date if within this week,
-                # otherwise use the first day of the week (the Monday)
-                approved_date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
-                
-                # Check if approved_date is within the requested week
-                if approved_date >= start_str and approved_date <= end_str:
-                    expense_date = approved_date
+                # Manually re-assigned by admin: keep the created_at day if within the
+                # target period, otherwise snap to the assigned week's Monday.
+                creat = (expense.get("created_at") or "")[:10]
+                if creat and creat >= start_str and creat <= end_str[:10]:
+                    expense_date = creat
                 else:
-                    # Use the assigned week's Monday
                     expense_date = expense.get("assigned_week")[:10]
-            elif expense.get("status") == "completed":
-                expense_date = (expense.get("completed_at") or expense.get("created_at", ""))[:10]
-            elif expense.get("status") == "approved":
-                expense_date = (expense.get("approved_at") or expense.get("created_at", ""))[:10]
             else:
-                expense_date = expense.get("created_at", "")[:10]
+                expense_date = (expense.get("created_at") or "")[:10]
             
             # Count completed AND approved expenses in totals (both are validated expenses)
             if expense.get("status") in ["completed", "approved"]:

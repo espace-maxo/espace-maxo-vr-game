@@ -4,6 +4,31 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — BUG MAJEUR : Charges attribuées au mauvais jour (DONE sur preview)
+
+**Rapport utilisateur** : « Le point du 01/05/2026 a intégré des charges qui ne sont pas liées à cette journée. » Capture d'écran prouvant que 8 charges du 27/04, 30/04, 02/05 apparaissaient dans le point du 01/05 pour un total de 163 850 F (sur espacemaxo.com).
+
+**Root cause** : dans `/api/reports/weekly` (`server.py`), l'attribution des dépenses à un jour utilisait `completed_at` (pour completed) ou `approved_at` (pour approved) — des **timestamps administratifs** (date de validation/paiement), PAS la date réelle de la charge. Exemple réel trouvé :
+```
+"Liste Menusier - 30/04/2026" :
+  created_at  = 2026-04-30  ← vraie date
+  approved_at = 2026-04-30
+  completed_at= 2026-05-01T18:07:49  ← date du paiement administratif
+```
+→ Cette charge était rattachée au **01/05** au lieu du **30/04**.
+
+**Fix** (`server.py` `get_weekly_report`) :
+1. Query `expenses_by_date` : filtre désormais UNIQUEMENT sur `created_at` dans la période (plus sur completed_at/approved_at).
+2. Logique d'attribution `expense_date` : utilise UNIQUEMENT `created_at` (avec fallback sur `assigned_week` si manuellement re-assigné).
+3. Les statuts sont limités à `completed | approved | pending | revision_requested`.
+
+**Validation** via curl sur preview backend : endpoints répondent correctement. ATTENTION : la prod `espacemaxo.com` est une instance **distincte** (33 expenses vs 2 sur preview) → l'utilisateur doit **redéployer via le bouton Deploy** pour propager le fix en production.
+
+### Bonus : Bouton "Valider et passer au Reversement"
+- Ajouté dans `HebdoReport.jsx` (bouton vert avec icône Check, `data-testid=validate-and-revers-btn`).
+- Bascule automatiquement vers le sous-onglet Reversement via `onGoToReversement()` contrôlé par `hebdoSubTab` state dans `CaissePage.jsx`.
+
+
 ## 02/05/2026 — Faire le point : strict période sur les achats (DONE)
 
 **Demande utilisateur** : « Supprime des points tout achat qui n'est pas lié à la période. »
