@@ -4,6 +4,24 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Achats : prestations payées rejoignent "terminés", masquées chez la Gérante (DONE)
+
+**Demande utilisateur** : « Les prestations payées aussi doivent être achevées dans achats et prestations terminés. La gérante ne les verra plus. »
+
+**Fix** (`AchatsTab.jsx`) :
+- Helper `isFinished(e)` : `status === 'completed' OU (category === 'paiement' && is_paid === true)`.
+- **Onglet "Achats terminés"** renommé **"Achats & prestations terminés"** (admin uniquement) :
+  - Compteur + total + liste utilisent `expenses.filter(isFinished)` au lieu du seul `status === 'completed'`.
+- **Liste "Approuvés - Prêts à acheter"** : pour la Gérante, on filtre `status === 'approved'` ET on exclut les prestations payées (`!(category === 'paiement' && is_paid === true)`).
+- KPI : `visibleExpenses` exclut désormais tout ce qui matche `isFinished` pour la Gérante (et plus seulement `completed`).
+- Message vide mis à jour : "Aucun achat ni prestation terminé".
+
+Lint OK, compile OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Gérante : masquer les achats terminés (DONE)
 
 **Demande utilisateur** : « Fais disparaître les achats terminés du profil de la gérante. »

@@ -171,6 +171,16 @@ const AchatsTab = ({ ctx }) => {
 
   // Author filter for "Validation en cours" (admin only) : 'all' | 'admin' | 'manager' | 'other'
   const [authorFilter, setAuthorFilter] = React.useState('all');
+
+  // Helpers : qu'est-ce qu'une dépense "terminée" ?
+  //  - status === 'completed' : achat normal réglé.
+  //  - category === 'paiement' && is_paid === true : prestation marquée payée.
+  // Ces deux cas doivent disparaître du profil de la Gérante (déjà réglés/payés)
+  // et apparaître dans l'onglet "Achats terminés" côté Admin.
+  const isFinished = (e) =>
+    e.status === 'completed' ||
+    (e.category === 'paiement' && e.is_paid === true);
+  const isAdminUser = currentUser?.role === 'admin';
   // List of unique authors found in current expenses (for the dropdown of "other")
   const allAuthors = React.useMemo(() => {
     const set = new Set();
@@ -466,9 +476,9 @@ const AchatsTab = ({ ctx }) => {
                   }`}
                 >
                   <FileText className="w-4 h-4 mr-1 inline" />
-                  Achats terminés
+                  Achats &amp; prestations terminés
                   <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'completed').length}
+                    {expenses.filter(isFinished).length}
                   </Badge>
                 </button>
                 )}
@@ -572,16 +582,17 @@ const AchatsTab = ({ ctx }) => {
               {/* === KPI Cards aérées (regroupement par état) === */}
               {expenses.length > 0 && (() => {
                 const isAdmin = currentUser?.role === 'admin';
-                // La Gérante ne voit pas les achats "completed" (terminés/payés) :
-                // ils ne la concernent plus une fois la dépense réglée par l'admin.
-                const visibleExpenses = isAdmin ? expenses : expenses.filter(e => e.status !== 'completed');
+                // La Gérante ne voit pas les achats "terminés" (completed OU prestations payées) :
+                // ils ne la concernent plus une fois la dépense réglée par l'admin / la prestation payée.
+                const visibleExpenses = isAdmin ? expenses : expenses.filter(e => !isFinished(e));
                 const sumBy = (statuses) => visibleExpenses
                   .filter(e => statuses.includes(e.status))
                   .reduce((s, e) => s + (e.amount || 0), 0);
                 const cntBy = (statuses) => visibleExpenses.filter(e => statuses.includes(e.status)).length;
                 const aTraiterAmount = sumBy(['pending', 'admin_review', 'revision_requested']);
                 const aTraiterCount = cntBy(['pending', 'admin_review', 'revision_requested']);
-                // Pour la Gérante : seulement "approved" (validés). Pour l'admin : approved + completed.
+                // Pour la Gérante : seulement "approved" non encore payées (prestations).
+                // Pour l'admin : approved + completed.
                 const validesStatuses = isAdmin ? ['approved', 'completed'] : ['approved'];
                 const validesAmount = sumBy(validesStatuses);
                 const validesCount = cntBy(validesStatuses);
@@ -1621,7 +1632,13 @@ const AchatsTab = ({ ctx }) => {
 
 
               {/* Approved expenses (ready for purchase) */}
-              {achatsSubView === 'valides' && expenses.filter(e => e.status === 'approved').length > 0 && (
+              {achatsSubView === 'valides' && (() => {
+                // La Gérante ne voit plus les prestations déjà payées (elles vont dans Terminés admin).
+                const approvedVisible = expenses.filter(e =>
+                  e.status === 'approved' && (isAdminUser || !(e.category === 'paiement' && e.is_paid === true))
+                );
+                if (approvedVisible.length === 0) return null;
+                return (
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-green-400 flex items-center justify-between flex-wrap gap-2">
@@ -1629,10 +1646,10 @@ const AchatsTab = ({ ctx }) => {
                         <CheckCircle className="w-5 h-5" />
                         APPROUVÉS - Prêts à acheter
                         <Badge className="bg-green-500/30 text-green-300 ml-2">
-                          {expenses.filter(e => e.status === 'approved').length}
+                          {approvedVisible.length}
                         </Badge>
                         <Badge className="bg-emerald-500/30 text-emerald-300">
-                          Total: {formatPrice(expenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0))} F
+                          Total: {formatPrice(approvedVisible.reduce((sum, e) => sum + e.amount, 0))} F
                         </Badge>
                       </div>
                       <div className="flex gap-2 flex-wrap">
@@ -1666,7 +1683,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {expenses.filter(e => e.status === 'approved').map(expense => (
+                    {approvedVisible.map(expense => (
                       <div key={expense.id} className="bg-green-900/20 rounded-lg p-3 border border-green-500/30">
                         <div className="flex flex-col gap-2">
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -1933,22 +1950,24 @@ const AchatsTab = ({ ctx }) => {
                     ))}
                   </CardContent>
                 </Card>
-              )}
+                );
+              })()}
 
               {/* Completed expenses (Achats terminés — dedicated sub-menu) */}
-              {achatsSubView === 'termines' && (
-                expenses.filter(e => e.status === 'completed').length > 0 ? (
+              {achatsSubView === 'termines' && (() => {
+                const finishedList = expenses.filter(isFinished);
+                return finishedList.length > 0 ? (
                   <Card className="bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-slate-600/50" data-testid="completed-expenses-card">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-slate-200 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <FileText className="w-5 h-5" />
-                          Achats terminés
+                          Achats &amp; prestations terminés
                           <Badge className="bg-slate-500/30 text-slate-200 ml-2">
-                            {expenses.filter(e => e.status === 'completed').length}
+                            {finishedList.length}
                           </Badge>
                           <Badge className="bg-emerald-500/30 text-emerald-300">
-                            Total: {formatPrice(expenses.filter(e => e.status === 'completed').reduce((s, e) => s + (e.amount || 0), 0))} F
+                            Total: {formatPrice(finishedList.reduce((s, e) => s + (e.amount || 0), 0))} F
                           </Badge>
                         </div>
                         <div className="flex gap-2">
@@ -1975,7 +1994,7 @@ const AchatsTab = ({ ctx }) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
-                      {expenses.filter(e => e.status === 'completed').map(expense => (
+                      {finishedList.map(expense => (
                         <div key={expense.id} className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/30" data-testid={`completed-expense-${expense.id}`}>
                           <div className="flex flex-col gap-2">
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -2099,11 +2118,11 @@ const AchatsTab = ({ ctx }) => {
                   <Card className="bg-slate-800/30 border-slate-700">
                     <CardContent className="py-12 text-center">
                       <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                      <p className="text-slate-500">Aucun achat terminé</p>
+                      <p className="text-slate-500">Aucun achat ni prestation terminé</p>
                     </CardContent>
                   </Card>
-                )
-              )}
+                );
+              })()}
 
               {/* Rejected expenses */}
               {achatsSubView === 'rejetes' && expenses.filter(e => e.status === 'rejected').length > 0 && (
