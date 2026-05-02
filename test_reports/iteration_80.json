@@ -1,0 +1,114 @@
+{
+  "summary": "Iteration 80 - Testing new Audit Logs system for invoice and table (bon) modifications. Backend: 22/24 tests passed (92%). Frontend: All UI elements verified - Audit tab visible only for Admin, filters, KPIs, log rows, detail modal all working correctly.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PUT /api/caisse/tables/{id}",
+        "issue": "Table update does NOT create audit log. The tables.py router with audit logging exists but is NOT included in server.py. Server.py has duplicate table endpoints without audit logging.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "DELETE /api/caisse/tables/{id}?reason=cancelled",
+        "issue": "Table deletion with reason=cancelled does NOT create audit log. Same root cause - tables.py router not included in server.py.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_logs_iter80.py",
+    "/app/test_reports/pytest/audit_logs_iter80_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Include tables.py router in server.py OR add audit logging to the table endpoints in server.py. Currently tables.py has _log_audit calls but server.py table endpoints do not.",
+    "The tables.py router (lines 90-192) has proper audit logging for PUT and DELETE with reason=cancelled, but server.py (lines 4064-4115) has duplicate endpoints without audit logging."
+  ],
+  "critical_code_review_comments": [
+    "Backend invoices.py: Audit logging working correctly for all invoice operations (create, update, validate, cancel, delete, update-items)",
+    "Backend invoices.py: _log_audit function properly excludes MongoDB _id from responses",
+    "Backend invoices.py: _diff_invoice function correctly computes field-level diffs with items summary",
+    "Backend invoices.py: GET /api/audit/logs correctly restricts access to admin role only (403 for manager/server)",
+    "Backend tables.py: Has proper audit logging implementation but router is NOT included in server.py",
+    "Backend server.py: Has duplicate table endpoints (lines 4064-4115) that do NOT call _log_audit",
+    "Frontend AuditLogsTab.jsx: Well-implemented with all required data-testid attributes",
+    "Frontend CaissePage.jsx: Correctly shows Audit tab only for admin role (line 5038-5044)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_audit_logs_iter80.py"
+  ],
+  "success_rate": {
+    "backend": "92% (22/24 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": {"password": "Caisse2026"},
+    "gerante": {"pin": "2468"}
+  },
+  "seed_data_creation": "Test invoices and tables created and cleaned up during tests",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 80 tested new Audit Logs system. Invoice audit logging works perfectly (create, validate, cancel, delete, update-items). Table audit logging DOES NOT WORK because tables.py router is not included in server.py - the server.py has duplicate table endpoints without audit calls. Key data-testids: tab-audit, audit-logs-tab, audit-search-input, audit-entity-filter, audit-actor-filter, audit-action-filter, audit-refresh-btn, audit-date-from, audit-date-to, audit-row-{id}, audit-detail-{id}. Backend endpoint: GET /api/audit/logs?role=admin returns {total, by_action, by_actor, logs}. Returns 403 for non-admin roles.",
+  "features_verified": {
+    "backend": [
+      "GET /api/audit/logs?role=admin returns 200 with total/by_action/by_actor/logs - PASSED",
+      "GET /api/audit/logs?role=manager returns 403 (Admin only) - PASSED",
+      "GET /api/audit/logs?role=server returns 403 (Admin only) - PASSED",
+      "GET /api/audit/logs without role returns 422 (required param) - PASSED",
+      "POST /api/invoices creates audit log with action='create' - PASSED",
+      "PUT /api/invoices/{id} with validation_status='validated' creates log action='validate' with diff - PASSED",
+      "PUT /api/invoices/{id} with validation_status='cancelled' creates log action='cancel' with diff - PASSED",
+      "DELETE /api/invoices/{id} creates log action='delete' - PASSED",
+      "PUT /api/invoices/{id}/update-items creates log with items diff - PASSED",
+      "PUT /api/caisse/tables/{id} creates audit log - FAILED (tables.py router not included)",
+      "DELETE /api/caisse/tables/{id}?reason=cancelled creates audit log - FAILED (tables.py router not included)",
+      "DELETE /api/caisse/tables/{id} without reason does NOT create log - PASSED",
+      "Filter by entity_type=invoice - PASSED",
+      "Filter by entity_type=table - PASSED",
+      "Filter by actor_role=manager - PASSED",
+      "Filter by actor_role=server - PASSED",
+      "Filter by action=create - PASSED",
+      "Filter by action=validate - PASSED",
+      "Filter by date range - PASSED",
+      "Filter by search (invoice_number) - PASSED",
+      "Combined filters - PASSED",
+      "No MongoDB _id in responses - PASSED",
+      "Audit log structure has required fields - PASSED",
+      "Snapshot contains useful data - PASSED"
+    ],
+    "frontend": [
+      "Admin login via /caisse (password: Caisse2026) - PASSED",
+      "Audit tab visible for Admin (data-testid='tab-audit') - PASSED",
+      "Audit tab NOT visible for Gérante (Manager) - PASSED",
+      "AuditLogsTab container (data-testid='audit-logs-tab') - PASSED",
+      "Search input (data-testid='audit-search-input') - PASSED",
+      "Entity filter (data-testid='audit-entity-filter') - PASSED",
+      "Actor filter (data-testid='audit-actor-filter') - PASSED",
+      "Action filter (data-testid='audit-action-filter') - PASSED",
+      "Refresh button (data-testid='audit-refresh-btn') - PASSED",
+      "Date filters (audit-date-from, audit-date-to) - PASSED",
+      "Audit log rows displayed (17 rows found) - PASSED",
+      "Detail buttons work (data-testid='audit-detail-{id}') - PASSED",
+      "Detail modal shows event info correctly - PASSED",
+      "KPIs displayed: Total, Création, Modification, Validation, Annulation, Suppression - PASSED"
+    ]
+  },
+  "root_cause_analysis": {
+    "issue": "Table audit logging not working",
+    "root_cause": "The tables.py router file exists with proper _log_audit calls but is NOT included in server.py via include_router(). Instead, server.py has duplicate table endpoints (lines 4064-4115) that do not call _log_audit.",
+    "evidence": [
+      "tables.py lines 90-192: Has PUT and DELETE endpoints with _log_audit calls",
+      "server.py lines 4064-4115: Has duplicate PUT and DELETE endpoints WITHOUT _log_audit calls",
+      "server.py lines 110-128: include_router() calls do NOT include tables_router",
+      "Test results: 0 table audit logs created despite table operations being performed"
+    ],
+    "fix_options": [
+      "Option 1: Add 'from routers.tables import router as tables_router, set_db as set_tables_db' and 'api_router.include_router(tables_router)' to server.py, then remove duplicate endpoints",
+      "Option 2: Add _log_audit calls to the existing table endpoints in server.py (lines 4064-4115)"
+    ]
+  }
+}

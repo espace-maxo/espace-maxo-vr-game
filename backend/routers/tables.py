@@ -2,13 +2,20 @@
 Caisse Pro - Table Routes
 Handles multi-table draft invoice system
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
 import logging
 
 from models.caisse import CaisseTableCreate, CaisseTableUpdate
+
+# Audit helper (centralised in invoices router)
+try:
+    from routers.invoices import _log_audit
+except Exception:  # pragma: no cover
+    async def _log_audit(*_a, **_kw):
+        return None
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +88,17 @@ async def create_caisse_table(table_data: CaisseTableCreate):
 
 
 @router.put("/caisse/tables/{table_id}")
-async def update_caisse_table(table_id: str, table_data: CaisseTableUpdate):
+async def update_caisse_table(
+    table_id: str,
+    table_data: CaisseTableUpdate,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Update a table/draft invoice"""
     try:
+        # Snapshot before
+        before = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+
         update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
         
         if table_data.items is not None:
@@ -108,6 +123,35 @@ async def update_caisse_table(table_id: str, table_data: CaisseTableUpdate):
             raise HTTPException(status_code=404, detail="Table non trouvée")
         
         updated_table = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+
+        # Audit only meaningful changes (skip pure timestamp/items length parity)
+        if before:
+            changes = {}
+            for k, v in update_data.items():
+                if k == "updated_at":
+                    continue
+                if k == "items":
+                    old_summary = {
+                        "count": len(before.get("items") or []),
+                        "qty": sum(float(i.get("quantity") or 0) for i in (before.get("items") or [])),
+                    }
+                    new_summary = {
+                        "count": len(v or []),
+                        "qty": sum(float(i.get("quantity") or 0) for i in (v or [])),
+                    }
+                    if old_summary != new_summary:
+                        changes[k] = {"from": old_summary, "to": new_summary}
+                    continue
+                if before.get(k) != v:
+                    changes[k] = {"from": before.get(k), "to": v}
+            if changes:
+                await _log_audit(
+                    "table",
+                    updated_table or before,
+                    "update",
+                    {"name": actor_name, "role": actor_role},
+                    changes,
+                )
         return {"success": True, "table": updated_table}
     except HTTPException:
         raise
@@ -117,12 +161,28 @@ async def update_caisse_table(table_id: str, table_data: CaisseTableUpdate):
 
 
 @router.delete("/caisse/tables/{table_id}")
-async def delete_caisse_table(table_id: str):
+async def delete_caisse_table(
+    table_id: str,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+    reason: Optional[str] = Query(None, description="converted | cancelled | other"),
+):
     """Delete a table/draft (when converted to invoice or cancelled)"""
     try:
+        existing = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
         result = await db.caisse_tables.delete_one({"id": table_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Table non trouvée")
+        # Only log explicit cancellations (manual delete from UI), not the silent
+        # cleanup that follows an invoice conversion — caller passes reason='cancelled'.
+        if existing and (reason or "").lower() == "cancelled":
+            await _log_audit(
+                "table",
+                existing,
+                "delete",
+                {"name": actor_name, "role": actor_role},
+                None,
+            )
         return {"success": True}
     except HTTPException:
         raise

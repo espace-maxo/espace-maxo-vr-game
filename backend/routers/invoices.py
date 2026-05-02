@@ -70,9 +70,16 @@ def _diff_invoice(before: dict, after_patch: dict) -> dict:
     return out
 
 
-async def _log_invoice_audit(invoice_doc: dict, action: str, actor: dict | None, changes: dict | None = None):
-    """Persist an audit line for an invoice modification.
+async def _log_audit(
+    entity_type: str,
+    entity_doc: dict,
+    action: str,
+    actor: dict | None,
+    changes: dict | None = None,
+):
+    """Persist a unified audit line for an invoice or table (bon) modification.
 
+    entity_type: "invoice" | "table"
     actor: {"name": str, "role": str, "user_id": Optional[str]}
     action: "create" | "update" | "delete" | "validate" | "cancel"
     """
@@ -81,25 +88,33 @@ async def _log_invoice_audit(invoice_doc: dict, action: str, actor: dict | None,
             return
         entry = {
             "id": str(uuid.uuid4()),
-            "invoice_id": invoice_doc.get("id"),
-            "invoice_number": invoice_doc.get("invoice_number"),
-            "table_number": invoice_doc.get("table_number"),
+            "entity_type": entity_type,
+            "entity_id": entity_doc.get("id"),
+            "invoice_number": entity_doc.get("invoice_number"),
+            "table_number": entity_doc.get("table_number"),
             "action": action,
-            "actor_name": (actor or {}).get("name") or invoice_doc.get("created_by") or "—",
+            "actor_name": (actor or {}).get("name") or entity_doc.get("created_by") or entity_doc.get("server_name") or "—",
             "actor_role": (actor or {}).get("role") or "manager",
             "actor_id": (actor or {}).get("user_id"),
             "changes": changes or {},
             "snapshot": {
-                "total": invoice_doc.get("total"),
-                "items_count": len(invoice_doc.get("items") or []),
-                "validation_status": invoice_doc.get("validation_status"),
+                "total": entity_doc.get("total"),
+                "items_count": len(entity_doc.get("items") or []),
+                "validation_status": entity_doc.get("validation_status"),
+                "client_name": entity_doc.get("client_name") or entity_doc.get("customer_name"),
+                "server_name": entity_doc.get("server_name"),
             },
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.invoice_audit_logs.insert_one(entry)
+        await db.audit_logs.insert_one(entry)
     except Exception as e:
         # Never break a write because of audit logging
         logger.error(f"audit log failed: {e}")
+
+
+# Backward-compat alias used elsewhere in this router
+async def _log_invoice_audit(invoice_doc: dict, action: str, actor: dict | None, changes: dict | None = None):
+    await _log_audit("invoice", invoice_doc, action, actor, changes)
 
 
 # ==================== MODELS ====================
@@ -156,7 +171,11 @@ class Invoice(BaseModel):
 # ==================== CRUD ====================
 
 @router.post("/invoices")
-async def create_invoice(invoice_data: InvoiceCreate):
+async def create_invoice(
+    invoice_data: InvoiceCreate,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Create a new invoice"""
     try:
         today = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -185,10 +204,11 @@ async def create_invoice(invoice_data: InvoiceCreate):
         invoice_dict = invoice.model_dump()
         await db.invoices.insert_one(invoice_dict)
         # Audit : creation
-        await _log_invoice_audit(
+        await _log_audit(
+            "invoice",
             invoice_dict,
             "create",
-            {"name": invoice_data.created_by, "role": "manager"},
+            {"name": actor_name or invoice_data.created_by, "role": actor_role or "manager"},
             None,
         )
         return {"success": True, "invoice": {k: v for k, v in invoice_dict.items() if k != "_id"}}
@@ -257,6 +277,66 @@ async def get_invoices(
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== AUDIT LOGS (Admin only) ====================
+
+@router.get("/audit/logs")
+async def get_audit_logs(
+    role: str = Query(..., description="Caller role - must be 'admin'"),
+    entity_type: Optional[str] = Query(None, description="invoice | table"),
+    actor_role: Optional[str] = Query(None, description="manager | server | admin"),
+    action: Optional[str] = Query(None, description="create|update|delete|validate|cancel"),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    search: Optional[str] = Query(None, description="search by invoice_number or actor_name"),
+    limit: int = Query(500, ge=1, le=2000),
+):
+    """Return audit logs of order/invoice/bon modifications.
+
+    Restricted to admin (role param check). Filters by entity_type, actor_role,
+    action, date range, and free-text search on invoice_number/actor_name.
+    """
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé à l'administrateur")
+
+    query: Dict = {}
+    if entity_type:
+        query["entity_type"] = entity_type
+    if actor_role:
+        query["actor_role"] = actor_role
+    if action:
+        query["action"] = action
+    if start_date or end_date:
+        date_q: Dict = {}
+        if start_date:
+            date_q["$gte"] = f"{start_date}T00:00:00"
+        if end_date:
+            date_q["$lte"] = f"{end_date}T23:59:59.999"
+        query["created_at"] = date_q
+    if search:
+        rgx = {"$regex": re.escape(search), "$options": "i"}
+        query["$or"] = [
+            {"invoice_number": rgx},
+            {"actor_name": rgx},
+        ]
+
+    logs = await db.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    # Stats
+    total = len(logs)
+    by_action: Dict[str, int] = {}
+    by_actor: Dict[str, int] = {}
+    for lg in logs:
+        a = lg.get("action") or "?"
+        by_action[a] = by_action.get(a, 0) + 1
+        nm = lg.get("actor_name") or "—"
+        by_actor[nm] = by_actor.get(nm, 0) + 1
+    return {
+        "total": total,
+        "by_action": by_action,
+        "by_actor": by_actor,
+        "logs": logs,
+    }
 
 
 @router.get("/invoices/stats/by-product")
@@ -411,7 +491,12 @@ async def get_invoice(invoice_id: str):
 
 
 @router.put("/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
+async def update_invoice(
+    invoice_id: str,
+    invoice_data: dict = Body(...),
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Update an existing invoice.
     If validation status changes to 'validated':
       - Auto-stop the associated table and record service_stats
@@ -431,10 +516,32 @@ async def update_invoice(invoice_id: str, invoice_data: dict = Body(...)):
                 detail=f"Caisse clôturée pour le {invoice_date}. Rouvrez le Z dans 'Point de la Caisse' avant de modifier cette facture."
             )
 
+        # Compute diff BEFORE applying patch
+        diff = _diff_invoice(current_invoice, invoice_data)
+
         invoice_data["updated_at"] = datetime.now(timezone.utc).isoformat()
         result = await db.invoices.update_one({"id": invoice_id}, {"$set": invoice_data})
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Facture non trouvée")
+
+        # Determine action label for audit
+        action_label = "update"
+        new_status = invoice_data.get("validation_status")
+        old_status = current_invoice.get("validation_status")
+        if new_status == "validated" and old_status != "validated":
+            action_label = "validate"
+        elif new_status == "cancelled" and old_status != "cancelled":
+            action_label = "cancel"
+
+        # Refresh doc for snapshot
+        refreshed = {**current_invoice, **invoice_data}
+        await _log_audit(
+            "invoice",
+            refreshed,
+            action_label,
+            {"name": actor_name, "role": actor_role},
+            diff,
+        )
 
         if (invoice_data.get("validation_status") == "validated"
                 and current_invoice
@@ -779,7 +886,11 @@ async def resync_destockage(date: Optional[str] = None, all_past: bool = False):
 
 
 @router.delete("/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str):
+async def delete_invoice(
+    invoice_id: str,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Delete an invoice"""
     try:
         existing = await db.invoices.find_one({"id": invoice_id})
@@ -798,6 +909,14 @@ async def delete_invoice(invoice_id: str):
         result = await db.invoices.delete_one({"id": invoice_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Facture non trouvée")
+
+        await _log_audit(
+            "invoice",
+            existing,
+            "delete",
+            {"name": actor_name, "role": actor_role},
+            None,
+        )
         return {"success": True}
     except HTTPException:
         raise
@@ -809,7 +928,12 @@ async def delete_invoice(invoice_id: str):
 # ==================== UPDATE ITEMS ====================
 
 @router.put("/invoices/{invoice_id}/update-items")
-async def update_invoice_items(invoice_id: str, data: dict = Body(...)):
+async def update_invoice_items(
+    invoice_id: str,
+    data: dict = Body(...),
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Update invoice items (only if modification_allowed)"""
     try:
         items = data.get("items", [])
@@ -829,6 +953,16 @@ async def update_invoice_items(invoice_id: str, data: dict = Body(...)):
             dept = item.get("department", "autres")
             totals_by_department[dept] = totals_by_department.get(dept, 0) + (item.get("price", 0) * item.get("quantity", 1))
 
+        # Diff before mutation
+        patch = {
+            "items": items,
+            "subtotal": subtotal,
+            "discount_amount": discount_amount,
+            "total": new_total,
+            "totals_by_department": totals_by_department,
+        }
+        diff = _diff_invoice(invoice, patch)
+
         await db.invoices.update_one(
             {"id": invoice_id},
             {"$set": {
@@ -841,6 +975,15 @@ async def update_invoice_items(invoice_id: str, data: dict = Body(...)):
                 "modified_at": datetime.now(timezone.utc).isoformat(),
                 "validation_status": "pending"
             }}
+        )
+
+        refreshed = {**invoice, **patch, "validation_status": "pending"}
+        await _log_audit(
+            "invoice",
+            refreshed,
+            "update",
+            {"name": actor_name, "role": actor_role},
+            diff,
         )
         return {"success": True, "message": "Facture modifiée"}
     except HTTPException:

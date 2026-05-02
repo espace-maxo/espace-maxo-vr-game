@@ -49,6 +49,7 @@ import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
+import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
 import CurrentAccountsTab from "./caisse/components/CurrentAccountsTab";
@@ -218,6 +219,15 @@ const CaissePage = () => {
   const [loginForm, setLoginForm] = useState({ pin: "", password: "" });
   const [loginMode, setLoginMode] = useState("pin"); // pin or admin
   const [showForgotCodeModal, setShowForgotCodeModal] = useState(false);
+
+  // Audit actor query string (added to mutation URLs so the audit log knows
+  // which user performed the action — visible only to admins).
+  const actorQs = () => {
+    if (!currentUser) return "";
+    const name = encodeURIComponent(currentUser.full_name || currentUser.username || "—");
+    const role = encodeURIComponent(currentUser.role || "manager");
+    return `actor_name=${name}&actor_role=${role}`;
+  };
   
   // Main state
   const [activeTab, setActiveTab] = useState("tables");
@@ -563,7 +573,7 @@ const CaissePage = () => {
   const saveCurrentTableToDb = async () => {
     if (!activeTableId) return;
     try {
-      await axios.put(`${API}/caisse/tables/${activeTableId}`, {
+      await axios.put(`${API}/caisse/tables/${activeTableId}?${actorQs()}`, {
         items: currentBill,
         client_id: selectedClient?.id || null,
         client_name: selectedClient?.name || "Client",
@@ -578,7 +588,7 @@ const CaissePage = () => {
 
   const closeTable = async (tableId) => {
     try {
-      await axios.delete(`${API}/caisse/tables/${tableId}`);
+      await axios.delete(`${API}/caisse/tables/${tableId}?${actorQs()}&reason=cancelled`);
       
       // If closing active table, switch to another or clear
       if (tableId === activeTableId) {
@@ -3402,7 +3412,7 @@ _Gérante - Espace Maxo_
 
   const createInvoice = async (invoiceData) => {
     try {
-      const response = await axios.post(`${API}/invoices`, invoiceData);
+      const response = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
       
       // Update client stats if selected
       if (selectedClient) {
@@ -3420,7 +3430,7 @@ _Gérante - Espace Maxo_
       if (activeTableId) {
         // Update table status to "invoiced" and CLEAR items since they're now in the invoice
         try {
-          await axios.put(`${API}/caisse/tables/${activeTableId}`, {
+          await axios.put(`${API}/caisse/tables/${activeTableId}?${actorQs()}`, {
             status: "invoiced",
             items: [], // Clear items since the order has been sent
             invoice_created_at: new Date().toISOString()
@@ -3562,7 +3572,7 @@ _Gérante - Espace Maxo_
       // Create the new date with time from original invoice
       const newCreatedAt = invoiceDate + 'T' + (pendingValidationInvoice.created_at?.split('T')[1] || '12:00:00.000Z');
       
-      await axios.put(`${API}/invoices/${pendingValidationInvoice.id}`, {
+      await axios.put(`${API}/invoices/${pendingValidationInvoice.id}?${actorQs()}`, {
         validation_status: "validated",
         validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
         validated_at: new Date().toISOString(),
@@ -3600,7 +3610,7 @@ _Gérante - Espace Maxo_
     
     if (!confirm("Supprimer cette facture ?")) return;
     try {
-      await axios.delete(`${API}/invoices/${invoiceId}`);
+      await axios.delete(`${API}/invoices/${invoiceId}?${actorQs()}`);
       toast.success("Bon supprimé");
       fetchAllData();
     } catch (error) {
@@ -3622,7 +3632,7 @@ _Gérante - Espace Maxo_
     if (!reason) return;
     
     try {
-      await axios.put(`${API}/invoices/${invoiceId}`, {
+      await axios.put(`${API}/invoices/${invoiceId}?${actorQs()}`, {
         validation_status: "cancelled",
         cancelled_by: currentUser?.full_name || currentUser?.username || "Admin",
         cancelled_at: new Date().toISOString(),
@@ -3827,7 +3837,7 @@ _Gérante - Espace Maxo_
     const newTotal = editingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
     try {
-      await axios.put(`${API}/invoices/${editingInvoice.id}/update-items`, {
+      await axios.put(`${API}/invoices/${editingInvoice.id}/update-items?${actorQs()}`, {
         items: editingItems,
         total: newTotal
       });
@@ -5025,6 +5035,12 @@ _Gérante - Espace Maxo_
                 <Settings className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Utilisateurs</span>
               </TabsTrigger>
             )}
+            {/* 14.5 AUDIT — Historique des modifications (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="audit" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-audit">
+                <ClipboardList className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Audit</span>
+              </TabsTrigger>
+            )}
             {/* 15. COMPTE COURANT (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="current-accounts" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-current-accounts">
@@ -5376,6 +5392,13 @@ _Gérante - Espace Maxo_
                 }}
                 onDeleteUser={deleteUser}
               />
+            </TabsContent>
+          )}
+
+          {/* ==================== AUDIT LOGS TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+            <TabsContent value="audit">
+              <AuditLogsTab currentUser={currentUser} />
             </TabsContent>
           )}
 
