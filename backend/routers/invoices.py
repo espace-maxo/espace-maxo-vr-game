@@ -38,6 +38,70 @@ def set_db(database):
     db = database
 
 
+def _diff_invoice(before: dict, after_patch: dict) -> dict:
+    """Compute a compact field-level diff between the previous invoice doc and the
+    incoming patch (only the fields the user actually changed).
+    Returns {field: {"from": old_value, "to": new_value}}.
+    Sensitive/internal fields (_id, updated_at) are filtered out.
+    """
+    skip = {"_id", "updated_at"}
+    out = {}
+    for k, v in (after_patch or {}).items():
+        if k in skip:
+            continue
+        old = before.get(k) if before else None
+        if k == "items":
+            # For items, summarise to (count, total_qty, total_amount) to keep payload small
+            old_summary = {
+                "count": len(old or []),
+                "qty": sum(float(i.get("quantity") or 0) for i in (old or [])),
+                "amount": sum(float(i.get("price") or 0) * float(i.get("quantity") or 0) for i in (old or [])),
+            }
+            new_summary = {
+                "count": len(v or []),
+                "qty": sum(float(i.get("quantity") or 0) for i in (v or [])),
+                "amount": sum(float(i.get("price") or 0) * float(i.get("quantity") or 0) for i in (v or [])),
+            }
+            if old_summary != new_summary:
+                out[k] = {"from": old_summary, "to": new_summary}
+            continue
+        if old != v:
+            out[k] = {"from": old, "to": v}
+    return out
+
+
+async def _log_invoice_audit(invoice_doc: dict, action: str, actor: dict | None, changes: dict | None = None):
+    """Persist an audit line for an invoice modification.
+
+    actor: {"name": str, "role": str, "user_id": Optional[str]}
+    action: "create" | "update" | "delete" | "validate" | "cancel"
+    """
+    try:
+        if db is None:
+            return
+        entry = {
+            "id": str(uuid.uuid4()),
+            "invoice_id": invoice_doc.get("id"),
+            "invoice_number": invoice_doc.get("invoice_number"),
+            "table_number": invoice_doc.get("table_number"),
+            "action": action,
+            "actor_name": (actor or {}).get("name") or invoice_doc.get("created_by") or "—",
+            "actor_role": (actor or {}).get("role") or "manager",
+            "actor_id": (actor or {}).get("user_id"),
+            "changes": changes or {},
+            "snapshot": {
+                "total": invoice_doc.get("total"),
+                "items_count": len(invoice_doc.get("items") or []),
+                "validation_status": invoice_doc.get("validation_status"),
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.invoice_audit_logs.insert_one(entry)
+    except Exception as e:
+        # Never break a write because of audit logging
+        logger.error(f"audit log failed: {e}")
+
+
 # ==================== MODELS ====================
 
 class InvoiceItemCreate(BaseModel):
@@ -120,6 +184,13 @@ async def create_invoice(invoice_data: InvoiceCreate):
 
         invoice_dict = invoice.model_dump()
         await db.invoices.insert_one(invoice_dict)
+        # Audit : creation
+        await _log_invoice_audit(
+            invoice_dict,
+            "create",
+            {"name": invoice_data.created_by, "role": "manager"},
+            None,
+        )
         return {"success": True, "invoice": {k: v for k, v in invoice_dict.items() if k != "_id"}}
     except Exception as e:
         logger.error(f"Error creating invoice: {e}")
