@@ -4,6 +4,37 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Audit : Historique des modifications de factures & bons (DONE)
+
+**Demande utilisateur** : « Permettre d'avoir l'historique des modifications de factures et des bons par la gérante et les serveurs uniquement dans le profil administrateur. »
+
+**Backend** (`/app/backend/routers/invoices.py`, `/app/backend/server.py`) :
+- Nouvelle fonction `_log_audit(entity_type, doc, action, actor, changes)` qui écrit dans la collection `audit_logs`.
+- Audit déclenché automatiquement sur :
+  - `POST /api/invoices` → action `create`
+  - `PUT /api/invoices/{id}` → action `update` / `validate` / `cancel` (auto-détectée selon `validation_status`) avec **diff champ par champ**
+  - `DELETE /api/invoices/{id}` → action `delete`
+  - `PUT /api/invoices/{id}/update-items` → action `update` avec diff items (count/qty/amount)
+  - `PUT /api/caisse/tables/{id}` → action `update` (entity_type=`table`) avec diff
+  - `DELETE /api/caisse/tables/{id}?reason=cancelled` → action `delete`
+  - **Exclusion intelligente** : le cleanup automatique post-facturation (`status=invoiced` + `items=[]`) et le delete sans `reason` ne sont PAS loggés.
+- Nouvel endpoint **admin-only** : `GET /api/audit/logs?role=admin` avec filtres `entity_type`, `actor_role`, `action`, `start_date`, `end_date`, `search`. Retourne `{total, by_action, by_actor, logs}`. Renvoie 403 si role≠admin.
+- Helper `_diff_invoice` calcule un diff compact (résumé pour `items` : count/qty/amount).
+
+**Frontend** (`AuditLogsTab.jsx` nouveau, `CaissePage.jsx`) :
+- Nouveau composant `AuditLogsTab` réservé à l'admin, accessible via onglet **"Audit"** (badge rouge).
+- KPIs : Total + compteurs par action (Création / Modification / Validation / Annulation / Suppression).
+- Filtres : recherche libre, type (facture / bon), auteur (par défaut "Gérante & serveurs", masque admin), action, période.
+- Liste : badge action coloré, n° facture, table, **diff inline** (champ : ancien → nouveau), snapshot (total / lignes / client), modal détail.
+- Auto-refresh 60s.
+- Toutes les mutations (POST/PUT/DELETE invoices, PUT/DELETE caisse/tables) passent désormais `?actor_name=X&actor_role=Y` via le helper `actorQs()`.
+
+**Validation** : testing agent → **iter80 22/24 + iter81 24/24 backend (100%)** — frontend 100%. Toutes les actions tracées correctement, exclusions respectées, accès admin only confirmé.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Journal : Boutons "Début du journal" + "Réinitialiser" (DONE)
 
 **Demande utilisateur** : « Mettre un bouton de suppression et de début du journal. »
