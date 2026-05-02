@@ -25,7 +25,8 @@ const HebdoReport = ({
   formatPrice,
   API,
   refreshWeekly,
-  isAdmin
+  isAdmin,
+  onGoToReversement,
 }) => {
   const [showAttach, setShowAttach] = useState(false);
   const [unlinkedInvoices, setUnlinkedInvoices] = useState([]);
@@ -255,6 +256,19 @@ const HebdoReport = ({
                 <AlertCircle className="w-4 h-4 mr-1" /> Doublons
               </Button>
               </>
+              )}
+              {onGoToReversement && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    toast.success("Point validé — passage au Reversement");
+                    onGoToReversement();
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  data-testid="validate-and-revers-btn"
+                >
+                  <Check className="w-4 h-4 mr-1" /> Valider et passer au Reversement
+                </Button>
               )}
             </>
           )}

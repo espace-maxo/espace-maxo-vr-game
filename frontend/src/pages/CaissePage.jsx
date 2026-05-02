@@ -398,6 +398,8 @@ const CaissePage = () => {
   // ============== FAIRE LE POINT (Rapport période : jour / semaine / personnalisé) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  // Sub-tab active inside the "Faire le point" tab ("point-hebdo" | "point-financier")
+  const [hebdoSubTab, setHebdoSubTab] = useState("point-hebdo");
   // End date (inclusive). Par défaut = dimanche de la semaine courante (preset "Cette semaine").
   const [weekEndDate, setWeekEndDate] = useState(() => {
     const d = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -5810,7 +5812,7 @@ _Gérante - Espace Maxo_
           {/* ==================== POINT HEBDOMADAIRE TAB ==================== */}
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="hebdo">
-            <Tabs defaultValue="point-hebdo" className="w-full">
+            <Tabs value={hebdoSubTab} onValueChange={setHebdoSubTab} className="w-full">
               <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
                 <TabsTrigger value="point-hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
                   <BarChart3 className="w-4 h-4 mr-2" />
@@ -5835,6 +5837,7 @@ _Gérante - Espace Maxo_
                   API={API}
                   refreshWeekly={fetchWeeklyReport}
                   isAdmin={currentUser?.role === 'admin'}
+                  onGoToReversement={() => setHebdoSubTab("point-financier")}
                 />
               </TabsContent>
 
