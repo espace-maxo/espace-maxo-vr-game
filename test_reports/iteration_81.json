@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 81 - RETEST of bug fix from iteration 80. Table audit logging now works correctly. All 24 tests passed (100%). The fix added _log_audit calls directly to table endpoints in server.py (lines 4064-4180).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_logs_iter80.py",
+    "/app/test_reports/pytest/audit_logs_iter81_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Bug fix verified: PUT /api/caisse/tables/{id} with items now creates audit log entity_type='table' action='update'",
+    "Bug fix verified: DELETE /api/caisse/tables/{id}?reason=cancelled now creates audit log entity_type='table' action='delete'",
+    "Cleanup exclusion verified: DELETE without reason does NOT create log (post-invoice cleanup)",
+    "Cleanup exclusion verified: PUT with status='invoiced' + items=[] does NOT create log (post-invoice cleanup)",
+    "No regression on invoice audit logs - all 22 invoice tests still pass"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": {"password": "Caisse2026"},
+    "gerante": {"pin": "2468"}
+  },
+  "seed_data_creation": "Test tables and invoices created and cleaned up during tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 81 confirmed bug fix from iteration 80. Table audit logging now works correctly. The fix was implemented by adding _log_audit calls directly to the existing table endpoints in server.py (lines 4064-4180) rather than including the separate tables.py router. Key behaviors: (1) PUT with items creates 'update' log with items diff summary, (2) DELETE with reason=cancelled creates 'delete' log, (3) DELETE without reason does NOT log (cleanup), (4) PUT with status='invoiced' + items=[] does NOT log (post-invoice cleanup). All 24 audit log tests pass.",
+  "bugs_fixed_in_this_iteration": [
+    {
+      "bug": "PUT /api/caisse/tables/{id} did not create audit log",
+      "fix": "Added _log_audit call in server.py lines 4103-4139",
+      "status": "FIXED"
+    },
+    {
+      "bug": "DELETE /api/caisse/tables/{id}?reason=cancelled did not create audit log",
+      "fix": "Added _log_audit call in server.py lines 4161-4173",
+      "status": "FIXED"
+    }
+  ]
+}
