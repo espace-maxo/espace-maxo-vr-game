@@ -4,6 +4,29 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Journal : Assistant LLM + Suppression + Cutoff 01/05/2026 (DONE)
+
+**Demande utilisateur** : « Oui (option C) et aussi bouton de suppression. Prends le journal à partir du 01/05/2026. »
+
+**Backend** (`/app/backend/routers/journal.py`) :
+- Constante `JOURNAL_CUTOFF = "2026-05-01"` appliquée aux requêtes invoices/expenses/manual du dashboard et de realtime → seules les opérations à partir du 01/05/2026 sont comptées.
+- Nouveaux endpoints :
+  - `POST /api/journal/manual` : création d'une opération réelle (entrée/sortie) avec catégorisation auto.
+  - `DELETE /api/journal/manual/{id}` : suppression d'une opération manuelle.
+  - `POST /api/journal/chat` : **assistant LLM** (Claude Sonnet 4.5 via EMERGENT_LLM_KEY) qui parse une commande FR ("ENTRÉE/DÉPENSE/PRÉVISION/SITUATION") en JSON puis l'exécute. Crée l'opération dans `journal_manual` ou `forecasts` selon l'intention.
+- Collection nouvelle : `journal_manual` (id, type, amount, label, category, created_by, created_at, source: manual|chat).
+
+**Frontend** (`JournalTab.jsx`) :
+- Card violette "Assistant financier" en tête de la vue Réel : input texte, historique des 8 derniers messages, bouton Send (icône ✈/loader).
+- Bouton **trash** sur chaque opération manuelle (`deletable=true`) avec confirmation.
+- Rechargement auto du dashboard après chaque action (chat ou suppression).
+
+**Validation** : testing agent → **22/22 backend PASSED + tous frontend tests PASSED** (100%). Catégorisation auto OK, cutoff OK, LLM OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Renommage "Prévisions" → "Journal" + vue Réel (DONE)
 
 **Demande utilisateur** : Renommer + ajouter vue Réel auto + KPIs + alertes intelligentes (option B).
