@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import SubscriptionsTab from "./caisse/components/SubscriptionsTab";
 import ShareModal, { ShareButton } from "./caisse/components/ShareModal";
 import MonsieurTab from "./caisse/components/MonsieurTab";
 import PointFinancierTab from "./caisse/components/PointFinancierTab";
+import PointsHistoryTab from "./caisse/components/PointsHistoryTab";
 import ActiviteTab from "./caisse/components/ActiviteTab";
 import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
@@ -5822,6 +5823,10 @@ _Gérante - Espace Maxo_
                   <Banknote className="w-4 h-4 mr-2" />
                   Reversement
                 </TabsTrigger>
+                <TabsTrigger value="point-history" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-history">
+                  <History className="w-4 h-4 mr-2" />
+                  Historique
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="point-hebdo">
@@ -5843,6 +5848,10 @@ _Gérante - Espace Maxo_
 
               <TabsContent value="point-financier">
                 <PointFinancierTab currentUser={currentUser} />
+              </TabsContent>
+
+              <TabsContent value="point-history">
+                <PointsHistoryTab currentUser={currentUser} />
               </TabsContent>
             </Tabs>
           </TabsContent>

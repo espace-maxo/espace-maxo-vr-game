@@ -4,6 +4,29 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Nouveau sous-onglet "Historique" des reversements (DONE)
+
+**Demande utilisateur** : « Prévoir historique des points dans un sous-menu. »
+
+**Frontend** : nouveau composant `PointsHistoryTab.jsx` (~330 lignes) branché dans `CaissePage.jsx` comme 3ème sous-onglet (après "Faire le point" et "Reversement", couleur slate + icône History).
+
+**Contenu** :
+- 4 KPIs : Brouillons / En attente DG / Validés / Montant total
+- Filtres : recherche texte (signataire, notes, date, momo), statut (tous/brouillon/signé/validé), type de période (tous/daily/weekly), plage Du/Au, bouton Reset
+- Liste triée par date desc avec pour chaque point :
+  - Badge de statut coloré + type de période + label formaté (ex: "27/04 → 03/05/2026")
+  - Créé par / Signé par (+date) / Validé par (+date) / Notes tronquées
+  - Montant total en gros
+  - Ventilation compacte par mode (espèces/mobile/chèque/crédit) si > 0
+  - Actions : Voir PDF, Télécharger PDF
+  - Actions admin : Rouvrir (unlock) pour points validés, Supprimer (rouge)
+
+**Validation** : lint OK, compile OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager ce nouveau sous-onglet sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — BUG : Bouton "Valider (Admin)" invisible pour la DG (DONE sur preview)
 
 **Rapport utilisateur** : « La validation du point par la directrice générale ne fonctionne pas. Rien ne s'affiche, le bouton vert "Valider (Admin)" n'apparaît pas. »
