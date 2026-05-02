@@ -6402,9 +6402,12 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             ]
         }, {"_id": 0}).to_list(500)
         
-        # 2. Expenses explicitly assigned to this week
+        # 2. Expenses explicitly assigned to this week (any date, but ONLY active statuses)
+        # Without this status filter, rejected/cancelled/draft expenses with a stale
+        # assigned_week could pollute the period total.
         expenses_assigned = await db.expenses.find({
             "assigned_week": start_str,
+            "status": {"$in": ["completed", "approved", "pending", "revision_requested"]},
             "$and": [not_excluded_filter],
         }, {"_id": 0}).to_list(500)
         
@@ -6496,12 +6499,13 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             status = expense.get("status", "pending")
             expenses_by_status[status] = expenses_by_status.get(status, 0) + expense.get("amount", 0)
             
-            # Add to daily data if date is within our week range
-            if expense_date and expense_date in daily_data:
+            # Add to daily data if date is within our week range AND status is active.
+            # Pending / revision_requested expenses no longer pollute the daily count :
+            # they don't contribute to the total either, so showing "Charges (3) — 0 F"
+            # was misleading.
+            if expense_date and expense_date in daily_data and expense.get("status") in ["completed", "approved"]:
                 daily_data[expense_date]["expenses"]["count"] += 1
-                # Count both completed and approved in daily totals
-                if expense.get("status") in ["completed", "approved"]:
-                    daily_data[expense_date]["expenses"]["total"] += expense.get("amount", 0)
+                daily_data[expense_date]["expenses"]["total"] += expense.get("amount", 0)
                 daily_data[expense_date]["expenses"]["items"].append({
                     "id": expense.get("id"),
                     "description": expense.get("description"),
@@ -6638,12 +6642,20 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             )
         
         # ============== MANAGER GENERAL (Commandes & Achats) ==============
+        # Strict period filter + honor excluded_from_weeks like expenses do, so a Mme la D.G.
+        # order/purchase explicitly detached from this week disappears from the report.
+        mg_not_excluded = {"$or": [
+            {"excluded_from_weeks": {"$exists": False}},
+            {"excluded_from_weeks": {"$nin": [start_str]}},
+        ]}
         mg_orders = await db.monsieur_orders.find({
-            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"},
+            "$and": [mg_not_excluded],
         }, {"_id": 0}).to_list(500)
-        
+
         mg_purchases = await db.monsieur_purchases.find({
-            "created_at": {"$gte": start_str, "$lte": end_str + "Z"}
+            "created_at": {"$gte": start_str, "$lte": end_str + "Z"},
+            "$and": [mg_not_excluded],
         }, {"_id": 0}).to_list(500)
         
         mg_orders_total = sum(o.get("total", 0) for o in mg_orders if o.get("status") == "regle")

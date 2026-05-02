@@ -4,6 +4,26 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Faire le point : strict période sur les achats (DONE)
+
+**Demande utilisateur** : « Supprime des points tout achat qui n'est pas lié à la période. »
+
+**Root cause identifié** dans `/app/backend/server.py` (`/api/reports/weekly`) :
+1. **`expenses_assigned`** (Block 2) ne filtrait pas par statut → dépenses *rejected/cancelled/draft* avec un `assigned_week` obsolète polluaient le total.
+2. **`monsieur_orders` / `monsieur_purchases`** ne respectaient PAS `excluded_from_weeks` → impossible de détacher manuellement un achat Mme la D.G. d'une semaine.
+3. Dans la ventilation **par jour**, les dépenses *pending / revision_requested* incrémentaient `count` mais pas `total` → affichage trompeur "Charges (3) — 0 F".
+
+**Fixes appliqués** :
+1. Filtre `status ∈ {completed, approved, pending, revision_requested}` ajouté à `expenses_assigned`.
+2. Ajout de `excluded_from_weeks` au filtre des `mg_orders` et `mg_purchases`.
+3. Daily breakdown : `count` et `items` n'incluent plus que les dépenses *completed* / *approved* (cohérent avec le total quotidien).
+
+**Validation** via curl sur les semaines de mars-avril 2026 :
+- Achat Mme la D.G. de 75 000 F (créé le 03/04) → apparaît UNIQUEMENT semaine du 30/03 ✓ — invisible des autres semaines.
+- Commandes Mme la D.G. → bornées strictement à leur semaine de création ✓.
+- Total expenses cohérent avec daily breakdown ✓.
+
+
 ## 02/05/2026 — UX Fix : Signature "Faire le point" en 1 clic (DONE)
 
 **Rapport utilisateur** : « Faire le point ne marche pas correctement » — la signature/clôture ne fonctionnait pas chez l'admin et la Gérante.
