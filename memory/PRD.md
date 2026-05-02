@@ -4,6 +4,29 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Journal : Boutons "Début du journal" + "Réinitialiser" (DONE)
+
+**Demande utilisateur** : « Mettre un bouton de suppression et de début du journal. »
+
+**Backend** :
+- Refactor : `JOURNAL_CUTOFF` hardcodé → fonctions async `_get_cutoff()` / `_set_cutoff()` qui persistent la valeur dans la collection `app_settings` (clé `journal_cutoff`).
+- Nouveaux endpoints :
+  - `GET /api/journal/settings` → `{cutoff_date, default}`
+  - `POST /api/journal/settings` (validation YYYY-MM-DD) → met à jour la date pivot
+  - `POST /api/journal/reset` `{confirm:true, set_cutoff_to?:str}` → vide la collection `journal_manual` + optionnellement repositionne le cutoff
+- Le dashboard renvoie désormais le champ `cutoff` pour affichage.
+
+**Frontend** (`JournalTab.jsx`) :
+- Sous-titre affiche dynamiquement « Début du journal : AAAA-MM-JJ ».
+- Bouton **"Début du journal"** (cyan, icône CalendarRange) ouvre un éditeur déployable avec input date + Enregistrer/Annuler.
+- Bouton **"Réinitialiser"** (rose, icône Trash2) avec confirm() → supprime les opérations manuelles + vide l'historique chat.
+
+**Validation** : testing agent → **14/14 backend PASSED + 100% frontend PASSED**. Validation YYYY-MM-DD stricte (rejette "abc", "2026-04", "2026-13-45"), persistence OK, reset propre.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Journal : Assistant LLM + Suppression + Cutoff 01/05/2026 (DONE)
 
 **Demande utilisateur** : « Oui (option C) et aussi bouton de suppression. Prends le journal à partir du 01/05/2026. »
