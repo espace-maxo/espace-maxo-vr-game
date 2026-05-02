@@ -26,6 +26,7 @@ const HebdoReport = ({
   API,
   refreshWeekly,
   isAdmin,
+  currentUser,
   onGoToReversement,
 }) => {
   const [showAttach, setShowAttach] = useState(false);
@@ -151,8 +152,39 @@ const HebdoReport = ({
     }
   };
 
-  const detectDuplicates = async () => {
+  // Inline single-item delete (admin only) — used by the trash button on each
+  // sale/expense row in the daily expanded view.
+  const actorQs = () => {
+    const name = encodeURIComponent(currentUser?.full_name || currentUser?.username || "Admin");
+    const role = encodeURIComponent(currentUser?.role || "admin");
+    return `actor_name=${name}&actor_role=${role}`;
+  };
+
+  const deleteOneSale = async (invoiceId, invoiceNumber) => {
+    if (!isAdmin) return;
+    if (!confirm(`Supprimer définitivement la facture ${invoiceNumber || invoiceId} ?\n\nCette action est tracée dans l'audit.`)) return;
     try {
+      await axios.delete(`${API}/invoices/${invoiceId}?${actorQs()}`);
+      toast.success("Facture supprimée");
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la suppression");
+    }
+  };
+
+  const deleteOneExpense = async (expenseId, label) => {
+    if (!isAdmin) return;
+    if (!confirm(`Supprimer définitivement la dépense « ${label || expenseId} » ?`)) return;
+    try {
+      await axios.delete(`${API}/expenses/${expenseId}`);
+      toast.success("Dépense supprimée");
+      if (refreshWeekly) refreshWeekly();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la suppression");
+    }
+  };
+
+  const detectDuplicates = async () => {    try {
       const r = await axios.get(`${API}/reports/weekly/duplicates`, { params: { week_start: weekStartDate } });
       setDuplicates(r.data.duplicates || []);
       setShowDuplicates(true);
@@ -603,6 +635,18 @@ const HebdoReport = ({
                                     <span className="text-white text-xs flex-1">{item.invoice_number || `Facture`}</span>
                                     <span className="text-green-400 text-xs font-bold">{formatPrice(item.total)} F</span>
                                     {item.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{item.assigned_week.slice(5)}</Badge>}
+                                    {isAdmin && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0 text-red-400 hover:bg-red-500/15 hover:text-red-300"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteOneSale(item.id, item.invoice_number); }}
+                                        data-testid={`hebdo-delete-sale-${item.id}`}
+                                        title="Supprimer cette facture"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    )}
                                   </label>
                                 ))}
                               </div>
@@ -621,6 +665,18 @@ const HebdoReport = ({
                                     <Badge className={`text-xs ${item.status === 'completed' ? 'bg-green-500/20 text-green-400' : item.status === 'approved' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-500/20 text-slate-400'}`}>{item.status}</Badge>
                                     <span className="text-red-400 text-xs font-bold">{formatPrice(item.amount)} F</span>
                                     {item.assigned_week && <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">S.{item.assigned_week.slice(5)}</Badge>}
+                                    {isAdmin && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0 text-red-400 hover:bg-red-500/15 hover:text-red-300"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteOneExpense(item.id, item.description); }}
+                                        data-testid={`hebdo-delete-expense-${item.id}`}
+                                        title="Supprimer cette dépense"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    )}
                                   </label>
                                 ))}
                               </div>

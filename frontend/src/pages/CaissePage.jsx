@@ -5866,6 +5866,7 @@ _Gérante - Espace Maxo_
                   API={API}
                   refreshWeekly={fetchWeeklyReport}
                   isAdmin={currentUser?.role === 'admin'}
+                  currentUser={currentUser}
                   onGoToReversement={() => setHebdoSubTab("point-financier")}
                 />
               </TabsContent>
