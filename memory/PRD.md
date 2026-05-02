@@ -4,6 +4,22 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — Achats : la Gérante ne voit JAMAIS le détail des terminés (DONE)
+
+**Demande utilisateur** : « La gérante ne peut pas voir aussi le détail des achats et prestations terminés ».
+
+**Fix** (`AchatsTab.jsx`) : ajout d'une garde de rôle sur le rendu de la section "termines" (ligne ~1957). Désormais le bloc complet (Card "Achats & prestations terminés" + sa liste détaillée) n'est plus rendu DU TOUT pour la Gérante, même si `achatsSubView === 'termines'` (cas où elle hériterait de cette valeur d'un précédent état persisté). Combiné avec :
+- onglet caché pour la Gérante,
+- KPIs filtrés (visibleExpenses),
+- liste "Approuvés" excluant les prestations payées,
+→ la Gérante n'a aucun accès, ni visuel ni détaillé, aux dépenses terminées/payées.
+
+Lint OK, compile OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 02/05/2026 — Achats : prestations payées rejoignent "terminés", masquées chez la Gérante (DONE)
 
 **Demande utilisateur** : « Les prestations payées aussi doivent être achevées dans achats et prestations terminés. La gérante ne les verra plus. »

@@ -1954,7 +1954,7 @@ const AchatsTab = ({ ctx }) => {
               })()}
 
               {/* Completed expenses (Achats terminés — dedicated sub-menu) */}
-              {achatsSubView === 'termines' && (() => {
+              {achatsSubView === 'termines' && isAdminUser && (() => {
                 const finishedList = expenses.filter(isFinished);
                 return finishedList.length > 0 ? (
                   <Card className="bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-slate-600/50" data-testid="completed-expenses-card">
