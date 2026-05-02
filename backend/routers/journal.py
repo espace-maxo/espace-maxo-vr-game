@@ -25,9 +25,28 @@ router = APIRouter(tags=["journal"])
 db = None
 logger = logging.getLogger(__name__)
 
-# Date pivot : on n'affiche QUE les opérations à partir de cette date.
-# Demandée par l'utilisateur — métier "remise à zéro" du journal.
-JOURNAL_CUTOFF = "2026-05-01"
+# Date pivot par défaut. La valeur effective est lue/écrite dans la collection
+# `app_settings` (clé "journal_cutoff") pour permettre la modification depuis l'UI.
+JOURNAL_CUTOFF_DEFAULT = "2026-05-01"
+
+
+async def _get_cutoff() -> str:
+    """Lit la date pivot active depuis app_settings (avec fallback sur la default)."""
+    try:
+        doc = await db.app_settings.find_one({"key": "journal_cutoff"}, {"_id": 0})
+        if doc and doc.get("value"):
+            return str(doc["value"])
+    except Exception:
+        pass
+    return JOURNAL_CUTOFF_DEFAULT
+
+
+async def _set_cutoff(new_value: str) -> None:
+    await db.app_settings.update_one(
+        {"key": "journal_cutoff"},
+        {"$set": {"key": "journal_cutoff", "value": new_value, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
 
 
 def set_db(database):
@@ -61,13 +80,14 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
         horizon = now + timedelta(days=days)
         horizon_iso = horizon.strftime("%Y-%m-%d")
         seven = (now + timedelta(days=7)).strftime("%Y-%m-%d")
+        cutoff = await _get_cutoff()
 
-        # ============ RÉEL (depuis JOURNAL_CUTOFF) ============
+        # ============ RÉEL (depuis cutoff dynamique) ============
         # Recettes : factures validées créées à partir de la date pivot.
         invoices = await db.invoices.find(
             {
                 "validation_status": "validated",
-                "created_at": {"$gte": JOURNAL_CUTOFF},
+                "created_at": {"$gte": cutoff},
             },
             {"_id": 0, "total": 1, "total_amount": 1, "items": 1, "created_at": 1, "invoice_number": 1, "tip_total": 1},
         ).to_list(20000)
@@ -83,9 +103,9 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
         # Dépenses : completed + (paiement & is_paid), depuis cutoff aussi.
         expenses = await db.expenses.find(
             {"$or": [
-                {"completed_at": {"$gte": JOURNAL_CUTOFF}},
-                {"paid_at": {"$gte": JOURNAL_CUTOFF}},
-                {"created_at": {"$gte": JOURNAL_CUTOFF}},
+                {"completed_at": {"$gte": cutoff}},
+                {"paid_at": {"$gte": cutoff}},
+                {"created_at": {"$gte": cutoff}},
             ]},
             {"_id": 0},
         ).to_list(20000)
@@ -106,7 +126,7 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
 
         # ============ OPÉRATIONS MANUELLES (saisies via assistant ou bouton) ============
         manual_ops = await db.journal_manual.find(
-            {"created_at": {"$gte": JOURNAL_CUTOFF}},
+            {"created_at": {"$gte": cutoff}},
             {"_id": 0},
         ).to_list(5000)
         for m in manual_ops:
@@ -185,6 +205,7 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
 
         return {
             "as_of": today_iso,
+            "cutoff": cutoff,
             "actual": {
                 "balance": round(balance, 2),
                 "total_in": round(total_in_real, 2),
@@ -213,12 +234,13 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
 
 @router.get("/journal/realtime")
 async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Query(500, ge=1, le=2000)):
-    """Liste chronologique des opérations réelles (factures + dépenses + manuelles), depuis JOURNAL_CUTOFF."""
+    """Liste chronologique des opérations réelles (factures + dépenses + manuelles), depuis cutoff dynamique."""
     try:
         cutoff_window = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
-        # On combine : `cutoff de fenêtre temporelle (days)` + `cutoff métier JOURNAL_CUTOFF`.
+        # On combine : `cutoff de fenêtre temporelle (days)` + `cutoff métier dynamique`.
         # On garde le plus récent des deux pour ne JAMAIS afficher avant la date pivot.
-        cutoff = max(cutoff_window, JOURNAL_CUTOFF)
+        journal_cutoff = await _get_cutoff()
+        cutoff = max(cutoff_window, journal_cutoff)
         rows = []
 
         # Invoices in window
@@ -323,6 +345,7 @@ async def create_manual_op(payload: ManualOpCreate):
     now = datetime.now(timezone.utc)
     occurred = payload.occurred_at or now.isoformat()
     cat = payload.category or _auto_category(payload.label, payload.type)
+    cutoff = await _get_cutoff()
     doc = {
         "id": str(uuid.uuid4()),
         "type": payload.type,
@@ -330,7 +353,7 @@ async def create_manual_op(payload: ManualOpCreate):
         "label": (payload.label or "").strip() or ("Entrée manuelle" if payload.type == "entree" else "Dépense manuelle"),
         "category": cat,
         "created_by": payload.created_by or "Admin",
-        "created_at": occurred if occurred >= JOURNAL_CUTOFF else now.isoformat(),
+        "created_at": occurred if occurred >= cutoff else now.isoformat(),
         "source": "manual",
     }
     await db.journal_manual.insert_one(doc.copy())
@@ -344,6 +367,62 @@ async def delete_manual_op(op_id: str):
     if res.deleted_count == 0:
         raise HTTPException(404, "Opération introuvable")
     return {"success": True}
+
+
+# ==================== PARAMÈTRES (date de début + reset) ====================
+
+class CutoffPayload(BaseModel):
+    cutoff_date: str = Field(..., description="YYYY-MM-DD ; nouvelle date de début du journal")
+
+
+@router.get("/journal/settings")
+async def get_journal_settings():
+    """Renvoie la date de début active du journal."""
+    cutoff = await _get_cutoff()
+    return {"cutoff_date": cutoff, "default": JOURNAL_CUTOFF_DEFAULT}
+
+
+@router.post("/journal/settings")
+async def update_journal_settings(payload: CutoffPayload):
+    """Modifie la date de début du journal. Format strict : YYYY-MM-DD."""
+    val = (payload.cutoff_date or "").strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", val):
+        raise HTTPException(422, "Format attendu : YYYY-MM-DD")
+    try:
+        # Validation parse
+        datetime.strptime(val, "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(422, "Date invalide")
+    await _set_cutoff(val)
+    return {"success": True, "cutoff_date": val}
+
+
+class ResetPayload(BaseModel):
+    confirm: bool = Field(..., description="Doit être true pour confirmer la suppression")
+    set_cutoff_to: Optional[str] = Field(None, description="Optionnel : nouvelle date pivot après reset")
+
+
+@router.post("/journal/reset")
+async def reset_journal(payload: ResetPayload):
+    """Réinitialise le journal :
+    - supprime toutes les opérations manuelles (collection journal_manual),
+    - optionnellement repositionne la date de début (`set_cutoff_to`).
+    Les factures et dépenses NE SONT PAS supprimées (sources de vérité).
+    """
+    if not payload.confirm:
+        raise HTTPException(400, "confirm doit être true")
+    res = await db.journal_manual.delete_many({})
+    new_cutoff = None
+    if payload.set_cutoff_to:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", payload.set_cutoff_to):
+            raise HTTPException(422, "set_cutoff_to format YYYY-MM-DD")
+        await _set_cutoff(payload.set_cutoff_to)
+        new_cutoff = payload.set_cutoff_to
+    return {
+        "success": True,
+        "deleted_manual_ops": res.deleted_count,
+        "cutoff_date": new_cutoff or await _get_cutoff(),
+    }
 
 
 # ==================== ASSISTANT CONVERSATIONNEL (LLM) ====================

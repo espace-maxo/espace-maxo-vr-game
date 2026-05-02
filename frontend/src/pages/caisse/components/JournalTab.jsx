@@ -49,6 +49,54 @@ const JournalTab = () => {
   const [chatHistory, setChatHistory] = useState([]); // [{role, text, ts}]
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Settings (cutoff date)
+  const [cutoffDate, setCutoffDate] = useState("2026-05-01");
+  const [showCutoffEditor, setShowCutoffEditor] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/journal/settings`);
+      if (r.data?.cutoff_date) setCutoffDate(r.data.cutoff_date);
+    } catch {}
+  }, []);
+
+  const saveCutoff = async () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)) {
+      toast.error("Format attendu : AAAA-MM-JJ");
+      return;
+    }
+    try {
+      await axios.post(`${API}/journal/settings`, { cutoff_date: cutoffDate });
+      toast.success(`Début du journal fixé au ${cutoffDate}`);
+      setShowCutoffEditor(false);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+
+  const resetJournal = async () => {
+    const ok = window.confirm(
+      `⚠️ Réinitialiser le journal ?\n\n` +
+      `Cette action va supprimer TOUTES les opérations manuelles que vous avez saisies (assistant + bouton).\n` +
+      `Les factures et dépenses ne sont PAS supprimées.\n\n` +
+      `La date de début reste : ${cutoffDate}.\n\nContinuer ?`
+    );
+    if (!ok) return;
+    setResetting(true);
+    try {
+      const r = await axios.post(`${API}/journal/reset`, { confirm: true });
+      toast.success(`Journal réinitialisé (${r.data.deleted_manual_ops} opération(s) supprimée(s))`);
+      setChatHistory([]);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -65,7 +113,7 @@ const JournalTab = () => {
     }
   }, [days]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); fetchSettings(); }, [load, fetchSettings]);
 
   const sendChat = async () => {
     const msg = (chatMessage || "").trim();
@@ -126,9 +174,33 @@ const JournalTab = () => {
           </h2>
           <p className="text-slate-400 text-xs mt-0.5">
             Suivi temps réel des entrées/sorties + prévisions sur {days} jours
+            <span className="ml-2 text-slate-500">·</span>
+            <span className="ml-2">Début du journal : <span className="text-cyan-300">{cutoffDate}</span></span>
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowCutoffEditor((v) => !v)}
+            className="border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10"
+            data-testid="journal-cutoff-btn"
+            title="Définir la date de début du journal"
+          >
+            <CalendarRange className="w-4 h-4 mr-1" /> Début du journal
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={resetJournal}
+            disabled={resetting}
+            className="border-rose-500/50 text-rose-300 hover:bg-rose-500/10"
+            data-testid="journal-reset-btn"
+            title="Supprimer toutes les opérations manuelles du journal"
+          >
+            {resetting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1" />}
+            Réinitialiser
+          </Button>
           <select
             value={days}
             onChange={(e) => setDays(parseInt(e.target.value))}
@@ -145,6 +217,37 @@ const JournalTab = () => {
           </Button>
         </div>
       </div>
+
+      {/* Cutoff editor (collapsible) */}
+      {showCutoffEditor && (
+        <Card className="bg-cyan-900/20 border-cyan-500/40" data-testid="journal-cutoff-editor">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-cyan-200 font-bold text-sm mb-2">📅 Définir la date de début du journal</p>
+            <p className="text-slate-400 text-xs mb-3">
+              Toutes les opérations (factures, dépenses, manuelles) avant cette date seront masquées du Journal et de ses statistiques.
+            </p>
+            <div className="flex gap-2 flex-wrap items-center">
+              <Input
+                type="date"
+                value={cutoffDate}
+                onChange={(e) => setCutoffDate(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white max-w-xs"
+                data-testid="journal-cutoff-input"
+              />
+              <Button onClick={saveCutoff} className="bg-cyan-600 hover:bg-cyan-700" data-testid="journal-cutoff-save">
+                Enregistrer
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setShowCutoffEditor(false); fetchSettings(); }}
+                className="border-slate-700 text-slate-300"
+              >
+                Annuler
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       {dashboard && (
