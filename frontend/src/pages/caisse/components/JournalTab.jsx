@@ -14,8 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, BookOpen, CalendarRange,
   RefreshCw, ArrowDownCircle, ArrowUpCircle, ChefHat, Receipt, Users, Package,
+  Send, Bot, Trash2, Sparkles, Plus, Loader2,
 } from "lucide-react";
 import ForecastsTab from "./ForecastsTab";
+import { Input } from "@/components/ui/input";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -42,6 +44,11 @@ const JournalTab = () => {
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState(30);
 
+  // Chat assistant state
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState([]); // [{role, text, ts}]
+  const [chatLoading, setChatLoading] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -59,6 +66,46 @@ const JournalTab = () => {
   }, [days]);
 
   useEffect(() => { load(); }, [load]);
+
+  const sendChat = async () => {
+    const msg = (chatMessage || "").trim();
+    if (!msg || chatLoading) return;
+    setChatLoading(true);
+    setChatHistory(h => [...h, { role: "user", text: msg, ts: new Date().toISOString() }]);
+    setChatMessage("");
+    try {
+      const res = await axios.post(`${API}/journal/chat`, { message: msg });
+      const data = res.data || {};
+      setChatHistory(h => [...h, { role: "assistant", text: data.explain || "—", ts: new Date().toISOString(), executed: data.executed }]);
+      if (data.executed) {
+        await load();
+      }
+    } catch (e) {
+      const errMsg = e?.response?.data?.detail || "Erreur LLM";
+      setChatHistory(h => [...h, { role: "assistant", text: `❌ ${errMsg}`, ts: new Date().toISOString() }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const onChatKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  };
+
+  const deleteOp = async (op) => {
+    if (!op.deletable) return;
+    if (!window.confirm(`Supprimer "${op.label}" (${fmt(op.amount)} F) ?`)) return;
+    try {
+      await axios.delete(`${API}/journal/manual/${op.ref_id}`);
+      toast.success("Opération supprimée");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
 
   const kpiClass = (v) => v >= 0 ? "text-emerald-300" : "text-rose-300";
   const balanceTrendIcon = (cur, projected) => {
@@ -187,6 +234,52 @@ const JournalTab = () => {
 
       {view === "real" && (
         <>
+          {/* === ASSISTANT CONVERSATIONNEL === */}
+          <Card className="bg-gradient-to-br from-purple-900/30 to-fuchsia-900/15 border-purple-500/40" data-testid="journal-chat">
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-500/30 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-purple-200" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-purple-200 font-bold text-sm flex items-center gap-1">
+                    Assistant financier <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Tapez : <em>"ENTRÉE 25000 vente du soir"</em> · <em>"DÉPENSE 5000 taxi"</em> · <em>"PRÉVISION DÉPENSE 100000 loyer 2026-06-01"</em> · <em>"SITUATION"</em>
+                  </p>
+                </div>
+              </div>
+              {chatHistory.length > 0 && (
+                <div className="bg-slate-900/60 border border-slate-700 rounded p-2 max-h-48 overflow-y-auto space-y-1.5" data-testid="chat-history">
+                  {chatHistory.slice(-8).map((m, idx) => (
+                    <div
+                      key={idx}
+                      className={`text-xs px-2 py-1 rounded ${m.role === "user" ? "bg-blue-500/15 text-blue-100 self-end ml-auto max-w-[85%]" : (m.executed ? "bg-emerald-500/15 text-emerald-100" : "bg-slate-800 text-slate-200")}`}
+                    >
+                      {m.role === "user" && <span className="text-blue-300 mr-1">›</span>}
+                      {m.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={onChatKey}
+                  placeholder="Tapez votre commande…"
+                  disabled={chatLoading}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  data-testid="chat-input"
+                />
+                <Button onClick={sendChat} disabled={chatLoading || !chatMessage.trim()} className="bg-purple-600 hover:bg-purple-700" data-testid="chat-send">
+                  {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Répartition par catégorie */}
           {dashboard?.actual?.out_by_category && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -243,6 +336,18 @@ const JournalTab = () => {
                         <span className={`font-bold whitespace-nowrap text-base ${isIn ? "text-emerald-300" : "text-rose-300"}`}>
                           {isIn ? "+" : "−"} {fmt(op.amount)} F
                         </span>
+                        {op.deletable && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteOp(op)}
+                            className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10 h-7 px-1.5 ml-1"
+                            data-testid={`journal-delete-${op.ref_id}`}
+                            title="Supprimer cette opération manuelle"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
                     );
                   })}

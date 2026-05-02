@@ -5,19 +5,29 @@ Tableau de bord = "Réel" (factures validées + dépenses payées) + "Prévision
 (forecasts pas encore réglés).
 
 Endpoints :
-- GET /api/journal/dashboard?days=30
-    Retourne : solde actuel, projections 7j et 30j, totaux entrées/sorties réelles
-    et prévisionnelles, alertes intelligentes (ratio>70%, déficit futur, solde<0).
-- GET /api/journal/realtime?days=N
-    Liste chronologique des opérations réelles sur N jours.
+- GET  /api/journal/dashboard?days=30
+- GET  /api/journal/realtime?days=N&since=YYYY-MM-DD
+- POST /api/journal/manual          → entrée/sortie saisie à la main (réelle)
+- DELETE /api/journal/manual/{id}   → suppression d'une opération manuelle
+- POST /api/journal/chat            → assistant conversationnel (LLM)
 """
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Body
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
+from typing import Optional
+import uuid
+import json
+import re
+import os
 import logging
 
 router = APIRouter(tags=["journal"])
 db = None
 logger = logging.getLogger(__name__)
+
+# Date pivot : on n'affiche QUE les opérations à partir de cette date.
+# Demandée par l'utilisateur — métier "remise à zéro" du journal.
+JOURNAL_CUTOFF = "2026-05-01"
 
 
 def set_db(database):
@@ -52,10 +62,13 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
         horizon_iso = horizon.strftime("%Y-%m-%d")
         seven = (now + timedelta(days=7)).strftime("%Y-%m-%d")
 
-        # ============ RÉEL ============
-        # Recettes : factures validées de TOUTE l'histoire (le solde est cumulatif).
+        # ============ RÉEL (depuis JOURNAL_CUTOFF) ============
+        # Recettes : factures validées créées à partir de la date pivot.
         invoices = await db.invoices.find(
-            {"validation_status": "validated"},
+            {
+                "validation_status": "validated",
+                "created_at": {"$gte": JOURNAL_CUTOFF},
+            },
             {"_id": 0, "total": 1, "total_amount": 1, "items": 1, "created_at": 1, "invoice_number": 1, "tip_total": 1},
         ).to_list(20000)
         total_in_real = 0.0
@@ -67,8 +80,15 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
             total_in_real += float(amt or 0)
             total_in_real += float(inv.get("tip_total") or 0)
 
-        # Dépenses : completed + (paiement & is_paid)
-        expenses = await db.expenses.find({}, {"_id": 0}).to_list(20000)
+        # Dépenses : completed + (paiement & is_paid), depuis cutoff aussi.
+        expenses = await db.expenses.find(
+            {"$or": [
+                {"completed_at": {"$gte": JOURNAL_CUTOFF}},
+                {"paid_at": {"$gte": JOURNAL_CUTOFF}},
+                {"created_at": {"$gte": JOURNAL_CUTOFF}},
+            ]},
+            {"_id": 0},
+        ).to_list(20000)
         total_out_real = 0.0
         out_by_category = {"cuisine": 0.0, "charges": 0.0, "salaires": 0.0, "divers": 0.0}
         for e in expenses:
@@ -83,6 +103,25 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
                 out_by_category[bucket] = out_by_category.get(bucket, 0) + amt
 
         balance = total_in_real - total_out_real
+
+        # ============ OPÉRATIONS MANUELLES (saisies via assistant ou bouton) ============
+        manual_ops = await db.journal_manual.find(
+            {"created_at": {"$gte": JOURNAL_CUTOFF}},
+            {"_id": 0},
+        ).to_list(5000)
+        for m in manual_ops:
+            amt = float(m.get("amount") or 0)
+            if m.get("type") == "entree":
+                total_in_real += amt
+                balance += amt
+            else:
+                total_out_real += amt
+                balance -= amt
+                bucket = m.get("category") or "divers"
+                if bucket in out_by_category:
+                    out_by_category[bucket] += amt
+                else:
+                    out_by_category["divers"] += amt
 
         # ============ PRÉVISIONNEL ============
         # Forecasts de status=prevu sur l'horizon (sortie future)
@@ -174,9 +213,12 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
 
 @router.get("/journal/realtime")
 async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Query(500, ge=1, le=2000)):
-    """Liste chronologique des opérations réelles (factures + dépenses validées)."""
+    """Liste chronologique des opérations réelles (factures + dépenses + manuelles), depuis JOURNAL_CUTOFF."""
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+        cutoff_window = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+        # On combine : `cutoff de fenêtre temporelle (days)` + `cutoff métier JOURNAL_CUTOFF`.
+        # On garde le plus récent des deux pour ne JAMAIS afficher avant la date pivot.
+        cutoff = max(cutoff_window, JOURNAL_CUTOFF)
         rows = []
 
         # Invoices in window
@@ -223,8 +265,220 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
                 "by": e.get("paid_by") or e.get("created_by") or "—",
             })
 
+        # Opérations manuelles (saisies à la main ou via chat)
+        manuals = await db.journal_manual.find(
+            {"created_at": {"$gte": cutoff}},
+            {"_id": 0},
+        ).sort("created_at", -1).to_list(limit)
+        for m in manuals:
+            rows.append({
+                "id": "man-" + str(m.get("id", "")),
+                "type": m.get("type"),
+                "category": m.get("category") or "divers",
+                "amount": float(m.get("amount") or 0),
+                "label": m.get("label") or "Opération manuelle",
+                "ref_id": m.get("id"),
+                "created_at": m.get("created_at"),
+                "by": m.get("created_by") or "Admin",
+                "deletable": True,
+                "source": m.get("source") or "manual",
+            })
+
         rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
         return {"days": days, "count": len(rows), "operations": rows[:limit]}
     except Exception as e:
         logger.exception("journal realtime error")
         raise HTTPException(500, str(e))
+
+
+# ==================== OPÉRATIONS MANUELLES ====================
+
+class ManualOpCreate(BaseModel):
+    type: str = Field(..., description="entree | depense")
+    amount: float = Field(..., gt=0)
+    label: str = ""
+    category: Optional[str] = None  # cuisine | charges | salaires | divers | ventes
+    created_by: Optional[str] = "Admin"
+    occurred_at: Optional[str] = None  # ISO date string ; défaut = now
+
+
+def _auto_category(label: str, type_: str) -> str:
+    s = (label or "").lower()
+    if type_ == "entree":
+        return "ventes"
+    if any(k in s for k in ["loyer", "edf", "facture", "internet", "fibre", "eau ", "impot", "csu", "cnss", "charge"]):
+        return "charges"
+    if any(k in s for k in ["salaire", "salaires", "prime", "paie ", "personnel", "employé"]):
+        return "salaires"
+    if any(k in s for k in ["cuisine", "marché", "marche", "fournisseur", "achat", "vivres"]):
+        return "cuisine"
+    return "divers"
+
+
+@router.post("/journal/manual")
+async def create_manual_op(payload: ManualOpCreate):
+    """Crée une opération manuelle (entrée ou sortie réelle)."""
+    if payload.type not in ("entree", "depense"):
+        raise HTTPException(422, "type doit être 'entree' ou 'depense'")
+    now = datetime.now(timezone.utc)
+    occurred = payload.occurred_at or now.isoformat()
+    cat = payload.category or _auto_category(payload.label, payload.type)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "type": payload.type,
+        "amount": float(payload.amount),
+        "label": (payload.label or "").strip() or ("Entrée manuelle" if payload.type == "entree" else "Dépense manuelle"),
+        "category": cat,
+        "created_by": payload.created_by or "Admin",
+        "created_at": occurred if occurred >= JOURNAL_CUTOFF else now.isoformat(),
+        "source": "manual",
+    }
+    await db.journal_manual.insert_one(doc.copy())
+    doc.pop("_id", None)
+    return {"success": True, "operation": doc}
+
+
+@router.delete("/journal/manual/{op_id}")
+async def delete_manual_op(op_id: str):
+    res = await db.journal_manual.delete_one({"id": op_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Opération introuvable")
+    return {"success": True}
+
+
+# ==================== ASSISTANT CONVERSATIONNEL (LLM) ====================
+
+class ChatRequest(BaseModel):
+    message: str
+    user: Optional[str] = "Admin"
+
+
+def _strip_code_fence(s: str) -> str:
+    s = (s or "").strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\s*```$", "", s)
+    return s.strip()
+
+
+@router.post("/journal/chat")
+async def journal_chat(payload: ChatRequest = Body(...)):
+    """Assistant : parse une commande FR puis exécute (création réelle ou prévisionnelle)."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+    except Exception as e:  # pragma: no cover
+        raise HTTPException(500, f"emergentintegrations indisponible : {e}")
+
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(500, "EMERGENT_LLM_KEY non configurée")
+
+    msg = (payload.message or "").strip()
+    if not msg:
+        raise HTTPException(422, "Message vide")
+
+    today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    system = (
+        "Tu es un parseur de commandes financières en français pour un POS de restaurant. "
+        "Tu dois traduire le message de l'utilisateur en JSON STRICT (pas de prose), schema :\n"
+        '{"action": "create_real" | "create_forecast" | "show_balance" | "show_journal" | "show_forecasts" | "show_report" | "unknown",\n'
+        ' "type": "entree" | "depense" | null,\n'
+        ' "amount": number | null,\n'
+        ' "label": string,\n'
+        ' "category": "cuisine" | "charges" | "salaires" | "divers" | "ventes" | null,\n'
+        ' "date": "YYYY-MM-DD" | null }\n\n'
+        "Règles : \n"
+        "- ENTRÉE/RECETTE → action=create_real, type=entree.\n"
+        "- DÉPENSE/SORTIE → action=create_real, type=depense.\n"
+        "- PRÉVISION ENTRÉE → action=create_forecast, type=entree (date obligatoire).\n"
+        "- PRÉVISION DÉPENSE → action=create_forecast, type=depense (date obligatoire).\n"
+        "- SITUATION/SOLDE → action=show_balance.\n"
+        "- JOURNAL → action=show_journal.\n"
+        "- PRÉVISIONS → action=show_forecasts.\n"
+        "- RAPPORT JOURNALIER/HEBDOMADAIRE/PRÉVISIONNEL → action=show_report.\n"
+        "- Sinon action=unknown.\n"
+        f"- Date par défaut si absente : {today_iso}.\n"
+        "- Catégorie : déduire de la description ; ventes pour les recettes.\n"
+        "- amount : nombre uniquement (pas de FCFA, pas d'espaces). Convertir 25 000 ou 25k → 25000.\n"
+        "Réponds UNIQUEMENT avec le JSON, rien d'autre."
+    )
+    chat = LlmChat(api_key=api_key, session_id=f"journal-{uuid.uuid4()}", system_message=system).with_model(
+        "anthropic", "claude-sonnet-4-5-20250929"
+    )
+    raw = await chat.send_message(UserMessage(text=msg))
+    text = _strip_code_fence(raw)
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return {"success": False, "action": "unknown", "raw": raw, "executed": False, "explain": "Désolé, je n'ai pas compris votre commande."}
+
+    action = parsed.get("action") or "unknown"
+    type_ = parsed.get("type")
+    amount = parsed.get("amount")
+    label = parsed.get("label") or ""
+    category = parsed.get("category")
+    date_str = parsed.get("date") or today_iso
+    executed = False
+    result = None
+    explain = ""
+
+    try:
+        if action == "create_real" and type_ in ("entree", "depense") and amount and amount > 0:
+            doc = {
+                "id": str(uuid.uuid4()),
+                "type": type_,
+                "amount": float(amount),
+                "label": label or ("Entrée manuelle" if type_ == "entree" else "Dépense manuelle"),
+                "category": category or _auto_category(label, type_),
+                "created_by": payload.user or "Admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "source": "chat",
+            }
+            await db.journal_manual.insert_one(doc.copy())
+            doc.pop("_id", None)
+            result = doc
+            executed = True
+            verb = "Entrée" if type_ == "entree" else "Dépense"
+            explain = f"✅ {verb} de {int(amount):,} F enregistrée — \"{doc['label']}\" ({doc['category']})."
+        elif action == "create_forecast" and type_ in ("entree", "depense") and amount and amount > 0:
+            cat = category or _auto_category(label, type_)
+            fdoc = {
+                "id": str(uuid.uuid4()),
+                "date": date_str,
+                "label": label or ("Prévision entrée" if type_ == "entree" else "Prévision dépense"),
+                "amount": float(amount),
+                "category": cat if cat in ("salaires", "loyer", "fournisseur", "charges", "impots", "maintenance", "autre") else "autre",
+                "status": "prevu",
+                "recurrence": "none",
+                "notes": f"type={type_} (créé via chat)",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.forecasts.insert_one(fdoc.copy())
+            fdoc.pop("_id", None)
+            result = fdoc
+            executed = True
+            verb = "entrée" if type_ == "entree" else "sortie"
+            explain = f"📅 Prévision de {verb} ({int(amount):,} F) enregistrée pour le {date_str}."
+        elif action == "show_balance":
+            explain = "💰 Voir le bandeau \"Solde actuel\" en haut du Journal."
+        elif action == "show_journal":
+            explain = "📖 Le journal complet est affiché juste en-dessous."
+        elif action == "show_forecasts":
+            explain = "📅 Voir l'onglet \"Prévisionnel\"."
+        elif action == "show_report":
+            explain = "📊 Utilisez l'onglet \"Faire le point\" pour générer un rapport (PDF / WhatsApp)."
+        else:
+            explain = "🤔 Je n'ai pas compris. Exemples : \"ENTRÉE: 25000 - vente du soir\", \"DÉPENSE: 5000 - taxi\", \"PRÉVISION DÉPENSE: 100000 - loyer - 2026-06-01\"."
+    except Exception as e:
+        logger.exception("chat exec error")
+        explain = f"❌ Erreur lors de l'exécution : {e}"
+
+    return {
+        "success": True,
+        "action": action,
+        "executed": executed,
+        "parsed": parsed,
+        "result": result,
+        "explain": explain,
+    }
