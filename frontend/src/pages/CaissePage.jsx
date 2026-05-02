@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ import MultiLinkStockModal from "./caisse/components/MultiLinkStockModal";
 import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
+import JournalTab from "./caisse/components/JournalTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
 import CurrentAccountsTab from "./caisse/components/CurrentAccountsTab";
@@ -4984,10 +4985,10 @@ _Gérante - Espace Maxo_
                 <Receipt className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Point de la Caisse</span>
               </TabsTrigger>
             )}
-            {/* 8.7 PREVISIONS (Admin only) */}
+            {/* 8.7 JOURNAL (ex-Prévisions) (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="forecasts" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-forecasts">
-                <Wallet className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Prévisions</span>
+                <BookOpen className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Journal</span>
               </TabsTrigger>
             )}
             {/* 9. HEBDO */}
@@ -5917,7 +5918,7 @@ _Gérante - Espace Maxo_
           {/* ==================== PREVISIONS TAB (Admin only) ==================== */}
           {currentUser?.role === 'admin' && (
           <TabsContent value="forecasts">
-            <ForecastsTab />
+            <JournalTab />
           </TabsContent>
           )}
 
