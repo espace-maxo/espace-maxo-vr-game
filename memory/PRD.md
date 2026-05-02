@@ -4,6 +4,21 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 02/05/2026 — BUG : Bouton "Valider (Admin)" invisible pour la DG (DONE sur preview)
+
+**Rapport utilisateur** : « La validation du point par la directrice générale ne fonctionne pas. Rien ne s'affiche, le bouton vert "Valider (Admin)" n'apparaît pas. »
+
+**Root cause** : Le bouton "Valider (Admin)" s'affiche UNIQUEMENT dans la branche `isSigned && !isAdminValidated && currentPoint`. Or `currentPoint` est chargé en fonction de la période sélectionnée (par défaut = semaine en cours). Si la Gérante a signé un point sur une semaine passée, l'Admin qui ouvre Reversement ne voit rien — le bouton est absent car `currentPoint` est null pour la période courante.
+
+**Fix** (`PointFinancierTab.jsx`) : ajout d'une **bannière ambre "En attente de validation"** visible SEULEMENT pour l'admin, en tête de toutes les branches (CREATE/EDIT + SIGNED + ADMIN_VALIDATED). Cette bannière :
+- Liste tous les reversements avec `signed=true && admin_validated=false` (tri date DESC).
+- Indique le nombre de reversements, le total cumulé, le signataire et la date de signature.
+- Clic sur une ligne → `goToPoint()` change la période active → le point s'ouvre → la branche SIGNED s'affiche → le bouton "Valider (Admin)" devient visible.
+- Se rafraîchit après chaque validation (la ligne disparaît dès que la DG valide).
+
+**Validation** : preview OK. ⚠️ **Redéploiement requis** sur espacemaxo.com.
+
+
 ## 02/05/2026 — Fix #2 : `planned_date` prioritaire pour l'attribution (DONE sur preview)
 
 **Rapport utilisateur après premier fix** : « Les charges demeurent toujours ».

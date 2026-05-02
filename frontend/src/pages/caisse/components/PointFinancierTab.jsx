@@ -65,6 +65,26 @@ export default function PointFinancierTab({ currentUser }) {
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
 
+  // Tous les points signés non encore validés (toute période confondue) — pour l'Admin/DG.
+  // Évite que la DG "ne voie rien" si le point signé se trouve sur une autre semaine
+  // que celle sélectionnée par défaut.
+  const [pendingValidations, setPendingValidations] = useState([]);
+  const fetchPendingValidations = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      // Récupère tous les points et filtre côté client — plus robuste que de se reposer
+      // sur le seul statut "signed" (certains anciens points peuvent ne pas l'avoir).
+      const res = await axios.get(`${API}/financial-points`);
+      const all = res.data.financial_points || [];
+      const pending = all.filter(p => p.signed === true && p.admin_validated !== true);
+      // Tri par date décroissante pour voir les plus récents en premier
+      pending.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+      setPendingValidations(pending);
+    } catch {
+      setPendingValidations([]);
+    }
+  }, [isAdmin]);
+
   const computedTotal = parseFloat(form.cash_amount || 0) + parseFloat(form.mobile_amount || 0) +
     parseFloat(form.cheque_amount || 0) + parseFloat(form.wallet_amount || 0);
 
@@ -107,7 +127,7 @@ export default function PointFinancierTab({ currentUser }) {
     } catch { setRevenueData(null); }
   }, [periodType, selectedDate, weekStart]);
 
-  useEffect(() => { fetchPoints(); fetchRevenue(); }, [fetchPoints, fetchRevenue]);
+  useEffect(() => { fetchPoints(); fetchRevenue(); fetchPendingValidations(); }, [fetchPoints, fetchRevenue, fetchPendingValidations]);
 
   const handleWeekChange = (dir) => {
     const n = dir === "next" ? addWeeks(new Date(weekStart), 1) : subWeeks(new Date(weekStart), 1);
@@ -238,9 +258,24 @@ export default function PointFinancierTab({ currentUser }) {
     setLoading(true);
     try {
       await axios.post(`${API}/financial-points/${currentPoint.id}/admin-validate`, { admin_name: currentUser?.full_name || currentUser?.username || "Admin" });
-      toast.success("Reversement valide par l'administrateur"); fetchPoints();
+      toast.success("Reversement valide par l'administrateur");
+      fetchPoints();
+      fetchPendingValidations();
     } catch (err) { toast.error(err.response?.data?.detail || "Erreur"); }
     finally { setLoading(false); }
+  };
+
+  // Navigue vers la période d'un point en attente de validation (utilisé par la bannière DG)
+  const goToPoint = (point) => {
+    if (point.period_type === "weekly") {
+      setPeriodType("weekly");
+      setWeekStart(point.date);
+      if (point.end_date) setWeekEnd(point.end_date);
+    } else {
+      setPeriodType("daily");
+      setSelectedDate(point.date);
+    }
+    // fetchPoints se déclenchera via useEffect
   };
 
   const unlockPoint = async () => {
@@ -275,6 +310,68 @@ export default function PointFinancierTab({ currentUser }) {
     ? `Semaine du ${format(new Date(weekStart), "dd MMM", { locale: fr })} au ${format(new Date(weekEnd), "dd MMM yyyy", { locale: fr })}`
     : `Journee du ${format(new Date(selectedDate), "dd MMMM yyyy", { locale: fr })}`;
 
+  // Bannière admin : liste des reversements signés en attente de validation.
+  // Se déclenche peu importe la période courante → la DG ne peut plus "rater" un point signé.
+  const PendingValidationsBanner = () => {
+    if (!isAdmin || pendingValidations.length === 0) return null;
+    const total = pendingValidations.reduce((s, p) => s + (p.total_amount || 0), 0);
+    return (
+      <Card className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-amber-500/50 shadow-lg shadow-amber-500/5" data-testid="pending-validations-banner">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center animate-pulse">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-amber-200 font-bold">
+                  {pendingValidations.length} reversement{pendingValidations.length > 1 ? "s" : ""} en attente de votre validation
+                </p>
+                <p className="text-xs text-amber-300/70">Total : {formatPrice(total)} F · Cliquez sur un reversement pour l'ouvrir et le valider</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            {pendingValidations.map((p) => {
+              const isCurrent = currentPoint?.id === p.id;
+              const periodStr = p.period_type === "weekly" && p.end_date
+                ? `${format(new Date(p.date), "dd/MM")} → ${format(new Date(p.end_date), "dd/MM/yyyy")}`
+                : format(new Date(p.date), "dd MMMM yyyy", { locale: fr });
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => goToPoint(p)}
+                  className={`flex items-center justify-between gap-3 p-2.5 rounded border text-left transition ${
+                    isCurrent
+                      ? "bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-400/50"
+                      : "bg-slate-900/60 border-slate-700 hover:bg-slate-800 hover:border-amber-500/50"
+                  }`}
+                  data-testid={`pending-row-${p.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-sm">{periodStr}</p>
+                    <p className="text-xs text-slate-400">
+                      Signé par <span className="text-white">{p.signed_by}</span>
+                      {p.signed_at && <> · le {format(new Date(p.signed_at), "dd/MM HH:mm")}</>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-lg font-bold text-amber-300">{formatPrice(p.total_amount)} F</span>
+                    {isCurrent ? (
+                      <Badge className="bg-blue-500/30 text-blue-200">Ouvert</Badge>
+                    ) : (
+                      <Badge className="bg-amber-500/20 text-amber-300">Valider →</Badge>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const amountFields = [
     { key: "cash_amount", label: "Especes", icon: Banknote, color: "green", revenueKey: "cash" },
     { key: "mobile_amount", label: "Mobile Money", icon: Smartphone, color: "orange", revenueKey: "mobile" },
@@ -299,6 +396,7 @@ export default function PointFinancierTab({ currentUser }) {
     const DestIcon = destIcon(currentPoint.destination);
     return (
       <div className="space-y-6" data-testid="point-financier-tab">
+        <PendingValidationsBanner />
         <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Document verrouille" />
         <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
         <Card className="bg-emerald-900/20 border-emerald-500/40">
@@ -359,6 +457,7 @@ export default function PointFinancierTab({ currentUser }) {
     const DestIcon = destIcon(currentPoint.destination);
     return (
       <div className="space-y-6" data-testid="point-financier-tab">
+        <PendingValidationsBanner />
         <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="En attente de validation administrateur" />
         <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
         <Card className="bg-blue-900/20 border-blue-500/40"><CardContent className="p-5">
@@ -403,6 +502,7 @@ export default function PointFinancierTab({ currentUser }) {
   // ===== EDIT/CREATE =====
   return (
     <div className="space-y-6" data-testid="point-financier-tab">
+      <PendingValidationsBanner />
       <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Reversement des recettes par mode de paiement" />
       <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
 
