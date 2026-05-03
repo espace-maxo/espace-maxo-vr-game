@@ -4916,16 +4916,16 @@ _Gérante - Espace Maxo_
               onOpenPointCaisse={() => setActiveTab('point_caisse')}
             />
           )}
-          <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start">
+          <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start text-xs sm:text-sm">
             {/* 1. TABLES */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="tables" className="data-[state=active]:bg-teal-500 data-[state=active]:text-white px-2 sm:px-3">
-                <LayoutGrid className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Tables</span>
+                <LayoutGrid className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Tables</span>
               </TabsTrigger>
             )}
             {/* 2. BONS */}
             <TabsTrigger value="bons" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white px-2 sm:px-3">
-              <Printer className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">BONS</span>
+              <Printer className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">BONS</span>
               <NotifBadge count={effectiveCounts.invoices} color="orange" testid="badge-bons" />
               {currentUser?.role === 'admin' && (
                 <NotifBadge count={(effectiveCounts.cancellation_requests || 0) + (effectiveCounts.modification_requests || 0)} color="red" testid="badge-bons-requests" />
@@ -4934,23 +4934,23 @@ _Gérante - Espace Maxo_
             {/* 3. PRISE DE COMMANDES */}
             {(currentUser?.role === 'server' || currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="commande" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white px-2 sm:px-3">
-                <Calculator className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Prise de commandes</span>
+                <Calculator className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Prise de commandes</span>
               </TabsTrigger>
             )}
             {/* 4. FACTURES */}
             <TabsTrigger value="invoices" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white px-2 sm:px-3">
-              <FileText className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Factures</span>
+              <FileText className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Factures</span>
             </TabsTrigger>
             {/* 4. LOCATIONS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3">
-                <Building2 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Locations</span>
+                <Building2 className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Locations</span>
               </TabsTrigger>
             )}
             {/* 5. ACHATS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3">
-                <ShoppingCart className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Achats</span>
+                <ShoppingCart className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Achats</span>
                 <NotifBadge count={effectiveCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
               </TabsTrigger>
             )}
@@ -4966,85 +4966,85 @@ _Gérante - Espace Maxo_
             {/* 5.6 FOURNISSEURS & BC */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="po" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-po">
-                <Truck className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Fournisseurs</span>
+                <Truck className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Fournisseurs</span>
                 <NotifBadge count={effectiveCounts.purchase_orders} color="sky" testid="badge-po" />
               </TabsTrigger>
             )}
             {/* 6. PROFORMA */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="proforma" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white px-2 sm:px-3">
-                <FileText className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Proforma</span>
+                <FileText className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Proforma</span>
               </TabsTrigger>
             )}
             {/* 7. ACTIVITE & HISTORIQUE */}
             {currentUser?.role !== 'manager' && (
               <TabsTrigger value="activite" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3">
-                <Activity className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Activite & Historique</span>
+                <Activity className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Activite & Historique</span>
               </TabsTrigger>
             )}
             {/* 8. STATISTIQUES & RAPPORT (admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="stats" className="data-[state=active]:bg-green-500 data-[state=active]:text-white px-2 sm:px-3">
-                <BarChart3 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Statistiques & Rapport</span>
+                <BarChart3 className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Statistiques & Rapport</span>
                 <NotifBadge count={effectiveCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
             {/* 8.5 POINT DE LA CAISSE (Admin + Gérante) — remplace Analytics */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="point_caisse" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-caisse">
-                <Receipt className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Point de la Caisse</span>
+                <Receipt className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Point de la Caisse</span>
               </TabsTrigger>
             )}
             {/* 8.7 JOURNAL (ex-Prévisions) (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="forecasts" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-forecasts">
-                <BookOpen className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Journal</span>
+                <BookOpen className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Journal</span>
               </TabsTrigger>
             )}
             {/* 9. HEBDO */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
-                <BarChart3 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Faire le point</span>
+                <BarChart3 className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Faire le point</span>
               </TabsTrigger>
             )}
             {/* 10. PRODUITS */}
             <TabsTrigger value="products" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white px-2 sm:px-3">
-              <Package className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Produits</span>
+              <Package className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Produits</span>
             </TabsTrigger>
             {/* 11. CLIENTS */}
             <TabsTrigger value="clients" className="data-[state=active]:bg-pink-500 data-[state=active]:text-white px-2 sm:px-3">
-              <Users className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Clients</span>
+              <Users className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Clients</span>
             </TabsTrigger>
             {/* 12. ABONNEMENTS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="subscriptions" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
-                <RefreshCw className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Abonnements</span>
+                <RefreshCw className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Abonnements</span>
               </TabsTrigger>
             )}
             {/* 13. NOTES */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="instructions" className="data-[state=active]:bg-teal-600 data-[state=active]:text-white px-2 sm:px-3"
                 onClick={() => { if (unreadNotesCount > 0) markAllNotesRead(); }}>
-                <MessageSquare className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Notes</span>
+                <MessageSquare className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Notes</span>
                 <NotifBadge count={unreadNotesCount || effectiveCounts.notes} color="red" testid="badge-notes" />
               </TabsTrigger>
             )}
             {/* 14. UTILISATEURS */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="users" className="data-[state=active]:bg-red-500 data-[state=active]:text-white px-2 sm:px-3">
-                <Settings className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Utilisateurs</span>
+                <Settings className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Utilisateurs</span>
               </TabsTrigger>
             )}
             {/* 14.5 AUDIT — Historique des modifications (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="audit" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-audit">
-                <ClipboardList className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Audit</span>
+                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Audit</span>
               </TabsTrigger>
             )}
             {/* 15. COMPTE COURANT (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="current-accounts" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-current-accounts">
-                <Wallet className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Compte courant</span>
+                <Wallet className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Compte courant</span>
               </TabsTrigger>
             )}
             {/* 15.5 POURBOIRES (tous les rôles) */}
@@ -5057,12 +5057,12 @@ _Gérante - Espace Maxo_
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
-                <ClipboardList className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Mon Point</span>
+                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Mon Point</span>
               </TabsTrigger>
             )}
             {currentUser?.role === 'manager' && (
               <TabsTrigger value="points_serveurs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
-                <ClipboardList className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Points Serveurs</span>
+                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Points Serveurs</span>
               </TabsTrigger>
             )}
           </TabsList>
@@ -6537,7 +6537,7 @@ _Gérante - Espace Maxo_
                         }`}
                       >
                         <Icon className="w-3 h-3" />
-                        <span className="hidden sm:inline">{config.label}</span>
+                        <span className="inline text-[11px] sm:text-sm">{config.label}</span>
                       </button>
                     );
                   })}
