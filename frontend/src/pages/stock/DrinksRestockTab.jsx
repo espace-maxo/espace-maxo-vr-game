@@ -43,6 +43,38 @@ const DrinksRestockTab = () => {
   const [convertSupplierId, setConvertSupplierId] = useState("");
   const [convertNotes, setConvertNotes] = useState("");
   const [converting, setConverting] = useState(false);
+  // Per-product crate edit (inline)
+  const [editingCrateId, setEditingCrateId] = useState(null);
+  const [editingCrateValue, setEditingCrateValue] = useState("");
+
+  const startEditCrate = (row) => {
+    setEditingCrateId(row.id);
+    setEditingCrateValue(row.is_custom_crate ? String(row.bottles_per_crate) : "");
+  };
+
+  const cancelEditCrate = () => {
+    setEditingCrateId(null);
+    setEditingCrateValue("");
+  };
+
+  const saveCrate = async (row) => {
+    const v = parseInt(editingCrateValue, 10);
+    if (Number.isNaN(v) || v < 0) {
+      toast.error("Valeur invalide");
+      return;
+    }
+    try {
+      await axios.put(`${API}/stock/products/${row.id}/bottles-per-crate`, null, {
+        params: { value: v },
+      });
+      if (v === 0) toast.success("Casier remis à la valeur globale");
+      else toast.success(`Casier de ${row.name} fixé à ${v} bouteilles`);
+      cancelEditCrate();
+      fetchPlan();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
 
   const fetchPlan = useCallback(async () => {
     setLoading(true);
@@ -380,6 +412,7 @@ const DrinksRestockTab = () => {
                     <th className="text-left p-2">Catégorie</th>
                     <th className="text-right p-2">Stock</th>
                     <th className="text-right p-2">Min</th>
+                    <th className="text-center p-2" title="Bouteilles par casier (modifiable)">Casier</th>
                     <th className="text-right p-2" title="Bouteilles manquantes pour compléter le casier en cours">Pour casier</th>
                     <th className="text-right p-2">Cmd reco.</th>
                     <th className="text-right p-2">Casiers</th>
@@ -395,6 +428,54 @@ const DrinksRestockTab = () => {
                       <td className="p-2 text-slate-400 text-xs">{r.category_name}</td>
                       <td className="p-2 text-right text-slate-200">{fmt(r.current_quantity)}</td>
                       <td className="p-2 text-right text-slate-400 text-xs">{fmt(r.stock_min)}</td>
+                      {/* Casier éditable inline */}
+                      <td className="p-2 text-center">
+                        {editingCrateId === r.id ? (
+                          <div className="flex items-center gap-1 justify-center">
+                            <Input
+                              type="number"
+                              min={0}
+                              autoFocus
+                              value={editingCrateValue}
+                              placeholder="0=auto"
+                              onChange={(e) => setEditingCrateValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveCrate(r);
+                                if (e.key === "Escape") cancelEditCrate();
+                              }}
+                              className="h-6 w-16 text-center bg-slate-800 border-slate-600 text-white text-xs"
+                              data-testid={`restock-crate-edit-${r.id}`}
+                            />
+                            <button
+                              onClick={() => saveCrate(r)}
+                              className="text-emerald-400 hover:text-emerald-300 text-xs px-1"
+                              data-testid={`restock-crate-save-${r.id}`}
+                              title="Enregistrer (Entrée)"
+                            >✓</button>
+                            <button
+                              onClick={cancelEditCrate}
+                              className="text-slate-400 hover:text-rose-300 text-xs px-1"
+                              title="Annuler (Échap)"
+                            >×</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEditCrate(r)}
+                            className={`px-1.5 py-0.5 rounded text-xs hover:bg-slate-700 transition ${
+                              r.is_custom_crate
+                                ? "bg-purple-500/20 text-purple-200 border border-purple-500/40 font-bold"
+                                : "text-slate-400 border border-transparent"
+                            }`}
+                            data-testid={`restock-crate-cell-${r.id}`}
+                            title={r.is_custom_crate
+                              ? "Valeur personnalisée — cliquez pour modifier (0 = auto)"
+                              : "Cliquez pour personnaliser ce casier"
+                            }
+                          >
+                            {r.bottles_per_crate}
+                          </button>
+                        )}
+                      </td>
                       <td className="p-2 text-right text-amber-300 text-xs">
                         {r.bottles_to_complete_crate > 0 ? `+${fmt(r.bottles_to_complete_crate)}` : "—"}
                       </td>

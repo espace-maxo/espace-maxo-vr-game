@@ -481,6 +481,31 @@ async def stock_snapshot_at(
     }
 
 
+@router.put("/products/{product_id}/bottles-per-crate")
+async def set_product_bottles_per_crate(product_id: str, value: int = 0):
+    """Définit le nombre de bouteilles par casier pour un produit boisson.
+    `value=0` (ou non passé) supprime l'override pour repasser sur la valeur globale.
+    """
+    if value < 0:
+        raise HTTPException(422, "Valeur négative invalide")
+    product = await db.stock_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(404, "Produit non trouvé")
+    if value == 0:
+        await db.stock_products.update_one(
+            {"id": product_id},
+            {"$unset": {"bottles_per_crate": ""},
+             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    else:
+        await db.stock_products.update_one(
+            {"id": product_id},
+            {"$set": {"bottles_per_crate": int(value),
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    return {"success": True, "product_id": product_id, "bottles_per_crate": int(value) if value > 0 else None}
+
+
 # ==================== PLAN D'APPROVISIONNEMENT BOISSONS ====================
 
 @router.get("/drinks-restock-plan")
@@ -520,16 +545,20 @@ async def drinks_restock_plan(
     for p in products:
         qty = float(p.get("quantity") or 0)
         stock_min = float(p.get("stock_min") or 0)
+        # Casier spécifique au produit s'il est configuré, sinon valeur globale
+        per_crate = int(p.get("bottles_per_crate") or 0) or bottles_per_crate
+        if per_crate <= 0:
+            per_crate = bottles_per_crate
         # Bouteilles manquantes pour compléter le prochain casier complet
-        rem = qty % bottles_per_crate
-        to_complete = (bottles_per_crate - rem) if rem != 0 else 0
+        rem = qty % per_crate
+        to_complete = (per_crate - rem) if rem != 0 else 0
         # Écart au minimum
         gap_to_min = max(0.0, stock_min - qty)
         # Recommandation : couvrir le min, et arrondir au casier supérieur
         target = max(gap_to_min, to_complete) if (gap_to_min > 0 or to_complete > 0) else 0
         if target > 0:
-            crates_needed = -(-int(target + 0.999) // bottles_per_crate)  # ceil
-            recommended_qty = crates_needed * bottles_per_crate
+            crates_needed = -(-int(target + 0.999) // per_crate)  # ceil
+            recommended_qty = crates_needed * per_crate
         else:
             crates_needed = 0
             recommended_qty = 0
@@ -551,6 +580,8 @@ async def drinks_restock_plan(
             "unit": p.get("unit") or "",
             "current_quantity": qty,
             "stock_min": stock_min,
+            "bottles_per_crate": per_crate,
+            "is_custom_crate": bool(p.get("bottles_per_crate")),
             "bottles_to_complete_crate": to_complete,
             "gap_to_min": gap_to_min,
             "recommended_qty": recommended_qty,
