@@ -19,10 +19,13 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   PackageCheck, RefreshCw, Printer, FileText, Search, Boxes,
-  AlertTriangle, TrendingDown, CheckCircle2,
+  AlertTriangle, TrendingDown, CheckCircle2, ShoppingCart, X, Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const fmt = (n) => Math.round(Number(n || 0)).toLocaleString("fr-FR");
@@ -34,6 +37,12 @@ const DrinksRestockTab = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("to_order"); // all | to_order | rupture | low | ok
   const [includeOk, setIncludeOk] = useState(false);
+  // Convert-to-purchase modal
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
+  const [convertSupplierId, setConvertSupplierId] = useState("");
+  const [convertNotes, setConvertNotes] = useState("");
+  const [converting, setConverting] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     setLoading(true);
@@ -50,6 +59,45 @@ const DrinksRestockTab = () => {
   }, [bottlesPerCrate]);
 
   useEffect(() => { fetchPlan(); }, [fetchPlan]);
+
+  // Fetch suppliers for the convert modal
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await axios.get(`${API}/stock/suppliers`);
+        setSuppliers(r.data?.suppliers || []);
+      } catch {}
+    })();
+  }, []);
+
+  const openConvert = () => {
+    setConvertOpen(true);
+    setConvertSupplierId("");
+    setConvertNotes("Bon généré depuis le Plan d'approvisionnement boissons");
+  };
+
+  const confirmConvert = async () => {
+    setConverting(true);
+    try {
+      const supplier = suppliers.find((s) => s.id === convertSupplierId);
+      const r = await axios.post(`${API}/stock/drinks-restock-plan/convert`, {
+        bottles_per_crate: bottlesPerCrate || 24,
+        supplier_id: convertSupplierId || "",
+        supplier_name: supplier ? supplier.name : "",
+        notes: convertNotes,
+      });
+      const p = r.data?.purchase;
+      toast.success(
+        `Bon d'achat créé (brouillon) : ${r.data.items_count} produits · ${fmt(r.data.total_amount)} F`,
+        { description: "Ouvrez l'onglet Achats pour ajuster prix/quantités puis valider." },
+      );
+      setConvertOpen(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors de la conversion");
+    } finally {
+      setConverting(false);
+    }
+  };
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -268,6 +316,15 @@ const DrinksRestockTab = () => {
       {/* Print buttons */}
       <div className="flex flex-wrap items-center gap-2">
         <Button
+          onClick={openConvert}
+          disabled={!data || (data?.totals?.recommended_bottles || 0) === 0}
+          className="bg-emerald-600 hover:bg-emerald-700"
+          data-testid="restock-convert-btn"
+          title="Créer un bon d'achat brouillon avec toutes les recommandations"
+        >
+          <ShoppingCart className="w-4 h-4 mr-1" /> Convertir en achat
+        </Button>
+        <Button
           onClick={() => printAt("ticket")}
           disabled={!data || rows.length === 0}
           className="bg-slate-700 hover:bg-slate-600"
@@ -367,6 +424,79 @@ const DrinksRestockTab = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Convert-to-purchase modal */}
+      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg" data-testid="restock-convert-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-300">
+              <ShoppingCart className="w-5 h-5" /> Convertir en bon d'achat
+            </DialogTitle>
+          </DialogHeader>
+          {data && (
+            <div className="space-y-4 mt-2">
+              <div className="rounded-lg bg-slate-800/60 border border-slate-700 p-3 grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Produits</p>
+                  <p className="text-xl font-bold text-white">{(data.products || []).filter((p) => (p.recommended_qty || 0) > 0).length}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Casiers</p>
+                  <p className="text-xl font-bold text-purple-300">{fmt(data.totals?.recommended_crates)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-400">Coût estimé</p>
+                  <p className="text-xl font-bold text-emerald-300">{fmt(data.totals?.estimated_cost)} F</p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-slate-400">Fournisseur (optionnel)</Label>
+                <select
+                  value={convertSupplierId}
+                  onChange={(e) => setConvertSupplierId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-md text-white text-sm px-2 py-2"
+                  data-testid="restock-convert-supplier"
+                >
+                  <option value="">— Aucun (à renseigner plus tard) —</option>
+                  {[...suppliers].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-xs text-slate-400">Notes</Label>
+                <Input
+                  value={convertNotes}
+                  onChange={(e) => setConvertNotes(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  data-testid="restock-convert-notes"
+                />
+              </div>
+
+              <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2">
+                ℹ️ Le bon est créé en <strong>brouillon (status=pending)</strong>. Les stocks ne sont pas modifiés. Ouvrez l'onglet <strong>Achats</strong> pour ajuster les prix et quantités, puis validez à la livraison.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <Button variant="outline" onClick={() => setConvertOpen(false)} className="border-slate-700 text-slate-300">
+                  <X className="w-4 h-4 mr-1" /> Annuler
+                </Button>
+                <Button
+                  onClick={confirmConvert}
+                  disabled={converting}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  data-testid="restock-convert-confirm"
+                >
+                  {converting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <ShoppingCart className="w-4 h-4 mr-1" />}
+                  Créer le bon
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

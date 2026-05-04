@@ -578,6 +578,91 @@ async def drinks_restock_plan(
     }
 
 
+class RestockToPurchaseItem(BaseModel):
+    product_id: str
+    quantity: float
+    unit_price: Optional[float] = None
+
+
+class RestockToPurchaseBody(BaseModel):
+    supplier_id: str = ""
+    supplier_name: str = ""
+    purchase_date: Optional[str] = None
+    notes: str = ""
+    user_name: str = ""
+    bottles_per_crate: int = 24
+    # Si items vide, le serveur prend toutes les recommandations courantes.
+    items: Optional[List[RestockToPurchaseItem]] = None
+
+
+@router.post("/drinks-restock-plan/convert")
+async def convert_restock_plan_to_purchase(body: RestockToPurchaseBody):
+    """Crée un achat **brouillon** (status='pending', sans toucher au stock)
+    à partir des recommandations du plan d'approvisionnement boissons.
+
+    Le bon doit être ouvert depuis l'onglet "Achats" pour ajuster les
+    quantités/prix puis être validé (action existante = entrée stock).
+    """
+    plan_items: List[Dict] = []
+    if body.items:
+        # Items explicitement fournis par l'UI
+        for it in body.items:
+            if it.quantity <= 0:
+                continue
+            product = await db.stock_products.find_one({"id": it.product_id})
+            if not product:
+                continue
+            unit_price = it.unit_price if (it.unit_price is not None) else float(product.get("purchase_price") or 0)
+            plan_items.append({
+                "product_id": product["id"],
+                "product_name": product.get("name", ""),
+                "product_code": product.get("code", ""),
+                "quantity": float(it.quantity),
+                "unit": product.get("unit", ""),
+                "unit_price": float(unit_price),
+                "total": float(it.quantity) * float(unit_price),
+            })
+    else:
+        # Pas d'items fournis : on recalcule le plan et on prend les recommandations
+        plan = await drinks_restock_plan(bottles_per_crate=body.bottles_per_crate)
+        for r in plan.get("products", []):
+            qty = float(r.get("recommended_qty") or 0)
+            if qty <= 0:
+                continue
+            unit_price = float(r.get("unit_purchase_price") or 0)
+            plan_items.append({
+                "product_id": r["id"],
+                "product_name": r.get("name", ""),
+                "product_code": r.get("code", ""),
+                "quantity": qty,
+                "unit": r.get("unit", ""),
+                "unit_price": unit_price,
+                "total": qty * unit_price,
+            })
+
+    if not plan_items:
+        raise HTTPException(422, "Aucun produit à commander")
+
+    total_amount = sum(i["total"] for i in plan_items)
+    purchase = {
+        "id": str(uuid.uuid4()),
+        "supplier_id": body.supplier_id or "",
+        "supplier_name": body.supplier_name or "",
+        "purchase_date": body.purchase_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "items": plan_items,
+        "total_amount": round(total_amount, 2),
+        "notes": body.notes or "Bon généré depuis le Plan d'approvisionnement boissons",
+        "user_name": body.user_name or "Auto",
+        "status": "pending",  # bon brouillon, à valider depuis l'onglet Achats
+        "source": "drinks_restock_plan",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.stock_purchases.insert_one(purchase)
+    purchase.pop("_id", None)
+    return {"success": True, "purchase": purchase, "items_count": len(plan_items),
+            "total_amount": purchase["total_amount"]}
+
+
 @router.get("/destock-live")
 async def destock_live_dashboard(limit: int = 50):
     """Live deduction dashboard.
