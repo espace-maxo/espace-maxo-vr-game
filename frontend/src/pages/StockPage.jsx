@@ -186,6 +186,8 @@ export default function StockPage() {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotSearch, setSnapshotSearch] = useState("");
   const [snapshotShowZero, setSnapshotShowZero] = useState(false);
+  const [snapshotOnlyDrinks, setSnapshotOnlyDrinks] = useState(true);
+  const [snapshotCategoryId, setSnapshotCategoryId] = useState("all");
   // Mobile sidebar drawer
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Manual link modal (per unlinked product)
@@ -594,7 +596,7 @@ export default function StockPage() {
     setSnapshotLoading(true);
     try {
       const r = await axios.get(`${API}/snapshot`, {
-        params: { at: snapshotDate, only_drinks: true },
+        params: { at: snapshotDate, only_drinks: snapshotOnlyDrinks },
       });
       setSnapshotData(r.data);
     } catch (e) {
@@ -602,7 +604,7 @@ export default function StockPage() {
     } finally {
       setSnapshotLoading(false);
     }
-  }, [snapshotDate]);
+  }, [snapshotDate, snapshotOnlyDrinks]);
 
   const fetchMovements = useCallback(async () => {
     try {
@@ -667,6 +669,12 @@ export default function StockPage() {
     if (activeSection === "snapshot" && !snapshotData) fetchSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
+
+  // Recompute snapshot when scope (drinks vs all) changes while on the tab
+  useEffect(() => {
+    if (activeSection === "snapshot" && snapshotData) fetchSnapshot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshotOnlyDrinks]);
 
   // Auto-fetch magasin data when entering the tab
   useEffect(() => {
@@ -3323,7 +3331,7 @@ export default function StockPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Clock className="w-6 h-6 text-purple-400" />
-                Stock à une date · Boissons
+                Stock à une date {snapshotOnlyDrinks ? "· Boissons" : "· Tous les produits"}
               </h2>
             </div>
 
@@ -3373,8 +3381,47 @@ export default function StockPage() {
                     onChange={(e) => setSnapshotShowZero(e.target.checked)}
                     className="rounded"
                   />
-                  Afficher aussi les boissons avec un stock de 0 à cette date
+                  Afficher aussi les produits avec un stock de 0 à cette date
                 </label>
+                {/* Périmètre + filtre catégorie */}
+                <div className="sm:col-span-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3">
+                  <div className="flex items-center gap-1 rounded-lg bg-slate-800/50 p-1 border border-slate-700">
+                    <button
+                      onClick={() => { setSnapshotOnlyDrinks(true); setSnapshotCategoryId("all"); }}
+                      className={`px-3 py-1 rounded text-xs font-medium transition ${
+                        snapshotOnlyDrinks ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+                      }`}
+                      data-testid="snapshot-scope-drinks"
+                    >
+                      Boissons
+                    </button>
+                    <button
+                      onClick={() => { setSnapshotOnlyDrinks(false); setSnapshotCategoryId("all"); }}
+                      className={`px-3 py-1 rounded text-xs font-medium transition ${
+                        !snapshotOnlyDrinks ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+                      }`}
+                      data-testid="snapshot-scope-all"
+                    >
+                      Toutes catégories
+                    </button>
+                  </div>
+                  {!snapshotOnlyDrinks && categories.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-slate-400 m-0">Catégorie</Label>
+                      <select
+                        value={snapshotCategoryId}
+                        onChange={(e) => setSnapshotCategoryId(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded-md text-white text-sm px-2 py-1.5"
+                        data-testid="snapshot-category-filter"
+                      >
+                        <option value="all">Toutes ({categories.length})</option>
+                        {[...categories].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -3389,7 +3436,7 @@ export default function StockPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase text-slate-400">Boissons trouvées</p>
+                    <p className="text-[10px] uppercase text-slate-400">{snapshotOnlyDrinks ? "Boissons trouvées" : "Produits trouvés"}</p>
                     <p className="text-2xl font-bold text-purple-300">{snapshotData.total_products}</p>
                   </div>
                   <div>
@@ -3424,6 +3471,9 @@ export default function StockPage() {
                   (() => {
                     const term = (snapshotSearch || "").toLowerCase().trim();
                     let rows = snapshotData.products || [];
+                    if (!snapshotOnlyDrinks && snapshotCategoryId !== "all") {
+                      rows = rows.filter((r) => r.category_id === snapshotCategoryId);
+                    }
                     if (!snapshotShowZero) rows = rows.filter((r) => (r.quantity_at || 0) > 0);
                     if (term) rows = rows.filter((r) =>
                       (r.name || "").toLowerCase().includes(term)
@@ -3433,7 +3483,7 @@ export default function StockPage() {
                     if (rows.length === 0) {
                       return (
                         <div className="py-10 text-center text-slate-500 text-sm">
-                          Aucune boisson ne correspond.
+                          Aucun produit ne correspond.
                         </div>
                       );
                     }
