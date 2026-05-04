@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { Toaster } from "@/components/ui/sonner";
 import CaisseStockLinksOverview from "./stock/components/CaisseStockLinksOverview";
 import PortionnementTab from "./stock/components/PortionnementTab";
 import ProductAnalysisView from "./stock/components/ProductAnalysisView";
+import DrinksRestockTab from "./stock/DrinksRestockTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
@@ -115,6 +116,7 @@ const NAV_GROUPS = [
       { id: "movements", label: "Mouvements", icon: ArrowUpDown },
       { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
       { id: "snapshot", label: "Stock à une date", icon: Clock },
+      { id: "drinks_restock", label: "Appro. Boissons", icon: PackageCheck },
     ],
   },
   {
@@ -3532,6 +3534,19 @@ export default function StockPage() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* DRINKS RESTOCK PLAN */}
+        {activeSection === "drinks_restock" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <PackageCheck className="w-6 h-6 text-purple-400" />
+                Plan d'approvisionnement · Boissons
+              </h2>
+            </div>
+            <DrinksRestockTab />
           </div>
         )}
 

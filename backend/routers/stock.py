@@ -481,6 +481,103 @@ async def stock_snapshot_at(
     }
 
 
+# ==================== PLAN D'APPROVISIONNEMENT BOISSONS ====================
+
+@router.get("/drinks-restock-plan")
+async def drinks_restock_plan(
+    bottles_per_crate: int = 24,
+):
+    """Plan d'approvisionnement des boissons avec calcul casier.
+
+    Pour chaque boisson :
+      - bottles_to_complete_crate : nombre de bouteilles manquantes pour
+        compléter le prochain casier (= (n - qty % n) % n).
+      - recommended_qty : quantité conseillée à recommander (max entre
+        l'écart au stock_min, le besoin pour compléter le casier).
+        Toujours arrondi au multiple supérieur de bottles_per_crate.
+      - recommended_crates : recommended_qty / bottles_per_crate.
+    """
+    if bottles_per_crate <= 0:
+        bottles_per_crate = 24
+
+    cats = await db.stock_categories.find({}, {"_id": 0}).to_list(500)
+    cat_map = {c["id"]: c["name"] for c in cats}
+    drink_cat_ids = {c["id"] for c in cats if _is_drinks_category(c)}
+    if not drink_cat_ids:
+        return {"bottles_per_crate": bottles_per_crate, "products": [],
+                "totals": {"products": 0, "rupture": 0, "low": 0, "ok": 0,
+                            "recommended_bottles": 0, "recommended_crates": 0,
+                            "estimated_cost": 0.0}}
+
+    products = await db.stock_products.find(
+        {"category_id": {"$in": list(drink_cat_ids)}}, {"_id": 0}
+    ).to_list(5000)
+
+    rows = []
+    totals = {"products": 0, "rupture": 0, "low": 0, "ok": 0,
+                "recommended_bottles": 0, "recommended_crates": 0,
+                "estimated_cost": 0.0}
+    for p in products:
+        qty = float(p.get("quantity") or 0)
+        stock_min = float(p.get("stock_min") or 0)
+        # Bouteilles manquantes pour compléter le prochain casier complet
+        rem = qty % bottles_per_crate
+        to_complete = (bottles_per_crate - rem) if rem != 0 else 0
+        # Écart au minimum
+        gap_to_min = max(0.0, stock_min - qty)
+        # Recommandation : couvrir le min, et arrondir au casier supérieur
+        target = max(gap_to_min, to_complete) if (gap_to_min > 0 or to_complete > 0) else 0
+        if target > 0:
+            crates_needed = -(-int(target + 0.999) // bottles_per_crate)  # ceil
+            recommended_qty = crates_needed * bottles_per_crate
+        else:
+            crates_needed = 0
+            recommended_qty = 0
+
+        unit_cost = float(p.get("purchase_price") or 0)
+        if qty <= 0:
+            status = "rupture"; totals["rupture"] += 1
+        elif stock_min and qty <= stock_min:
+            status = "faible"; totals["low"] += 1
+        else:
+            status = "ok"; totals["ok"] += 1
+
+        rows.append({
+            "id": p.get("id"),
+            "code": p.get("code") or "",
+            "name": p.get("name") or "—",
+            "category_name": cat_map.get(p.get("category_id"), "—"),
+            "subcategory": p.get("subcategory") or "",
+            "unit": p.get("unit") or "",
+            "current_quantity": qty,
+            "stock_min": stock_min,
+            "bottles_to_complete_crate": to_complete,
+            "gap_to_min": gap_to_min,
+            "recommended_qty": recommended_qty,
+            "recommended_crates": crates_needed,
+            "unit_purchase_price": unit_cost,
+            "estimated_cost": round(recommended_qty * unit_cost, 2),
+            "status": status,
+        })
+        totals["products"] += 1
+        totals["recommended_bottles"] += recommended_qty
+        totals["recommended_crates"] += crates_needed
+        totals["estimated_cost"] += recommended_qty * unit_cost
+
+    rows.sort(key=lambda r: (
+        0 if r["status"] == "rupture" else (1 if r["status"] == "faible" else 2),
+        r["category_name"] or "",
+        r["name"] or "",
+    ))
+    totals["estimated_cost"] = round(totals["estimated_cost"], 2)
+
+    return {
+        "bottles_per_crate": bottles_per_crate,
+        "totals": totals,
+        "products": rows,
+    }
+
+
 @router.get("/destock-live")
 async def destock_live_dashboard(limit: int = 50):
     """Live deduction dashboard.

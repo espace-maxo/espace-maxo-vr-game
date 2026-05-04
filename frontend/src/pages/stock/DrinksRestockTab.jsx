@@ -1,0 +1,374 @@
+/**
+ * DrinksRestockTab — Plan d'approvisionnement boissons
+ *
+ * Pour chaque boisson :
+ *   - quantité actuelle / stock min
+ *   - nombre de bouteilles manquantes pour compléter le casier en cours
+ *   - quantité recommandée (arrondie au casier supérieur)
+ *   - nombre de casiers à commander + coût estimé
+ *
+ * Boutons : Imprimer ticket (80mm), Imprimer / PDF A4.
+ */
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import {
+  PackageCheck, RefreshCw, Printer, FileText, Search, Boxes,
+  AlertTriangle, TrendingDown, CheckCircle2,
+} from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const fmt = (n) => Math.round(Number(n || 0)).toLocaleString("fr-FR");
+
+const DrinksRestockTab = () => {
+  const [bottlesPerCrate, setBottlesPerCrate] = useState(24);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("to_order"); // all | to_order | rupture | low | ok
+  const [includeOk, setIncludeOk] = useState(false);
+
+  const fetchPlan = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/stock/drinks-restock-plan`, {
+        params: { bottles_per_crate: bottlesPerCrate || 24 },
+      });
+      setData(r.data);
+    } catch (e) {
+      toast.error("Erreur lors du calcul du plan");
+    } finally {
+      setLoading(false);
+    }
+  }, [bottlesPerCrate]);
+
+  useEffect(() => { fetchPlan(); }, [fetchPlan]);
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    let arr = data.products || [];
+    if (statusFilter === "to_order") arr = arr.filter((r) => (r.recommended_qty || 0) > 0);
+    else if (statusFilter !== "all") arr = arr.filter((r) => r.status === statusFilter);
+    if (!includeOk && statusFilter === "all") arr = arr.filter((r) => r.status !== "ok");
+    const term = (search || "").trim().toLowerCase();
+    if (term) arr = arr.filter((r) =>
+      (r.name || "").toLowerCase().includes(term)
+      || (r.code || "").toLowerCase().includes(term)
+      || (r.category_name || "").toLowerCase().includes(term)
+    );
+    return arr;
+  }, [data, statusFilter, includeOk, search]);
+
+  // ============== IMPRESSION ==============
+  const printAt = (cssMode) => {
+    if (!data) return;
+    const today = format(new Date(), "dd MMM yyyy à HH:mm", { locale: fr });
+    const t = data.totals || {};
+    const w = window.open("", "_blank", "width=900,height=900");
+    if (!w) {
+      toast.error("Veuillez autoriser les popups");
+      return;
+    }
+    const isTicket = cssMode === "ticket";
+    const printRows = (rows.length > 0 ? rows : (data.products || [])).filter((r) => (r.recommended_qty || 0) > 0);
+
+    const styles = isTicket ? `
+      @page { size: 80mm auto; margin: 4mm; }
+      body { font-family: 'Courier New', monospace; font-size: 11px; color:#000; }
+      h1 { font-size:13px; text-align:center; margin:2px 0;}
+      .meta { text-align:center; font-size:10px; margin-bottom:4px;}
+      .sep { border-top:1px dashed #000; margin: 4px 0;}
+      table { width:100%; border-collapse:collapse;}
+      td, th { padding: 2px 0; vertical-align: top; font-size:10px;}
+      .right { text-align:right; }
+      .b { font-weight:bold; }
+      .totals { margin-top:6px; border-top:1px solid #000; padding-top:4px; font-size:11px; }
+      .ok { display:none; }
+    ` : `
+      @page { size: A4 portrait; margin: 12mm; }
+      body { font-family: Arial, sans-serif; font-size:12px; color:#111; }
+      h1 { font-size:18px; margin: 0 0 4px 0; }
+      .meta { color:#555; margin-bottom: 14px; }
+      table { width:100%; border-collapse: collapse; }
+      th { background:#f3f4f6; text-align:left; font-size:11px; padding: 6px 8px; border-bottom: 1px solid #ccc;}
+      td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size:11.5px;}
+      .right { text-align:right; }
+      .b { font-weight:bold; }
+      .rupture { color:#b91c1c; font-weight:bold; }
+      .faible { color:#b45309; }
+      .totals-card { margin-top:16px; padding:10px; background:#f9fafb; border-left:4px solid #6d28d9;}
+      .footer { margin-top: 24px; font-size:10px; color:#777; }
+    `;
+
+    const totalsBlock = `
+      <div class="totals-card">
+        <div><strong>${t.products || 0}</strong> boissons analysées · ${t.rupture || 0} en rupture · ${t.low || 0} stock faible</div>
+        <div>Recommandation : <strong>${fmt(t.recommended_bottles)}</strong> bouteilles soit <strong>${fmt(t.recommended_crates)}</strong> casiers (${data.bottles_per_crate}/casier)</div>
+        <div>Coût estimé : <strong>${fmt(t.estimated_cost)} F CFA</strong></div>
+      </div>
+    `;
+
+    const rowsHtml = printRows.map((r) => `
+      <tr>
+        <td>${r.code || "—"}</td>
+        <td class="b">${r.name}</td>
+        <td>${r.category_name}</td>
+        <td class="right">${fmt(r.current_quantity)}</td>
+        <td class="right">${fmt(r.stock_min)}</td>
+        <td class="right b">${fmt(r.recommended_qty)}</td>
+        <td class="right">${r.recommended_crates}</td>
+        ${isTicket ? "" : `<td class="right">${fmt(r.estimated_cost)} F</td>`}
+        <td class="${r.status}">${r.status === "rupture" ? "RUPTURE" : r.status === "faible" ? "Faible" : ""}</td>
+      </tr>
+    `).join("");
+
+    w.document.write(`
+      <html><head><meta charset="utf-8"><title>Plan d'approvisionnement boissons</title>
+      <style>${styles}</style></head>
+      <body>
+        <h1>${isTicket ? "PLAN APPRO BOISSONS" : "Plan d'approvisionnement — Boissons"}</h1>
+        <div class="meta">${today}${isTicket ? `<br>Casier = ${data.bottles_per_crate}` : ` · Casier = ${data.bottles_per_crate} bouteilles`}</div>
+        ${isTicket ? '<div class="sep"></div>' : ""}
+        <table>
+          <thead>
+            <tr>
+              ${isTicket ? "" : "<th>Code</th>"}
+              <th>${isTicket ? "Boisson" : "Produit"}</th>
+              ${isTicket ? "" : "<th>Catégorie</th>"}
+              <th class="right">${isTicket ? "Stock" : "Stock"}</th>
+              ${isTicket ? "" : '<th class="right">Min</th>'}
+              <th class="right">Cmd</th>
+              <th class="right">Cas.</th>
+              ${isTicket ? "" : '<th class="right">Coût est.</th><th>État</th>'}
+            </tr>
+          </thead>
+          <tbody>${rowsHtml || `<tr><td colspan="9" style="text-align:center;color:#666">Aucune recommandation.</td></tr>`}</tbody>
+        </table>
+        ${isTicket ? `
+          <div class="totals">
+            Total: ${fmt(t.recommended_bottles)} bout. (${fmt(t.recommended_crates)} cas.)<br>
+            Coût: ${fmt(t.estimated_cost)} F<br>
+            Rupture: ${t.rupture || 0} · Faible: ${t.low || 0}
+          </div>
+          <div class="sep"></div>
+          <div style="text-align:center;font-size:10px;">Espace Maxo</div>
+        ` : totalsBlock}
+        ${isTicket ? "" : '<div class="footer">Espace Maxo — Module Stock · Caisse Pro</div>'}
+        <script>window.onload=()=>{setTimeout(()=>{window.print();},250);};</script>
+      </body></html>
+    `);
+    w.document.close();
+  };
+
+  const totals = data?.totals || {};
+
+  return (
+    <div className="space-y-4" data-testid="drinks-restock-tab">
+      {/* Toolbar */}
+      <Card className="bg-slate-900/60 border-slate-800">
+        <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+          <div>
+            <Label className="text-xs text-slate-400">Bouteilles par casier</Label>
+            <Input
+              type="number"
+              min={1}
+              value={bottlesPerCrate}
+              onChange={(e) => setBottlesPerCrate(parseInt(e.target.value) || 24)}
+              className="bg-slate-800 border-slate-700 text-white"
+              data-testid="restock-crate-size"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Bières/sodas = 24 · Vins/spiritueux = 12</p>
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-slate-400">Recherche</Label>
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 w-4 h-4 text-slate-500" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nom, code ou catégorie..."
+                className="pl-8 bg-slate-800 border-slate-700 text-white"
+                data-testid="restock-search"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs text-slate-400">Filtre</Label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-md text-white text-sm px-2 py-2"
+              data-testid="restock-status-filter"
+            >
+              <option value="to_order">À commander uniquement</option>
+              <option value="all">Toutes</option>
+              <option value="rupture">Rupture seulement</option>
+              <option value="faible">Stock faible seulement</option>
+              <option value="ok">OK seulement</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={fetchPlan}
+              disabled={loading}
+              className="bg-purple-600 hover:bg-purple-700 w-full"
+              data-testid="restock-refresh"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+              Actualiser
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPIs */}
+      {data && (
+        <Card className="bg-gradient-to-br from-purple-900/30 to-slate-900/70 border-purple-500/30">
+          <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div>
+              <p className="text-[10px] uppercase text-slate-400">Boissons</p>
+              <p className="text-2xl font-bold text-white">{totals.products || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-rose-400" /> Rupture
+              </p>
+              <p className="text-2xl font-bold text-rose-300">{totals.rupture || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+                <TrendingDown className="w-3 h-3 text-amber-400" /> Stock faible
+              </p>
+              <p className="text-2xl font-bold text-amber-300">{totals.low || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+                <Boxes className="w-3 h-3 text-emerald-400" /> À commander
+              </p>
+              <p className="text-2xl font-bold text-emerald-300">
+                {fmt(totals.recommended_crates)} <span className="text-sm text-slate-400">casier(s)</span>
+              </p>
+              <p className="text-[10px] text-slate-500">{fmt(totals.recommended_bottles)} bouteilles</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400">Coût estimé</p>
+              <p className="text-2xl font-bold text-purple-300">{fmt(totals.estimated_cost)} F</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Print buttons */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => printAt("ticket")}
+          disabled={!data || rows.length === 0}
+          className="bg-slate-700 hover:bg-slate-600"
+          data-testid="restock-print-ticket"
+          title="Format ticket 80mm pour imprimante thermique"
+        >
+          <Printer className="w-4 h-4 mr-1" /> Imprimer ticket
+        </Button>
+        <Button
+          onClick={() => printAt("a4")}
+          disabled={!data || rows.length === 0}
+          className="bg-slate-700 hover:bg-slate-600"
+          data-testid="restock-print-pdf"
+          title="Format A4 — utilisez 'Enregistrer en PDF' depuis le dialog d'impression"
+        >
+          <FileText className="w-4 h-4 mr-1" /> Imprimer / PDF A4
+        </Button>
+        {statusFilter === "all" && (
+          <label className="ml-auto flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeOk}
+              onChange={(e) => setIncludeOk(e.target.checked)}
+              className="rounded"
+            />
+            Inclure les boissons OK
+          </label>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card className="bg-slate-900/60 border-slate-800">
+        <CardContent className="pt-4">
+          {loading ? (
+            <div className="py-10 text-center text-slate-400">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+              Calcul en cours…
+            </div>
+          ) : !data ? (
+            <div className="py-10 text-center text-slate-500 text-sm">Chargement…</div>
+          ) : rows.length === 0 ? (
+            <div className="py-10 text-center text-emerald-400">
+              <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
+              Aucune commande nécessaire pour ce filtre.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                    <th className="text-left p-2">Code</th>
+                    <th className="text-left p-2">Boisson</th>
+                    <th className="text-left p-2">Catégorie</th>
+                    <th className="text-right p-2">Stock</th>
+                    <th className="text-right p-2">Min</th>
+                    <th className="text-right p-2" title="Bouteilles manquantes pour compléter le casier en cours">Pour casier</th>
+                    <th className="text-right p-2">Cmd reco.</th>
+                    <th className="text-right p-2">Casiers</th>
+                    <th className="text-right p-2">Coût est.</th>
+                    <th className="text-center p-2">État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id} className="border-b border-slate-800/60 hover:bg-slate-800/40" data-testid={`restock-row-${r.id}`}>
+                      <td className="p-2 font-mono text-[11px] text-slate-400">{r.code || "—"}</td>
+                      <td className="p-2 text-white">{r.name}</td>
+                      <td className="p-2 text-slate-400 text-xs">{r.category_name}</td>
+                      <td className="p-2 text-right text-slate-200">{fmt(r.current_quantity)}</td>
+                      <td className="p-2 text-right text-slate-400 text-xs">{fmt(r.stock_min)}</td>
+                      <td className="p-2 text-right text-amber-300 text-xs">
+                        {r.bottles_to_complete_crate > 0 ? `+${fmt(r.bottles_to_complete_crate)}` : "—"}
+                      </td>
+                      <td className="p-2 text-right font-bold text-emerald-300">
+                        {r.recommended_qty > 0 ? fmt(r.recommended_qty) : "—"}
+                      </td>
+                      <td className="p-2 text-right text-purple-300 font-semibold">
+                        {r.recommended_crates > 0 ? r.recommended_crates : "—"}
+                      </td>
+                      <td className="p-2 text-right text-slate-300 text-xs">
+                        {r.estimated_cost > 0 ? `${fmt(r.estimated_cost)} F` : "—"}
+                      </td>
+                      <td className="p-2 text-center">
+                        {r.status === "rupture" ? (
+                          <Badge className="bg-rose-500/20 text-rose-300 text-[10px]">Rupture</Badge>
+                        ) : r.status === "faible" ? (
+                          <Badge className="bg-amber-500/20 text-amber-300 text-[10px]">Faible</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-500/20 text-emerald-300 text-[10px]">OK</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default DrinksRestockTab;
