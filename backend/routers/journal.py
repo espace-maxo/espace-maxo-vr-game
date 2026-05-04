@@ -83,13 +83,18 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
         cutoff = await _get_cutoff()
 
         # ============ RÉEL (depuis cutoff dynamique) ============
+        excl_inv = await _excluded_ids("invoice")
+        excl_exp = await _excluded_ids("expense")
         # Recettes : factures validées créées à partir de la date pivot.
+        inv_query = {
+            "validation_status": "validated",
+            "created_at": {"$gte": cutoff},
+        }
+        if excl_inv:
+            inv_query["id"] = {"$nin": list(excl_inv)}
         invoices = await db.invoices.find(
-            {
-                "validation_status": "validated",
-                "created_at": {"$gte": cutoff},
-            },
-            {"_id": 0, "total": 1, "total_amount": 1, "items": 1, "created_at": 1, "invoice_number": 1, "tip_total": 1},
+            inv_query,
+            {"_id": 0, "id": 1, "total": 1, "total_amount": 1, "items": 1, "created_at": 1, "invoice_number": 1, "tip_total": 1},
         ).to_list(20000)
         total_in_real = 0.0
         for inv in invoices:
@@ -101,12 +106,15 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
             total_in_real += float(inv.get("tip_total") or 0)
 
         # Dépenses : completed + (paiement & is_paid), depuis cutoff aussi.
+        exp_query = {"$or": [
+            {"completed_at": {"$gte": cutoff}},
+            {"paid_at": {"$gte": cutoff}},
+            {"created_at": {"$gte": cutoff}},
+        ]}
+        if excl_exp:
+            exp_query["id"] = {"$nin": list(excl_exp)}
         expenses = await db.expenses.find(
-            {"$or": [
-                {"completed_at": {"$gte": cutoff}},
-                {"paid_at": {"$gte": cutoff}},
-                {"created_at": {"$gte": cutoff}},
-            ]},
+            exp_query,
             {"_id": 0},
         ).to_list(20000)
         total_out_real = 0.0
@@ -241,14 +249,19 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
         # On garde le plus récent des deux pour ne JAMAIS afficher avant la date pivot.
         journal_cutoff = await _get_cutoff()
         cutoff = max(cutoff_window, journal_cutoff)
+        excl_inv = await _excluded_ids("invoice")
+        excl_exp = await _excluded_ids("expense")
         rows = []
 
         # Invoices in window
+        inv_q = {
+            "validation_status": "validated",
+            "created_at": {"$gte": cutoff},
+        }
+        if excl_inv:
+            inv_q["id"] = {"$nin": list(excl_inv)}
         invoices = await db.invoices.find(
-            {
-                "validation_status": "validated",
-                "created_at": {"$gte": cutoff},
-            },
+            inv_q,
             {"_id": 0, "id": 1, "invoice_number": 1, "total": 1, "total_amount": 1, "created_at": 1, "server_name": 1, "tip_total": 1, "created_by": 1},
         ).sort("created_at", -1).to_list(limit)
         for inv in invoices:
@@ -262,16 +275,21 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
                 "ref_id": inv.get("id"),
                 "created_at": inv.get("created_at"),
                 "by": inv.get("server_name") or inv.get("created_by") or "Caisse",
+                "source": "invoice",
+                "excludable": True,
             })
 
         # Expenses in window
+        exp_q = {
+            "$or": [
+                {"status": "completed", "completed_at": {"$gte": cutoff}},
+                {"category": "paiement", "is_paid": True, "paid_at": {"$gte": cutoff}},
+            ]
+        }
+        if excl_exp:
+            exp_q["id"] = {"$nin": list(excl_exp)}
         expenses = await db.expenses.find(
-            {
-                "$or": [
-                    {"status": "completed", "completed_at": {"$gte": cutoff}},
-                    {"category": "paiement", "is_paid": True, "paid_at": {"$gte": cutoff}},
-                ]
-            },
+            exp_q,
             {"_id": 0},
         ).sort("created_at", -1).to_list(limit)
         for e in expenses:
@@ -285,6 +303,8 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
                 "ref_id": e.get("id"),
                 "created_at": ts,
                 "by": e.get("paid_by") or e.get("created_by") or "—",
+                "source": "expense",
+                "excludable": True,
             })
 
         # Opérations manuelles (saisies à la main ou via chat)
@@ -367,6 +387,66 @@ async def delete_manual_op(op_id: str):
     if res.deleted_count == 0:
         raise HTTPException(404, "Opération introuvable")
     return {"success": True}
+
+
+# ==================== EXCLUSIONS (auto-entries: invoices & expenses) ====================
+
+class ExcludePayload(BaseModel):
+    source: str = Field(..., description="invoice | expense")
+    ref_id: str = Field(..., min_length=1)
+    excluded_by: Optional[str] = "Admin"
+    reason: Optional[str] = None
+
+
+@router.post("/journal/exclude")
+async def exclude_from_journal(payload: ExcludePayload):
+    """Masque une facture ou une dépense du journal de trésorerie.
+
+    La facture/dépense reste intacte dans la caisse (source de vérité) ;
+    elle est simplement retirée des agrégats et de la liste du journal.
+    Idempotent : plusieurs appels ne créent qu'une seule exclusion.
+    """
+    src = (payload.source or "").lower()
+    if src not in ("invoice", "expense"):
+        raise HTTPException(422, "source doit être 'invoice' ou 'expense'")
+    key = {"source": src, "ref_id": payload.ref_id}
+    await db.journal_excluded.update_one(
+        key,
+        {"$set": {
+            **key,
+            "excluded_by": payload.excluded_by or "Admin",
+            "reason": payload.reason,
+            "excluded_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"success": True, "source": src, "ref_id": payload.ref_id}
+
+
+@router.post("/journal/include")
+async def include_in_journal(payload: ExcludePayload):
+    """Réintègre une facture/dépense précédemment exclue du journal."""
+    src = (payload.source or "").lower()
+    if src not in ("invoice", "expense"):
+        raise HTTPException(422, "source doit être 'invoice' ou 'expense'")
+    res = await db.journal_excluded.delete_one({"source": src, "ref_id": payload.ref_id})
+    return {"success": True, "removed": res.deleted_count}
+
+
+@router.get("/journal/exclusions")
+async def list_exclusions():
+    items = await db.journal_excluded.find({}, {"_id": 0}).sort("excluded_at", -1).to_list(2000)
+    return {"count": len(items), "exclusions": items}
+
+
+async def _excluded_ids(source: str) -> set:
+    try:
+        rows = await db.journal_excluded.find(
+            {"source": source}, {"_id": 0, "ref_id": 1}
+        ).to_list(10000)
+        return {r.get("ref_id") for r in rows if r.get("ref_id")}
+    except Exception:
+        return set()
 
 
 # ==================== PARAMÈTRES (date de début + reset) ====================

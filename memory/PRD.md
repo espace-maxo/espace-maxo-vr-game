@@ -4,6 +4,43 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 04/05/2026 — Journal : Exclure factures & dépenses auto (DONE)
+
+**Demande utilisateur** : « Dans le menu journal, donner la possibilité de supprimer des achats enregistrés automatiquement de même que des recettes. »
+
+**Implémentation (soft-exclude)** : pour préserver l'intégrité comptable, la suppression depuis le journal = exclusion (la facture/dépense reste dans la caisse, juste masquée du journal de trésorerie).
+
+**Backend** (`/app/backend/routers/journal.py`) :
+- Nouveau endpoint `POST /api/journal/exclude` `{source: "invoice"|"expense", ref_id, excluded_by, reason?}` — idempotent via upsert.
+- `POST /api/journal/include` pour réintégrer.
+- `GET /api/journal/exclusions` pour lister les exclusions actives.
+- Collection `journal_excluded` — clé (`source`, `ref_id`).
+- `journal/dashboard` et `journal/realtime` filtrent automatiquement les IDs exclus (via `$nin`).
+- Les lignes de factures/dépenses dans `/realtime` exposent désormais `excludable: true` et `source`.
+
+**Frontend** (`JournalTab.jsx`) :
+- Le bouton poubelle apparaît maintenant sur **toutes** les lignes (manuelles + factures + dépenses).
+- Pour les ops manuelles : delete définitif (comme avant).
+- Pour les factures/dépenses auto : confirmation explicite *« ... reste enregistrée dans la caisse, juste masquée du journal »* → POST `/journal/exclude`.
+
+**Validation curl end-to-end** : dashboard `total_in=5000F, invoices_count=1` → après exclusion `total_in=0F, invoices_count=0` → `include` restaure. Lint FE/BE OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
+## 02/05/2026 — Boutons suppression Détail Jour par Jour (DONE)
+
+**Demande utilisateur** : « Mets des boutons de suppression pour le détail jour par jour de faire le point. »
+
+Ajout d'icônes poubelle (admin only) sur chaque ligne Ventes/Charges dans le détail journalier de "Faire le point" (`HebdoReport.jsx`). Suppression auto-tracée dans l'audit. Confirmation + refresh auto.
+
+
+## 02/05/2026 — Lisibilité mobile des onglets Caisse (DONE)
+
+Tous les TabsTrigger de CaissePage passent en `text-[11px] sm:text-sm` avec icône + nom visible sur téléphone. Plus d'onglets "icône-seule" illisibles.
+
+
 ## 02/05/2026 — Audit : Historique des modifications de factures & bons (DONE)
 
 **Demande utilisateur** : « Permettre d'avoir l'historique des modifications de factures et des bons par la gérante et les serveurs uniquement dans le profil administrateur. »

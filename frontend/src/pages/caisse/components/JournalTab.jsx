@@ -144,14 +144,37 @@ const JournalTab = () => {
   };
 
   const deleteOp = async (op) => {
-    if (!op.deletable) return;
-    if (!window.confirm(`Supprimer "${op.label}" (${fmt(op.amount)} F) ?`)) return;
-    try {
-      await axios.delete(`${API}/journal/manual/${op.ref_id}`);
-      toast.success("Opération supprimée");
-      load();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Erreur");
+    // Manual ops → true delete
+    if (op.deletable) {
+      if (!window.confirm(`Supprimer "${op.label}" (${fmt(op.amount)} F) ?`)) return;
+      try {
+        await axios.delete(`${API}/journal/manual/${op.ref_id}`);
+        toast.success("Opération supprimée");
+        load();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Erreur");
+      }
+      return;
+    }
+    // Auto-entries (invoices / expenses) → soft exclude from journal
+    if (op.excludable && (op.source === "invoice" || op.source === "expense")) {
+      const label = op.source === "invoice" ? "cette facture" : "cette dépense";
+      if (!window.confirm(
+        `Retirer ${label} du journal ?\n\n` +
+        `« ${op.label} » — ${fmt(op.amount)} F\n\n` +
+        `Attention : ${label} reste enregistrée dans la caisse, elle est juste masquée du journal de trésorerie.`
+      )) return;
+      try {
+        await axios.post(`${API}/journal/exclude`, {
+          source: op.source,
+          ref_id: op.ref_id,
+          excluded_by: "Admin",
+        });
+        toast.success(op.source === "invoice" ? "Facture retirée du journal" : "Dépense retirée du journal");
+        load();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Erreur");
+      }
     }
   };
 
@@ -439,14 +462,19 @@ const JournalTab = () => {
                         <span className={`font-bold whitespace-nowrap text-base ${isIn ? "text-emerald-300" : "text-rose-300"}`}>
                           {isIn ? "+" : "−"} {fmt(op.amount)} F
                         </span>
-                        {op.deletable && (
+                        {(op.deletable || op.excludable) && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => deleteOp(op)}
                             className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10 h-7 px-1.5 ml-1"
                             data-testid={`journal-delete-${op.ref_id}`}
-                            title="Supprimer cette opération manuelle"
+                            title={op.deletable
+                              ? "Supprimer cette opération manuelle"
+                              : (op.source === "invoice"
+                                  ? "Retirer cette facture du journal (la facture reste dans la caisse)"
+                                  : "Retirer cette dépense du journal (la dépense reste enregistrée)")
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
