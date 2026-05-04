@@ -362,6 +362,125 @@ async def get_movements(product_id: str = None, movement_type: str = None, date_
     return {"movements": movements}
 
 
+# ==================== STOCK À UNE DATE DONNÉE (BOISSONS) ====================
+
+def _is_drinks_category(cat: dict) -> bool:
+    """Détecte si une catégorie de stock concerne les boissons / bar."""
+    name = (cat or {}).get("name") or ""
+    n = name.lower()
+    return ("boisson" in n) or ("bar" in n) or ("cocktail" in n)
+
+
+@router.get("/snapshot")
+async def stock_snapshot_at(
+    at: str = "",
+    only_drinks: bool = True,
+):
+    """Reconstruit le stock de chaque produit à une date+heure donnée.
+
+    Logique : `qty_at(t) = current_quantity - somme(delta des mouvements après t)`.
+    Pour chaque mouvement, le delta net est `new_quantity - previous_quantity`.
+
+    Paramètres :
+      - at : date ISO. Si vide ou si format `YYYY-MM-DD`, utilise 23:59:59 ce jour-là.
+      - only_drinks : si True (défaut), filtre sur catégories de type Boisson/Bar/Cocktail.
+    """
+    if not at:
+        raise HTTPException(422, "Paramètre 'at' requis (YYYY-MM-DD ou ISO datetime)")
+    # Normalise en bornant à fin de journée si seule la date est fournie.
+    cutoff = at if "T" in at else f"{at}T23:59:59.999"
+
+    # Catégories boissons ?
+    drink_cat_ids = set()
+    if only_drinks:
+        cats = await db.stock_categories.find({}, {"_id": 0}).to_list(500)
+        drink_cat_ids = {c["id"] for c in cats if _is_drinks_category(c)}
+
+    # Produits à inclure
+    prod_query = {}
+    if only_drinks:
+        if not drink_cat_ids:
+            return {"at": cutoff, "only_drinks": True, "products": [], "total_products": 0,
+                    "total_quantity": 0.0, "total_value": 0.0}
+        prod_query["category_id"] = {"$in": list(drink_cat_ids)}
+    products = await db.stock_products.find(prod_query, {"_id": 0}).to_list(5000)
+
+    # Cats lookup pour libellés
+    cats_all = await db.stock_categories.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+    cat_map = {c["id"]: c["name"] for c in cats_all}
+
+    if not products:
+        return {"at": cutoff, "only_drinks": only_drinks, "products": [], "total_products": 0,
+                "total_quantity": 0.0, "total_value": 0.0}
+
+    pids = [p["id"] for p in products]
+    # Mouvements après la date (à soustraire du stock actuel)
+    later_movs = await db.stock_movements.find(
+        {"product_id": {"$in": pids}, "created_at": {"$gt": cutoff}},
+        {"_id": 0, "product_id": 1, "previous_quantity": 1, "new_quantity": 1, "quantity": 1, "movement_type": 1},
+    ).to_list(100000)
+
+    # Net delta after cutoff per product
+    delta_after: Dict[str, float] = {}
+    for m in later_movs:
+        pid = m.get("product_id")
+        if not pid:
+            continue
+        prev_q = m.get("previous_quantity")
+        new_q = m.get("new_quantity")
+        if prev_q is not None and new_q is not None:
+            delta = float(new_q) - float(prev_q)
+        else:
+            # Fallback (mouvements anciens sans previous/new)
+            qty = float(m.get("quantity") or 0)
+            mtype = (m.get("movement_type") or "").lower()
+            if mtype in ("entree", "entrée", "in"): delta = qty
+            elif mtype in ("sortie", "out"): delta = -qty
+            else: delta = 0.0
+        delta_after[pid] = delta_after.get(pid, 0.0) + delta
+
+    rows = []
+    total_qty = 0.0
+    total_val = 0.0
+    for p in products:
+        pid = p["id"]
+        cur_qty = float(p.get("quantity") or 0)
+        qty_at = cur_qty - delta_after.get(pid, 0.0)
+        if qty_at < 0:
+            qty_at = 0.0  # garde-fou pour anomalies historiques
+        unit_cost = float(p.get("purchase_price") or 0)
+        value_at = qty_at * unit_cost
+        rows.append({
+            "id": pid,
+            "code": p.get("code") or "",
+            "name": p.get("name") or "—",
+            "category_id": p.get("category_id"),
+            "category_name": cat_map.get(p.get("category_id"), "—"),
+            "subcategory": p.get("subcategory") or "",
+            "unit": p.get("unit") or "",
+            "current_quantity": cur_qty,
+            "quantity_at": round(qty_at, 4),
+            "delta_after": round(delta_after.get(pid, 0.0), 4),
+            "unit_purchase_price": unit_cost,
+            "value_at": round(value_at, 2),
+            "stock_min": float(p.get("stock_min") or 0),
+            "movements_after_count": sum(1 for m in later_movs if m.get("product_id") == pid),
+        })
+        total_qty += qty_at
+        total_val += value_at
+
+    rows.sort(key=lambda r: (r["category_name"] or "", r["name"] or ""))
+    return {
+        "at": cutoff,
+        "only_drinks": only_drinks,
+        "drink_categories": [{"id": cid, "name": cat_map.get(cid, "—")} for cid in drink_cat_ids],
+        "total_products": len(rows),
+        "total_quantity": round(total_qty, 2),
+        "total_value": round(total_val, 2),
+        "products": rows,
+    }
+
+
 @router.get("/destock-live")
 async def destock_live_dashboard(limit: int = 50):
     """Live deduction dashboard.

@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,6 +114,7 @@ const NAV_GROUPS = [
       { id: "magasin", label: "Stock Magasin", icon: Warehouse },
       { id: "movements", label: "Mouvements", icon: ArrowUpDown },
       { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
+      { id: "snapshot", label: "Stock à une date", icon: Clock },
     ],
   },
   {
@@ -176,6 +177,15 @@ export default function StockPage() {
   // Déstockage live dashboard
   const [destockLive, setDestockLive] = useState(null);
   const [destockLiveLoading, setDestockLiveLoading] = useState(false);
+  // Snapshot stock à une date (boissons)
+  const [snapshotDate, setSnapshotDate] = useState(() => {
+    const now = new Date();
+    return now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  });
+  const [snapshotData, setSnapshotData] = useState(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotSearch, setSnapshotSearch] = useState("");
+  const [snapshotShowZero, setSnapshotShowZero] = useState(false);
   // Mobile sidebar drawer
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Manual link modal (per unlinked product)
@@ -579,6 +589,21 @@ export default function StockPage() {
     }
   };
 
+  const fetchSnapshot = useCallback(async () => {
+    if (!snapshotDate) return;
+    setSnapshotLoading(true);
+    try {
+      const r = await axios.get(`${API}/snapshot`, {
+        params: { at: snapshotDate, only_drinks: true },
+      });
+      setSnapshotData(r.data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors du calcul du stock à cette date");
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, [snapshotDate]);
+
   const fetchMovements = useCallback(async () => {
     try {
       const params = { limit: movementFilters.limit || 200 };
@@ -592,8 +617,7 @@ export default function StockPage() {
   }, [movementFilters]);
 
   const fetchPurchases = useCallback(async () => {
-    try { const r = await axios.get(`${API}/purchases`); setPurchases(r.data.purchases); } catch {}
-  }, []);
+    try { const r = await axios.get(`${API}/purchases`); setPurchases(r.data.purchases); } catch {}  }, []);
 
   const fetchUsers = useCallback(async () => {
     try { const r = await axios.get(`${API}/auth/users`); setStockUsers(r.data.users); } catch {}
@@ -640,6 +664,7 @@ export default function StockPage() {
   // Auto-fetch destockage live when entering the tab
   useEffect(() => {
     if (activeSection === "destock_live" && !destockLive) fetchDestockLive();
+    if (activeSection === "snapshot" && !snapshotData) fetchSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
@@ -3292,7 +3317,173 @@ export default function StockPage() {
           </div>
         )}
 
+        {/* SNAPSHOT — Stock à une date donnée (Boissons) */}
+        {activeSection === "snapshot" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Clock className="w-6 h-6 text-purple-400" />
+                Stock à une date · Boissons
+              </h2>
+            </div>
 
+            <Card className="bg-slate-900/60 border-slate-800">
+              <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs text-slate-400">Date et heure de référence</Label>
+                  <Input
+                    type="datetime-local"
+                    value={snapshotDate}
+                    onChange={(e) => setSnapshotDate(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="snapshot-date-input"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    L'état du stock est reconstruit à partir des mouvements postérieurs à cette date.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-400">Recherche</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-slate-500" />
+                    <Input
+                      value={snapshotSearch}
+                      onChange={(e) => setSnapshotSearch(e.target.value)}
+                      placeholder="Nom ou code..."
+                      className="pl-8 bg-slate-800 border-slate-700 text-white"
+                      data-testid="snapshot-search-input"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={fetchSnapshot}
+                    disabled={snapshotLoading || !snapshotDate}
+                    className="bg-purple-600 hover:bg-purple-700"
+                    data-testid="snapshot-compute-btn"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-1 ${snapshotLoading ? "animate-spin" : ""}`} />
+                    Calculer
+                  </Button>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-slate-300 sm:col-span-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={snapshotShowZero}
+                    onChange={(e) => setSnapshotShowZero(e.target.checked)}
+                    className="rounded"
+                  />
+                  Afficher aussi les boissons avec un stock de 0 à cette date
+                </label>
+              </CardContent>
+            </Card>
+
+            {/* KPI summary */}
+            {snapshotData && (
+              <Card className="bg-gradient-to-br from-purple-900/30 to-slate-900/70 border-purple-500/30">
+                <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Date interrogée</p>
+                    <p className="text-base font-bold text-white">
+                      {snapshotData.at?.replace("T", " · ").slice(0, 19)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Boissons trouvées</p>
+                    <p className="text-2xl font-bold text-purple-300">{snapshotData.total_products}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Quantité totale (toutes unités)</p>
+                    <p className="text-2xl font-bold text-emerald-300">
+                      {Math.round(snapshotData.total_quantity || 0).toLocaleString("fr-FR")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Valorisation stock</p>
+                    <p className="text-2xl font-bold text-amber-300">
+                      {Math.round(snapshotData.total_value || 0).toLocaleString("fr-FR")} F
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Liste des produits */}
+            <Card className="bg-slate-900/60 border-slate-800">
+              <CardContent className="pt-4">
+                {snapshotLoading ? (
+                  <div className="py-10 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    Calcul du stock à la date demandée…
+                  </div>
+                ) : !snapshotData ? (
+                  <div className="py-10 text-center text-slate-500 text-sm">
+                    Choisissez une date puis cliquez sur "Calculer".
+                  </div>
+                ) : (
+                  (() => {
+                    const term = (snapshotSearch || "").toLowerCase().trim();
+                    let rows = snapshotData.products || [];
+                    if (!snapshotShowZero) rows = rows.filter((r) => (r.quantity_at || 0) > 0);
+                    if (term) rows = rows.filter((r) =>
+                      (r.name || "").toLowerCase().includes(term)
+                      || (r.code || "").toLowerCase().includes(term)
+                      || (r.category_name || "").toLowerCase().includes(term)
+                    );
+                    if (rows.length === 0) {
+                      return (
+                        <div className="py-10 text-center text-slate-500 text-sm">
+                          Aucune boisson ne correspond.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                              <th className="text-left p-2">Code</th>
+                              <th className="text-left p-2">Produit</th>
+                              <th className="text-left p-2">Catégorie</th>
+                              <th className="text-right p-2">Stock à la date</th>
+                              <th className="text-right p-2">Unité</th>
+                              <th className="text-right p-2">Stock actuel</th>
+                              <th className="text-right p-2">Δ depuis</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((r) => {
+                              const delta = r.delta_after || 0;
+                              const lowStock = r.stock_min && r.quantity_at <= r.stock_min;
+                              return (
+                                <tr key={r.id} className="border-b border-slate-800/60 hover:bg-slate-800/40" data-testid={`snapshot-row-${r.id}`}>
+                                  <td className="p-2 font-mono text-[11px] text-slate-400">{r.code || "—"}</td>
+                                  <td className="p-2 text-white">{r.name}</td>
+                                  <td className="p-2 text-slate-400 text-xs">{r.category_name}</td>
+                                  <td className={`p-2 text-right font-bold ${lowStock ? "text-amber-300" : "text-white"}`}>
+                                    {Number(r.quantity_at).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                                    {lowStock && <span className="ml-1 text-[10px]">⚠</span>}
+                                  </td>
+                                  <td className="p-2 text-right text-slate-400 text-xs">{r.unit}</td>
+                                  <td className="p-2 text-right text-slate-300">
+                                    {Number(r.current_quantity).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                                  </td>
+                                  <td className={`p-2 text-right text-xs ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-slate-500"}`}>
+                                    {delta > 0 ? "+" : ""}{Number(delta).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* PURCHASES */}
         {activeSection === "purchases" && (
