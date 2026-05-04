@@ -63,6 +63,7 @@ const EVENT_TYPES = [
 
 const LocationsTab = ({ currentUser, formatPrice }) => {
   const [locations, setLocations] = useState([]);
+  const [proformas, setProformas] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState(null);
   const [viewingLocation, setViewingLocation] = useState(null);
@@ -118,6 +119,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
   useEffect(() => {
     fetchLocations();
+    fetchProformas();
   }, []);
 
   const fetchLocations = async () => {
@@ -129,6 +131,63 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       toast.error("Erreur lors du chargement des locations");
     }
   };
+
+  const fetchProformas = async () => {
+    try {
+      const res = await axios.get(`${API}/proforma-invoices`);
+      setProformas(res.data.proformas || []);
+    } catch (error) {
+      console.error("Error fetching proformas:", error);
+    }
+  };
+
+  // Détecte les conflits sur la date/les espaces sélectionnés
+  // vs. réservations confirmées + proformas (hors rejetés/convertis/brouillons cachés).
+  const dateConflicts = React.useMemo(() => {
+    const d = formData.reservation_date;
+    if (!d) return { reservations: [], proformas: [] };
+    const selectedSpaces = formData.space_types || [];
+    const overlaps = (spaceType) => {
+      if (!spaceType) return false;
+      const booked = spaceType.split("+").filter(Boolean);
+      if (selectedSpaces.length === 0) return true;
+      return booked.some((s) => selectedSpaces.includes(s));
+    };
+    // Proforma : heuristique "location" + extraction de date dans titre/notes/items
+    const extractDate = (p) => {
+      const blob = [
+        p.proforma_title || "",
+        p.notes || "",
+        ...(p.items || []).map((i) => `${i.name || ""} ${i.description || ""}`),
+      ].join(" ");
+      const m1 = blob.match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+      if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+      const m2 = blob.match(/(\d{2})[-/](\d{2})[-/](\d{4})/);
+      if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+      return null;
+    };
+    const looksLocation = (p) => {
+      const txt = [
+        p.proforma_title || "",
+        p.notes || "",
+        ...(p.items || []).map((i) => `${i.name || ""} ${i.description || ""}`),
+      ].join(" ").toLowerCase();
+      return /(location|reservation|réservation|salle|jardin|espace|jeu|fête|fete|événement|evenement|mariage|anniversaire|bapt|pack)/i.test(txt);
+    };
+    const res = locations.filter((l) =>
+      l.id !== editingLocation?.id
+      && l.reservation_date === d
+      && l.status !== "cancelled"
+      && overlaps(l.space_type)
+    );
+    const pro = proformas.filter((p) => {
+      if (p.status === "rejected" || p.status === "converted") return false;
+      if (!looksLocation(p)) return false;
+      const evDate = extractDate(p);
+      return evDate === d;
+    });
+    return { reservations: res, proformas: pro };
+  }, [formData.reservation_date, formData.space_types, locations, proformas, editingLocation]);
 
   const handleSpaceChange = (spaceType) => {
     // For single space selection (backward compatibility)
@@ -1033,7 +1092,11 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                   type="date"
                   value={formData.reservation_date}
                   onChange={(e) => setFormData({...formData, reservation_date: e.target.value})}
-                  className="bg-slate-700/50 border-slate-600 text-white"
+                  className={`bg-slate-700/50 border-slate-600 text-white ${
+                    (dateConflicts.reservations.length > 0 || dateConflicts.proformas.length > 0)
+                      ? "ring-2 ring-amber-500/60" : ""
+                  }`}
+                  data-testid="location-date-input"
                 />
               </div>
               <div className="space-y-2">
@@ -1055,6 +1118,56 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
                 />
               </div>
             </div>
+
+            {/* Conflit de date : réservations + proformas */}
+            {formData.reservation_date && (dateConflicts.reservations.length > 0 || dateConflicts.proformas.length > 0) && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2" data-testid="location-conflict-alert">
+                <div className="flex items-center gap-2 text-amber-300 font-semibold text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  Attention — Cette date est déjà sollicitée
+                </div>
+                {dateConflicts.reservations.length > 0 && (
+                  <div className="text-xs text-amber-200/90 space-y-1">
+                    <div className="font-medium text-amber-300">{dateConflicts.reservations.length} réservation(s) existante(s) :</div>
+                    {dateConflicts.reservations.map((l) => (
+                      <div key={l.id} className="pl-2 border-l-2 border-amber-500/40">
+                        <span className="text-white">{l.customer_name}</span>
+                        {" · "}
+                        <span className="text-amber-200/80">
+                          {(l.space_type || "").split("+").map((s) => SPACE_CONFIG[s]?.label || s).join(" + ")}
+                        </span>
+                        {l.start_time && <span className="text-slate-400"> · {l.start_time}→{l.end_time || "?"}</span>}
+                        {l.event_type && <span className="text-slate-400"> · {l.event_type}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {dateConflicts.proformas.length > 0 && (
+                  <div className="text-xs text-amber-200/90 space-y-1">
+                    <div className="font-medium text-amber-300">{dateConflicts.proformas.length} proforma(s) en cours pour cette date :</div>
+                    {dateConflicts.proformas.map((p) => (
+                      <div key={p.id} className="pl-2 border-l-2 border-amber-500/40">
+                        <span className="text-white">{p.client_name}</span>
+                        {" · "}
+                        <span className="text-slate-400 font-mono">{p.proforma_number}</span>
+                        {p.proforma_title && <span className="text-slate-400"> · {p.proforma_title}</span>}
+                        <Badge className={`ml-2 text-[10px] ${
+                          p.status === "sent" ? "bg-amber-500/20 text-amber-300" :
+                          p.status === "accepted" ? "bg-emerald-500/20 text-emerald-300" :
+                          "bg-slate-500/20 text-slate-300"
+                        }`}>{p.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400 italic">
+                  Vous pouvez quand même confirmer si ces demandes concernent d'autres espaces ou créneaux.
+                </div>
+              </div>
+            )}
 
             {/* Event Info */}
             <div className="grid grid-cols-2 gap-3">
