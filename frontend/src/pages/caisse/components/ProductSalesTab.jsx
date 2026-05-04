@@ -61,7 +61,7 @@ const ProductSalesTab = () => {
   const [department, setDepartment] = useState("all");
   const [validatedOnly, setValidatedOnly] = useState(true);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("revenue"); // revenue | quantity_sold | invoice_count | avg_price | name
+  const [sortKey, setSortKey] = useState("quantity_sold"); // quantity_sold | revenue | invoice_count | avg_price | name
   const [sortDir, setSortDir] = useState("desc");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
