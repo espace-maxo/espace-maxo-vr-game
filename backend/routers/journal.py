@@ -113,6 +113,15 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
         ]}
         if excl_exp:
             exp_query["id"] = {"$nin": list(excl_exp)}
+        # Déjà liées manuellement ? → on les retire ici pour éviter le doublon
+        # (l'op manuelle compte à leur place).
+        linked_exp = await _linked_expense_ids()
+        if linked_exp:
+            prev = exp_query.get("id")
+            if prev and isinstance(prev, dict) and "$nin" in prev:
+                exp_query["id"] = {"$nin": list(set(prev["$nin"]) | linked_exp)}
+            else:
+                exp_query["id"] = {"$nin": list(linked_exp)}
         expenses = await db.expenses.find(
             exp_query,
             {"_id": 0},
@@ -288,6 +297,14 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
         }
         if excl_exp:
             exp_q["id"] = {"$nin": list(excl_exp)}
+        # Anti-doublon : dépenses déjà représentées par une op manuelle liée.
+        linked_exp = await _linked_expense_ids()
+        if linked_exp:
+            prev = exp_q.get("id")
+            if prev and isinstance(prev, dict) and "$nin" in prev:
+                exp_q["id"] = {"$nin": list(set(prev["$nin"]) | linked_exp)}
+            else:
+                exp_q["id"] = {"$nin": list(linked_exp)}
         expenses = await db.expenses.find(
             exp_q,
             {"_id": 0},
@@ -437,6 +454,118 @@ async def include_in_journal(payload: ExcludePayload):
 async def list_exclusions():
     items = await db.journal_excluded.find({}, {"_id": 0}).sort("excluded_at", -1).to_list(2000)
     return {"count": len(items), "exclusions": items}
+
+
+async def _linked_expense_ids() -> set:
+    """IDs des dépenses déjà rattachées au journal via un journal_manual."""
+    try:
+        rows = await db.journal_manual.find(
+            {"linked_expense_id": {"$ne": None}},
+            {"_id": 0, "linked_expense_id": 1},
+        ).to_list(10000)
+        return {r.get("linked_expense_id") for r in rows if r.get("linked_expense_id")}
+    except Exception:
+        return set()
+
+
+@router.get("/journal/available-expenses")
+async def list_available_expenses(
+    search: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    """Liste les achats/dépenses du module Achats que l'admin peut lier au journal.
+
+    Chaque ligne retourne aussi un flag `already_in_journal` pour indiquer :
+    - si elle est déjà comptée automatiquement (status=completed ou paid),
+    - ou déjà liée manuellement via `journal_manual.linked_expense_id`.
+    """
+    query = {}
+    if search:
+        rgx = {"$regex": re.escape(search.strip()), "$options": "i"}
+        query["$or"] = [
+            {"description": rgx},
+            {"category": rgx},
+            {"supplier": rgx},
+            {"reference": rgx},
+        ]
+    expenses = await db.expenses.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    linked = await _linked_expense_ids()
+    excluded = await _excluded_ids("expense")
+
+    rows = []
+    for e in expenses:
+        eid = e.get("id")
+        is_completed = e.get("status") == "completed"
+        is_paid = e.get("category") == "paiement" and e.get("is_paid") is True
+        is_linked = eid in linked
+        is_excluded = eid in excluded
+        rows.append({
+            "id": eid,
+            "description": e.get("description") or "—",
+            "category": e.get("category") or "autres",
+            "supplier": e.get("supplier") or "",
+            "amount": float(e.get("amount") or 0),
+            "status": e.get("status") or "pending",
+            "created_at": e.get("created_at"),
+            "completed_at": e.get("completed_at"),
+            "paid_at": e.get("paid_at"),
+            "is_paid": bool(e.get("is_paid")),
+            "is_completed": is_completed,
+            "already_in_journal": (is_completed or is_paid or is_linked) and not is_excluded,
+            "already_linked": is_linked,
+            "excluded": is_excluded,
+        })
+    return {"count": len(rows), "expenses": rows}
+
+
+class LinkExpensePayload(BaseModel):
+    expense_id: str = Field(..., min_length=1)
+    linked_by: Optional[str] = "Admin"
+
+
+@router.post("/journal/link-expense")
+async def link_expense_to_journal(payload: LinkExpensePayload):
+    """Crée une opération manuelle dans le journal pointant vers une dépense
+    existante (`linked_expense_id`). L'anti-doublon du dashboard ignorera
+    ensuite la dépense auto quand elle sera marquée completed/paid.
+    """
+    exp = await db.expenses.find_one({"id": payload.expense_id}, {"_id": 0})
+    if not exp:
+        raise HTTPException(404, "Achat introuvable")
+
+    # Idempotence : si déjà lié, ne rien faire et renvoyer l'op existante.
+    existing = await db.journal_manual.find_one(
+        {"linked_expense_id": payload.expense_id},
+        {"_id": 0},
+    )
+    if existing:
+        return {"success": True, "already_linked": True, "operation": existing}
+
+    amount = float(exp.get("amount") or 0)
+    if amount <= 0:
+        raise HTTPException(422, "Montant invalide (0)")
+
+    cat = _categorize_expense(exp.get("category"), exp.get("description"))
+    now = datetime.now(timezone.utc)
+    cutoff = await _get_cutoff()
+    created_raw = exp.get("created_at") or now.isoformat()
+    # Normalise (même format que cutoff "YYYY-MM-DD")
+    created_at = created_raw if str(created_raw) >= cutoff else now.isoformat()
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "type": "depense",
+        "amount": amount,
+        "label": exp.get("description") or "Dépense liée",
+        "category": cat,
+        "created_by": payload.linked_by or "Admin",
+        "created_at": created_at,
+        "source": "expense_link",
+        "linked_expense_id": payload.expense_id,
+    }
+    await db.journal_manual.insert_one(doc.copy())
+    doc.pop("_id", None)
+    return {"success": True, "operation": doc}
 
 
 async def _excluded_ids(source: str) -> set:

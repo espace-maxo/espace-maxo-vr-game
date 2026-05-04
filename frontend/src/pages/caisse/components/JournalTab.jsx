@@ -14,10 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, BookOpen, CalendarRange,
   RefreshCw, ArrowDownCircle, ArrowUpCircle, ChefHat, Receipt, Users, Package,
-  Send, Bot, Trash2, Sparkles, Plus, Loader2,
+  Send, Bot, Trash2, Sparkles, Plus, Loader2, Link as LinkIcon, Search, X,
+  CheckCircle2,
 } from "lucide-react";
 import ForecastsTab from "./ForecastsTab";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -53,6 +57,13 @@ const JournalTab = () => {
   const [cutoffDate, setCutoffDate] = useState("2026-05-01");
   const [showCutoffEditor, setShowCutoffEditor] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  // "Lier un achat" modal state
+  const [linkerOpen, setLinkerOpen] = useState(false);
+  const [linkerSearch, setLinkerSearch] = useState("");
+  const [linkerLoading, setLinkerLoading] = useState(false);
+  const [linkerExpenses, setLinkerExpenses] = useState([]);
+  const [linkingId, setLinkingId] = useState(null);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -187,6 +198,50 @@ const JournalTab = () => {
 
   const filteredOps = useMemo(() => operations || [], [operations]);
 
+  // ============== LIER UN ACHAT ==============
+  const fetchAvailableExpenses = useCallback(async (term = "") => {
+    setLinkerLoading(true);
+    try {
+      const params = { limit: 200 };
+      if (term && term.trim()) params.search = term.trim();
+      const r = await axios.get(`${API}/journal/available-expenses`, { params });
+      setLinkerExpenses(r.data?.expenses || []);
+    } catch (e) {
+      toast.error("Erreur de chargement des achats");
+    } finally {
+      setLinkerLoading(false);
+    }
+  }, []);
+
+  const openLinker = () => {
+    setLinkerOpen(true);
+    fetchAvailableExpenses("");
+  };
+
+  const linkExpense = async (expense) => {
+    if (expense.already_in_journal) {
+      toast.info("Cet achat est déjà dans le journal");
+      return;
+    }
+    setLinkingId(expense.id);
+    try {
+      const r = await axios.post(`${API}/journal/link-expense`, {
+        expense_id: expense.id,
+      });
+      if (r.data?.already_linked) {
+        toast.info("Déjà lié au journal");
+      } else {
+        toast.success(`Achat lié : ${expense.description} (${fmt(expense.amount)} F)`);
+      }
+      // Refresh picker and journal
+      await Promise.all([fetchAvailableExpenses(linkerSearch), load()]);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors du rattachement");
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4" data-testid="journal-tab">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -211,6 +266,16 @@ const JournalTab = () => {
             title="Définir la date de début du journal"
           >
             <CalendarRange className="w-4 h-4 mr-1" /> Début du journal
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openLinker}
+            className="border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"
+            data-testid="journal-link-expense-btn"
+            title="Chercher un achat existant et le lier au journal (1 clic)"
+          >
+            <LinkIcon className="w-4 h-4 mr-1" /> Lier un achat
           </Button>
           <Button
             size="sm"
@@ -488,6 +553,106 @@ const JournalTab = () => {
           </Card>
         </>
       )}
+
+      {/* ======= MODAL "Lier un achat" ======= */}
+      <Dialog open={linkerOpen} onOpenChange={setLinkerOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="journal-linker-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-300">
+              <LinkIcon className="w-5 h-5" /> Lier un achat au journal
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Un clic ajoute l'achat comme sortie dans le journal de trésorerie. Si l'achat est ensuite marqué payé dans Achats, aucun doublon ne sera créé.
+            </p>
+          </DialogHeader>
+
+          <div className="relative mt-2">
+            <Search className="absolute left-2 top-2.5 w-4 h-4 text-slate-500" />
+            <Input
+              value={linkerSearch}
+              onChange={(e) => setLinkerSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") fetchAvailableExpenses(linkerSearch); }}
+              placeholder="Rechercher par description, fournisseur, catégorie…"
+              className="pl-8 bg-slate-800 border-slate-700 text-white"
+              data-testid="journal-linker-search"
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <Button
+              size="sm"
+              onClick={() => fetchAvailableExpenses(linkerSearch)}
+              disabled={linkerLoading}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="journal-linker-refresh"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${linkerLoading ? "animate-spin" : ""}`} />
+              Rechercher
+            </Button>
+            <span className="text-xs text-slate-400">{linkerExpenses.length} achat(s) trouvé(s)</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto mt-3 space-y-2 pr-1">
+            {linkerLoading ? (
+              <div className="py-10 text-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" /> Chargement…
+              </div>
+            ) : linkerExpenses.length === 0 ? (
+              <div className="py-10 text-center text-slate-500 text-sm">
+                Aucun achat trouvé.
+              </div>
+            ) : (
+              linkerExpenses.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2"
+                  data-testid={`journal-linker-row-${e.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-medium truncate">{e.description}</p>
+                    <p className="text-xs text-slate-500">
+                      {e.created_at ? format(parseISO(e.created_at), "dd/MM/yyyy", { locale: fr }) : "—"}
+                      {e.supplier && <> · {e.supplier}</>}
+                      <span className="ml-2 text-slate-400">· {e.category}</span>
+                    </p>
+                  </div>
+                  <Badge className={`text-[10px] ${e.is_completed ? "bg-emerald-500/20 text-emerald-300" : e.is_paid ? "bg-blue-500/20 text-blue-300" : "bg-slate-500/20 text-slate-300"}`}>
+                    {e.is_completed ? "Terminé" : e.is_paid ? "Payé" : e.status}
+                  </Badge>
+                  <span className="font-bold text-rose-300 whitespace-nowrap text-sm">
+                    − {fmt(e.amount)} F
+                  </span>
+                  {e.already_in_journal ? (
+                    <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/40 border">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      {e.already_linked ? "Déjà lié" : "Déjà dans le journal"}
+                    </Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => linkExpense(e)}
+                      disabled={linkingId === e.id}
+                      className="bg-emerald-600 hover:bg-emerald-700 h-7"
+                      data-testid={`journal-link-btn-${e.id}`}
+                    >
+                      {linkingId === e.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <><LinkIcon className="w-3.5 h-3.5 mr-1" /> Lier</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800 mt-2">
+            <Button variant="outline" onClick={() => setLinkerOpen(false)} className="border-slate-700 text-slate-300">
+              <X className="w-4 h-4 mr-1" /> Fermer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

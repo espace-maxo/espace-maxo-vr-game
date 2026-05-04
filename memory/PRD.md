@@ -4,6 +4,27 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 04/05/2026 — Journal : Lier un achat par 1 clic (DONE)
+
+**Demande utilisateur** : « Dans le journal, donner la possibilité d'aller chercher des achats à lier par un clic. » Choix : `c` (n'importe quel achat) + `a` (crée une op journal, évite le doublon si l'achat est payé ensuite).
+
+**Backend** (`/app/backend/routers/journal.py`) :
+- `GET /api/journal/available-expenses?search=&limit=` — liste tous les achats avec flags `already_in_journal`, `already_linked`, `excluded`, `is_completed`, `is_paid`, `status`.
+- `POST /api/journal/link-expense {expense_id}` — crée une op `journal_manual` avec `source="expense_link"` + `linked_expense_id`. Idempotent (renvoie `already_linked=true` si déjà lié).
+- **Anti-doublon** : le dashboard et realtime excluent désormais via `$nin` les expenses ayant un `linked_expense_id` dans `journal_manual`. Quand l'achat lié passe en `completed/paid` plus tard, aucun double comptage.
+
+**Frontend** (`JournalTab.jsx`) :
+- Nouveau bouton toolbar **"Lier un achat"** (emerald, icône Link) à côté de "Début du journal" / "Réinitialiser".
+- Ouvre un Dialog avec recherche + liste paginée.
+- Chaque ligne affiche : description, date, fournisseur, catégorie, statut, montant.
+- Bouton **"Lier"** par ligne → 1 clic → ajout au journal. Badge **"Déjà dans le journal"** pour les lignes déjà comptées.
+
+**Validation end-to-end ✅** : achat pending 3000F (total_out=0) → link → total_out=3000F → idempotence OK → passage en completed → total_out reste 3000F (**pas de doublon**). UI : modal fonctionnelle, 4 lignes listées, 3 boutons "Lier" + 1 "Déjà dans le journal".
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 04/05/2026 — Journal : Exclure factures & dépenses auto (DONE)
 
 **Demande utilisateur** : « Dans le menu journal, donner la possibilité de supprimer des achats enregistrés automatiquement de même que des recettes. »
