@@ -8,12 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { 
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
-  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt
+  Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt,
+  CalendarDays, List,
 } from "lucide-react";
 import { LOGO_BASE64 } from "../constants_logo";
+import LocationCalendarTab from "./LocationCalendarTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -710,6 +713,19 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   };
 
   return (
+    <Tabs defaultValue="list" className="w-full">
+      <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
+        <TabsTrigger value="list" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="loc-subtab-list">
+          <List className="w-4 h-4 mr-1" /> Liste des réservations
+        </TabsTrigger>
+        <TabsTrigger value="calendar" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="loc-subtab-calendar">
+          <CalendarDays className="w-4 h-4 mr-1" /> Calendrier de disponibilité
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="calendar">
+        <LocationCalendarTab formatPrice={formatPrice} />
+      </TabsContent>
+      <TabsContent value="list">
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3">
@@ -1306,6 +1322,8 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         </DialogContent>
       </Dialog>
     </div>
+      </TabsContent>
+    </Tabs>
   );
 };
 

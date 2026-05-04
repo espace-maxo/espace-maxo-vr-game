@@ -4,6 +4,24 @@
 Application pour le restaurant "Espace Maxo" à Cotonou (Bénin) permettant de réserver des jeux VR, payer par mobile money, commander des combos avec session de jeu, réserver des tables avec acompte, gérer les réservations, et gérer un système de facturation POS interne.
 
 
+## 04/05/2026 — Locations : Calendrier de disponibilité (DONE)
+
+**Demande utilisateur** : « Dans Location, mettre un sous-menu pour voir les dates de réservation y compris les dates de demande proforma pour vérifier la disponibilité du site. »
+
+**Livré** :
+- `LocationsTab` passe en **sous-onglets** : `Liste des réservations` (vue existante) + `Calendrier de disponibilité` (nouveau).
+- Nouveau composant `LocationCalendarTab.jsx` : vue calendaire mensuelle combinant `locations` et `proforma_invoices`, avec extraction auto des dates d'événement (regex sur titre/notes/items).
+- KPIs : dates réservées, sollicitées, **conflits**, événements totaux.
+- Filtres : Tous/Réservations/Proformas + option "proformas liées à une location uniquement".
+- Code couleur : violet=réservation, ambre=proforma date événement, rose=conflit.
+- Panneau latéral : détails du jour cliqué (client, espace, heures, invités, type, montant, phone).
+
+**Vérifié visuellement ✅** : 31 jours rendus, 3 événements affichés, KPIs corrects. Lint OK.
+
+### ⚠️ Déploiement
+Redéployez via **Deploy** pour propager sur `espacemaxo.com`.
+
+
 ## 04/05/2026 — Journal : Lier un achat par 1 clic (DONE)
 
 **Demande utilisateur** : « Dans le journal, donner la possibilité d'aller chercher des achats à lier par un clic. » Choix : `c` (n'importe quel achat) + `a` (crée une op journal, évite le doublon si l'achat est payé ensuite).
