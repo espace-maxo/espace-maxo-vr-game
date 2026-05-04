@@ -366,7 +366,16 @@ const LocationCalendarTab = ({ formatPrice }) => {
                 Aucun événement {selectedDate ? "ce jour" : ""}. Date libre !
               </div>
             ) : (
-              selectedEvents.map((ev) => (
+              selectedEvents.map((ev) => {
+                const evDate = (() => {
+                  try {
+                    const dObj = parseISO(ev.date);
+                    return isValid(dObj) ? dObj : null;
+                  } catch { return null; }
+                })();
+                const longDate = evDate ? format(evDate, "EEEE dd MMM yyyy", { locale: fr }) : ev.date;
+                const shortDate = evDate ? format(evDate, "dd/MM/yyyy", { locale: fr }) : ev.date;
+                return (
                 <div
                   key={ev.id}
                   className={`rounded-lg border p-2 ${
@@ -376,6 +385,19 @@ const LocationCalendarTab = ({ formatPrice }) => {
                   }`}
                   data-testid={`calendar-event-${ev.id}`}
                 >
+                  {/* Date proéminente (quand aucun jour n'est sélectionné) */}
+                  {!selectedDate && (
+                    <button
+                      onClick={() => { if (evDate) { setCurrentMonth(evDate); setSelectedDate(evDate); } }}
+                      className="w-full flex items-center gap-1.5 mb-1.5 text-left text-xs font-semibold text-white bg-slate-800/60 hover:bg-slate-700 border border-slate-700 rounded px-2 py-1 transition"
+                      title="Afficher ce jour dans le calendrier"
+                      data-testid={`calendar-event-date-${ev.id}`}
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-purple-300" />
+                      <span className="capitalize">{longDate}</span>
+                      <span className="ml-auto text-[10px] text-slate-400">{shortDate}</span>
+                    </button>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -458,7 +480,8 @@ const LocationCalendarTab = ({ formatPrice }) => {
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
