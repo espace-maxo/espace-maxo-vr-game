@@ -32,11 +32,15 @@ const fmt = (n) => Math.round(Number(n || 0)).toLocaleString("fr-FR");
 
 const DrinksRestockTab = () => {
   const [bottlesPerCrate, setBottlesPerCrate] = useState(24);
+  const [daysHorizon, setDaysHorizon] = useState(7);
+  const [lookbackDays, setLookbackDays] = useState(30);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("to_order"); // all | to_order | rupture | low | ok
+  const [subtypeFilter, setSubtypeFilter] = useState("all"); // all | soda | biere | alcool_autre
   const [includeOk, setIncludeOk] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   // Convert-to-purchase modal
   const [convertOpen, setConvertOpen] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
@@ -80,7 +84,11 @@ const DrinksRestockTab = () => {
     setLoading(true);
     try {
       const r = await axios.get(`${API}/stock/drinks-restock-plan`, {
-        params: { bottles_per_crate: bottlesPerCrate || 24 },
+        params: {
+          bottles_per_crate: bottlesPerCrate || 24,
+          days_horizon: daysHorizon || 7,
+          lookback_days: lookbackDays || 30,
+        },
       });
       setData(r.data);
     } catch (e) {
@@ -88,7 +96,7 @@ const DrinksRestockTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [bottlesPerCrate]);
+  }, [bottlesPerCrate, daysHorizon, lookbackDays]);
 
   useEffect(() => { fetchPlan(); }, [fetchPlan]);
 
@@ -112,13 +120,22 @@ const DrinksRestockTab = () => {
     setConverting(true);
     try {
       const supplier = suppliers.find((s) => s.id === convertSupplierId);
-      const r = await axios.post(`${API}/stock/drinks-restock-plan/convert`, {
+      // Si une sélection est active, envoie uniquement ces items
+      const sel = selectedRows.filter((r) => (r.recommended_qty || 0) > 0);
+      const payload = {
         bottles_per_crate: bottlesPerCrate || 24,
         supplier_id: convertSupplierId || "",
         supplier_name: supplier ? supplier.name : "",
         notes: convertNotes,
-      });
-      const p = r.data?.purchase;
+      };
+      if (selectedIds.size > 0) {
+        payload.items = sel.map((r) => ({
+          product_id: r.id,
+          quantity: r.recommended_qty,
+          unit_price: r.unit_purchase_price,
+        }));
+      }
+      const r = await axios.post(`${API}/stock/drinks-restock-plan/convert`, payload);
       toast.success(
         `Bon d'achat créé (brouillon) : ${r.data.items_count} produits · ${fmt(r.data.total_amount)} F`,
         { description: "Ouvrez l'onglet Achats pour ajuster prix/quantités puis valider." },
@@ -134,6 +151,7 @@ const DrinksRestockTab = () => {
   const rows = useMemo(() => {
     if (!data) return [];
     let arr = data.products || [];
+    if (subtypeFilter !== "all") arr = arr.filter((r) => r.drink_subtype === subtypeFilter);
     if (statusFilter === "to_order") arr = arr.filter((r) => (r.recommended_qty || 0) > 0);
     else if (statusFilter !== "all") arr = arr.filter((r) => r.status === statusFilter);
     if (!includeOk && statusFilter === "all") arr = arr.filter((r) => r.status !== "ok");
@@ -144,7 +162,34 @@ const DrinksRestockTab = () => {
       || (r.category_name || "").toLowerCase().includes(term)
     );
     return arr;
-  }, [data, statusFilter, includeOk, search]);
+  }, [data, statusFilter, subtypeFilter, includeOk, search]);
+
+  // Selected rows used for printing / converting
+  const selectedRows = useMemo(() => {
+    if (selectedIds.size === 0) return rows; // pas de sélection = tout
+    return rows.filter((r) => selectedIds.has(r.id));
+  }, [rows, selectedIds]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const selectAll = () => setSelectedIds(new Set(rows.map((r) => r.id)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const selectedTotals = useMemo(() => {
+    let bottles = 0, crates = 0, cost = 0;
+    for (const r of selectedRows) {
+      bottles += r.recommended_qty || 0;
+      crates += r.recommended_crates || 0;
+      cost += r.estimated_cost || 0;
+    }
+    return { bottles, crates, cost };
+  }, [selectedRows]);
 
   // ============== IMPRESSION ==============
   const printAt = (cssMode) => {
@@ -157,7 +202,7 @@ const DrinksRestockTab = () => {
       return;
     }
     const isTicket = cssMode === "ticket";
-    const printRows = (rows.length > 0 ? rows : (data.products || [])).filter((r) => (r.recommended_qty || 0) > 0);
+    const printRows = (selectedRows.length > 0 ? selectedRows : rows).filter((r) => (r.recommended_qty || 0) > 0);
 
     const styles = isTicket ? `
       @page { size: 80mm auto; margin: 4mm; }
@@ -253,7 +298,7 @@ const DrinksRestockTab = () => {
     <div className="space-y-4" data-testid="drinks-restock-tab">
       {/* Toolbar */}
       <Card className="bg-slate-900/60 border-slate-800">
-        <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+        <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
           <div>
             <Label className="text-xs text-slate-400">Bouteilles par casier</Label>
             <Input
@@ -264,7 +309,31 @@ const DrinksRestockTab = () => {
               className="bg-slate-800 border-slate-700 text-white"
               data-testid="restock-crate-size"
             />
-            <p className="text-[10px] text-slate-500 mt-1">Bières/sodas = 24 · Vins/spiritueux = 12</p>
+            <p className="text-[10px] text-slate-500 mt-1">Casier par défaut (modifiable par produit)</p>
+          </div>
+          <div>
+            <Label className="text-xs text-slate-400">Couvrir (jours)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={daysHorizon}
+              onChange={(e) => setDaysHorizon(parseInt(e.target.value) || 7)}
+              className="bg-slate-800 border-slate-700 text-white"
+              data-testid="restock-horizon"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Stock à constituer</p>
+          </div>
+          <div>
+            <Label className="text-xs text-slate-400">Analyse (jours)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={lookbackDays}
+              onChange={(e) => setLookbackDays(parseInt(e.target.value) || 30)}
+              className="bg-slate-800 border-slate-700 text-white"
+              data-testid="restock-lookback"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Période rythme conso</p>
           </div>
           <div className="sm:col-span-2">
             <Label className="text-xs text-slate-400">Recherche</Label>
@@ -279,21 +348,6 @@ const DrinksRestockTab = () => {
               />
             </div>
           </div>
-          <div>
-            <Label className="text-xs text-slate-400">Filtre</Label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-md text-white text-sm px-2 py-2"
-              data-testid="restock-status-filter"
-            >
-              <option value="to_order">À commander uniquement</option>
-              <option value="all">Toutes</option>
-              <option value="rupture">Rupture seulement</option>
-              <option value="faible">Stock faible seulement</option>
-              <option value="ok">OK seulement</option>
-            </select>
-          </div>
           <div className="flex items-center gap-2">
             <Button
               onClick={fetchPlan}
@@ -304,6 +358,43 @@ const DrinksRestockTab = () => {
               <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
+          </div>
+          {/* Sub-type & status filters */}
+          <div className="sm:col-span-6 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-3">
+            <div className="flex items-center gap-1 rounded-lg bg-slate-800/50 p-1 border border-slate-700">
+              {[
+                { k: "all", label: "Tous" },
+                { k: "soda", label: "Sodas & non alcoolisés" },
+                { k: "biere", label: "Bières" },
+                { k: "alcool_autre", label: "Autres alcools" },
+              ].map((f) => (
+                <button
+                  key={f.k}
+                  onClick={() => setSubtypeFilter(f.k)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition ${
+                    subtypeFilter === f.k ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                  data-testid={`restock-subtype-${f.k}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-slate-400 m-0">État</Label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-md text-white text-sm px-2 py-1.5"
+                data-testid="restock-status-filter"
+              >
+                <option value="to_order">À commander uniquement</option>
+                <option value="all">Toutes</option>
+                <option value="rupture">Rupture seulement</option>
+                <option value="faible">Stock faible seulement</option>
+                <option value="ok">OK seulement</option>
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -345,20 +436,20 @@ const DrinksRestockTab = () => {
         </Card>
       )}
 
-      {/* Print buttons */}
+      {/* Print buttons & selection */}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           onClick={openConvert}
-          disabled={!data || (data?.totals?.recommended_bottles || 0) === 0}
+          disabled={!data || (selectedTotals.bottles || 0) === 0}
           className="bg-emerald-600 hover:bg-emerald-700"
           data-testid="restock-convert-btn"
-          title="Créer un bon d'achat brouillon avec toutes les recommandations"
+          title="Créer un bon d'achat brouillon avec les produits sélectionnés"
         >
           <ShoppingCart className="w-4 h-4 mr-1" /> Convertir en achat
         </Button>
         <Button
           onClick={() => printAt("ticket")}
-          disabled={!data || rows.length === 0}
+          disabled={!data || selectedRows.length === 0}
           className="bg-slate-700 hover:bg-slate-600"
           data-testid="restock-print-ticket"
           title="Format ticket 80mm pour imprimante thermique"
@@ -367,24 +458,35 @@ const DrinksRestockTab = () => {
         </Button>
         <Button
           onClick={() => printAt("a4")}
-          disabled={!data || rows.length === 0}
+          disabled={!data || selectedRows.length === 0}
           className="bg-slate-700 hover:bg-slate-600"
           data-testid="restock-print-pdf"
-          title="Format A4 — utilisez 'Enregistrer en PDF' depuis le dialog d'impression"
+          title="Format A4"
         >
           <FileText className="w-4 h-4 mr-1" /> Imprimer / PDF A4
         </Button>
-        {statusFilter === "all" && (
-          <label className="ml-auto flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeOk}
-              onChange={(e) => setIncludeOk(e.target.checked)}
-              className="rounded"
-            />
-            Inclure les boissons OK
-          </label>
-        )}
+        <div className="ml-auto flex items-center gap-2 text-xs">
+          <span className="text-slate-400">
+            {selectedIds.size > 0 ? (
+              <>
+                <span className="text-purple-300 font-bold">{selectedIds.size}</span> sélectionné(s) ·
+                <span className="ml-1 text-emerald-300 font-bold">{fmt(selectedTotals.crates)}</span> casier(s) ·
+                <span className="ml-1 text-purple-300 font-bold">{fmt(selectedTotals.cost)} F</span>
+              </>
+            ) : (
+              <>Aucun produit sélectionné — opérations sur tous les <span className="text-white">{rows.length}</span> affichés</>
+            )}
+          </span>
+          {selectedIds.size > 0 ? (
+            <Button size="sm" variant="outline" onClick={clearSelection} className="border-slate-700 text-slate-300 h-7">
+              <X className="w-3.5 h-3.5 mr-1" /> Vider
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={selectAll} className="border-slate-700 text-slate-300 h-7" data-testid="restock-select-all">
+              Tout sélectionner
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -407,13 +509,23 @@ const DrinksRestockTab = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-[11px] uppercase text-slate-400 border-b border-slate-800">
+                    <th className="p-2 w-8">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && selectedIds.size === rows.length}
+                        onChange={(e) => e.target.checked ? selectAll() : clearSelection()}
+                        className="rounded"
+                        title="Tout sélectionner / désélectionner"
+                        data-testid="restock-select-toggle"
+                      />
+                    </th>
                     <th className="text-left p-2">Code</th>
                     <th className="text-left p-2">Boisson</th>
-                    <th className="text-left p-2">Catégorie</th>
+                    <th className="text-center p-2">Type</th>
                     <th className="text-right p-2">Stock</th>
-                    <th className="text-right p-2">Min</th>
+                    <th className="text-right p-2" title={`Consommation moyenne sur ${lookbackDays} jours`}>Conso/j</th>
+                    <th className="text-right p-2" title="Jours de stock restants au rythme actuel">Jours</th>
                     <th className="text-center p-2" title="Bouteilles par casier (modifiable)">Casier</th>
-                    <th className="text-right p-2" title="Bouteilles manquantes pour compléter le casier en cours">Pour casier</th>
                     <th className="text-right p-2">Cmd reco.</th>
                     <th className="text-right p-2">Casiers</th>
                     <th className="text-right p-2">Coût est.</th>
@@ -421,13 +533,37 @@ const DrinksRestockTab = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-800/60 hover:bg-slate-800/40" data-testid={`restock-row-${r.id}`}>
+                  {rows.map((r) => {
+                    const isSelected = selectedIds.has(r.id);
+                    const subBadge = r.drink_subtype === "soda"
+                      ? { label: "Soda", color: "bg-cyan-500/20 text-cyan-300" }
+                      : r.drink_subtype === "biere"
+                        ? { label: "Bière", color: "bg-amber-500/20 text-amber-300" }
+                        : { label: "Alcool", color: "bg-purple-500/20 text-purple-300" };
+                    const daysWarn = r.days_of_stock != null && r.days_of_stock < daysHorizon;
+                    return (
+                    <tr key={r.id} className={`border-b border-slate-800/60 hover:bg-slate-800/40 ${isSelected ? "bg-purple-900/10" : ""}`} data-testid={`restock-row-${r.id}`}>
+                      <td className="p-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(r.id)}
+                          className="rounded"
+                          data-testid={`restock-select-${r.id}`}
+                        />
+                      </td>
                       <td className="p-2 font-mono text-[11px] text-slate-400">{r.code || "—"}</td>
                       <td className="p-2 text-white">{r.name}</td>
-                      <td className="p-2 text-slate-400 text-xs">{r.category_name}</td>
+                      <td className="p-2 text-center">
+                        <Badge className={`${subBadge.color} text-[10px]`}>{subBadge.label}</Badge>
+                      </td>
                       <td className="p-2 text-right text-slate-200">{fmt(r.current_quantity)}</td>
-                      <td className="p-2 text-right text-slate-400 text-xs">{fmt(r.stock_min)}</td>
+                      <td className="p-2 text-right text-xs text-slate-300">
+                        {r.daily_consumption > 0 ? r.daily_consumption.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className={`p-2 text-right text-xs ${daysWarn ? "text-rose-300 font-bold" : "text-slate-300"}`}>
+                        {r.days_of_stock != null ? `${r.days_of_stock}j` : <span className="text-slate-600">—</span>}
+                      </td>
                       {/* Casier éditable inline */}
                       <td className="p-2 text-center">
                         {editingCrateId === r.id ? (
@@ -476,9 +612,6 @@ const DrinksRestockTab = () => {
                           </button>
                         )}
                       </td>
-                      <td className="p-2 text-right text-amber-300 text-xs">
-                        {r.bottles_to_complete_crate > 0 ? `+${fmt(r.bottles_to_complete_crate)}` : "—"}
-                      </td>
                       <td className="p-2 text-right font-bold text-emerald-300">
                         {r.recommended_qty > 0 ? fmt(r.recommended_qty) : "—"}
                       </td>
@@ -498,7 +631,7 @@ const DrinksRestockTab = () => {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

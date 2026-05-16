@@ -371,6 +371,26 @@ def _is_drinks_category(cat: dict) -> bool:
     return ("boisson" in n) or ("bar" in n) or ("cocktail" in n)
 
 
+_BEER_KEYWORDS = [
+    "biere", "bière", "beer", "castel", "doppel", "flag", "guinness",
+    "pils", "xxl", "beaufort", "heineken", "eku", "brassin", "awooyo",
+    "bavaria", "desperados", "lager", "stout", "blond", "amstel", "ngok",
+    "tuborg", "carlsberg", "kronenbourg", "1664",
+]
+
+
+def _drink_subtype(product: dict, cat_name: str) -> str:
+    """Classe un produit boisson en : 'soda' | 'biere' | 'alcool_autre'."""
+    name = (product.get("name") or "").lower()
+    cn = (cat_name or "").lower()
+    sub = (product.get("subcategory") or "").lower()
+    if "non alcoolis" in cn or "non alcool" in cn or "non alcoolis" in sub:
+        return "soda"
+    if any(k in name for k in _BEER_KEYWORDS):
+        return "biere"
+    return "alcool_autre"
+
+
 @router.get("/snapshot")
 async def stock_snapshot_at(
     at: str = "",
@@ -511,51 +531,97 @@ async def set_product_bottles_per_crate(product_id: str, value: int = 0):
 @router.get("/drinks-restock-plan")
 async def drinks_restock_plan(
     bottles_per_crate: int = 24,
+    days_horizon: int = 7,
+    lookback_days: int = 30,
+    product_ids: Optional[str] = None,
 ):
-    """Plan d'approvisionnement des boissons avec calcul casier.
+    """Plan d'approvisionnement boissons avec rythme de consommation.
+
+    Paramètres :
+      - bottles_per_crate : taille de casier par défaut (override par produit possible)
+      - days_horizon : nombre de jours de stock que l'on veut couvrir (défaut 7)
+      - lookback_days : période d'analyse pour le taux conso (défaut 30 jours)
+      - product_ids : CSV pour filtrer sur certains produits (optionnel)
 
     Pour chaque boisson :
-      - bottles_to_complete_crate : nombre de bouteilles manquantes pour
-        compléter le prochain casier (= (n - qty % n) % n).
-      - recommended_qty : quantité conseillée à recommander (max entre
-        l'écart au stock_min, le besoin pour compléter le casier).
-        Toujours arrondi au multiple supérieur de bottles_per_crate.
-      - recommended_crates : recommended_qty / bottles_per_crate.
+      - daily_consumption : moyenne quotidienne sur lookback_days
+      - days_of_stock : current_qty / daily_consumption (None si pas de conso)
+      - target_qty : max(stock_min, daily_consumption × days_horizon)
+      - recommended_qty : arrondi au casier supérieur (couvre target_qty + complète le casier)
+      - drink_subtype : 'soda' | 'biere' | 'alcool_autre'
     """
     if bottles_per_crate <= 0:
         bottles_per_crate = 24
+    if days_horizon <= 0:
+        days_horizon = 7
+    if lookback_days <= 0:
+        lookback_days = 30
 
     cats = await db.stock_categories.find({}, {"_id": 0}).to_list(500)
     cat_map = {c["id"]: c["name"] for c in cats}
     drink_cat_ids = {c["id"] for c in cats if _is_drinks_category(c)}
     if not drink_cat_ids:
-        return {"bottles_per_crate": bottles_per_crate, "products": [],
+        return {"bottles_per_crate": bottles_per_crate, "days_horizon": days_horizon,
+                "lookback_days": lookback_days, "products": [],
                 "totals": {"products": 0, "rupture": 0, "low": 0, "ok": 0,
-                            "recommended_bottles": 0, "recommended_crates": 0,
-                            "estimated_cost": 0.0}}
+                           "recommended_bottles": 0, "recommended_crates": 0,
+                           "estimated_cost": 0.0}}
 
-    products = await db.stock_products.find(
-        {"category_id": {"$in": list(drink_cat_ids)}}, {"_id": 0}
-    ).to_list(5000)
+    prod_query: Dict = {"category_id": {"$in": list(drink_cat_ids)}}
+    if product_ids:
+        ids = [p.strip() for p in product_ids.split(",") if p.strip()]
+        if ids:
+            prod_query["id"] = {"$in": ids}
+    products = await db.stock_products.find(prod_query, {"_id": 0}).to_list(5000)
+
+    if not products:
+        return {"bottles_per_crate": bottles_per_crate, "days_horizon": days_horizon,
+                "lookback_days": lookback_days, "products": [],
+                "totals": {"products": 0, "rupture": 0, "low": 0, "ok": 0,
+                           "recommended_bottles": 0, "recommended_crates": 0,
+                           "estimated_cost": 0.0}}
+
+    # Conso par produit sur lookback_days (somme des sorties)
+    pids = [p["id"] for p in products]
+    since_iso = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    movs = await db.stock_movements.find(
+        {"product_id": {"$in": pids},
+         "movement_type": {"$in": ["sortie", "out"]},
+         "created_at": {"$gte": since_iso}},
+        {"_id": 0, "product_id": 1, "quantity": 1},
+    ).to_list(200000)
+    consumption_total: Dict[str, float] = {}
+    for m in movs:
+        pid = m.get("product_id")
+        if not pid:
+            continue
+        consumption_total[pid] = consumption_total.get(pid, 0.0) + float(m.get("quantity") or 0)
 
     rows = []
     totals = {"products": 0, "rupture": 0, "low": 0, "ok": 0,
-                "recommended_bottles": 0, "recommended_crates": 0,
-                "estimated_cost": 0.0}
+              "recommended_bottles": 0, "recommended_crates": 0,
+              "estimated_cost": 0.0, "total_daily_consumption": 0.0}
+
     for p in products:
         qty = float(p.get("quantity") or 0)
         stock_min = float(p.get("stock_min") or 0)
-        # Casier spécifique au produit s'il est configuré, sinon valeur globale
         per_crate = int(p.get("bottles_per_crate") or 0) or bottles_per_crate
         if per_crate <= 0:
             per_crate = bottles_per_crate
+
+        total_out = consumption_total.get(p["id"], 0.0)
+        daily = total_out / lookback_days if lookback_days > 0 else 0.0
+        weekly = daily * 7
+        days_of_stock = (qty / daily) if daily > 0 else None
+        # Cible : couvrir l'horizon de consommation
+        cover_qty = daily * days_horizon
         # Bouteilles manquantes pour compléter le prochain casier complet
         rem = qty % per_crate
         to_complete = (per_crate - rem) if rem != 0 else 0
         # Écart au minimum
         gap_to_min = max(0.0, stock_min - qty)
-        # Recommandation : couvrir le min, et arrondir au casier supérieur
-        target = max(gap_to_min, to_complete) if (gap_to_min > 0 or to_complete > 0) else 0
+        # Cible finale
+        target = max(gap_to_min, cover_qty - qty, to_complete)
         if target > 0:
             crates_needed = -(-int(target + 0.999) // per_crate)  # ceil
             recommended_qty = crates_needed * per_crate
@@ -571,11 +637,15 @@ async def drinks_restock_plan(
         else:
             status = "ok"; totals["ok"] += 1
 
+        cat_name = cat_map.get(p.get("category_id"), "—")
+        subtype = _drink_subtype(p, cat_name)
+
         rows.append({
             "id": p.get("id"),
             "code": p.get("code") or "",
             "name": p.get("name") or "—",
-            "category_name": cat_map.get(p.get("category_id"), "—"),
+            "category_name": cat_name,
+            "drink_subtype": subtype,
             "subcategory": p.get("subcategory") or "",
             "unit": p.get("unit") or "",
             "current_quantity": qty,
@@ -583,7 +653,11 @@ async def drinks_restock_plan(
             "bottles_per_crate": per_crate,
             "is_custom_crate": bool(p.get("bottles_per_crate")),
             "bottles_to_complete_crate": to_complete,
+            "daily_consumption": round(daily, 2),
+            "weekly_consumption": round(weekly, 2),
+            "days_of_stock": round(days_of_stock, 1) if days_of_stock is not None else None,
             "gap_to_min": gap_to_min,
+            "cover_qty": round(cover_qty, 2),
             "recommended_qty": recommended_qty,
             "recommended_crates": crates_needed,
             "unit_purchase_price": unit_cost,
@@ -594,16 +668,24 @@ async def drinks_restock_plan(
         totals["recommended_bottles"] += recommended_qty
         totals["recommended_crates"] += crates_needed
         totals["estimated_cost"] += recommended_qty * unit_cost
+        totals["total_daily_consumption"] += daily
 
+    # Ordre demandé : soda → bière → alcool_autre, puis rupture en premier dans chaque groupe
+    SUBTYPE_ORDER = {"soda": 0, "biere": 1, "alcool_autre": 2}
+    STATUS_ORDER = {"rupture": 0, "faible": 1, "ok": 2}
     rows.sort(key=lambda r: (
-        0 if r["status"] == "rupture" else (1 if r["status"] == "faible" else 2),
-        r["category_name"] or "",
+        SUBTYPE_ORDER.get(r["drink_subtype"], 99),
+        STATUS_ORDER.get(r["status"], 99),
+        -1 * (r["daily_consumption"] or 0),  # plus consommé d'abord dans le groupe
         r["name"] or "",
     ))
     totals["estimated_cost"] = round(totals["estimated_cost"], 2)
+    totals["total_daily_consumption"] = round(totals["total_daily_consumption"], 2)
 
     return {
         "bottles_per_crate": bottles_per_crate,
+        "days_horizon": days_horizon,
+        "lookback_days": lookback_days,
         "totals": totals,
         "products": rows,
     }
