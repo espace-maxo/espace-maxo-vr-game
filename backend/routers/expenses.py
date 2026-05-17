@@ -3,7 +3,7 @@ Expenses Router - Gestion des dépenses/achats Caisse Pro.
 Endpoints: CRUD + assign-week + bulk ops.
 Le PUT status='completed' synchronise avec le module Stock (Entrées + stock_purchases).
 """
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -237,7 +237,11 @@ async def get_expenses(
 
 
 @router.post("/expenses")
-async def create_expense(expense: ExpenseCreate):
+async def create_expense(
+    expense: ExpenseCreate,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Create a new expense request (by manager)"""
     try:
         expense_doc = {
@@ -271,6 +275,28 @@ async def create_expense(expense: ExpenseCreate):
 
         await db.expenses.insert_one(expense_doc)
         expense_doc.pop("_id", None)
+
+        # Audit trail (visible by admin only)
+        try:
+            from routers.invoices import _log_audit as _log_audit_fn
+            snapshot_doc = {
+                "id": expense_doc["id"],
+                "invoice_number": (expense_doc.get("description") or "")[:40],
+                "total": expense_doc.get("amount"),
+                "items": [],
+                "client_name": expense_doc.get("supplier"),
+                "validation_status": expense_doc.get("status"),
+            }
+            await _log_audit_fn(
+                "expense", snapshot_doc, "create",
+                {"name": actor_name or expense_doc.get("requested_by"), "role": actor_role or "manager"},
+                {"amount": {"from": None, "to": expense_doc.get("amount")},
+                 "category": {"from": None, "to": expense_doc.get("category")},
+                 "supplier": {"from": None, "to": expense_doc.get("supplier")},
+                 "expense_type": {"from": None, "to": expense_doc.get("expense_type")}},
+            )
+        except Exception as _e:
+            logger.error(f"expense audit failed: {_e}")
 
         # If funding source set → allocate on that current account now
         if expense_doc.get("funded_by_account_id"):

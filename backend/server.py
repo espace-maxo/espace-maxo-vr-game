@@ -7390,7 +7390,11 @@ async def get_locations(
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/locations")
-async def create_location(location: LocationReservationCreate):
+async def create_location(
+    location: LocationReservationCreate,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Create a new location reservation (Admin only)"""
     try:
         location_dict = location.model_dump()
@@ -7402,19 +7406,45 @@ async def create_location(location: LocationReservationCreate):
         location_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
         
         await db.location_reservations.insert_one(location_dict)
+        try:
+            from routers.invoices import _log_audit as _log_audit_fn
+            snapshot_doc = {
+                "id": location_dict["id"],
+                "invoice_number": location_dict.get("id", "")[:8],
+                "table_number": None,
+                "total": location_dict.get("rental_amount"),
+                "items": [],
+                "client_name": location_dict.get("customer_name"),
+                "validation_status": location_dict.get("status"),
+            }
+            await _log_audit_fn(
+                "location", snapshot_doc, "create",
+                {"name": actor_name, "role": actor_role},
+                {"reservation_date": {"from": None, "to": location_dict.get("reservation_date")},
+                 "space_type": {"from": None, "to": location_dict.get("space_type")},
+                 "amount": {"from": None, "to": location_dict.get("rental_amount")}},
+            )
+        except Exception as _e:
+            logger.error(f"location audit failed: {_e}")
         return {"success": True, "location": {k: v for k, v in location_dict.items() if k != "_id"}}
     except Exception as e:
         logger.error(f"Error creating location: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.put("/locations/{location_id}")
-async def update_location(location_id: str, update: LocationReservationUpdate):
+async def update_location(
+    location_id: str,
+    update: LocationReservationUpdate,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Update a location reservation (Admin only)"""
     try:
         update_dict = {k: v for k, v in update.model_dump().items() if v is not None}
         if not update_dict:
             raise HTTPException(status_code=400, detail="No fields to update")
         
+        before = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
         update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
         
         # Recalculate balance if amounts changed
@@ -7434,6 +7464,30 @@ async def update_location(location_id: str, update: LocationReservationUpdate):
             raise HTTPException(status_code=404, detail="Location not found")
         
         updated = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
+        if before and updated:
+            try:
+                from routers.invoices import _log_audit as _log_audit_fn
+                changes = {}
+                for k, v in update_dict.items():
+                    if k == "updated_at":
+                        continue
+                    if before.get(k) != v:
+                        changes[k] = {"from": before.get(k), "to": v}
+                if changes:
+                    snapshot_doc = {
+                        "id": updated.get("id"),
+                        "invoice_number": (updated.get("id", "") or "")[:8],
+                        "total": updated.get("rental_amount"),
+                        "items": [],
+                        "client_name": updated.get("customer_name"),
+                        "validation_status": updated.get("status"),
+                    }
+                    await _log_audit_fn(
+                        "location", snapshot_doc, "update",
+                        {"name": actor_name, "role": actor_role}, changes,
+                    )
+            except Exception as _e:
+                logger.error(f"location audit failed: {_e}")
         return {"success": True, "location": updated}
     except HTTPException:
         raise
@@ -7442,12 +7496,34 @@ async def update_location(location_id: str, update: LocationReservationUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.delete("/locations/{location_id}")
-async def delete_location(location_id: str):
+async def delete_location(
+    location_id: str,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
     """Delete a location reservation (Admin only)"""
     try:
+        existing = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
         result = await db.location_reservations.delete_one({"id": location_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Location not found")
+        if existing:
+            try:
+                from routers.invoices import _log_audit as _log_audit_fn
+                snapshot_doc = {
+                    "id": existing.get("id"),
+                    "invoice_number": (existing.get("id", "") or "")[:8],
+                    "total": existing.get("rental_amount"),
+                    "items": [],
+                    "client_name": existing.get("customer_name"),
+                    "validation_status": existing.get("status"),
+                }
+                await _log_audit_fn(
+                    "location", snapshot_doc, "delete",
+                    {"name": actor_name, "role": actor_role}, None,
+                )
+            except Exception as _e:
+                logger.error(f"location audit failed: {_e}")
         return {"success": True, "message": "Location deleted"}
     except HTTPException:
         raise

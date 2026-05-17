@@ -213,6 +213,8 @@ const AuditLogsTab = ({ currentUser }) => {
                 <SelectItem value="all">Tous</SelectItem>
                 <SelectItem value="invoice">Factures</SelectItem>
                 <SelectItem value="table">Bons (tables)</SelectItem>
+                <SelectItem value="location">Locations</SelectItem>
+                <SelectItem value="expense">Achats / dépenses</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -311,7 +313,10 @@ const AuditLogsTab = ({ currentUser }) => {
                           <Icon className="w-3 h-3 mr-1" />{am.label}
                         </Badge>
                         <Badge variant="outline" className="border-slate-600 text-slate-300">
-                          {lg.entity_type === "table" ? "Bon (table)" : "Facture"}
+                          {lg.entity_type === "table" ? "Bon (table)"
+                            : lg.entity_type === "location" ? "Location"
+                            : lg.entity_type === "expense" ? "Achat"
+                            : "Facture"}
                         </Badge>
                         {lg.invoice_number && (
                           <span className="text-sm font-mono text-slate-200">{lg.invoice_number}</span>
@@ -402,7 +407,12 @@ const AuditLogsTab = ({ currentUser }) => {
                 </div>
                 <div className="rounded bg-slate-800 px-3 py-2">
                   <div className="text-[10px] uppercase text-slate-400">Type</div>
-                  <div className="font-semibold">{selected.entity_type === "table" ? "Bon (table)" : "Facture"}</div>
+                  <div className="font-semibold">
+                    {selected.entity_type === "table" ? "Bon (table)"
+                      : selected.entity_type === "location" ? "Location"
+                      : selected.entity_type === "expense" ? "Achat"
+                      : "Facture"}
+                  </div>
                 </div>
                 <div className="rounded bg-slate-800 px-3 py-2">
                   <div className="text-[10px] uppercase text-slate-400">Auteur</div>

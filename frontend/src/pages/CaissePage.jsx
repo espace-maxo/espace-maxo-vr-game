@@ -1161,7 +1161,7 @@ const CaissePage = () => {
         const firstCat = commonItems[0]?.category || expenseForm.category || "autres";
         const desc = expenseForm.description?.trim()
           || `Achats communs - ${commonItems.length} article(s) - ${format(new Date(), "dd/MM/yyyy")}`;
-        await axios.post(`${API}/expenses`, {
+        await axios.post(`${API}/expenses?${actorQs()}`, {
           category: firstCat,
           description: desc,
           amount: totalAmount,
@@ -1657,7 +1657,7 @@ const CaissePage = () => {
           ? `Liste ${supplierName} - ${now}`
           : `Liste sans fournisseur - ${now}`;
 
-        await axios.post(`${API}/expenses`, {
+        await axios.post(`${API}/expenses?${actorQs()}`, {
           category: items[0].category,
           description: groupName,
           quantity: items.length,

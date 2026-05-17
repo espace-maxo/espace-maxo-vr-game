@@ -65,6 +65,14 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   const [locations, setLocations] = useState([]);
   const [proformas, setProformas] = useState([]);
   const [showModal, setShowModal] = useState(false);
+
+  // Append actor (manager/admin) info to write requests so they appear
+  // in the admin audit trail.
+  const actorQs = () => {
+    const n = encodeURIComponent(currentUser?.full_name || currentUser?.username || "—");
+    const r = encodeURIComponent(currentUser?.role || "manager");
+    return `actor_name=${n}&actor_role=${r}`;
+  };
   const [editingLocation, setEditingLocation] = useState(null);
   const [viewingLocation, setViewingLocation] = useState(null);
   const [filterSpace, setFilterSpace] = useState("all");
@@ -214,10 +222,10 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
       delete submitData.space_types;
 
       if (editingLocation) {
-        await axios.put(`${API}/locations/${editingLocation.id}`, submitData);
+        await axios.put(`${API}/locations/${editingLocation.id}?${actorQs()}`, submitData);
         toast.success("Location modifiée avec succès");
       } else {
-        await axios.post(`${API}/locations`, submitData);
+        await axios.post(`${API}/locations?${actorQs()}`, submitData);
         toast.success("Location créée avec succès");
       }
       setShowModal(false);
@@ -234,7 +242,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette réservation ?")) return;
     
     try {
-      await axios.delete(`${API}/locations/${locationId}`);
+      await axios.delete(`${API}/locations/${locationId}?${actorQs()}`);
       toast.success("Location supprimée");
       fetchLocations();
     } catch (error) {
@@ -245,7 +253,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
   const handleStatusChange = async (locationId, newStatus) => {
     try {
-      await axios.put(`${API}/locations/${locationId}`, { status: newStatus });
+      await axios.put(`${API}/locations/${locationId}?${actorQs()}`, { status: newStatus });
       toast.success("Statut mis à jour");
       fetchLocations();
     } catch (error) {
