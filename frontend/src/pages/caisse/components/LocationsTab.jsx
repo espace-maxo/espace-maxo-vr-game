@@ -1378,13 +1378,37 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
 
               {/* Manager/Admin Actions */}
               {canManageLocations && viewingLocation.status === "confirmed" && (
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
-                    onClick={() => { handleStatusChange(viewingLocation.id, "completed"); setViewingLocation(null); }}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={async () => {
+                      const remaining = Number(viewingLocation.balance_remaining || 0);
+                      const total = Number(viewingLocation.rental_amount || 0);
+                      const msg = remaining > 0
+                        ? `Solder la réservation de ${viewingLocation.customer_name} ?\n\nMontant total : ${total.toLocaleString("fr-FR")} F\nReste à payer : ${remaining.toLocaleString("fr-FR")} F\n\nLe solde sera enregistré dans les recettes d'aujourd'hui.`
+                        : `Marquer la réservation comme soldée ?\n\nMontant : ${total.toLocaleString("fr-FR")} F déjà perçus.`;
+                      if (!window.confirm(msg)) return;
+                      try {
+                        await axios.post(`${API}/locations/${viewingLocation.id}/settle?${actorQs()}`);
+                        toast.success("Réservation soldée — recette ajoutée à aujourd'hui");
+                        setViewingLocation(null);
+                        fetchLocations();
+                      } catch (e) {
+                        toast.error(e?.response?.data?.detail || "Erreur lors du solde");
+                      }
+                    }}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    data-testid="location-settle-btn"
+                    title="Marque comme payée intégralement + enregistre la recette à la date du jour"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Marquer Terminée
+                    Solder en 1 clic
+                  </Button>
+                  <Button
+                    onClick={() => { handleStatusChange(viewingLocation.id, "completed"); setViewingLocation(null); }}
+                    className="bg-green-700 hover:bg-green-800"
+                    title="Termine sans toucher au solde"
+                  >
+                    Terminée
                   </Button>
                   <Button
                     onClick={() => { handleStatusChange(viewingLocation.id, "cancelled"); setViewingLocation(null); }}

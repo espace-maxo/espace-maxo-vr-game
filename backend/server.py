@@ -6644,11 +6644,25 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 daily_data[date]["service"] = {"count": 0, "avg_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
         
         # ============== LOCATIONS (RENTALS) INCOME ==============
-        # Get confirmed/completed locations for the week based on reservation_date
-        locations = await db.location_reservations.find({
+        # On inclut :
+        #   1) Les locations dont la date d'événement (reservation_date) tombe dans la plage
+        #   2) Les locations soldées (settled_at) pendant la plage (peu importe la date d'événement)
+        locations_window = await db.location_reservations.find({
             "status": {"$in": ["confirmed", "completed"]},
-            "reservation_date": {"$gte": start_str, "$lte": end_str[:10]}
-        }, {"_id": 0}).to_list(500)
+            "$or": [
+                {"reservation_date": {"$gte": start_str, "$lte": end_str[:10]}},
+                {"settled_at": {"$gte": start_str, "$lte": end_str[:10] + "T23:59:59"}},
+            ]
+        }, {"_id": 0}).to_list(1000)
+        # Dédup par id (l'un peut matcher les deux conditions)
+        _seen = set()
+        locations = []
+        for _l in locations_window:
+            _lid = _l.get("id")
+            if _lid in _seen:
+                continue
+            _seen.add(_lid)
+            locations.append(_l)
         
         # Calculate total locations income
         total_locations_income = 0
@@ -6684,8 +6698,10 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             
             locations_by_space[space_label] = locations_by_space.get(space_label, 0) + rental_amount
             
-            # Add to daily data
-            res_date = loc.get("reservation_date", "")[:10]
+            # Add to daily data — la recette est rattachée à la date de solde si présente,
+            # sinon à la date de réservation (comportement historique).
+            settled_at = loc.get("settled_at") or ""
+            res_date = (settled_at[:10] if settled_at else (loc.get("reservation_date", "") or "")[:10])
             if res_date in daily_data:
                 daily_data[res_date]["locations"]["count"] += 1
                 daily_data[res_date]["locations"]["total"] += rental_amount
@@ -7494,6 +7510,60 @@ async def update_location(
     except Exception as e:
         logger.error(f"Error updating location: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/locations/{location_id}/settle")
+async def settle_location(
+    location_id: str,
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
+    """Solder une réservation en 1 clic.
+
+    Effets :
+      - status = 'completed'
+      - deposit_paid = rental_amount (solde réglé)
+      - balance_remaining = 0
+      - settled_at = now (utilisé pour la date de recette du jour)
+    """
+    existing = await db.location_reservations.find_one({"id": location_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Location non trouvée")
+    if existing.get("status") == "completed" and float(existing.get("balance_remaining") or 0) == 0:
+        return {"success": True, "already_settled": True, "location": {k: v for k, v in existing.items() if k != "_id"}}
+
+    rental = float(existing.get("rental_amount") or 0)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {
+        "status": "completed",
+        "deposit_paid": rental,
+        "balance_remaining": 0,
+        "settled_at": now_iso,
+        "updated_at": now_iso,
+    }
+    await db.location_reservations.update_one({"id": location_id}, {"$set": update})
+
+    updated = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
+    try:
+        from routers.invoices import _log_audit as _log_audit_fn
+        snapshot_doc = {
+            "id": updated.get("id"),
+            "invoice_number": (updated.get("id", "") or "")[:8],
+            "total": updated.get("rental_amount"),
+            "items": [],
+            "client_name": updated.get("customer_name"),
+            "validation_status": "completed",
+        }
+        await _log_audit_fn(
+            "location", snapshot_doc, "settle",
+            {"name": actor_name, "role": actor_role},
+            {"status": {"from": existing.get("status"), "to": "completed"},
+             "balance_remaining": {"from": existing.get("balance_remaining"), "to": 0},
+             "settled_at": {"from": None, "to": now_iso}},
+        )
+    except Exception as _e:
+        logger.error(f"location audit failed: {_e}")
+    return {"success": True, "location": updated}
+
 
 @api_router.delete("/locations/{location_id}")
 async def delete_location(
