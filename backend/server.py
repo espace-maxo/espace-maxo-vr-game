@@ -6644,11 +6644,11 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 daily_data[date]["service"] = {"count": 0, "avg_duration": 0, "excellent": 0, "acceptable": 0, "slow": 0}
         
         # ============== LOCATIONS (RENTALS) INCOME ==============
-        # On inclut :
-        #   1) Les locations dont la date d'événement (reservation_date) tombe dans la plage
-        #   2) Les locations soldées (settled_at) pendant la plage (peu importe la date d'événement)
+        # Inclut TOUS les statuts utiles (pending/confirmed/completed) pour que
+        # toute demande de location renseignée par la gérante soit visible dans
+        # le rapport. Les statuts annulés (cancelled) sont exclus.
         locations_window = await db.location_reservations.find({
-            "status": {"$in": ["confirmed", "completed"]},
+            "status": {"$nin": ["cancelled", "annule", "annulee"]},
             "$or": [
                 {"reservation_date": {"$gte": start_str, "$lte": end_str[:10]}},
                 {"settled_at": {"$gte": start_str, "$lte": end_str[:10] + "T23:59:59"}},
