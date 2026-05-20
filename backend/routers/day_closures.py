@@ -59,52 +59,74 @@ class DayClosureReopen(BaseModel):
 
 @router.get("/server-points/status")
 async def get_server_points_status(date: str):
-    """Retourne la liste de TOUS les serveurs actifs avec leur statut pour la date donnée.
-    Permet à l'UI d'afficher "X/Y serveurs ont fait leur point".
+    """Retourne la liste des serveurs qui ont **pris des commandes** ce jour-là,
+    avec leur statut de validation. Les serveurs sans aucune facture ne sont
+    PAS comptés (pas besoin de faire leur point).
     """
     try:
-        # Tous les utilisateurs serveurs actifs
-        servers = await db.caisse_users.find({
-            "role": "server", "is_active": {"$ne": False}
-        }, {"_id": 0}).to_list(500)
+        # 1. Récupérer toutes les factures du jour (validated OU pending)
+        start = f"{date}T00:00:00"
+        end = f"{date}T23:59:59Z"
+        invoices = await db.invoices.find({
+            "created_at": {"$gte": start, "$lte": end},
+        }, {"_id": 0, "created_by": 1, "total": 1, "validation_status": 1}).to_list(5000)
 
-        # Points validés à cette date
+        # 2. Agréger par created_by (nom du serveur)
+        by_name = {}  # name -> {count, amount}
+        for inv in invoices:
+            name = (inv.get("created_by") or "").strip()
+            if not name:
+                continue
+            by_name.setdefault(name, {"count": 0, "amount": 0})
+            by_name[name]["count"] += 1
+            if inv.get("validation_status") == "validated":
+                by_name[name]["amount"] += inv.get("total", 0)
+
+        if not by_name:
+            return {
+                "date": date,
+                "total_servers": 0,
+                "validated_count": 0,
+                "all_validated": True,  # personne n'a pris de commande = pas de blocage
+                "servers": [],
+            }
+
+        # 3. Match avec caisse_users (pour récupérer l'id et confirmer le rôle)
+        users = await db.caisse_users.find({}, {"_id": 0}).to_list(500)
+        user_by_name = {}
+        for u in users:
+            uname = (u.get("full_name") or u.get("username") or "").strip()
+            if uname:
+                user_by_name[uname] = u
+
+        # 4. Points déjà validés pour cette date
         points = await db.server_points.find({"date": date}, {"_id": 0}).to_list(500)
-        points_by_id = {p["server_id"]: p for p in points}
+        points_by_name = {p.get("server_name"): p for p in points}
+        points_by_id = {p.get("server_id"): p for p in points}
 
         items = []
-        for s in servers:
-            sid = s["id"]
-            point = points_by_id.get(sid)
+        for name, stats in by_name.items():
+            user = user_by_name.get(name)
+            sid = user.get("id") if user else f"anon_{name}"
+            point = points_by_id.get(sid) or points_by_name.get(name)
             items.append({
                 "server_id": sid,
-                "server_name": s.get("full_name") or s.get("username") or "Serveur",
+                "server_name": name,
+                "role": user.get("role") if user else "server",
                 "validated": bool(point),
                 "validated_at": point.get("validated_at") if point else None,
-                "total_invoices": point.get("total_invoices", 0) if point else 0,
-                "total_amount": point.get("total_amount", 0) if point else 0,
+                "total_invoices": stats["count"],
+                "total_amount": stats["amount"],
             })
 
-        # Inclure les serveurs qui ont validé mais ne sont plus actifs
-        known_ids = {s["id"] for s in servers}
-        for p in points:
-            if p["server_id"] not in known_ids:
-                items.append({
-                    "server_id": p["server_id"],
-                    "server_name": p.get("server_name", "Serveur inconnu"),
-                    "validated": True,
-                    "validated_at": p.get("validated_at"),
-                    "total_invoices": p.get("total_invoices", 0),
-                    "total_amount": p.get("total_amount", 0),
-                })
-
+        items.sort(key=lambda x: x["server_name"])
         total = len(items)
         done = sum(1 for i in items if i["validated"])
         return {
             "date": date,
             "total_servers": total,
             "validated_count": done,
-            "all_validated": (done == total and total > 0) or (total == 0),
+            "all_validated": done == total,
             "servers": items,
         }
     except Exception as e:
@@ -197,15 +219,23 @@ async def close_day(date: str, data: DayClosureClose):
         if existing and existing.get("status") == "closed":
             return {"success": True, "already_closed": True, "closure": existing}
 
-        # Vérification : tous les serveurs ont validé
+        # Vérification : seuls les serveurs qui ont pris des commandes doivent avoir validé
         if not data.force:
-            servers = await db.caisse_users.find({
-                "role": "server", "is_active": {"$ne": False}
-            }, {"_id": 0}).to_list(500)
-            if servers:
+            start = f"{date}T00:00:00"
+            end = f"{date}T23:59:59Z"
+            invoices = await db.invoices.find({
+                "created_at": {"$gte": start, "$lte": end},
+            }, {"_id": 0, "created_by": 1}).to_list(5000)
+            servers_with_orders = set()
+            for inv in invoices:
+                name = (inv.get("created_by") or "").strip()
+                if name:
+                    servers_with_orders.add(name)
+
+            if servers_with_orders:
                 points = await db.server_points.find({"date": date}, {"_id": 0}).to_list(500)
-                done_ids = {p["server_id"] for p in points}
-                missing = [s.get("full_name") or s.get("username") for s in servers if s["id"] not in done_ids]
+                done_names = {p.get("server_name") for p in points}
+                missing = sorted(servers_with_orders - done_names)
                 if missing:
                     raise HTTPException(
                         status_code=400,

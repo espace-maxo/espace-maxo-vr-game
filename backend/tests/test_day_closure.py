@@ -78,3 +78,27 @@ class TestDayClosureFlow:
         # Cleanup
         requests.post(f"{BASE_URL}/api/day-closures/{self.DATE}/reopen",
                       json={"reopened_by": "Admin", "reason": "cleanup"})
+
+    def test_status_only_includes_servers_with_orders(self):
+        """Vérifie que seuls les serveurs qui ont effectivement pris des commandes
+        ce jour-là apparaissent dans la liste (pas tous les serveurs actifs)."""
+        # Date dans le futur lointain, aucun invoice -> aucun serveur
+        r = requests.get(f"{BASE_URL}/api/server-points/status", params={"date": "2099-12-31"})
+        assert r.status_code == 200
+        d = r.json()
+        assert d["total_servers"] == 0
+        # all_validated doit être True quand personne n'a pris de commande (rien à bloquer)
+        assert d["all_validated"] is True
+
+    def test_close_allowed_when_no_servers_took_orders(self):
+        """Si personne n'a pris de commande sur la date, la fermeture est autorisée."""
+        future_date = "2099-12-31"
+        # Cleanup d'abord
+        requests.post(f"{BASE_URL}/api/day-closures/{future_date}/reopen",
+                      json={"reopened_by": "Test", "reason": "cleanup"})
+        r = requests.post(f"{BASE_URL}/api/day-closures/{future_date}/close",
+                          json={"closed_by": "TestGerante"})
+        assert r.status_code == 200, r.text
+        # Cleanup
+        requests.post(f"{BASE_URL}/api/day-closures/{future_date}/reopen",
+                      json={"reopened_by": "Test", "reason": "cleanup"})
