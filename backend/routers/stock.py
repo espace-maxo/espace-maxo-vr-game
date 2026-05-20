@@ -391,20 +391,48 @@ def _drink_subtype(product: dict, cat_name: str) -> str:
     return "alcool_autre"
 
 
+@router.get("/drinks-products")
+async def get_drinks_products():
+    """Liste les produits Boissons/Bar pour le formulaire d'achat dédié.
+    Retourne id, name, unit, quantity (stock actuel), purchase_price, category, stock_min.
+    """
+    try:
+        cats = await db.stock_categories.find({}, {"_id": 0}).to_list(500)
+        drink_cat_ids = {c["id"] for c in cats if _is_drinks_category(c)}
+        cat_name_by_id = {c["id"]: c.get("name", "") for c in cats}
+
+        query = {"is_active": True}
+        if drink_cat_ids:
+            query["category_id"] = {"$in": list(drink_cat_ids)}
+
+        products = await db.stock_products.find(query, {"_id": 0}).sort("name", 1).to_list(2000)
+        items = []
+        for p in products:
+            items.append({
+                "id": p["id"],
+                "name": p.get("name", ""),
+                "code": p.get("code", ""),
+                "unit": p.get("unit", "bouteille"),
+                "quantity": p.get("quantity", 0),
+                "stock_min": p.get("stock_min", 0),
+                "purchase_price": p.get("purchase_price", 0),
+                "category_id": p.get("category_id", ""),
+                "category_name": cat_name_by_id.get(p.get("category_id", ""), ""),
+                "subtype": _drink_subtype(p, cat_name_by_id.get(p.get("category_id", ""), "")),
+                "statut": p.get("statut", "normal"),
+            })
+        return {"products": items, "count": len(items)}
+    except Exception as e:
+        logger.error(f"Error fetching drinks products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/snapshot")
 async def stock_snapshot_at(
     at: str = "",
     only_drinks: bool = True,
 ):
-    """Reconstruit le stock de chaque produit à une date+heure donnée.
-
-    Logique : `qty_at(t) = current_quantity - somme(delta des mouvements après t)`.
-    Pour chaque mouvement, le delta net est `new_quantity - previous_quantity`.
-
-    Paramètres :
-      - at : date ISO. Si vide ou si format `YYYY-MM-DD`, utilise 23:59:59 ce jour-là.
-      - only_drinks : si True (défaut), filtre sur catégories de type Boisson/Bar/Cocktail.
-    """
+    """Reconstruit le stock de chaque produit à une date+heure donnée."""
     if not at:
         raise HTTPException(422, "Paramètre 'at' requis (YYYY-MM-DD ou ISO datetime)")
     # Normalise en bornant à fin de journée si seule la date est fournie.

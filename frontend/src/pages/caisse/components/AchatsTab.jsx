@@ -18,9 +18,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ShoppingCart, Plus, Eye, CheckCircle, AlertCircle, Edit2, Trash2,
-  FileText, Printer, Receipt, Calendar, X, Truck, Wallet, Ban,
+  FileText, Printer, Receipt, Calendar, X, Truck, Wallet, Ban, Wine, PackagePlus,
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
+import DrinkPurchaseDialog from "./DrinkPurchaseDialog";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -127,6 +128,7 @@ const computeAuditTrail = (expense) => {
 };
 
 const AchatsTab = ({ ctx }) => {
+  const [showDrinksPurchase, setShowDrinksPurchase] = React.useState(false);
   const {
     currentUser,
     expenses,
@@ -155,6 +157,8 @@ const AchatsTab = ({ ctx }) => {
     convertExpenseToPO,
     availableAccounts,
     allocateExpenseToAccount,
+    fetchExpenses,
+    receiveExpenseStock,
   } = ctx;
 
   // Local state for "rayer une ligne" edits per pending grouped expense.
@@ -370,6 +374,14 @@ const AchatsTab = ({ ctx }) => {
                 </h2>
                 {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                   <div className="flex gap-2 flex-wrap">
+                    <Button 
+                      onClick={() => setShowDrinksPurchase(true)}
+                      className="bg-orange-600 hover:bg-orange-700"
+                      data-testid="new-drinks-purchase-btn"
+                    >
+                      <Wine className="w-4 h-4 mr-2" />
+                      Achat Boissons
+                    </Button>
                     <Button 
                       onClick={() => setShowExpenseModal(true)}
                       className="bg-purple-600 hover:bg-purple-700"
@@ -2292,6 +2304,14 @@ const AchatsTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Modal : Achat Boissons (liaison directe au stock) */}
+              <DrinkPurchaseDialog
+                open={showDrinksPurchase}
+                onClose={() => setShowDrinksPurchase(false)}
+                currentUser={currentUser}
+                onCreated={() => { if (fetchExpenses) fetchExpenses(); }}
+              />
             </div>
 
   );

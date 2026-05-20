@@ -139,6 +139,10 @@ class ExpenseItem(BaseModel):
     strike_reason: Optional[str] = None
     expense_type: Optional[str] = None  # 'achat' | 'paiement'
     destination: Optional[str] = None  # 'cuisine'|'bar'|'salle'|'jeux_vr'|'jardin'|'administratif'
+    # === DRINKS PURCHASE LINK === (added 20/05/2026)
+    # Si renseigné, la synchro stock se fait DIRECTEMENT par id (plus de matching nom).
+    stock_product_id: Optional[str] = None
+    unit: Optional[str] = None  # ex: "bouteille", "casier"
 
 
 class ExpenseCreate(BaseModel):
@@ -466,34 +470,45 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                         item_price = exp_item.get("unit_price", 0) or 0
                         item_unit_hint = exp_item.get("unit") or ""
 
-                        if not item_desc:
+                        if not item_desc and not exp_item.get("stock_product_id"):
                             continue
 
-                        # Expand package conditioning: "(Casier de 24 bouteilles)" → qty × 24
-                        item_desc, item_qty, item_price, item_unit_hint, was_expanded = _expand_conditioning(
-                            item_desc, item_qty, item_price, item_unit_hint
-                        )
-                        if was_expanded:
-                            logger.info(
-                                f"Conditioning expanded: '{exp_item.get('description')}' "
-                                f"→ '{item_desc}' qty={item_qty} pu={item_price} unit={item_unit_hint}"
-                            )
+                        # === FAST-PATH : item lié à un produit Stock (Achat Boissons) ===
+                        # Si stock_product_id est fourni, on saute le matching nom et on
+                        # utilise directement l'id du produit (fiabilité 100%).
+                        stock_product = None
+                        if exp_item.get("stock_product_id"):
+                            stock_product = await db.stock_products.find_one({
+                                "id": exp_item["stock_product_id"],
+                                "is_active": True,
+                            })
 
-                        escaped = re.escape(item_desc)
-                        stock_product = await db.stock_products.find_one({
-                            "name": {"$regex": f"^{escaped}$", "$options": "i"},
-                            "is_active": True,
-                        })
                         if not stock_product:
+                            # Expand package conditioning: "(Casier de 24 bouteilles)" → qty × 24
+                            item_desc, item_qty, item_price, item_unit_hint, was_expanded = _expand_conditioning(
+                                item_desc, item_qty, item_price, item_unit_hint
+                            )
+                            if was_expanded:
+                                logger.info(
+                                    f"Conditioning expanded: '{exp_item.get('description')}' "
+                                    f"→ '{item_desc}' qty={item_qty} pu={item_price} unit={item_unit_hint}"
+                                )
+
+                            escaped = re.escape(item_desc)
                             stock_product = await db.stock_products.find_one({
-                                "name": {"$regex": f"^{escaped}", "$options": "i"},
+                                "name": {"$regex": f"^{escaped}$", "$options": "i"},
                                 "is_active": True,
                             })
-                        if not stock_product:
-                            stock_product = await db.stock_products.find_one({
-                                "name": {"$regex": escaped, "$options": "i"},
-                                "is_active": True,
-                            })
+                            if not stock_product:
+                                stock_product = await db.stock_products.find_one({
+                                    "name": {"$regex": f"^{escaped}", "$options": "i"},
+                                    "is_active": True,
+                                })
+                            if not stock_product:
+                                stock_product = await db.stock_products.find_one({
+                                    "name": {"$regex": escaped, "$options": "i"},
+                                    "is_active": True,
+                                })
     
                         if stock_product:
                             old_qty = stock_product.get("quantity", 0)
@@ -936,4 +951,223 @@ async def unallocate_expense_from_current_account(expense_id: str):
         raise
     except Exception as e:
         logger.error(f"Unallocate expense error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# === ACHAT BOISSONS — flux dédié avec lien direct au stock ===
+# ============================================================================
+
+class DrinkPurchaseItem(BaseModel):
+    stock_product_id: str
+    quantity: float = 1  # nombre total de bouteilles (4b)
+    unit_price: float = 0  # prix unitaire (par bouteille)
+
+
+class DrinkPurchaseCreate(BaseModel):
+    items: List[DrinkPurchaseItem]
+    supplier: Optional[str] = ""
+    planned_date: Optional[str] = ""
+    requested_by: str
+    funded_by_account_id: Optional[str] = None
+    funded_by_account_name: Optional[str] = None
+    funded_affects_ca: Optional[bool] = True
+    notes: Optional[str] = ""
+
+
+@router.post("/expenses/drinks")
+async def create_drinks_purchase(data: DrinkPurchaseCreate):
+    """Crée un achat de boissons rattaché DIRECTEMENT à des produits Stock (id-based).
+
+    Le statut initial est "pending". Une fois validé (status=completed), les bouteilles
+    sont automatiquement ajoutées au stock via la logique existante (qui utilise
+    stock_product_id en priorité).
+    """
+    try:
+        if not data.items:
+            raise HTTPException(400, "Aucun article")
+
+        # Vérifie et enrichit chaque ligne avec le nom + unité du produit
+        items_payload = []
+        total_amount = 0.0
+        for it in data.items:
+            prod = await db.stock_products.find_one({
+                "id": it.stock_product_id, "is_active": True
+            }, {"_id": 0})
+            if not prod:
+                raise HTTPException(404, f"Produit Stock introuvable : {it.stock_product_id}")
+            qty = it.quantity or 1
+            pu = it.unit_price if (it.unit_price and it.unit_price > 0) else (prod.get("purchase_price", 0) or 0)
+            amount = qty * pu
+            total_amount += amount
+            items_payload.append({
+                "category": "Boissons",
+                "description": prod["name"],
+                "quantity": qty,
+                "unit_price": pu,
+                "amount": amount,
+                "stock_product_id": prod["id"],
+                "unit": prod.get("unit", "bouteille"),
+                "destination": "bar",
+                "expense_type": "achat",
+            })
+
+        expense_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        expense = {
+            "id": expense_id,
+            "category": "Boissons",
+            "description": f"Achat boissons ({len(items_payload)} article(s))",
+            "quantity": 1,
+            "unit_price": total_amount,
+            "amount": total_amount,
+            "supplier": data.supplier or "",
+            "planned_date": data.planned_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "requested_by": data.requested_by,
+            "status": "pending",
+            "is_group": True,
+            "items": items_payload,
+            "expense_type": "achat",
+            "destination": "bar",
+            "is_drinks_purchase": True,  # marqueur pour l'UI
+            "funded_by_account_id": data.funded_by_account_id,
+            "funded_by_account_name": data.funded_by_account_name,
+            "funded_affects_ca": data.funded_affects_ca if data.funded_affects_ca is not None else True,
+            "notes": data.notes or "",
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.expenses.insert_one(expense)
+        expense.pop("_id", None)
+        logger.info(f"Drinks purchase created: {expense_id} by {data.requested_by} total={total_amount}")
+        return {"success": True, "expense": expense}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Drinks purchase create error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@router.post("/expenses/{expense_id}/receive-stock")
+async def receive_stock_for_expense(expense_id: str, body: dict = Body(default={})):
+    """Bouton "Recevoir en stock" — Force la mise en stock d'un achat sans changer son
+    status. Idempotent : si déjà reçu, ne refait rien.
+    Utile pour les achats de boissons reçus physiquement avant validation admin.
+    """
+    try:
+        expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+        if not expense:
+            raise HTTPException(404, "Achat introuvable")
+        if expense.get("expense_type") == "paiement":
+            raise HTTPException(400, "Les paiements ne génèrent pas d'entrée en stock")
+
+        already_synced = await db.stock_purchases.find_one({
+            "source": "caisse", "expense_id": expense_id,
+        })
+        if already_synced:
+            return {"success": True, "already_received": True, "purchase_id": already_synced.get("id")}
+
+        # Réutilise la logique de sync en passant par PUT status=completed sans changer le statut visible
+        items = expense.get("items") if expense.get("is_group") else [{
+            "description": expense.get("description", ""),
+            "quantity": expense.get("quantity", 1),
+            "unit_price": expense.get("unit_price") or expense.get("amount", 0),
+            "amount": expense.get("amount", 0),
+            "category": expense.get("category", ""),
+            "stock_product_id": expense.get("stock_product_id"),
+        }]
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        received_by = (body or {}).get("user_name") or expense.get("requested_by", "Caisse")
+        purchase_items = []
+        for ei in items:
+            if ei.get("struck"):
+                continue
+            qty = ei.get("quantity", 1) or 1
+            pu = ei.get("unit_price", 0) or 0
+            stock_product = None
+            if ei.get("stock_product_id"):
+                stock_product = await db.stock_products.find_one({"id": ei["stock_product_id"], "is_active": True})
+            if not stock_product:
+                # Fallback name match
+                desc = (ei.get("description") or "").strip()
+                if desc:
+                    stock_product = await db.stock_products.find_one({
+                        "name": {"$regex": f"^{re.escape(desc)}$", "$options": "i"},
+                        "is_active": True,
+                    })
+            if not stock_product:
+                logger.warning(f"receive-stock: product not found for item {ei}")
+                continue
+
+            old_qty = stock_product.get("quantity", 0)
+            new_qty = old_qty + qty
+            smin = stock_product.get("stock_min", 5)
+            new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
+
+            await db.stock_products.update_one({"id": stock_product["id"]}, {"$set": {
+                "quantity": new_qty,
+                "purchase_price": pu if pu > 0 else stock_product.get("purchase_price", 0),
+                "valeur_totale": new_qty * (pu if pu > 0 else stock_product.get("purchase_price", 0)),
+                "statut": new_statut,
+                "updated_at": now_iso,
+            }})
+
+            await db.stock_movements.insert_one({
+                "id": str(uuid.uuid4()),
+                "product_id": stock_product["id"],
+                "product_name": stock_product["name"],
+                "product_code": stock_product.get("code", ""),
+                "movement_type": "entree",
+                "quantity": qty,
+                "previous_quantity": old_qty,
+                "new_quantity": new_qty,
+                "unit": stock_product.get("unit", ""),
+                "unit_price": pu or stock_product.get("purchase_price", 0),
+                "total_value": qty * (pu or stock_product.get("purchase_price", 0)),
+                "reason": f"Réception manuelle - {expense.get('supplier', 'N/A')}",
+                "user_name": received_by,
+                "expense_id": expense_id,
+                "source": "caisse_manual",
+                "created_at": now_iso,
+            })
+            purchase_items.append({
+                "product_id": stock_product["id"],
+                "product_name": stock_product["name"],
+                "quantity": qty,
+                "unit_price": pu,
+                "total": qty * pu,
+            })
+
+        if not purchase_items:
+            raise HTTPException(400, "Aucun article rattaché au stock")
+
+        # Idempotency record
+        purchase_doc = {
+            "id": str(uuid.uuid4()),
+            "expense_id": expense_id,
+            "source": "caisse",
+            "supplier": expense.get("supplier", ""),
+            "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "items": purchase_items,
+            "total_amount": sum(i["total"] for i in purchase_items),
+            "user_name": received_by,
+            "received_manually": True,
+            "created_at": now_iso,
+        }
+        await db.stock_purchases.insert_one(purchase_doc)
+
+        # Marque l'expense comme reçu sans changer son statut
+        await db.expenses.update_one({"id": expense_id}, {"$set": {
+            "stock_received": True,
+            "stock_received_at": now_iso,
+            "stock_received_by": received_by,
+            "updated_at": now_iso,
+        }})
+
+        return {"success": True, "received_items": len(purchase_items), "purchase_id": purchase_doc["id"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Receive stock error: {e}")
         raise HTTPException(500, str(e))

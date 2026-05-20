@@ -1343,6 +1343,24 @@ const CaissePage = () => {
     }
   };
 
+  // "Recevoir en stock" — déclenche manuellement la mise en stock d'un achat
+  // (utile pour les achats boissons reçus physiquement avant validation admin)
+  const receiveExpenseStock = async (expenseId) => {
+    try {
+      const res = await axios.post(`${API}/expenses/${expenseId}/receive-stock`, {
+        user_name: currentUser?.full_name || currentUser?.username || "Caisse",
+      });
+      if (res.data?.already_received) {
+        toast.info("Cet achat est déjà en stock");
+      } else {
+        toast.success(`${res.data?.received_items || 0} article(s) ajouté(s) au stock`);
+      }
+      fetchExpenses();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur de réception");
+    }
+  };
+
   const deleteExpense = async (expenseId) => {
     if (!confirm("Supprimer cette dépense ?")) return;
     try {
@@ -5830,6 +5848,8 @@ _Gérante - Espace Maxo_
               convertExpenseToPO,
               availableAccounts,
               allocateExpenseToAccount,
+              fetchExpenses,
+              receiveExpenseStock,
             }} />
           </TabsContent>
           )}
