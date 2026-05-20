@@ -81,7 +81,13 @@ const StatsTab = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-slate-400 text-sm">Chiffre d'affaires du mois</p>
-                <p className="text-2xl sm:text-3xl font-bold text-amber-500">{formatPrice(monthlyStats.total_revenue)} F</p>
+                <p className="text-2xl sm:text-3xl font-bold text-amber-500" data-testid="stats-total-revenue">{formatPrice(monthlyStats.total_revenue)} F</p>
+                {(monthlyStats.locations_income || 0) > 0 && (
+                  <p className="text-xs text-purple-300 mt-1">
+                    + Locations & Réservations : <span className="font-bold">{formatPrice(monthlyStats.locations_income)} F</span>
+                    {' '}<span className="text-slate-400">= Total Recettes <span className="text-emerald-400 font-bold">{formatPrice(monthlyStats.total_income || (monthlyStats.total_revenue + (monthlyStats.locations_income || 0)))} F</span></span>
+                  </p>
+                )}
               </div>
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500/20 rounded-full flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500" />
@@ -95,50 +101,46 @@ const StatsTab = ({
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-          <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <TreePine className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                <p className="text-slate-400 text-xs">Salle & Jardin</p>
-              </div>
-              <p className="text-base sm:text-lg font-bold text-green-400">{formatPrice(monthlyStats.by_department?.salle_jardin || 0)} F</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                <p className="text-slate-400 text-xs">Jeux</p>
-              </div>
-              <p className="text-base sm:text-lg font-bold text-blue-400">{formatPrice(monthlyStats.by_department?.jeux || 0)} F</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3" data-testid="stats-revenue-groups">
+          <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/40">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Wine className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
                 <p className="text-slate-400 text-xs">Bar</p>
               </div>
-              <p className="text-base sm:text-lg font-bold text-orange-400">{formatPrice(monthlyStats.by_department?.bar || 0)} F</p>
+              <p className="text-base sm:text-lg font-bold text-orange-400" data-testid="stats-group-bar">{formatPrice(monthlyStats.by_revenue_group?.bar || monthlyStats.by_department?.bar || 0)} F</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
+          <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/40">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <TreePine className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                <p className="text-slate-400 text-xs">Menu & Combos</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-green-400" data-testid="stats-group-menu">
+                {formatPrice(monthlyStats.by_revenue_group?.menu_combos || ((monthlyStats.by_department?.salle_jardin || 0) + (monthlyStats.by_department?.accompagnements || 0)))} F
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/40">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                <p className="text-slate-400 text-xs">Jeux</p>
+              </div>
+              <p className="text-base sm:text-lg font-bold text-blue-400" data-testid="stats-group-jeux">{formatPrice(monthlyStats.by_revenue_group?.jeux || monthlyStats.by_department?.jeux || 0)} F</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/40">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                <p className="text-slate-400 text-xs">Location</p>
+                <p className="text-slate-400 text-xs">Locations & Réservations</p>
               </div>
-              <p className="text-base sm:text-lg font-bold text-purple-400">{formatPrice(monthlyStats.by_department?.location || 0)} F</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/30 col-span-2 sm:col-span-1">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-                <p className="text-slate-400 text-xs">Autres</p>
-              </div>
-              <p className="text-base sm:text-lg font-bold text-slate-400">{formatPrice(monthlyStats.by_department?.autres || 0)} F</p>
+              <p className="text-base sm:text-lg font-bold text-purple-400" data-testid="stats-group-locations">
+                {formatPrice(monthlyStats.locations_income || monthlyStats.by_department?.location || 0)} F
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Salle de fête, Jardin, Salle de jeux</p>
             </CardContent>
           </Card>
         </div>
@@ -148,23 +150,38 @@ const StatsTab = ({
             <CardTitle className="text-white text-base sm:text-lg flex items-center gap-2">
               <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
               Détail par jour
+              <span className="text-slate-500 text-[10px] font-normal ml-2">Bar · Menu · Jeux</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 sm:px-6">
-            <div className="space-y-1.5 sm:space-y-2 max-h-[350px] sm:max-h-[400px] overflow-y-auto">
-              {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => (
-                <div key={date} className="flex items-center justify-between bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-white font-medium text-sm sm:text-base truncate">
-                      {format(new Date(date), "EEE d MMM", { locale: fr })}
+            <div className="space-y-1.5 sm:space-y-2 max-h-[420px] sm:max-h-[480px] overflow-y-auto">
+              {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => {
+                const g = data.by_revenue_group || {};
+                return (
+                <div key={date} className="bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm sm:text-base truncate">
+                        {format(new Date(date), "EEE d MMM", { locale: fr })}
+                      </p>
+                      <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}</p>
+                    </div>
+                    <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
+                      {formatPrice(data.revenue)} F
                     </p>
-                    <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}</p>
                   </div>
-                  <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
-                    {formatPrice(data.revenue)} F
-                  </p>
+                  {(g.bar || g.menu_combos || g.jeux || g.autres) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <span className="text-orange-300"><Wine className="w-3 h-3 inline mr-0.5" />Bar : <strong className="text-orange-400">{formatPrice(g.bar || 0)} F</strong></span>
+                      <span className="text-green-300"><TreePine className="w-3 h-3 inline mr-0.5" />Menu : <strong className="text-green-400">{formatPrice(g.menu_combos || 0)} F</strong></span>
+                      <span className="text-blue-300"><Gamepad2 className="w-3 h-3 inline mr-0.5" />Jeux : <strong className="text-blue-400">{formatPrice(g.jeux || 0)} F</strong></span>
+                      {(g.autres || 0) > 0 && (
+                        <span className="text-slate-400">Autres : <strong>{formatPrice(g.autres || 0)} F</strong></span>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
+              );})}
               {Object.keys(monthlyStats.daily_stats || {}).length === 0 && (
                 <p className="text-slate-500 text-center py-8 text-sm">Aucune donnée pour ce mois</p>
               )}

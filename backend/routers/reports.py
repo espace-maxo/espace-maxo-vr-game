@@ -39,10 +39,29 @@ def extract_department_totals(invoice: dict) -> dict:
     dt = invoice.get("totals_by_department", {}) or {}
     return {
         "salle_jardin": dt.get("salle_jardin", 0) + dt.get("jardin", 0),
+        "accompagnements": dt.get("accompagnements", 0),
         "jeux": dt.get("jeux", 0),
         "bar": dt.get("bar", 0),
         "location": dt.get("location", 0),
         "autres": dt.get("autres", 0),
+    }
+
+
+# Regroupement métier pour "Faire le point" et "Statistiques & Rapport"
+# - bar         : boissons
+# - menu_combos : Plats (salle_jardin / jardin) + Accompagnements (frites, sauces…)
+# - jeux        : sessions de jeux
+# - autres      : items divers (location item à la caisse, autres)
+# Les locations de salle/jardin proviennent d'une collection séparée et ne sont
+# PAS comptées ici (cf. server.py get_weekly_report -> locations).
+def extract_revenue_groups(invoice: dict) -> dict:
+    """Return dict with 4 business revenue groups from an invoice."""
+    d = extract_department_totals(invoice)
+    return {
+        "bar": d["bar"],
+        "menu_combos": d["salle_jardin"] + d["accompagnements"],
+        "jeux": d["jeux"],
+        "autres": d["location"] + d["autres"],
     }
 
 
@@ -81,11 +100,15 @@ async def get_invoice_stats(date: str = Query(None)):
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
         total_discounts = sum(inv.get("discount_amount", 0) for inv in invoices)
 
-        by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+        by_department = {"salle_jardin": 0, "accompagnements": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+        by_revenue_group = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
         for inv in invoices:
             d = extract_department_totals(inv)
             for k in by_department:
                 by_department[k] += d[k]
+            g = extract_revenue_groups(inv)
+            for k in by_revenue_group:
+                by_revenue_group[k] += g[k]
 
         invoice_count = len(invoices)
         average_ticket = total_revenue / invoice_count if invoice_count > 0 else 0
@@ -94,6 +117,7 @@ async def get_invoice_stats(date: str = Query(None)):
             "total_revenue": total_revenue,
             "total_discounts": total_discounts,
             "by_department": by_department,
+            "by_revenue_group": by_revenue_group,
             "invoice_count": invoice_count,
             "average_ticket": average_ticket
         }
@@ -156,17 +180,50 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
         for inv in invoices:
             day = inv.get("created_at", "")[:10]
             if day not in daily_stats:
-                daily_stats[day] = {"revenue": 0, "count": 0}
+                daily_stats[day] = {
+                    "revenue": 0, "count": 0,
+                    "by_revenue_group": {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0},
+                }
             daily_stats[day]["revenue"] += inv.get("total", 0)
             daily_stats[day]["count"] += 1
+            g = extract_revenue_groups(inv)
+            for k in daily_stats[day]["by_revenue_group"]:
+                daily_stats[day]["by_revenue_group"][k] += g[k]
 
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
 
-        by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+        by_department = {"salle_jardin": 0, "accompagnements": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+        by_revenue_group = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
         for inv in invoices:
             d = extract_department_totals(inv)
             for k in by_department:
                 by_department[k] += d[k]
+            g = extract_revenue_groups(inv)
+            for k in by_revenue_group:
+                by_revenue_group[k] += g[k]
+
+        # Recettes Locations & Réservations (collection séparée) sur le mois
+        # On prend toutes les réservations payées dans le mois (settled_at) OU dont la
+        # date de réservation tombe dans le mois (statut != cancelled).
+        month_start = f"{date_prefix}-01"
+        month_end = f"{date_prefix}-{last_day_num:02d}"
+        loc_reservations = await db.location_reservations.find({
+            "status": {"$nin": ["cancelled", "annule", "annulee"]},
+            "$or": [
+                {"reservation_date": {"$gte": month_start, "$lte": month_end}},
+                {"settled_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"}},
+            ],
+        }, {"_id": 0}).to_list(2000)
+        _seen = set()
+        locations_income = 0
+        locations_count = 0
+        for loc in loc_reservations:
+            lid = loc.get("id")
+            if lid in _seen:
+                continue
+            _seen.add(lid)
+            locations_income += loc.get("rental_amount", 0) or 0
+            locations_count += 1
 
         return {
             "year": year,
@@ -174,6 +231,10 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
             "total_revenue": total_revenue,
             "invoice_count": len(invoices),
             "by_department": by_department,
+            "by_revenue_group": by_revenue_group,
+            "locations_income": locations_income,
+            "locations_count": locations_count,
+            "total_income": total_revenue + locations_income,
             "daily_stats": daily_stats
         }
     except Exception as e:
@@ -254,11 +315,15 @@ async def get_analytics_dashboard(year: int = Query(None), month: int = Query(No
                 else:
                     by_payment["other"] += inv.get("total", 0)
 
-            by_department = {"salle_jardin": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+            by_department = {"salle_jardin": 0, "accompagnements": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+            by_revenue_group = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
             for inv in validated:
                 dept = extract_department_totals(inv)
                 for k in by_department:
                     by_department[k] += dept[k]
+                g = extract_revenue_groups(inv)
+                for k in by_revenue_group:
+                    by_revenue_group[k] += g[k]
 
             daily = {}
             for inv in validated:
@@ -298,6 +363,7 @@ async def get_analytics_dashboard(year: int = Query(None), month: int = Query(No
                 "by_server": by_server,
                 "by_payment_method": by_payment,
                 "by_department": by_department,
+                "by_revenue_group": by_revenue_group,
                 "daily_stats": daily,
                 "top_products": top_products,
             }

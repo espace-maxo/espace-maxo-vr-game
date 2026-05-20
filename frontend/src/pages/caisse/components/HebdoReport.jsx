@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   BarChart3, ChevronLeft, ChevronRight, Download, MessageCircle,
   Calendar, TrendingUp, ShoppingCart, DollarSign, Clock, AlertCircle, Timer, Building2,
-  Link, Check, Trash2, UserCircle
+  Link, Check, Trash2, UserCircle, Wine, UtensilsCrossed, Gamepad2
 } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -490,29 +490,49 @@ const HebdoReport = ({
           </div>
 
           {/* Résumé en cartes */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            {/* BAR */}
+            <Card className="bg-gradient-to-br from-orange-900/30 to-amber-900/20 border-orange-500/50" data-testid="hebdo-card-bar">
               <CardContent className="p-4 text-center">
-                <TrendingUp className="w-6 h-6 text-green-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</p>
-                <p className="text-xs text-slate-400">{weeklyReport.sales?.count || 0} ventes</p>
+                <Wine className="w-6 h-6 text-orange-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-orange-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.bar || 0)} F</p>
+                <p className="text-xs text-slate-400">Recettes Bar</p>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-purple-900/30 to-violet-900/20 border-purple-500/50">
+            {/* MENU & COMBOS */}
+            <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50" data-testid="hebdo-card-menu">
+              <CardContent className="p-4 text-center">
+                <UtensilsCrossed className="w-6 h-6 text-green-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-green-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.menu_combos || 0)} F</p>
+                <p className="text-xs text-slate-400">Menu & Combos</p>
+              </CardContent>
+            </Card>
+            {/* JEUX */}
+            <Card className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 border-blue-500/50" data-testid="hebdo-card-jeux">
+              <CardContent className="p-4 text-center">
+                <Gamepad2 className="w-6 h-6 text-blue-400 mx-auto mb-1" />
+                <p className="text-2xl font-bold text-blue-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.jeux || 0)} F</p>
+                <p className="text-xs text-slate-400">Recettes Jeux</p>
+              </CardContent>
+            </Card>
+            {/* LOCATIONS (Jardin & Salle) */}
+            <Card className="bg-gradient-to-br from-purple-900/30 to-violet-900/20 border-purple-500/50" data-testid="hebdo-card-locations">
               <CardContent className="p-4 text-center">
                 <Building2 className="w-6 h-6 text-purple-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-purple-400">{formatPrice(weeklyReport.locations?.total || 0)} F</p>
-                <p className="text-xs text-slate-400">{weeklyReport.locations?.count || 0} locations</p>
+                <p className="text-xs text-slate-400">Locations ({weeklyReport.locations?.count || 0})</p>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+            {/* DÉPENSES */}
+            <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50" data-testid="hebdo-card-expenses">
               <CardContent className="p-4 text-center">
                 <ShoppingCart className="w-6 h-6 text-red-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</p>
-                <p className="text-xs text-slate-400">{weeklyReport.expenses?.count || 0} achats</p>
+                <p className="text-xs text-slate-400">{weeklyReport.expenses?.count || 0} dépenses</p>
               </CardContent>
             </Card>
-            <Card className={`bg-gradient-to-br ${weeklyReport.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-rose-900/30 to-red-900/20 border-rose-500/50'}`}>
+            {/* RÉSULTAT */}
+            <Card className={`bg-gradient-to-br ${weeklyReport.is_profitable ? 'from-emerald-900/30 to-green-900/20 border-emerald-500/50' : 'from-rose-900/30 to-red-900/20 border-rose-500/50'}`} data-testid="hebdo-card-result">
               <CardContent className="p-4 text-center">
                 <DollarSign className={`w-6 h-6 mx-auto mb-1 ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`} />
                 <p className={`text-2xl font-bold ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -521,7 +541,8 @@ const HebdoReport = ({
                 <p className="text-xs text-slate-400">{weeklyReport.is_profitable ? 'Bénéfice' : 'Perte'}</p>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-cyan-900/30 to-blue-900/20 border-cyan-500/50">
+            {/* TOTAL RECETTES */}
+            <Card className="bg-gradient-to-br from-cyan-900/30 to-blue-900/20 border-cyan-500/50" data-testid="hebdo-card-total">
               <CardContent className="p-4 text-center">
                 <TrendingUp className="w-6 h-6 text-cyan-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-cyan-400">{formatPrice(weeklyReport.total_income || (weeklyReport.sales?.total || 0) + (weeklyReport.locations?.total || 0))} F</p>
@@ -558,7 +579,9 @@ const HebdoReport = ({
                     <tr className="text-left text-slate-400 border-b border-slate-700">
                       <th className="p-3">Jour</th>
                       <th className="p-3">Date</th>
-                      <th className="p-3 text-right text-green-400">Ventes</th>
+                      <th className="p-3 text-right text-orange-400" title="Recettes Bar">Bar</th>
+                      <th className="p-3 text-right text-green-400" title="Carte Menu & Combos">Menu/Combo</th>
+                      <th className="p-3 text-right text-blue-400" title="Recettes Jeux">Jeux</th>
                       <th className="p-3 text-right text-purple-400">Locations</th>
                       <th className="p-3 text-right text-red-400">Dépenses</th>
                       <th className="p-3 text-right">Résultat</th>
@@ -577,8 +600,13 @@ const HebdoReport = ({
                         </td>
                         <td className="p-3 text-slate-400">{data.date_formatted}</td>
                         <td className="p-3 text-right">
-                          <span className="text-green-400 font-bold">{formatPrice(data.sales?.total || 0)} F</span>
-                          <span className="text-slate-500 text-xs ml-1">({data.sales?.count || 0})</span>
+                          <span className="text-orange-400 font-bold">{formatPrice(data.sales?.by_revenue_group?.bar || 0)} F</span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-green-400 font-bold">{formatPrice(data.sales?.by_revenue_group?.menu_combos || 0)} F</span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-blue-400 font-bold">{formatPrice(data.sales?.by_revenue_group?.jeux || 0)} F</span>
                         </td>
                         <td className="p-3 text-right">
                           <span className="text-purple-400 font-bold">{formatPrice(data.locations?.total || 0)} F</span>
@@ -597,7 +625,7 @@ const HebdoReport = ({
                         </td>
                       </tr>
                       {expandedDay === date && (
-                      <tr><td colSpan={8} className="p-0">
+                      <tr><td colSpan={9} className="p-0">
                         <div className="bg-slate-900/50 border-y border-slate-700/30 px-4 py-3 space-y-3">
                           {/* Transfer/Delete bar - Admin only */}
                           {isAdmin && transferItems.length > 0 && (
@@ -726,8 +754,10 @@ const HebdoReport = ({
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-900/50 font-bold">
-                      <td colSpan="2" className="p-3 text-white">TOTAL SEMAINE</td>
-                      <td className="p-3 text-right text-green-400">{formatPrice(weeklyReport.sales?.total || 0)} F</td>
+                      <td colSpan="2" className="p-3 text-white">TOTAL PÉRIODE</td>
+                      <td className="p-3 text-right text-orange-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.bar || 0)} F</td>
+                      <td className="p-3 text-right text-green-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.menu_combos || 0)} F</td>
+                      <td className="p-3 text-right text-blue-400">{formatPrice(weeklyReport.sales?.by_revenue_group?.jeux || 0)} F</td>
                       <td className="p-3 text-right text-purple-400">{formatPrice(weeklyReport.locations?.total || 0)} F</td>
                       <td className="p-3 text-right text-red-400">{formatPrice(weeklyReport.expenses?.total || 0)} F</td>
                       <td className={`p-3 text-right ${weeklyReport.is_profitable ? 'text-emerald-400' : 'text-rose-400'}`}>

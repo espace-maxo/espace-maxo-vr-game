@@ -6521,6 +6521,8 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         
         # Aggregate sales by day
         total_sales = 0
+        # Aggregation au niveau global par groupe de recettes (Bar / Menu&Combos / Jeux / Autres)
+        sales_by_revenue_group_total = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
         for invoice in invoices:
             # Determine date: assigned_week takes priority
             if invoice.get("assigned_week") == start_str:
@@ -6529,18 +6531,47 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                     inv_date = start_str  # Assign to Monday if outside week
             else:
                 inv_date = invoice.get("created_at", "")[:10]
-            
+
+            # Compute revenue groups for this invoice (utilise totals_by_department si présent,
+            # sinon retombe sur les items.department pour les anciennes factures).
+            tbd = invoice.get("totals_by_department") or {}
+            if not tbd:
+                tbd = {}
+                for it in (invoice.get("items") or []):
+                    dep = (it.get("department") or "autres")
+                    amt = (it.get("price", 0) or 0) * (it.get("quantity", 1) or 0)
+                    tbd[dep] = tbd.get(dep, 0) + amt
+            inv_groups = {
+                "bar": tbd.get("bar", 0),
+                "menu_combos": tbd.get("salle_jardin", 0) + tbd.get("jardin", 0) + tbd.get("accompagnements", 0),
+                "jeux": tbd.get("jeux", 0),
+                "autres": tbd.get("location", 0) + tbd.get("autres", 0),
+            }
+
             if inv_date in daily_data:
+                # Init revenue group bucket once
+                if "by_revenue_group" not in daily_data[inv_date]["sales"]:
+                    daily_data[inv_date]["sales"]["by_revenue_group"] = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
                 daily_data[inv_date]["sales"]["count"] += 1
                 daily_data[inv_date]["sales"]["total"] += invoice.get("total", 0)
+                for k in inv_groups:
+                    daily_data[inv_date]["sales"]["by_revenue_group"][k] += inv_groups[k]
                 daily_data[inv_date]["sales"]["items"].append({
                     "id": invoice.get("id"),
                     "invoice_number": invoice.get("invoice_number"),
                     "total": invoice.get("total", 0),
                     "items_count": len(invoice.get("items", [])),
-                    "assigned_week": invoice.get("assigned_week")
+                    "assigned_week": invoice.get("assigned_week"),
+                    "by_revenue_group": inv_groups,
                 })
             total_sales += invoice.get("total", 0)
+            for k in sales_by_revenue_group_total:
+                sales_by_revenue_group_total[k] += inv_groups[k]
+
+        # Assurer le champ by_revenue_group sur tous les jours (même vides)
+        for date in daily_data:
+            if "by_revenue_group" not in daily_data[date]["sales"]:
+                daily_data[date]["sales"]["by_revenue_group"] = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
         
         # Aggregate expenses by day
         total_expenses = 0
@@ -6787,6 +6818,7 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             "sales": {
                 "total": total_sales,
                 "count": len(invoices),
+                "by_revenue_group": sales_by_revenue_group_total,
             },
             "locations": {
                 "total": total_locations_income,
