@@ -28,6 +28,7 @@ import { fr } from "date-fns/locale";
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
 import HebdoReport from "./caisse/components/HebdoReport";
+import DayClosureGuard from "./caisse/components/DayClosureGuard";
 import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
 import ProformaTab from "./caisse/components/ProformaTab";
@@ -5874,21 +5875,23 @@ _Gérante - Espace Maxo_
               </TabsList>
 
               <TabsContent value="point-hebdo">
-                <HebdoReport 
-                  weeklyReport={weeklyReport}
-                  weekStartDate={weekStartDate}
-                  setWeekStartDate={setWeekStartDate}
-                  weekEndDate={weekEndDate}
-                  setWeekEndDate={setWeekEndDate}
-                  generateWeeklyPDF={generateWeeklyPDF}
-                  sendWeeklyWhatsApp={sendWeeklyWhatsApp}
-                  formatPrice={formatPrice}
-                  API={API}
-                  refreshWeekly={fetchWeeklyReport}
-                  isAdmin={currentUser?.role === 'admin'}
-                  currentUser={currentUser}
-                  onGoToReversement={() => setHebdoSubTab("point-financier")}
-                />
+                <DayClosureGuard currentUser={currentUser}>
+                  <HebdoReport 
+                    weeklyReport={weeklyReport}
+                    weekStartDate={weekStartDate}
+                    setWeekStartDate={setWeekStartDate}
+                    weekEndDate={weekEndDate}
+                    setWeekEndDate={setWeekEndDate}
+                    generateWeeklyPDF={generateWeeklyPDF}
+                    sendWeeklyWhatsApp={sendWeeklyWhatsApp}
+                    formatPrice={formatPrice}
+                    API={API}
+                    refreshWeekly={fetchWeeklyReport}
+                    isAdmin={currentUser?.role === 'admin'}
+                    currentUser={currentUser}
+                    onGoToReversement={() => setHebdoSubTab("point-financier")}
+                  />
+                </DayClosureGuard>
               </TabsContent>
 
               <TabsContent value="point-financier">

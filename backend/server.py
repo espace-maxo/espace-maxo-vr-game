@@ -41,6 +41,7 @@ from routers.product_packages import router as product_packages_router, set_db a
 from routers.cash_closures import router as cash_closures_router, set_db as set_cash_closures_db
 from routers.gerante_advances import router as gerante_advances_router, set_db as set_gerante_advances_db
 from routers.journal import router as journal_router, set_db as set_journal_db
+from routers.day_closures import router as day_closures_router, set_db as set_day_closures_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -70,6 +71,7 @@ set_product_packages_db(db)
 set_cash_closures_db(db)
 set_gerante_advances_db(db)
 set_journal_db(db)
+set_day_closures_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -126,6 +128,7 @@ api_router.include_router(stock_router)
 api_router.include_router(cash_closures_router)
 api_router.include_router(gerante_advances_router)
 api_router.include_router(journal_router)
+api_router.include_router(day_closures_router)
 
 # Configure logging
 logging.basicConfig(

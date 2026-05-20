@@ -342,22 +342,6 @@ const HebdoReport = ({
         <div className="flex items-center gap-2 flex-wrap">
           {weeklyReport && (
             <>
-              <Button size="sm" onClick={() => generateWeeklyPDF()} className="bg-red-600 hover:bg-red-700" data-testid="fairepoint-pdf-btn">
-                <Download className="w-4 h-4 mr-1" /> PDF
-              </Button>
-              <Button size="sm" onClick={() => sendWeeklyWhatsApp()} className="bg-green-600 hover:bg-green-700" data-testid="fairepoint-whatsapp-btn">
-                <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
-              </Button>
-              {isAdmin && (
-              <>
-              <Button size="sm" onClick={() => setShowAttach(!showAttach)} className={showAttach ? "bg-cyan-700 hover:bg-cyan-800" : "bg-cyan-600 hover:bg-cyan-700"} data-testid="attach-btn">
-                <Link className="w-4 h-4 mr-1" /> Rattacher
-              </Button>
-              <Button size="sm" onClick={detectDuplicates} className="bg-amber-600 hover:bg-amber-700" data-testid="duplicates-btn">
-                <AlertCircle className="w-4 h-4 mr-1" /> Doublons
-              </Button>
-              </>
-              )}
               {onGoToReversement && (
                 <Button
                   size="sm"
@@ -384,12 +368,6 @@ const HebdoReport = ({
             <div className="flex items-center gap-1.5 flex-wrap" data-testid="period-presets">
               <Button size="sm" variant={periodPreset === "today" ? "default" : "outline"} onClick={() => applyPreset("today")} className={periodPreset === "today" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-today">
                 Aujourd'hui
-              </Button>
-              <Button size="sm" variant={periodPreset === "week" ? "default" : "outline"} onClick={() => applyPreset("week")} className={periodPreset === "week" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-week">
-                Cette semaine
-              </Button>
-              <Button size="sm" variant={periodPreset === "month" ? "default" : "outline"} onClick={() => applyPreset("month")} className={periodPreset === "month" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-month">
-                Mois en cours
               </Button>
               <Button size="sm" variant={periodPreset === "custom" ? "default" : "outline"} onClick={() => setPeriodPreset("custom")} className={periodPreset === "custom" ? "bg-cyan-600 hover:bg-cyan-700 h-8" : "border-slate-600 text-slate-300 h-8"} data-testid="preset-custom">
                 Personnalisée
