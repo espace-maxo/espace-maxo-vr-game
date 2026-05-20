@@ -33,11 +33,18 @@ class FinancialPointCreate(BaseModel):
     billettage: dict = {}
     momo_number: str = ""
     destination: str = "admin"  # "admin" ou "banque"
+    # Catégorie métier du reversement. Permet 1 reversement distinct par catégorie
+    # pour la même journée/semaine.
+    # Valeurs : "bar" | "menu_combos" | "jeux" | "locations" | "all" (legacy)
+    category: str = "all"
+
+
+VALID_CATEGORIES = {"bar", "menu_combos", "jeux", "locations", "all"}
 
 
 @router.get("/financial-points")
-async def get_financial_points(date: str = None, status: str = None, period_type: str = None):
-    """Get financial points, optionally filtered by date, status, or period_type"""
+async def get_financial_points(date: str = None, status: str = None, period_type: str = None, category: str = None):
+    """Get financial points, optionally filtered by date, status, period_type, or category"""
     try:
         query = {}
         if date:
@@ -46,8 +53,10 @@ async def get_financial_points(date: str = None, status: str = None, period_type
             query["status"] = status
         if period_type:
             query["period_type"] = period_type
+        if category:
+            query["category"] = category
 
-        points = await db.financial_points.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+        points = await db.financial_points.find(query, {"_id": 0}).sort("date", -1).to_list(200)
         return {"financial_points": points}
     except Exception as e:
         logger.error(f"Error fetching financial points: {e}")
@@ -71,21 +80,28 @@ async def get_financial_point(point_id: str):
 
 @router.post("/financial-points")
 async def create_financial_point(data: FinancialPointCreate):
-    """Create a new financial point (by manager)"""
+    """Create a new financial point (by manager). Une réversement distinct est autorisé par catégorie pour la même période."""
     try:
+        if data.category not in VALID_CATEGORIES:
+            raise HTTPException(status_code=400, detail=f"Catégorie invalide: {data.category}")
+
+        # Contrainte d'unicité : (date, period_type, category) — donc 4 reversements
+        # distincts par jour (bar / menu_combos / jeux / locations) sont possibles.
         if data.period_type == "weekly" and data.end_date:
             existing = await db.financial_points.find_one({
                 "period_type": "weekly",
                 "date": data.date,
-                "end_date": data.end_date
+                "end_date": data.end_date,
+                "category": data.category,
             })
         else:
             existing = await db.financial_points.find_one({
                 "date": data.date,
-                "period_type": data.period_type
+                "period_type": data.period_type,
+                "category": data.category,
             })
         if existing:
-            raise HTTPException(status_code=400, detail="Un point financier existe déjà pour cette période")
+            raise HTTPException(status_code=400, detail=f"Un reversement existe déjà pour cette période et cette catégorie ({data.category})")
 
         total = data.cash_amount + data.mobile_amount + data.cheque_amount + data.wallet_amount
 
@@ -94,6 +110,7 @@ async def create_financial_point(data: FinancialPointCreate):
             "date": data.date,
             "end_date": data.end_date,
             "period_type": data.period_type,
+            "category": data.category,
             "cash_amount": data.cash_amount,
             "mobile_amount": data.mobile_amount,
             "cheque_amount": data.cheque_amount,
@@ -117,7 +134,7 @@ async def create_financial_point(data: FinancialPointCreate):
         await db.financial_points.insert_one(point)
         point.pop("_id", None)
 
-        logger.info(f"Financial point created for {data.date} ({data.period_type}) by {data.created_by}")
+        logger.info(f"Financial point created for {data.date} ({data.period_type}/{data.category}) by {data.created_by}")
         return {"success": True, "financial_point": point}
     except HTTPException:
         raise
@@ -486,4 +503,169 @@ async def generate_financial_point_pdf(point_id: str):
         raise
     except Exception as e:
         logger.error(f"Error generating financial point PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# CONSOLIDATED PDF — All categories for a single day or week
+# ============================================================================
+
+CATEGORY_LABELS = {
+    "bar": "Bar",
+    "menu_combos": "Menu & Combos",
+    "jeux": "Jeux",
+    "locations": "Locations & Réservations",
+    "all": "Reversement Global",
+}
+
+CATEGORY_COLORS = {
+    "bar": "#ea580c",
+    "menu_combos": "#16a34a",
+    "jeux": "#2563eb",
+    "locations": "#9333ea",
+    "all": "#64748b",
+}
+
+
+@router.get("/reversements/combined-pdf")
+async def generate_combined_pdf(date: str, period_type: str = "daily", end_date: str = ""):
+    """Generate ONE consolidated PDF listing all category-reversements for a given day/week."""
+    try:
+        # Build query for all category points of this period
+        query = {"period_type": period_type, "date": date}
+        if period_type == "weekly" and end_date:
+            query["end_date"] = end_date
+        points = await db.financial_points.find(query, {"_id": 0}).to_list(20)
+        if not points:
+            raise HTTPException(status_code=404, detail="Aucun reversement pour cette période")
+
+        # Sort by category in our canonical order
+        order = ["bar", "menu_combos", "jeux", "locations", "all"]
+        points.sort(key=lambda p: order.index(p.get("category", "all")) if p.get("category", "all") in order else 99)
+
+        def fmt(v):
+            return f"{(v or 0):,.0f}".replace(",", " ")
+
+        # Period label
+        try:
+            if period_type == "weekly" and end_date:
+                start = datetime.fromisoformat(date).strftime("%d/%m/%Y")
+                end = datetime.fromisoformat(end_date).strftime("%d/%m/%Y")
+                period_label = f"Semaine du {start} au {end}"
+            else:
+                d = datetime.fromisoformat(date).strftime("%d/%m/%Y")
+                period_label = f"Journée du {d}"
+        except Exception:
+            period_label = date
+
+        grand_total = sum(p.get("total_amount", 0) for p in points)
+        grand_cash = sum(p.get("cash_amount", 0) for p in points)
+        grand_mobile = sum(p.get("mobile_amount", 0) for p in points)
+        grand_cheque = sum(p.get("cheque_amount", 0) for p in points)
+        grand_wallet = sum(p.get("wallet_amount", 0) for p in points)
+
+        # Build sections per category
+        sections_html = ""
+        for p in points:
+            cat = p.get("category", "all")
+            label = CATEGORY_LABELS.get(cat, cat)
+            color = CATEGORY_COLORS.get(cat, "#64748b")
+            status_label = "Validé" if p.get("admin_validated") else ("Signé" if p.get("signed") else "En attente")
+
+            rows = ""
+            for lbl, key in [("Espèces", "cash_amount"), ("Mobile Money", "mobile_amount"),
+                             ("Chèque", "cheque_amount"), ("Crédit", "wallet_amount")]:
+                v = p.get(key, 0) or 0
+                if v > 0:
+                    rows += f'<tr><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">{lbl}</td><td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:bold;">{fmt(v)} F</td></tr>'
+
+            sections_html += f"""
+<div style="margin-bottom:18px;border:1px solid {color}30;border-radius:8px;overflow:hidden;">
+  <div style="background:{color};color:white;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;">
+    <strong style="font-size:13pt;">{label}</strong>
+    <span style="background:rgba(255,255,255,0.25);padding:3px 10px;border-radius:12px;font-size:9pt;">{status_label}</span>
+  </div>
+  <div style="padding:10px 14px;background:#fff;">
+    <table style="width:100%;border-collapse:collapse;font-size:10pt;">
+      <tbody>{rows or '<tr><td colspan="2" style="text-align:center;color:#94a3b8;padding:10px;">Aucun montant saisi</td></tr>'}</tbody>
+      <tfoot>
+        <tr style="background:#f8fafc;"><td style="padding:8px 10px;border-top:2px solid {color};font-weight:bold;">Sous-total</td><td style="padding:8px 10px;border-top:2px solid {color};text-align:right;font-weight:bold;color:{color};">{fmt(p.get('total_amount', 0))} F</td></tr>
+      </tfoot>
+    </table>
+    {f'<div style="margin-top:6px;padding:6px 8px;background:#fef3c7;border-radius:4px;font-size:9pt;color:#92400e;"><em>Note : {p.get("notes")}</em></div>' if p.get('notes') else ''}
+    <div style="margin-top:6px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between;">
+      <span>Créé par <strong>{p.get('created_by') or '-'}</strong></span>
+      {f'<span>Signé par <strong>{p.get("signed_by")}</strong></span>' if p.get('signed_by') else ''}
+      {f'<span>Validé par <strong>{p.get("admin_validated_by")}</strong></span>' if p.get('admin_validated_by') else ''}
+    </div>
+  </div>
+</div>
+"""
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  @page {{ size: A4; margin: 15mm; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; margin: 0; padding: 10px; }}
+  .header {{ text-align: center; border-bottom: 3px solid #0891b2; padding-bottom: 12px; margin-bottom: 18px; }}
+  .header h1 {{ color: #0891b2; margin: 0; font-size: 20pt; }}
+  .header h2 {{ color: #64748b; margin: 4px 0 0; font-size: 11pt; font-weight: normal; }}
+  .period {{ background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px; text-align: center; font-size: 12pt; font-weight: bold; color: #0369a1; margin-bottom: 15px; }}
+  .summary {{ background: linear-gradient(135deg,#ecfdf5,#d1fae5); border:2px solid #059669; border-radius: 10px; padding: 14px; margin-bottom: 20px; }}
+  .summary h3 {{ margin: 0 0 8px; color: #065f46; font-size: 12pt; }}
+  .summary table {{ width:100%; border-collapse:collapse; font-size:10pt; }}
+  .summary td {{ padding: 4px 8px; }}
+  .summary .label {{ color:#065f46; }}
+  .summary .value {{ text-align:right; font-weight:bold; color:#047857; }}
+  .grand-total {{ font-size:14pt !important; padding-top:8px !important; border-top:2px solid #059669; }}
+  .footer {{ text-align: center; margin-top: 25px; font-size: 8pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top:8px; }}
+</style></head><body>
+<div class="header">
+  <h1>ESPACE MAXO</h1>
+  <h2>Reversements consolidés — {period_label}</h2>
+</div>
+
+<div class="period">{period_label} · {len(points)} catégorie(s)</div>
+
+<div class="summary">
+  <h3>RÉCAPITULATIF GÉNÉRAL</h3>
+  <table>
+    <tr><td class="label">Total Espèces</td><td class="value">{fmt(grand_cash)} F</td></tr>
+    <tr><td class="label">Total Mobile Money</td><td class="value">{fmt(grand_mobile)} F</td></tr>
+    <tr><td class="label">Total Chèque</td><td class="value">{fmt(grand_cheque)} F</td></tr>
+    <tr><td class="label">Total Crédit</td><td class="value">{fmt(grand_wallet)} F</td></tr>
+    <tr><td class="label grand-total">TOTAL GÉNÉRAL</td><td class="value grand-total">{fmt(grand_total)} F</td></tr>
+  </table>
+</div>
+
+<h3 style="color:#0891b2;border-bottom:1px solid #cbd5e1;padding-bottom:4px;">Détail par catégorie</h3>
+{sections_html}
+
+<div class="footer">
+  Document généré automatiquement · Espace Maxo - Caisse Pro<br/>
+  {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}
+</div>
+</body></html>"""
+
+        pdf_buffer = io.BytesIO()
+        try:
+            from weasyprint import HTML
+            HTML(string=html).write_pdf(pdf_buffer)
+        except ImportError:
+            pdf_buffer.write(html.encode('utf-8'))
+            pdf_buffer.seek(0)
+            return StreamingResponse(
+                pdf_buffer, media_type="text/html",
+                headers={"Content-Disposition": f'inline; filename="reversements_{date}.html"'}
+            )
+
+        pdf_buffer.seek(0)
+        return StreamingResponse(
+            pdf_buffer, media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="reversements_{date}.pdf"'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating combined PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))

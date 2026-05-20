@@ -37,6 +37,26 @@ const COINS = [
 ];
 const ALL_DENOMS = [...BILLS, ...COINS];
 
+// 4 catégories de reversements (1 par jour, indépendantes)
+const CATEGORIES = [
+  { value: "bar", label: "Bar", color: "orange", emoji: "Bar" },
+  { value: "menu_combos", label: "Menu & Combos", color: "green", emoji: "Menu" },
+  { value: "jeux", label: "Jeux", color: "blue", emoji: "Jeux" },
+  { value: "locations", label: "Locations & Réservations", color: "purple", emoji: "Locations" },
+];
+const CATEGORY_LABEL = {
+  bar: "Bar", menu_combos: "Menu & Combos", jeux: "Jeux", locations: "Locations & Réservations", all: "Reversement Global (legacy)",
+};
+const CATEGORY_BORDER_CLASS = {
+  bar: "border-orange-500/50 bg-orange-500/5",
+  menu_combos: "border-green-500/50 bg-green-500/5",
+  jeux: "border-blue-500/50 bg-blue-500/5",
+  locations: "border-purple-500/50 bg-purple-500/5",
+};
+const CATEGORY_TEXT_CLASS = {
+  bar: "text-orange-400", menu_combos: "text-green-400", jeux: "text-blue-400", locations: "text-purple-400",
+};
+
 export default function PointFinancierTab({ currentUser }) {
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
@@ -46,6 +66,11 @@ export default function PointFinancierTab({ currentUser }) {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [weekStart, setWeekStart] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
   const [weekEnd, setWeekEnd] = useState(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+
+  // Catégorie actuellement éditée : 1 reversement par catégorie par jour/semaine
+  const [activeCategory, setActiveCategory] = useState("bar");
+  // Map catégorie -> point existant (pour pouvoir afficher les 4 statuts d'un coup)
+  const [pointsByCategory, setPointsByCategory] = useState({});
 
   const [currentPoint, setCurrentPoint] = useState(null);
   const [allPoints, setAllPoints] = useState([]);
@@ -101,15 +126,24 @@ export default function PointFinancierTab({ currentUser }) {
       const res = await axios.get(`${API}/financial-points`, { params });
       const points = res.data.financial_points || [];
       setAllPoints(points);
-      if (points.length > 0) {
-        const p = points[0];
-        setCurrentPoint(p);
+
+      // Indexer par catégorie (1 point max par catégorie)
+      const byCat = {};
+      for (const p of points) {
+        const cat = p.category || "all";
+        if (!byCat[cat]) byCat[cat] = p;
+      }
+      setPointsByCategory(byCat);
+
+      const target = byCat[activeCategory] || null;
+      if (target) {
+        setCurrentPoint(target);
         setForm({
-          cash_amount: p.cash_amount || 0, mobile_amount: p.mobile_amount || 0,
-          cheque_amount: p.cheque_amount || 0, wallet_amount: p.wallet_amount || 0,
-          momo_number: p.momo_number || "", destination: p.destination || "admin", notes: p.notes || ""
+          cash_amount: target.cash_amount || 0, mobile_amount: target.mobile_amount || 0,
+          cheque_amount: target.cheque_amount || 0, wallet_amount: target.wallet_amount || 0,
+          momo_number: target.momo_number || "", destination: target.destination || "admin", notes: target.notes || ""
         });
-        setBillettage(p.billettage || {});
+        setBillettage(target.billettage || {});
       } else {
         setCurrentPoint(null);
         setForm({ cash_amount: 0, mobile_amount: 0, cheque_amount: 0, wallet_amount: 0, momo_number: "", destination: "admin", notes: "" });
@@ -117,7 +151,7 @@ export default function PointFinancierTab({ currentUser }) {
       }
     } catch (err) { console.error("Erreur:", err); }
     finally { setLoading(false); }
-  }, [periodType, selectedDate, weekStart]);
+  }, [periodType, selectedDate, weekStart, activeCategory]);
 
   const fetchRevenue = useCallback(async () => {
     try {
@@ -157,11 +191,13 @@ export default function PointFinancierTab({ currentUser }) {
       } else {
         const r = await axios.post(`${API}/financial-points`, {
           date: periodType === "weekly" ? weekStart : selectedDate,
-          end_date: periodType === "weekly" ? weekEnd : "", period_type: periodType, ...payload,
+          end_date: periodType === "weekly" ? weekEnd : "", period_type: periodType,
+          category: activeCategory,
+          ...payload,
           created_by: currentUser?.full_name || currentUser?.username
         });
         saved = r.data?.financial_point || null;
-        if (!silent) toast.success("Reversement enregistre");
+        if (!silent) toast.success(`Reversement ${CATEGORY_LABEL[activeCategory]} enregistré`);
       }
       // Refresh local state IMMEDIATELY so currentPoint reflects the saved id
       if (saved) {
@@ -306,6 +342,22 @@ export default function PointFinancierTab({ currentUser }) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
+  // PDF consolidé de la journée/semaine — tous les reversements (4 catégories) sur un seul document.
+  const downloadCombinedPdf = () => {
+    const dDate = periodType === "weekly" ? weekStart : selectedDate;
+    if (Object.keys(pointsByCategory).length === 0) { toast.error("Aucun reversement à exporter"); return; }
+    const url = `${API}/reversements/combined-pdf?date=${dDate}&period_type=${periodType}${periodType === "weekly" ? `&end_date=${weekEnd}` : ""}`;
+    const a = document.createElement('a'); a.href = url;
+    a.setAttribute('download', `reversements_${dDate}.pdf`); a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+  const viewCombinedPdf = () => {
+    const dDate = periodType === "weekly" ? weekStart : selectedDate;
+    if (Object.keys(pointsByCategory).length === 0) { toast.error("Aucun reversement à voir"); return; }
+    const url = `${API}/reversements/combined-pdf?date=${dDate}&period_type=${periodType}${periodType === "weekly" ? `&end_date=${weekEnd}` : ""}`;
+    setPdfUrl(url); setShowPdfViewer(true);
+  };
+
   const periodLabel = periodType === "weekly"
     ? `Semaine du ${format(new Date(weekStart), "dd MMM", { locale: fr })} au ${format(new Date(weekEnd), "dd MMM yyyy", { locale: fr })}`
     : `Journee du ${format(new Date(selectedDate), "dd MMMM yyyy", { locale: fr })}`;
@@ -391,6 +443,70 @@ export default function PointFinancierTab({ currentUser }) {
   const destLabel = (d) => d === "banque" ? "Verse a la banque" : "Remis a l'administrateur";
   const destIcon = (d) => d === "banque" ? Building2 : UserCheck;
 
+  // === SÉLECTEUR DE CATÉGORIE (réutilisable dans toutes les vues) ===
+  const hasAnyPoint = Object.keys(pointsByCategory).length > 0;
+  const CategorySelector = (
+    <Card className="bg-slate-800/50 border-slate-700" data-testid="fp-category-selector">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-white text-base flex items-center gap-2 flex-wrap">
+          <span>Catégorie du reversement</span>
+          <span className="text-slate-500 text-xs font-normal hidden sm:inline">— 1 reversement distinct par catégorie pour la même période</span>
+          <div className="ml-auto flex gap-2">
+            {hasAnyPoint && (
+              <>
+                <Button size="sm" variant="outline" className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 h-7 text-xs" onClick={viewCombinedPdf} data-testid="fp-combined-pdf-view">
+                  <Eye className="w-3 h-3 mr-1" /> PDF du jour
+                </Button>
+                <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 h-7 text-xs" onClick={downloadCombinedPdf} data-testid="fp-combined-pdf-download">
+                  <Download className="w-3 h-3 mr-1" /> Télécharger
+                </Button>
+              </>
+            )}
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {CATEGORIES.map((c) => {
+            const p = pointsByCategory[c.value];
+            const isActive = activeCategory === c.value;
+            const statusBadge = p ? (
+              p.admin_validated
+                ? <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]"><CheckCircle className="w-2.5 h-2.5 mr-1" /> Validé</Badge>
+                : p.signed
+                ? <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px]"><ShieldCheck className="w-2.5 h-2.5 mr-1" /> Signé</Badge>
+                : <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]"><Clock className="w-2.5 h-2.5 mr-1" /> Brouillon</Badge>
+            ) : (
+              <Badge className="bg-slate-700/40 text-slate-400 border-slate-600 text-[10px]">Non saisi</Badge>
+            );
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setActiveCategory(c.value)}
+                className={`relative text-left p-3 rounded-lg border-2 transition-all ${isActive ? `${CATEGORY_BORDER_CLASS[c.value]} ring-2 ring-offset-2 ring-offset-slate-900 ring-${c.color}-500/40` : "border-slate-700 bg-slate-800/30 hover:border-slate-600"}`}
+                data-testid={`fp-cat-${c.value}`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className={`font-semibold text-sm ${isActive ? CATEGORY_TEXT_CLASS[c.value] : "text-slate-300"}`}>{c.label}</span>
+                  {statusBadge}
+                </div>
+                <p className={`text-lg font-bold ${isActive ? CATEGORY_TEXT_CLASS[c.value] : "text-slate-200"}`}>
+                  {p ? `${formatPrice(p.total_amount)} F` : "—"}
+                </p>
+                {p?.signed_by && <p className="text-[10px] text-slate-500 mt-1 truncate">Signé par {p.signed_by}</p>}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-slate-400 text-xs mt-3 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-cyan-400" />
+          Vue active : <strong className={CATEGORY_TEXT_CLASS[activeCategory]}>{CATEGORY_LABEL[activeCategory]}</strong>. Cliquez sur une autre catégorie pour basculer.
+        </p>
+      </CardContent>
+    </Card>
+  );
+
   // ===== LOCKED VIEW =====
   if (isLocked && currentPoint) {
     const DestIcon = destIcon(currentPoint.destination);
@@ -399,6 +515,7 @@ export default function PointFinancierTab({ currentUser }) {
         <PendingValidationsBanner />
         <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Document verrouille" />
         <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
+        {CategorySelector}
         <Card className="bg-emerald-900/20 border-emerald-500/40">
           <CardContent className="p-5">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -460,6 +577,7 @@ export default function PointFinancierTab({ currentUser }) {
         <PendingValidationsBanner />
         <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="En attente de validation administrateur" />
         <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
+        {CategorySelector}
         <Card className="bg-blue-900/20 border-blue-500/40"><CardContent className="p-5">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3">
@@ -503,14 +621,21 @@ export default function PointFinancierTab({ currentUser }) {
   return (
     <div className="space-y-6" data-testid="point-financier-tab">
       <PendingValidationsBanner />
-      <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Reversement des recettes par mode de paiement" />
+      <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Reversement des recettes par catégorie (Bar / Menu / Jeux / Locations)" />
       <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
 
+      {CategorySelector}
+
       {currentPoint && (
-        <Card className="bg-amber-900/20 border-amber-500/40"><CardContent className="p-4 flex items-center gap-3">
-          <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30"><Clock className="w-3 h-3 mr-1" /> Brouillon</Badge>
-          <span className="text-slate-300 text-sm">Cree par <span className="text-white font-medium">{currentPoint.created_by}</span></span>
-        </CardContent></Card>
+        <Card className={`bg-slate-800/40 border ${CATEGORY_BORDER_CLASS[activeCategory]}`}>
+          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+            <Badge className={`bg-slate-900/40 ${CATEGORY_TEXT_CLASS[activeCategory]} text-xs`}>
+              {CATEGORY_LABEL[activeCategory]}
+            </Badge>
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30"><Clock className="w-3 h-3 mr-1" /> Brouillon</Badge>
+            <span className="text-slate-300 text-sm">Cree par <span className="text-white font-medium">{currentPoint.created_by}</span></span>
+          </CardContent>
+        </Card>
       )}
 
       {/* Destination du versement */}
