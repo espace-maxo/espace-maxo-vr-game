@@ -760,3 +760,107 @@ async def delete_point_validation(date: str, period_type: str = "daily", end_dat
     except Exception as e:
         logger.error(f"Error deleting point validation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# REVERSEMENT AUTO-FILL — calcul automatique par catégorie & moyen de paiement
+# ============================================================================
+
+def _norm_payment_method(method: str) -> str:
+    """Normalize payment_method values to the 4 financial-point buckets."""
+    if not method:
+        return "cash"
+    m = method.lower().replace(" ", "_").replace("-", "_")
+    if m in ("cash", "especes", "espece", "espèces", "espèce", "liquide"):
+        return "cash"
+    if m in ("mobile", "mobile_money", "mtn", "orange", "momo", "om", "moov"):
+        return "mobile"
+    if m in ("cheque", "chèque", "check"):
+        return "cheque"
+    if m in ("wallet", "credit", "crédit", "compte_courant", "virement"):
+        return "wallet"
+    return "cash"  # default safe fallback
+
+
+@router.get("/reversements/auto-fill")
+async def reversement_auto_fill(date: str, period_type: str = "daily", end_date: str = ""):
+    """Compute the expected reversement per category × payment method for the period.
+
+    Returns a payload usable by the frontend to pre-fill the reversement form
+    while still allowing the Gérante to edit each value.
+    """
+    try:
+        # Period bounds
+        start = date
+        end = end_date if (period_type == "weekly" and end_date) else date
+        end_filter = end + "T23:59:59"
+
+        # Collect validated invoices in the period
+        invoices = await db.invoices.find({
+            "validation_status": "validated",
+            "created_at": {"$gte": start, "$lte": end_filter + "Z"},
+        }, {"_id": 0}).to_list(5000)
+
+        def _empty_bucket():
+            return {"cash": 0, "mobile": 0, "cheque": 0, "wallet": 0, "total": 0}
+
+        result = {
+            "bar": _empty_bucket(),
+            "menu_combos": _empty_bucket(),
+            "jeux": _empty_bucket(),
+            "locations": _empty_bucket(),
+        }
+
+        for inv in invoices:
+            pm = _norm_payment_method(inv.get("payment_method"))
+            tbd = inv.get("totals_by_department") or {}
+            if not tbd:
+                # fallback : reconstruct from items
+                tbd = {}
+                for it in (inv.get("items") or []):
+                    dep = (it.get("department") or "autres")
+                    amt = (it.get("price", 0) or 0) * (it.get("quantity", 1) or 0)
+                    tbd[dep] = tbd.get(dep, 0) + amt
+
+            cat_totals = {
+                "bar": tbd.get("bar", 0),
+                "menu_combos": tbd.get("salle_jardin", 0) + tbd.get("jardin", 0) + tbd.get("accompagnements", 0),
+                "jeux": tbd.get("jeux", 0),
+            }
+            for cat, amt in cat_totals.items():
+                if amt > 0:
+                    result[cat][pm] += amt
+                    result[cat]["total"] += amt
+
+        # Locations & Réservations : on prend les réservations payées (settled_at) OU
+        # les réservations de la période non annulées (rental_amount perçu).
+        loc_query = {
+            "status": {"$nin": ["cancelled", "annule", "annulee"]},
+            "$or": [
+                {"reservation_date": {"$gte": start, "$lte": end}},
+                {"settled_at": {"$gte": start, "$lte": end_filter + "Z"}},
+            ],
+        }
+        locations = await db.location_reservations.find(loc_query, {"_id": 0}).to_list(2000)
+        seen = set()
+        for loc in locations:
+            lid = loc.get("id")
+            if lid in seen:
+                continue
+            seen.add(lid)
+            amt = loc.get("rental_amount", 0) or 0
+            # Pour les locations, on n'a pas de payment_method enregistré explicitement.
+            # Convention : on met tout en cash par défaut. La Gérante pourra reventiler.
+            pm = _norm_payment_method(loc.get("payment_method"))
+            result["locations"][pm] += amt
+            result["locations"]["total"] += amt
+
+        return {
+            "date": date,
+            "end_date": end_date,
+            "period_type": period_type,
+            "categories": result,
+        }
+    except Exception as e:
+        logger.error(f"Error computing reversement auto-fill: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -71,6 +71,8 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
   const [activeCategory, setActiveCategory] = useState("bar");
   // Map catégorie -> point existant (pour pouvoir afficher les 4 statuts d'un coup)
   const [pointsByCategory, setPointsByCategory] = useState({});
+  // Snapshot des montants pré-remplis automatiquement (pour afficher l'écart si éditée)
+  const [autoFillSnapshot, setAutoFillSnapshot] = useState(null);
 
   const [currentPoint, setCurrentPoint] = useState(null);
   const [allPoints, setAllPoints] = useState([]);
@@ -163,8 +165,34 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
         });
         setBillettage(target.billettage || {});
       } else {
+        // === Pas de point existant : on tente le pré-remplissage automatique
+        // à partir des ventes validées du jour/semaine. La Gérante peut éditer librement.
         setCurrentPoint(null);
-        setForm({ cash_amount: 0, mobile_amount: 0, cheque_amount: 0, wallet_amount: 0, momo_number: "", destination: "admin", notes: "" });
+        try {
+          const autoRes = await axios.get(`${API}/reversements/auto-fill`, {
+            params: {
+              date: periodType === "weekly" ? weekStart : selectedDate,
+              period_type: periodType === "weekly" ? "weekly" : "daily",
+              ...(periodType === "weekly" ? { end_date: weekEnd } : {}),
+            }
+          });
+          const buckets = autoRes.data?.categories?.[activeCategory] || { cash: 0, mobile: 0, cheque: 0, wallet: 0 };
+          const prefilled = {
+            cash_amount: buckets.cash || 0,
+            mobile_amount: buckets.mobile || 0,
+            cheque_amount: buckets.cheque || 0,
+            wallet_amount: buckets.wallet || 0,
+            momo_number: "",
+            destination: "admin",
+            notes: "",
+          };
+          setForm(prefilled);
+          // Mémoriser la valeur calculée pour pouvoir afficher l'écart si l'utilisateur édite
+          setAutoFillSnapshot({ category: activeCategory, ...buckets });
+        } catch {
+          setForm({ cash_amount: 0, mobile_amount: 0, cheque_amount: 0, wallet_amount: 0, momo_number: "", destination: "admin", notes: "" });
+          setAutoFillSnapshot(null);
+        }
         setBillettage({});
       }
     } catch (err) { console.error("Erreur:", err); }
@@ -443,11 +471,33 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
   };
 
   const amountFields = [
-    { key: "cash_amount", label: "Especes", icon: Banknote, color: "green", revenueKey: "cash" },
-    { key: "mobile_amount", label: "Mobile Money", icon: Smartphone, color: "orange", revenueKey: "mobile" },
-    { key: "cheque_amount", label: "Cheque", icon: FileText, color: "purple", revenueKey: "cheque" },
-    { key: "wallet_amount", label: "Credit", icon: Wallet, color: "amber", revenueKey: "wallet" },
+    { key: "cash_amount", label: "Especes", icon: Banknote, color: "green", revenueKey: "cash", autoKey: "cash" },
+    { key: "mobile_amount", label: "Mobile Money", icon: Smartphone, color: "orange", revenueKey: "mobile", autoKey: "mobile" },
+    { key: "cheque_amount", label: "Cheque", icon: FileText, color: "purple", revenueKey: "cheque", autoKey: "cheque" },
+    { key: "wallet_amount", label: "Credit", icon: Wallet, color: "amber", revenueKey: "wallet", autoKey: "wallet" },
   ];
+
+  // Helper : remet la valeur calculée automatiquement dans un champ
+  const resetAutoFill = (fieldKey, autoKey) => {
+    if (!autoFillSnapshot) return;
+    setForm(p => ({ ...p, [fieldKey]: autoFillSnapshot[autoKey] || 0 }));
+  };
+  const resetAllAutoFill = () => {
+    if (!autoFillSnapshot) return;
+    setForm(p => ({
+      ...p,
+      cash_amount: autoFillSnapshot.cash || 0,
+      mobile_amount: autoFillSnapshot.mobile || 0,
+      cheque_amount: autoFillSnapshot.cheque || 0,
+      wallet_amount: autoFillSnapshot.wallet || 0,
+    }));
+    toast.success("Valeurs réinitialisées à partir des ventes du jour");
+  };
+  // Indique si le champ a été modifié par rapport au calcul automatique
+  const isFieldEdited = (fieldKey, autoKey) => {
+    if (!autoFillSnapshot || currentPoint) return false;
+    return Math.abs(parseFloat(form[fieldKey] || 0) - (autoFillSnapshot[autoKey] || 0)) > 0.5;
+  };
 
   const comparison = amountFields.map(f => {
     const reversed = currentPoint ? (currentPoint[f.key] || 0) : parseFloat(form[f.key] || 0);
@@ -721,11 +771,39 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
 
       {/* Saisie */}
       <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader><CardTitle className="text-white flex items-center gap-2"><Banknote className="w-5 h-5 text-green-400" />Saisie du Reversement</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2 flex-wrap">
+            <Banknote className="w-5 h-5 text-green-400" />Saisie du Reversement
+            {autoFillSnapshot && !currentPoint && autoFillSnapshot.total > 0 && (
+              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-[10px] ml-2">
+                Auto-calculé depuis les ventes
+              </Badge>
+            )}
+            {autoFillSnapshot && !currentPoint && autoFillSnapshot.total > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-cyan-300 hover:bg-cyan-500/10 h-7 text-xs"
+                onClick={resetAllAutoFill}
+                data-testid="fp-reset-autofill"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" /> Réinitialiser tout
+              </Button>
+            )}
+          </CardTitle>
+          {autoFillSnapshot && !currentPoint && autoFillSnapshot.total > 0 && (
+            <p className="text-cyan-300/80 text-xs mt-1">
+              Les montants sont pré-remplis à partir des ventes <strong>{CATEGORY_LABEL[activeCategory]}</strong> de la période ({formatPrice(autoFillSnapshot.total)} F). Modifiez librement si différent.
+            </p>
+          )}
+        </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
-            {amountFields.map(({ key, label, icon: Icon, color }) => (
-              <div key={key} className={`bg-${color}-900/10 border border-${color}-500/20 rounded-lg p-4`}>
+            {amountFields.map(({ key, label, icon: Icon, color, autoKey }) => {
+              const edited = isFieldEdited(key, autoKey);
+              const autoVal = autoFillSnapshot?.[autoKey] || 0;
+              return (
+              <div key={key} className={`bg-${color}-900/10 border ${edited ? 'border-amber-500/50' : `border-${color}-500/20`} rounded-lg p-4 transition-colors`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-full bg-${color}-500/20 flex items-center justify-center`}><Icon className={`w-4 h-4 text-${color}-400`} /></div>
@@ -744,6 +822,29 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
                     className="bg-slate-900/50 border-slate-600 text-white text-lg font-bold pr-8 disabled:opacity-50" placeholder="0" />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">F</span>
                 </div>
+                {/* Indicateur auto-calcul */}
+                {autoFillSnapshot && !currentPoint && (autoVal > 0 || edited) && (
+                  <div className="mt-2 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">
+                      Calculé : <strong className="text-cyan-300">{formatPrice(autoVal)} F</strong>
+                      {edited && (
+                        <span className="ml-2 text-amber-300">
+                          ({parseFloat(form[key] || 0) > autoVal ? '+' : ''}{formatPrice(parseFloat(form[key] || 0) - autoVal)} F)
+                        </span>
+                      )}
+                    </span>
+                    {edited && !formDisabled && (
+                      <button
+                        type="button"
+                        onClick={() => resetAutoFill(key, autoKey)}
+                        className="text-cyan-300 hover:text-cyan-200 text-[10px] underline"
+                        data-testid={`fp-reset-${key}`}
+                      >
+                        Restaurer
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Billettage under Especes */}
                 {key === "cash_amount" && showBillettage && !formDisabled && (
@@ -806,7 +907,8 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-4">
