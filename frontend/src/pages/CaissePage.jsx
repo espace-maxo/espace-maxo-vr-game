@@ -5872,7 +5872,7 @@ _Gérante - Espace Maxo_
               </TabsContent>
 
               <TabsContent value="point-financier">
-                <PointFinancierTab currentUser={currentUser} />
+                <PointFinancierTab currentUser={currentUser} onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
               </TabsContent>
 
               <TabsContent value="point-history">

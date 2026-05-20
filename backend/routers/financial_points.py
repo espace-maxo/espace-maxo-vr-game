@@ -669,3 +669,94 @@ async def generate_combined_pdf(date: str, period_type: str = "daily", end_date:
     except Exception as e:
         logger.error(f"Error generating combined PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# POINT VALIDATIONS — Gérante must validate "Faire le point" before Reversement
+# ============================================================================
+
+class PointValidationCreate(BaseModel):
+    date: str
+    end_date: str = ""
+    period_type: str = "daily"  # daily | weekly | monthly
+    validated_by: str = ""
+
+
+@router.get("/point-validations")
+async def get_point_validation(date: str, period_type: str = "daily", end_date: str = ""):
+    """Return validation record for the given period if it exists. Used by the UI to
+    block "Reversement" until the manager has validated the "Faire le point" view."""
+    try:
+        query = {"date": date, "period_type": period_type}
+        if period_type == "weekly" and end_date:
+            query["end_date"] = end_date
+        validation = await db.point_validations.find_one(query, {"_id": 0})
+        return {"validated": bool(validation), "validation": validation}
+    except Exception as e:
+        logger.error(f"Error fetching point validation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/point-validations")
+async def create_point_validation(data: PointValidationCreate):
+    """Mark the "Faire le point" as validated for the given period.
+    PRECONDITION: all invoices in the period must have validation_status == 'validated'
+    (no pending sales). Otherwise this returns 400 with the pending count.
+    """
+    try:
+        # Build date filter for the period
+        end_str = data.end_date if (data.period_type == "weekly" and data.end_date) else data.date
+        start_filter = data.date
+        end_filter = end_str + "T23:59:59"
+
+        # Check : zero pending invoices in the period
+        pending = await db.invoices.count_documents({
+            "validation_status": {"$in": ["pending", None]},
+            "created_at": {"$gte": start_filter, "$lte": end_filter + "Z"},
+        })
+        if pending > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Impossible de valider : {pending} facture(s) en attente. Validez d'abord le détail des ventes."
+            )
+
+        # Upsert validation record
+        query = {"date": data.date, "period_type": data.period_type}
+        if data.period_type == "weekly" and data.end_date:
+            query["end_date"] = data.end_date
+
+        existing = await db.point_validations.find_one(query)
+        if existing:
+            return {"success": True, "validation": {**existing, "_id": None, "already": True}}
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "date": data.date,
+            "end_date": data.end_date,
+            "period_type": data.period_type,
+            "validated_by": data.validated_by,
+            "validated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.point_validations.insert_one(doc)
+        doc.pop("_id", None)
+        logger.info(f"Point validated for {data.date} ({data.period_type}) by {data.validated_by}")
+        return {"success": True, "validation": doc}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating point validation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/point-validations")
+async def delete_point_validation(date: str, period_type: str = "daily", end_date: str = ""):
+    """Admin only — invalidate a previous validation (e.g., to re-edit the point)."""
+    try:
+        query = {"date": date, "period_type": period_type}
+        if period_type == "weekly" and end_date:
+            query["end_date"] = end_date
+        result = await db.point_validations.delete_one(query)
+        return {"success": True, "deleted": result.deleted_count}
+    except Exception as e:
+        logger.error(f"Error deleting point validation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

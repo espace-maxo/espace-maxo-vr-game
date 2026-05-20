@@ -4,7 +4,7 @@ import {
   Banknote, Smartphone, FileText, Wallet,
   RefreshCw, Save, CheckCircle, X, AlertCircle, Lock, Calendar, Clock,
   Download, Eye, Unlock, ShieldCheck, TrendingUp, TrendingDown, ArrowUpDown, ChevronDown, ChevronUp,
-  Building2, UserCheck
+  Building2, UserCheck, ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,7 @@ const CATEGORY_TEXT_CLASS = {
   bar: "text-orange-400", menu_combos: "text-green-400", jeux: "text-blue-400", locations: "text-purple-400",
 };
 
-export default function PointFinancierTab({ currentUser }) {
+export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
   const canEdit = isAdmin || isManager;
@@ -97,18 +97,36 @@ export default function PointFinancierTab({ currentUser }) {
   const fetchPendingValidations = useCallback(async () => {
     if (!isAdmin) return;
     try {
-      // Récupère tous les points et filtre côté client — plus robuste que de se reposer
-      // sur le seul statut "signed" (certains anciens points peuvent ne pas l'avoir).
       const res = await axios.get(`${API}/financial-points`);
       const all = res.data.financial_points || [];
       const pending = all.filter(p => p.signed === true && p.admin_validated !== true);
-      // Tri par date décroissante pour voir les plus récents en premier
       pending.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
       setPendingValidations(pending);
     } catch {
       setPendingValidations([]);
     }
   }, [isAdmin]);
+
+  // Validation préalable du "Faire le point" pour la période courante.
+  // Sans cette validation, la Gérante ne peut PAS éditer le Reversement.
+  const [pointValidation, setPointValidation] = useState(null);
+  const [pointValidationLoading, setPointValidationLoading] = useState(true);
+  const fetchPointValidation = useCallback(async () => {
+    setPointValidationLoading(true);
+    try {
+      const dateKey = periodType === "weekly" ? weekStart : selectedDate;
+      const r = await axios.get(`${API}/point-validations`, { params: {
+        date: dateKey,
+        period_type: periodType === "weekly" ? "weekly" : "daily",
+        ...(periodType === "weekly" ? { end_date: weekEnd } : {}),
+      } });
+      setPointValidation(r.data?.validated ? r.data.validation : null);
+    } catch {
+      setPointValidation(null);
+    } finally {
+      setPointValidationLoading(false);
+    }
+  }, [periodType, selectedDate, weekStart, weekEnd]);
 
   const computedTotal = parseFloat(form.cash_amount || 0) + parseFloat(form.mobile_amount || 0) +
     parseFloat(form.cheque_amount || 0) + parseFloat(form.wallet_amount || 0);
@@ -161,7 +179,7 @@ export default function PointFinancierTab({ currentUser }) {
     } catch { setRevenueData(null); }
   }, [periodType, selectedDate, weekStart]);
 
-  useEffect(() => { fetchPoints(); fetchRevenue(); fetchPendingValidations(); }, [fetchPoints, fetchRevenue, fetchPendingValidations]);
+  useEffect(() => { fetchPoints(); fetchRevenue(); fetchPendingValidations(); fetchPointValidation(); }, [fetchPoints, fetchRevenue, fetchPendingValidations, fetchPointValidation]);
 
   const handleWeekChange = (dir) => {
     const n = dir === "next" ? addWeeks(new Date(weekStart), 1) : subWeeks(new Date(weekStart), 1);
@@ -506,6 +524,44 @@ export default function PointFinancierTab({ currentUser }) {
       </CardContent>
     </Card>
   );
+
+  // ===== BLOCAGE : Gérante doit valider "Faire le point" avant Reversement =====
+  // Ne s'applique PAS à l'Admin (bypass), et seulement si aucun reversement n'a encore été créé.
+  const needsValidation = !isAdmin && !pointValidation && Object.keys(pointsByCategory).length === 0;
+  if (!pointValidationLoading && needsValidation) {
+    return (
+      <div className="space-y-6" data-testid="point-financier-tab">
+        <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Validation préalable requise" />
+        <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
+
+        <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-2 border-amber-500/50">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="w-16 h-16 mx-auto bg-amber-500/20 rounded-full flex items-center justify-center">
+              <Lock className="w-8 h-8 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-amber-300 mb-2">Reversement bloqué</h3>
+              <p className="text-slate-300 max-w-lg mx-auto">
+                Vous devez d'abord <strong className="text-white">valider "Faire le point"</strong> de cette période avant de pouvoir saisir un reversement.
+              </p>
+              <p className="text-slate-400 text-sm mt-2">
+                Cette étape garantit que toutes les ventes ont été contrôlées avant la remise des recettes.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+              <Button
+                onClick={() => onGotoHebdo && onGotoHebdo()}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white"
+                data-testid="reversement-goto-hebdo-btn"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" /> Aller à "Faire le point"
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // ===== LOCKED VIEW =====
   if (isLocked && currentPoint) {
