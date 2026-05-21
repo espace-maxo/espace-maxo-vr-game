@@ -43,3 +43,26 @@ class TestReversementAutoFill:
         # All should be zero
         for cat in r.json()["categories"].values():
             assert cat["total"] == 0
+
+    def test_location_department_routed_to_locations_category(self):
+        """REGRESSION : les factures avec totals_by_department.location doivent
+        alimenter la catégorie 'locations' (pas être perdues)."""
+        # Use a date with known location invoice (#EM-20260520-0005 location=25000)
+        r = requests.get(f"{BASE_URL}/api/reversements/auto-fill", params={
+            "date": "2026-05-20", "period_type": "daily"
+        })
+        d = r.json()
+        # Au moins la catégorie locations ne doit pas être 0 si tbd.location > 0
+        # (la facture 0005 a 25000 en location, payée par carte → cheque bucket)
+        assert d["categories"]["locations"]["total"] > 0, \
+            f"Location must be ventilated, got {d['categories']['locations']}"
+
+    def test_card_payment_routed_to_cheque(self):
+        """REGRESSION : pm='card' (carte bancaire) doit aller dans le bucket cheque."""
+        r = requests.get(f"{BASE_URL}/api/reversements/auto-fill", params={
+            "date": "2026-05-20", "period_type": "daily"
+        })
+        # The 25000 location invoice is paid by card → must be in cheque
+        loc = r.json()["categories"]["locations"]
+        assert loc["cheque"] > 0, f"Card payment must go to cheque, got {loc}"
+        assert loc["cash"] == 0, f"Card must NOT go to cash, got {loc}"

@@ -775,7 +775,8 @@ def _norm_payment_method(method: str) -> str:
         return "cash"
     if m in ("mobile", "mobile_money", "mtn", "orange", "momo", "om", "moov"):
         return "mobile"
-    if m in ("cheque", "chèque", "check"):
+    if m in ("cheque", "chèque", "check", "card", "carte", "carte_bancaire", "cb", "visa", "mastercard"):
+        # Carte bancaire = paiement électronique, classé avec chèque (non-espèces, non-mobile)
         return "cheque"
     if m in ("wallet", "credit", "crédit", "compte_courant", "virement"):
         return "wallet"
@@ -822,10 +823,15 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
                     amt = (it.get("price", 0) or 0) * (it.get("quantity", 1) or 0)
                     tbd[dep] = tbd.get(dep, 0) + amt
 
+            # Cartographie : totals_by_department → 4 buckets métier
+            # - autres : on l'inclut dans "locations" pour ne PAS perdre l'argent
+            #   (utilisateur a choisi 4 catégories, autres reste minoritaire et logique
+            #   à mettre avec les ventes diverses/location)
             cat_totals = {
                 "bar": tbd.get("bar", 0),
                 "menu_combos": tbd.get("salle_jardin", 0) + tbd.get("jardin", 0) + tbd.get("accompagnements", 0),
                 "jeux": tbd.get("jeux", 0),
+                "locations": tbd.get("location", 0) + tbd.get("autres", 0),
             }
             for cat, amt in cat_totals.items():
                 if amt > 0:
