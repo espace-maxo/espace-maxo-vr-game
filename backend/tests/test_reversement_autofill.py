@@ -62,7 +62,6 @@ class TestReversementAutoFill:
         r = requests.get(f"{BASE_URL}/api/reversements/auto-fill", params={
             "date": "2026-05-20", "period_type": "daily"
         })
-        # The 25000 location invoice is paid by card → must be in cheque
+        # La facture EM-20260520-0005 location=25000 payée par card → cheque bucket
         loc = r.json()["categories"]["locations"]
-        assert loc["cheque"] > 0, f"Card payment must go to cheque, got {loc}"
-        assert loc["cash"] == 0, f"Card must NOT go to cash, got {loc}"
+        assert loc["cheque"] >= 25000, f"Card payment must go to cheque (>=25000), got {loc}"

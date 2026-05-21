@@ -796,9 +796,13 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
         end = end_date if (period_type == "weekly" and end_date) else date
         end_filter = end + "T23:59:59"
 
-        # Collect validated invoices in the period
+        # Collect all non-cancelled invoices in the period.
+        # NB : on inclut désormais aussi les factures `pending` car l'émission du bon
+        # client génère désormais directement des factures validées. Les anciennes
+        # factures `pending` antérieures au déploiement doivent quand même être
+        # comptées dans la ventilation auto pour rester cohérentes.
         invoices = await db.invoices.find({
-            "validation_status": "validated",
+            "validation_status": {"$ne": "cancelled"},
             "created_at": {"$gte": start, "$lte": end_filter + "Z"},
         }, {"_id": 0}).to_list(5000)
 
