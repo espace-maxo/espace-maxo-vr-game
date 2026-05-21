@@ -128,7 +128,9 @@ async def create_financial_point(data: FinancialPointCreate):
             "signed_at": None,
             "billettage": data.billettage,
             "momo_number": data.momo_number,
-            "destination": data.destination
+            "destination": data.destination,
+            "adjustments": [],
+            "auto_fill_snapshot": None,
         }
 
         await db.financial_points.insert_one(point)
@@ -145,7 +147,12 @@ async def create_financial_point(data: FinancialPointCreate):
 
 @router.put("/financial-points/{point_id}")
 async def update_financial_point(point_id: str, data: dict = Body(...)):
-    """Update a financial point (only if not signed, or by admin)"""
+    """Update a financial point (only if not signed, or by admin).
+
+    Si `_adjustments` est présent dans le body, c'est une liste d'ajustements
+    avec motif clair : [{field, old_value, new_value, reason, adjusted_by}].
+    Ils sont ajoutés à `adjustments` (historique) pour traçabilité.
+    """
     try:
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
@@ -154,6 +161,29 @@ async def update_financial_point(point_id: str, data: dict = Body(...)):
         is_admin = data.pop("is_admin", False)
         if point.get("signed") and not is_admin:
             raise HTTPException(status_code=403, detail="Ce point financier est signé et ne peut être modifié que par l'administrateur")
+
+        # Extraction des ajustements explicites (avec motif) — ajoutés à l'historique
+        new_adjustments = data.pop("_adjustments", None)
+        if new_adjustments and isinstance(new_adjustments, list):
+            existing_adj = point.get("adjustments", []) or []
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for adj in new_adjustments:
+                if not isinstance(adj, dict):
+                    continue
+                field = adj.get("field")
+                reason = (adj.get("reason") or "").strip()
+                if not field or not reason:
+                    continue
+                existing_adj.append({
+                    "id": str(uuid.uuid4()),
+                    "field": field,
+                    "old_value": adj.get("old_value"),
+                    "new_value": adj.get("new_value"),
+                    "reason": reason,
+                    "adjusted_by": adj.get("adjusted_by") or "",
+                    "adjusted_at": now_iso,
+                })
+            data["adjustments"] = existing_adj
 
         if any(key in data for key in ["cash_amount", "mobile_amount", "cheque_amount", "wallet_amount"]):
             cash = data.get("cash_amount", point.get("cash_amount", 0))
@@ -176,6 +206,85 @@ async def update_financial_point(point_id: str, data: dict = Body(...)):
     except Exception as e:
         logger.error(f"Error updating financial point: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/financial-points/{point_id}/adjust")
+async def adjust_financial_point(point_id: str, data: dict = Body(...)):
+    """Ajuste une valeur d'un point financier avec motif clair (traçabilité obligatoire).
+
+    Body : {field, new_value, reason, adjusted_by}
+    - field : "cash_amount" | "mobile_amount" | "cheque_amount" | "wallet_amount"
+    - new_value : float (le nouveau montant)
+    - reason : motif clair de l'ajustement (obligatoire, min 3 caractères)
+    - adjusted_by : nom de la personne qui ajuste
+    """
+    try:
+        field = data.get("field")
+        reason = (data.get("reason") or "").strip()
+        adjusted_by = data.get("adjusted_by") or ""
+
+        allowed_fields = {"cash_amount", "mobile_amount", "cheque_amount", "wallet_amount"}
+        if field not in allowed_fields:
+            raise HTTPException(400, f"Champ ajustable invalide : {field}")
+        if len(reason) < 3:
+            raise HTTPException(400, "Le motif de l'ajustement est obligatoire (min. 3 caractères)")
+
+        try:
+            new_value = float(data.get("new_value", 0))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Valeur d'ajustement invalide")
+
+        point = await db.financial_points.find_one({"id": point_id})
+        if not point:
+            raise HTTPException(404, "Point financier non trouvé")
+
+        if point.get("admin_validated"):
+            raise HTTPException(403, "Ce point est déjà validé par l'administrateur — déverrouillez-le d'abord")
+
+        old_value = float(point.get(field, 0) or 0)
+        if abs(old_value - new_value) < 0.01:
+            return {"success": True, "no_change": True}
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        adj_entry = {
+            "id": str(uuid.uuid4()),
+            "field": field,
+            "old_value": old_value,
+            "new_value": new_value,
+            "reason": reason,
+            "adjusted_by": adjusted_by,
+            "adjusted_at": now_iso,
+        }
+
+        # Recalcule total
+        cash = point.get("cash_amount", 0) or 0
+        mobile = point.get("mobile_amount", 0) or 0
+        cheque = point.get("cheque_amount", 0) or 0
+        wallet = point.get("wallet_amount", 0) or 0
+        new_amounts = {"cash_amount": cash, "mobile_amount": mobile, "cheque_amount": cheque, "wallet_amount": wallet}
+        new_amounts[field] = new_value
+        new_total = sum(new_amounts.values())
+
+        await db.financial_points.update_one(
+            {"id": point_id},
+            {
+                "$set": {
+                    field: new_value,
+                    "total_amount": new_total,
+                    "updated_at": now_iso,
+                },
+                "$push": {"adjustments": adj_entry},
+            },
+        )
+
+        updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
+        logger.info(f"Adjusted {field} on FP {point_id}: {old_value} → {new_value} (reason: {reason})")
+        return {"success": True, "financial_point": updated, "adjustment": adj_entry}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adjusting financial point: {e}")
+        raise HTTPException(500, str(e))
 
 
 @router.post("/financial-points/{point_id}/admin-validate")

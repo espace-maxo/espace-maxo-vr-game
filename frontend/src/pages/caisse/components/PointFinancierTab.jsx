@@ -57,7 +57,7 @@ const CATEGORY_TEXT_CLASS = {
   bar: "text-orange-400", menu_combos: "text-green-400", jeux: "text-blue-400", locations: "text-purple-400",
 };
 
-export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCategory = null }) {
+export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCategory = null, hideBillettage = false }) {
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
   const canEdit = isAdmin || isManager;
@@ -95,6 +95,17 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   const [consentChecked, setConsentChecked] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
+
+  // Tracking des ajustements (motif obligatoire pour chaque modification d'un champ montant)
+  const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
+  // pendingAdjustments: [{field, old, new}] détectés au save
+  const [pendingAdjustments, setPendingAdjustments] = useState([]);
+  // adjustmentReasons: {field: reason}
+  const [adjustmentReasons, setAdjustmentReasons] = useState({});
+  // pendingPayloadRef : sauvegarde du payload à envoyer après confirmation des motifs
+  const [pendingSavePayload, setPendingSavePayload] = useState(null);
+  // Affichage de l'historique des ajustements
+  const [showAdjustmentHistory, setShowAdjustmentHistory] = useState(false);
 
   // Tous les points signés non encore validés (toute période confondue) — pour l'Admin/DG.
   // Évite que la DG "ne voie rien" si le point signé se trouve sur une autre semaine
@@ -224,8 +235,53 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
     toast.success(`Especes mis a jour : ${formatPrice(billettageTotal)} F`);
   };
 
+  // Détecte les ajustements (changements de cash/mobile/cheque/wallet) entre l'état actuel et currentPoint
+  const detectAdjustments = () => {
+    if (!currentPoint) return [];
+    const fields = ["cash_amount", "mobile_amount", "cheque_amount", "wallet_amount"];
+    const adjs = [];
+    for (const f of fields) {
+      const oldV = parseFloat(currentPoint[f] || 0);
+      const newV = parseFloat(form[f] || 0);
+      if (Math.abs(oldV - newV) > 0.5) {
+        adjs.push({ field: f, old: oldV, new: newV });
+      }
+    }
+    return adjs;
+  };
+
+  const FIELD_LABEL = {
+    cash_amount: "Espèces",
+    mobile_amount: "Mobile Money",
+    cheque_amount: "Chèque",
+    wallet_amount: "Crédit",
+  };
+
   const savePoint = async (silent = false) => {
     if (!canEdit) return null;
+    // Si on modifie un point existant, détecter les ajustements et demander motif AVANT save
+    if (currentPoint && !silent) {
+      const adjs = detectAdjustments();
+      if (adjs.length > 0) {
+        // Ouvrir la modale de motifs
+        setPendingAdjustments(adjs);
+        const initReasons = {};
+        adjs.forEach(a => { initReasons[a.field] = ""; });
+        setAdjustmentReasons(initReasons);
+        setPendingSavePayload({
+          cash_amount: parseFloat(form.cash_amount || 0),
+          mobile_amount: parseFloat(form.mobile_amount || 0),
+          cheque_amount: parseFloat(form.cheque_amount || 0),
+          wallet_amount: parseFloat(form.wallet_amount || 0),
+          momo_number: form.momo_number,
+          destination: form.destination,
+          notes: form.notes,
+          billettage,
+        });
+        setAdjustmentModalOpen(true);
+        return null;
+      }
+    }
     setLoading(true);
     try {
       const payload = {
@@ -271,6 +327,51 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
     } finally { setLoading(false); }
   };
 
+  // Confirme la modale de motifs et envoie le PUT avec _adjustments
+  const confirmAdjustmentsAndSave = async () => {
+    // Tous les motifs doivent être saisis (>= 3 caractères)
+    const missing = pendingAdjustments.filter(a => !(adjustmentReasons[a.field] || "").trim() || (adjustmentReasons[a.field] || "").trim().length < 3);
+    if (missing.length > 0) {
+      toast.error(`Motif obligatoire (≥3 caractères) pour : ${missing.map(m => FIELD_LABEL[m.field]).join(", ")}`);
+      return;
+    }
+    setLoading(true);
+    try {
+      const _adjustments = pendingAdjustments.map(a => ({
+        field: a.field,
+        old_value: a.old,
+        new_value: a.new,
+        reason: (adjustmentReasons[a.field] || "").trim(),
+        adjusted_by: currentUser?.full_name || currentUser?.username || "",
+      }));
+      const r = await axios.put(`${API}/financial-points/${currentPoint.id}`, {
+        ...pendingSavePayload,
+        is_admin: isAdmin,
+        _adjustments,
+      });
+      const saved = r.data?.financial_point || currentPoint;
+      toast.success(`Reversement ajusté (${_adjustments.length} modification${_adjustments.length > 1 ? "s" : ""} tracée${_adjustments.length > 1 ? "s" : ""})`);
+      setCurrentPoint(saved);
+      setForm({
+        cash_amount: saved.cash_amount || 0,
+        mobile_amount: saved.mobile_amount || 0,
+        cheque_amount: saved.cheque_amount || 0,
+        wallet_amount: saved.wallet_amount || 0,
+        momo_number: saved.momo_number || "",
+        destination: saved.destination || "admin",
+        notes: saved.notes || "",
+      });
+      setBillettage(saved.billettage || {});
+      setAdjustmentModalOpen(false);
+      setPendingAdjustments([]);
+      setAdjustmentReasons({});
+      setPendingSavePayload(null);
+      fetchPoints();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Erreur");
+    } finally { setLoading(false); }
+  };
+
   const signPoint = async () => {
     if (!consentChecked) return;
     setLoading(true);
@@ -310,7 +411,9 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   // Avant la signature, on force la gerante a effectuer (et appliquer) le billetage des especes.
   // Regle : si cash_amount > 0 (il y a des especes a verser), le billetage doit etre saisi
   // ET coherent (tolerance 0.5 F pour absorber les imprecisions de parseFloat).
-  const billettageRequired = parseFloat(form.cash_amount || 0) > 0;
+  // Si hideBillettage=true → le billettage est géré globalement par BillettageGlobalCard,
+  // donc on n'impose plus la vérification locale ici.
+  const billettageRequired = !hideBillettage && parseFloat(form.cash_amount || 0) > 0;
   const cashMatches = billettageRequired
     ? (billettageTotal > 0 && Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)) <= 0.5)
     : true; // Pas d'especes -> billetage pas necessaire
@@ -836,7 +939,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
                     <div className={`w-8 h-8 rounded-full bg-${color}-500/20 flex items-center justify-center`}><Icon className={`w-4 h-4 text-${color}-400`} /></div>
                     <Label className="text-slate-300 font-medium">{label}</Label>
                   </div>
-                  {key === "cash_amount" && !formDisabled && (
+                  {key === "cash_amount" && !formDisabled && !hideBillettage && (
                     <Button variant="ghost" size="sm" className="text-green-400 hover:text-green-300 text-xs h-7 px-2"
                       onClick={() => setShowBillettage(!showBillettage)} data-testid="fp-toggle-billettage">
                       {showBillettage ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />} Billettage
@@ -873,8 +976,27 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
                   </div>
                 )}
 
+                {/* Badge "Ajusté" : affiche le DERNIER ajustement de ce champ s'il existe dans l'historique */}
+                {currentPoint?.adjustments && currentPoint.adjustments.filter(a => a.field === key).length > 0 && (() => {
+                  const adjs = currentPoint.adjustments.filter(a => a.field === key);
+                  const last = adjs[adjs.length - 1];
+                  const delta = (last.new_value || 0) - (last.old_value || 0);
+                  return (
+                    <div className="mt-2 flex items-center gap-2 text-[11px] bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5" data-testid={`adjusted-badge-${key}`}>
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="text-amber-300 font-semibold">Ajusté {delta > 0 ? "+" : ""}{formatPrice(delta)} F</span>
+                      <span className="text-slate-400 truncate">· {last.reason}</span>
+                      {adjs.length > 1 && (
+                        <Badge className="bg-slate-700/40 text-slate-300 text-[9px] ml-auto flex-shrink-0">
+                          +{adjs.length - 1} autre{adjs.length > 2 ? "s" : ""}
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Billettage under Especes */}
-                {key === "cash_amount" && showBillettage && !formDisabled && (
+                {key === "cash_amount" && showBillettage && !formDisabled && !hideBillettage && (
                   <div className="mt-3 bg-slate-900/60 rounded-lg p-4 border border-green-500/30" data-testid="fp-billettage-section">
                     <p className="text-green-400 text-xs font-bold uppercase tracking-wider mb-3">Billettage des Especes</p>
                     {/* Billets */}
@@ -955,6 +1077,53 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
 
       <ComparisonCard comparison={comparison} totalReversed={currentPoint ? currentPoint.total_amount : computedTotal} totalRecorded={totalRecorded} totalDiff={(currentPoint ? currentPoint.total_amount : computedTotal) - totalRecorded} />
 
+      {/* Historique des ajustements (visible si au moins 1 ajustement) */}
+      {currentPoint?.adjustments && currentPoint.adjustments.length > 0 && (
+        <Card className="bg-slate-800/40 border-amber-500/30" data-testid="adjustment-history-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between text-amber-300">
+              <span className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Historique des ajustements <Badge className="bg-amber-500/20 text-amber-300 text-[10px] ml-2">{currentPoint.adjustments.length}</Badge>
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setShowAdjustmentHistory(!showAdjustmentHistory)} className="text-slate-300 h-7 px-2 text-xs" data-testid="adjustment-history-toggle">
+                {showAdjustmentHistory ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
+                {showAdjustmentHistory ? "Masquer" : "Voir le détail"}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          {showAdjustmentHistory && (
+            <CardContent className="pt-0">
+              <div className="space-y-2">
+                {[...currentPoint.adjustments].reverse().map((a, idx) => {
+                  const delta = (a.new_value || 0) - (a.old_value || 0);
+                  return (
+                    <div key={a.id || idx} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3" data-testid={`adjustment-entry-${idx}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge className="bg-amber-500/20 text-amber-300 text-[10px]">{FIELD_LABEL[a.field] || a.field}</Badge>
+                          <span className="text-slate-400">{formatPrice(a.old_value)} F</span>
+                          <span className="text-amber-400">→</span>
+                          <span className="text-amber-300 font-bold">{formatPrice(a.new_value)} F</span>
+                          <Badge className={`text-[10px] ${delta > 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}`}>
+                            {delta > 0 ? "+" : ""}{formatPrice(delta)} F
+                          </Badge>
+                        </div>
+                        <span className="text-[10px] text-slate-500">
+                          {a.adjusted_at ? new Date(a.adjusted_at).toLocaleString("fr-FR") : "—"}
+                          {a.adjusted_by ? ` · ${a.adjusted_by}` : ""}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 italic pl-1 border-l-2 border-amber-500/40 ml-1">"{a.reason}"</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       <div className="flex flex-wrap gap-3 justify-end">
         {isAdmin && currentPoint && <Button data-testid="fp-delete-btn" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deletePoint} disabled={loading}><X className="w-4 h-4 mr-1" /> Supprimer</Button>}
         {canEdit && !isSigned && <Button data-testid="fp-save-btn" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={savePoint} disabled={loading}><Save className="w-4 h-4 mr-1" /> {currentPoint ? "Mettre a jour" : "Enregistrer"}</Button>}
@@ -1026,6 +1195,57 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
         </DialogContent>
       </Dialog>
       <PdfViewerModal open={showPdfViewer} onOpenChange={setShowPdfViewer} pdfUrl={pdfUrl} periodLabel={periodLabel} />
+
+      {/* === Modale Ajustement avec motif obligatoire === */}
+      <Dialog open={adjustmentModalOpen} onOpenChange={(open) => { if (!open) { setAdjustmentModalOpen(false); setPendingAdjustments([]); setAdjustmentReasons({}); setPendingSavePayload(null); } }}>
+        <DialogContent className="bg-slate-900 border-amber-500/40 text-white max-w-2xl" data-testid="adjustment-modal">
+          <DialogHeader>
+            <DialogTitle className="text-amber-300 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Motif d'ajustement obligatoire
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm">
+              {pendingAdjustments.length} montant{pendingAdjustments.length > 1 ? "s" : ""} modifié{pendingAdjustments.length > 1 ? "s" : ""} — précisez le motif de chaque ajustement pour la traçabilité.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {pendingAdjustments.map((adj) => (
+              <div key={adj.field} className="border border-slate-700 bg-slate-800/40 rounded-lg p-3" data-testid={`adjustment-row-${adj.field}`}>
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-white">{FIELD_LABEL[adj.field]}</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">{formatPrice(adj.old)} F</span>
+                    <span className="text-amber-400">→</span>
+                    <span className="text-amber-300 font-bold">{formatPrice(adj.new)} F</span>
+                    <Badge className={`text-[10px] ${adj.new > adj.old ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}`}>
+                      {adj.new > adj.old ? "+" : ""}{formatPrice(adj.new - adj.old)} F
+                    </Badge>
+                  </div>
+                </div>
+                <Textarea
+                  placeholder="Motif clair (ex: Erreur saisie table 5, Cash manquant constaté, Pourboire reversé…)"
+                  value={adjustmentReasons[adj.field] || ""}
+                  onChange={(e) => setAdjustmentReasons(p => ({ ...p, [adj.field]: e.target.value }))}
+                  className="bg-slate-900/60 border-slate-700 text-white text-sm"
+                  rows={2}
+                  data-testid={`adjustment-reason-${adj.field}`}
+                />
+                {((adjustmentReasons[adj.field] || "").trim().length > 0 && (adjustmentReasons[adj.field] || "").trim().length < 3) && (
+                  <p className="text-rose-400 text-[11px] mt-1">Motif trop court (min. 3 caractères)</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-slate-700">
+            <Button variant="outline" className="border-slate-600 text-slate-300" onClick={() => { setAdjustmentModalOpen(false); setPendingAdjustments([]); setAdjustmentReasons({}); setPendingSavePayload(null); }} data-testid="adjustment-cancel">
+              Annuler
+            </Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmAdjustmentsAndSave} disabled={loading} data-testid="adjustment-confirm">
+              <Save className="w-4 h-4 mr-1" /> Confirmer & Enregistrer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

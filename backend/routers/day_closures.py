@@ -255,7 +255,70 @@ async def close_day(date: str, data: DayClosureClose):
         }
         await db.day_closures.update_one({"date": date}, {"$set": doc}, upsert=True)
         logger.info(f"Day {date} closed by {data.closed_by}")
-        return {"success": True, "closure": doc}
+
+        # === AUTO-CRÉATION des 4 reversements (Bar / Menu / Jeux / Locations) ===
+        # Pré-rempli à partir des ventes du jour. La Gérante pourra ajuster
+        # chaque montant avec un motif obligatoire (traçabilité).
+        auto_created = []
+        try:
+            from .financial_points import reversement_auto_fill as _autofill_fn
+            af = await _autofill_fn(date=date, period_type="daily", end_date="")
+            categories = af.get("categories", {}) if isinstance(af, dict) else {}
+            for cat_key in ("bar", "menu_combos", "jeux", "locations"):
+                bucket = categories.get(cat_key, {}) or {}
+                # On NE crée PAS si un reversement existe déjà pour cette (date, daily, cat).
+                existing_fp = await db.financial_points.find_one({
+                    "date": date,
+                    "period_type": "daily",
+                    "category": cat_key,
+                })
+                if existing_fp:
+                    continue
+                cash = float(bucket.get("cash", 0) or 0)
+                mobile = float(bucket.get("mobile", 0) or 0)
+                cheque = float(bucket.get("cheque", 0) or 0)
+                wallet = float(bucket.get("wallet", 0) or 0)
+                total = cash + mobile + cheque + wallet
+                fp = {
+                    "id": str(uuid.uuid4()),
+                    "date": date,
+                    "end_date": "",
+                    "period_type": "daily",
+                    "category": cat_key,
+                    "cash_amount": cash,
+                    "mobile_amount": mobile,
+                    "cheque_amount": cheque,
+                    "wallet_amount": wallet,
+                    "total_amount": total,
+                    "notes": "",
+                    "created_by": data.closed_by,
+                    "created_at": now,
+                    "status": "pending",
+                    "admin_validated": False,
+                    "admin_validated_by": None,
+                    "admin_validated_at": None,
+                    "signed": False,
+                    "signed_by": None,
+                    "signed_at": None,
+                    "billettage": {},
+                    "momo_number": "",
+                    "destination": "admin",
+                    "adjustments": [],
+                    "auto_fill_snapshot": {
+                        "cash": cash, "mobile": mobile, "cheque": cheque, "wallet": wallet,
+                        "total": total, "computed_at": now,
+                    },
+                    "auto_created_on_closure": True,
+                }
+                await db.financial_points.insert_one(fp)
+                fp.pop("_id", None)
+                auto_created.append(cat_key)
+            if auto_created:
+                logger.info(f"Auto-created {len(auto_created)} reversements on day closure {date}: {auto_created}")
+        except Exception as _e:
+            logger.error(f"Auto-create reversements on closure failed for {date}: {_e}")
+
+        return {"success": True, "closure": doc, "auto_created_reversements": auto_created}
     except HTTPException:
         raise
     except Exception as e:
