@@ -2111,9 +2111,12 @@ CALLMEBOT_API_KEY = os.environ.get('CALLMEBOT_API_KEY', '')
 ADMIN_PHONE_NUMBERS = ["+22997720808", "+22966269565", "+22941530000"]
 
 async def send_admin_sms_notification(message: str):
-    """Send admin notification (WhatsApp with SMS fallback) via services.sms_service.
-    Kept for backward compatibility — delegates to the dual-channel implementation.
+    """[DÉSACTIVÉ] Les notifications Twilio (SMS / WhatsApp) sont volontairement désactivées.
+    Réactiver en posant TWILIO_NOTIFICATIONS_ENABLED=true dans backend/.env.
     """
+    if os.environ.get("TWILIO_NOTIFICATIONS_ENABLED", "").lower() not in ("1", "true", "yes"):
+        logger.debug("Twilio notifications disabled (admin) — skipping message")
+        return False
     try:
         from services.sms_service import send_admin_sms_notification as _svc_send
         return await _svc_send(message)
@@ -2123,28 +2126,33 @@ async def send_admin_sms_notification(message: str):
 
 # Keep old function name for backward compatibility
 async def send_whatsapp_notification(message: str):
-    """Deprecated: Now sends SMS instead of WhatsApp"""
+    """[DÉSACTIVÉ] Les notifications WhatsApp via Twilio sont désactivées."""
     return await send_admin_sms_notification(message)
 
 async def send_client_sms_confirmation(phone: str, message: str):
-    """Send SMS confirmation to client via Twilio"""
+    """[DÉSACTIVÉ] Les SMS clients via Twilio sont désactivés.
+    Réactiver via TWILIO_NOTIFICATIONS_ENABLED=true dans backend/.env.
+    """
+    if os.environ.get("TWILIO_NOTIFICATIONS_ENABLED", "").lower() not in ("1", "true", "yes"):
+        logger.debug(f"Twilio notifications disabled (client {phone}) — skipping SMS")
+        return False
     if not twilio_client:
         logger.warning("Twilio not configured, skipping client SMS")
         return False
-    
+
     twilio_phone_number = os.environ.get('TWILIO_PHONE_NUMBER', '')
     if not twilio_phone_number:
         logger.error("Twilio phone number not configured")
         return False
-    
+
     # Format phone number for Benin
     clean_phone = phone.replace(" ", "").replace("+229", "")
     formatted_phone = f"+229{clean_phone}"
-    
+
     try:
         # Clean message for SMS
         clean_message = message.replace("✅", "[OK]").replace("🎮", "").replace("📅", "").replace("⏰", "").replace("👥", "").replace("💰", "").replace("📍", "").replace("🎯", "")
-        
+
         msg_response = twilio_client.messages.create(
             body=clean_message[:1600],
             to=formatted_phone,

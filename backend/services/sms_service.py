@@ -119,11 +119,24 @@ async def _send_sms_to(client: TwilioClient, admin_phone: str, message: str) -> 
         return False
 
 
+def _notifications_enabled() -> bool:
+    """Kill-switch global : si TWILIO_NOTIFICATIONS_ENABLED n'est pas
+    explicitement à true/1/yes, toutes les notifications Twilio (admin et client)
+    sont silencieusement ignorées.
+    """
+    return os.environ.get('TWILIO_NOTIFICATIONS_ENABLED', '').lower() in ('1', 'true', 'yes')
+
+
 async def send_admin_sms_notification(message: str) -> bool:
     """Send admin notification via WhatsApp (preferred) with SMS fallback.
 
     Function name kept for backward compatibility — now dual-channel.
+    Désactivé tant que TWILIO_NOTIFICATIONS_ENABLED n'est pas activé.
     """
+    if not _notifications_enabled():
+        logger.debug("Twilio notifications disabled (admin) — skipping")
+        return False
+
     client = _get_twilio_client()
     if not client:
         logger.warning("Twilio not configured, skipping notification")
@@ -148,7 +161,13 @@ async def send_admin_sms_notification(message: str) -> bool:
 
 
 async def send_client_sms_confirmation(phone: str, message: str) -> bool:
-    """Send SMS confirmation to client via Twilio"""
+    """Send SMS confirmation to client via Twilio.
+    Désactivé tant que TWILIO_NOTIFICATIONS_ENABLED n'est pas activé.
+    """
+    if not _notifications_enabled():
+        logger.debug(f"Twilio notifications disabled (client {phone}) — skipping")
+        return False
+
     client = _get_twilio_client()
     if not client:
         logger.warning("Twilio not configured, skipping client SMS")
