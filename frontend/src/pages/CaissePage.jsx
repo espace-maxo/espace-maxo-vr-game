@@ -3404,7 +3404,10 @@ _Gérante - Espace Maxo_
         totals_by_department: totalByDepartment,
         notes,
         created_by: currentUser?.full_name || currentUser?.username || "admin",
-        validation_status: "pending",
+        // Auto-validation à l'émission du bon client (pas de status pending)
+        validation_status: "validated",
+        validated_by: currentUser?.full_name || currentUser?.username || "admin",
+        validated_at: new Date().toISOString(),
         table_number: activeTable?.table_number || null
       };
       setPendingInvoiceData(invoiceData);
@@ -3424,7 +3427,10 @@ _Gérante - Espace Maxo_
       totals_by_department: totalByDepartment,
       notes,
       created_by: currentUser?.full_name || currentUser?.username || "admin",
-      validation_status: "pending",
+      // Auto-validation à l'émission du bon client (pas de status pending)
+      validation_status: "validated",
+      validated_by: currentUser?.full_name || currentUser?.username || "admin",
+      validated_at: new Date().toISOString(),
       table_number: activeTable?.table_number || null
     });
   };
@@ -3441,7 +3447,7 @@ _Gérante - Espace Maxo_
         });
       }
       
-      toast.success("✓ Commande envoyée avec succès ! En attente de validation par la gérante.", {
+      toast.success("✓ Bon client émis et validé automatiquement", {
         duration: 4000
       });
       

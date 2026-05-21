@@ -141,6 +141,9 @@ class InvoiceCreate(BaseModel):
     notes: str = ""
     created_by: str = ""
     validation_status: str = "pending"
+    # Auto-validation à l'émission du bon client (optionnel)
+    validated_by: str = ""
+    validated_at: str = ""
     table_number: Optional[int] = None
 
 
@@ -198,6 +201,8 @@ async def create_invoice(
             notes=invoice_data.notes,
             created_by=invoice_data.created_by,
             validation_status=invoice_data.validation_status,
+            validated_by=invoice_data.validated_by or (invoice_data.created_by if invoice_data.validation_status == "validated" else ""),
+            validated_at=invoice_data.validated_at or (datetime.now(timezone.utc).isoformat() if invoice_data.validation_status == "validated" else ""),
             table_number=invoice_data.table_number
         )
 
