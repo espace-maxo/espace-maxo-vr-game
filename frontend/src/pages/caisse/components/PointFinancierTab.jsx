@@ -57,7 +57,7 @@ const CATEGORY_TEXT_CLASS = {
   bar: "text-orange-400", menu_combos: "text-green-400", jeux: "text-blue-400", locations: "text-purple-400",
 };
 
-export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
+export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCategory = null }) {
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
   const canEdit = isAdmin || isManager;
@@ -67,8 +67,12 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
   const [weekStart, setWeekStart] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
   const [weekEnd, setWeekEnd] = useState(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
 
-  // Catégorie actuellement éditée : 1 reversement par catégorie par jour/semaine
-  const [activeCategory, setActiveCategory] = useState("bar");
+  // Catégorie actuellement éditée : 1 reversement par catégorie par jour/semaine.
+  // Si fixedCategory est fourni (chaque onglet "Reversement <X>"), on la verrouille.
+  const [activeCategory, setActiveCategory] = useState(fixedCategory || "bar");
+  useEffect(() => {
+    if (fixedCategory) setActiveCategory(fixedCategory);
+  }, [fixedCategory]);
   // Map catégorie -> point existant (pour pouvoir afficher les 4 statuts d'un coup)
   const [pointsByCategory, setPointsByCategory] = useState({});
   // Snapshot des montants pré-remplis automatiquement (pour afficher l'écart si éditée)
@@ -512,8 +516,31 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo }) {
   const destIcon = (d) => d === "banque" ? Building2 : UserCheck;
 
   // === SÉLECTEUR DE CATÉGORIE (réutilisable dans toutes les vues) ===
+  // Caché quand on est dans un onglet dédié (fixedCategory) — l'utilisateur ne peut
+  // pas changer de catégorie dans ce mode (chaque onglet est isolé).
   const hasAnyPoint = Object.keys(pointsByCategory).length > 0;
-  const CategorySelector = (
+  const CategorySelector = fixedCategory ? (
+    <Card className={`bg-slate-800/50 border ${CATEGORY_BORDER_CLASS[activeCategory]}`}>
+      <CardContent className="p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Badge className={`${CATEGORY_TEXT_CLASS[activeCategory]} bg-slate-900/40 text-sm py-1 px-3`}>
+            {CATEGORY_LABEL[activeCategory]}
+          </Badge>
+          <span className="text-slate-400 text-xs">Reversement dédié à cette catégorie</span>
+        </div>
+        {hasAnyPoint && pointsByCategory[activeCategory] && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 h-7 text-xs" onClick={viewCombinedPdf} data-testid="fp-combined-pdf-view">
+              <Eye className="w-3 h-3 mr-1" /> PDF du jour
+            </Button>
+            <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 h-7 text-xs" onClick={downloadCombinedPdf} data-testid="fp-combined-pdf-download">
+              <Download className="w-3 h-3 mr-1" /> Télécharger
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  ) : (
     <Card className="bg-slate-800/50 border-slate-700" data-testid="fp-category-selector">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base flex items-center gap-2 flex-wrap">
