@@ -442,16 +442,55 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   };
 
 
-  const adminValidate = async () => {
+  // Modale "Motif de l'écart billettage" (si le backend refuse la validation pour écart)
+  const [gapModalOpen, setGapModalOpen] = useState(false);
+  const [gapInfo, setGapInfo] = useState({ counted: 0, expected: 0, difference: 0 });
+  const [gapJustification, setGapJustification] = useState("");
+
+  const adminValidate = async (justification = "") => {
     if (!currentPoint || !isAdmin) return;
     setLoading(true);
     try {
-      await axios.post(`${API}/financial-points/${currentPoint.id}/admin-validate`, { admin_name: currentUser?.full_name || currentUser?.username || "Admin" });
+      const payload = { admin_name: currentUser?.full_name || currentUser?.username || "Admin" };
+      if (justification) payload.gap_justification = justification;
+      await axios.post(`${API}/financial-points/${currentPoint.id}/admin-validate`, payload);
       toast.success("Reversement valide par l'administrateur");
+      setGapModalOpen(false);
+      setGapJustification("");
       fetchPoints();
       fetchPendingValidations();
-    } catch (err) { toast.error(err.response?.data?.detail || "Erreur"); }
+    } catch (err) {
+      const detail = err.response?.data?.detail || "Erreur";
+      // Le backend refuse pour écart billettage → on ouvre la modale de justification
+      const isGapError = typeof detail === "string" && (detail.includes("Écart billettage") || detail.includes("Billettage manquant"));
+      if (isGapError && currentPoint?.period_type === "daily") {
+        try {
+          const recon = await axios.get(`${API}/billettage/${currentPoint.date}/reconciliation`);
+          setGapInfo({
+            counted: recon.data?.counted || 0,
+            expected: recon.data?.expected || 0,
+            difference: recon.data?.difference || 0,
+            billettage_exists: recon.data?.billettage_exists || false,
+          });
+          setGapJustification("");
+          setGapModalOpen(true);
+        } catch {
+          toast.error(detail);
+        }
+      } else {
+        toast.error(detail);
+      }
+    }
     finally { setLoading(false); }
+  };
+
+  const confirmGapAndValidate = async () => {
+    const reason = (gapJustification || "").trim();
+    if (reason.length < 3) {
+      toast.error("Motif obligatoire (min. 3 caractères)");
+      return;
+    }
+    await adminValidate(reason);
   };
 
   // Navigue vers la période d'un point en attente de validation (utilisé par la bannière DG)
@@ -843,7 +882,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
         <ComparisonCard comparison={comparison} totalReversed={totalReversed} totalRecorded={totalRecorded} totalDiff={totalDiff} />
         <div className="flex flex-wrap gap-3 justify-end">
           {isAdmin && (<>
-            <Button data-testid="fp-admin-validate-btn" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={adminValidate} disabled={loading}><CheckCircle className="w-4 h-4 mr-1" /> Valider (Admin)</Button>
+            <Button data-testid="fp-admin-validate-btn" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => adminValidate()} disabled={loading}><CheckCircle className="w-4 h-4 mr-1" /> Valider (Admin)</Button>
             <Button data-testid="fp-unlock-btn" variant="outline" className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10" onClick={unlockPoint} disabled={loading}><Unlock className="w-4 h-4 mr-1" /> Renvoyer pour modification</Button>
             <Button data-testid="fp-delete-btn" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deletePoint} disabled={loading}><X className="w-4 h-4 mr-1" /> Supprimer</Button>
           </>)}
@@ -1195,6 +1234,66 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
         </DialogContent>
       </Dialog>
       <PdfViewerModal open={showPdfViewer} onOpenChange={setShowPdfViewer} pdfUrl={pdfUrl} periodLabel={periodLabel} />
+
+      {/* === Modale Écart Billettage (validation Admin bloquée si écart non justifié) === */}
+      <Dialog open={gapModalOpen} onOpenChange={(open) => { if (!open) { setGapModalOpen(false); setGapJustification(""); } }}>
+        <DialogContent className="bg-slate-900 border-rose-500/50 text-white max-w-xl" data-testid="gap-modal">
+          <DialogHeader>
+            <DialogTitle className="text-rose-300 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Écart billettage — justification obligatoire
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm">
+              {gapInfo.billettage_exists === false
+                ? "Aucun billettage n'a été saisi pour cette journée alors que des espèces sont attendues."
+                : "Le total compté ne correspond pas au cash attendu. Veuillez justifier l'écart pour autoriser la validation."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                <p className="text-[10px] uppercase text-slate-500 mb-1">Compté</p>
+                <p className="text-lg font-bold text-emerald-300">{formatPrice(gapInfo.counted)} F</p>
+              </div>
+              <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                <p className="text-[10px] uppercase text-slate-500 mb-1">Attendu</p>
+                <p className="text-lg font-bold text-cyan-300">{formatPrice(gapInfo.expected)} F</p>
+              </div>
+              <div className={`rounded-lg p-3 border-2 ${gapInfo.difference > 0 ? "bg-blue-500/10 border-blue-500/40" : "bg-rose-500/10 border-rose-500/40"}`}>
+                <p className="text-[10px] uppercase text-slate-400 mb-1">Écart</p>
+                <p className={`text-lg font-bold ${gapInfo.difference > 0 ? "text-blue-300" : "text-rose-300"}`}>
+                  {gapInfo.difference > 0 ? "+" : ""}{formatPrice(gapInfo.difference)} F
+                </p>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300 mb-1 block">Motif clair de l'écart (obligatoire, ≥3 caractères)</Label>
+              <Textarea
+                placeholder="ex: 1500 F manquants — billet de 1000 abîmé refusé, 500 F arrondi pourboire serveur Marc…"
+                value={gapJustification}
+                onChange={(e) => setGapJustification(e.target.value)}
+                className="bg-slate-800/60 border-slate-700 text-white text-sm"
+                rows={3}
+                data-testid="gap-reason-input"
+              />
+              {(gapJustification || "").trim().length > 0 && (gapJustification || "").trim().length < 3 && (
+                <p className="text-rose-400 text-[11px] mt-1">Motif trop court (min. 3 caractères)</p>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 italic">
+              Ce motif sera enregistré dans l'historique des ajustements du reversement validé pour traçabilité.
+            </p>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-slate-700">
+            <Button variant="outline" className="border-slate-600 text-slate-300" onClick={() => { setGapModalOpen(false); setGapJustification(""); }} data-testid="gap-cancel">
+              Annuler
+            </Button>
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={confirmGapAndValidate} disabled={loading} data-testid="gap-confirm">
+              <CheckCircle className="w-4 h-4 mr-1" /> Valider malgré l'écart
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* === Modale Ajustement avec motif obligatoire === */}
       <Dialog open={adjustmentModalOpen} onOpenChange={(open) => { if (!open) { setAdjustmentModalOpen(false); setPendingAdjustments([]); setAdjustmentReasons({}); setPendingSavePayload(null); } }}>

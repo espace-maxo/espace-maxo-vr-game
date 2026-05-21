@@ -2180,6 +2180,7 @@ Régression validée : 26/26 tests passés (iteration_31).
 ## Prioritized Backlog
 
 ### P0 (Completed)
+- [x] **Garde-fou réconciliation billettage** : La validation Admin d'un reversement DAILY est bloquée si l'écart billettage (compté vs cash attendu) ≠ 0 sans motif. Modale "Motif de l'écart" obligatoire avec stockage dans `adjustments[]` (type=billettage_gap). Tests : 5/5 PASSED (21/05/2026)
 - [x] **Billettage Global Unique + Auto-création Reversements + Ajustements tracés** : Un seul billettage par jour (denominations 10000→5 FCFA) partagé entre les 4 reversements. Les 4 reversements daily sont auto-créés à la fermeture de journée avec snapshot auto-fill. Tout ajustement nécessite un motif clair (>=3 chars), tracé dans `adjustments` avec old/new/reason/who/when. Badge "Ajusté" + Historique visibles. 8/8 tests pytest PASSED. (21/05/2026)
 - [x] **Regroupement des Reversements** : Sous-menu unique "Reversement" (Bar/Menu/Jeux/Locations) + Historique groupé par jour avec les 4 catégories côte à côte (21/05/2026)
 - [x] Dashboard Analytics Admin avec graphiques + MoM (17/04/2026)

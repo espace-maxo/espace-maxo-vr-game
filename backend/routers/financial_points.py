@@ -288,9 +288,23 @@ async def adjust_financial_point(point_id: str, data: dict = Body(...)):
 
 
 @router.post("/financial-points/{point_id}/admin-validate")
-async def admin_validate_financial_point(point_id: str, admin_name: str = Body(..., embed=True)):
-    """Admin validates a signed financial point (final step - locks the document)"""
+async def admin_validate_financial_point(point_id: str, data: dict = Body(default={})):
+    """Admin validates a signed financial point (final step - locks the document).
+
+    Body :
+    - admin_name (str) : nom du valideur
+    - gap_justification (str, optionnel) : motif clair de l'écart billettage si présent
+                                            Requis si counted != expected pour la journée.
+    - allow_gap (bool, optionnel) : True = bypass le contrôle de réconciliation
+                                     (mais alors gap_justification reste OBLIGATOIRE).
+    """
     try:
+        admin_name = data.get("admin_name") if isinstance(data, dict) else None
+        gap_justification = (data.get("gap_justification") or "").strip() if isinstance(data, dict) else ""
+
+        if not admin_name:
+            raise HTTPException(status_code=400, detail="admin_name est requis")
+
         point = await db.financial_points.find_one({"id": point_id})
         if not point:
             raise HTTPException(status_code=404, detail="Point financier non trouvé")
@@ -301,18 +315,79 @@ async def admin_validate_financial_point(point_id: str, admin_name: str = Body(.
         if point.get("admin_validated"):
             raise HTTPException(status_code=400, detail="Ce point est déjà validé par l'administrateur")
 
-        await db.financial_points.update_one(
-            {"id": point_id},
-            {"$set": {
-                "admin_validated": True,
-                "admin_validated_by": admin_name,
-                "admin_validated_at": datetime.now(timezone.utc).isoformat(),
-                "status": "admin_validated"
-            }}
-        )
+        # === GARDE-FOU RÉCONCILIATION BILLETTAGE ===
+        # Pour les reversements DAILY uniquement (le billettage est par jour).
+        if point.get("period_type") == "daily":
+            date_str = point.get("date")
+            bill = await db.billettage_global.find_one({"date": date_str}, {"_id": 0})
+            counted = (bill or {}).get("total", 0) if bill else 0
+            # Somme des cash_amount des 4 reversements daily de ce jour
+            daily_points = await db.financial_points.find(
+                {"date": date_str, "period_type": "daily"}, {"_id": 0}
+            ).to_list(20)
+            expected = sum((p.get("cash_amount", 0) or 0) for p in daily_points)
+            difference = counted - expected
+
+            # Le billettage doit exister si on a des espèces attendues
+            if expected > 0 and not bill:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Billettage manquant pour le {date_str} : "
+                        f"{int(expected)} F d'espèces attendues mais aucun comptage saisi. "
+                        f"Veuillez compléter le billettage global avant validation."
+                    ),
+                )
+
+            # Si écart, exiger un motif clair
+            if abs(difference) > 0.5 and not gap_justification:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Écart billettage de {int(difference):+d} F détecté "
+                        f"(compté: {int(counted)} F, attendu: {int(expected)} F). "
+                        f"Veuillez fournir un motif clair (gap_justification, min. 3 caractères) "
+                        f"pour autoriser la validation."
+                    ),
+                )
+            if abs(difference) > 0.5 and len(gap_justification) < 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Le motif de l'écart est trop court (min. 3 caractères).",
+                )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        update_doc = {
+            "admin_validated": True,
+            "admin_validated_by": admin_name,
+            "admin_validated_at": now_iso,
+            "status": "admin_validated",
+        }
+
+        # Si motif d'écart fourni, on l'enregistre dans l'historique des ajustements
+        push_doc = None
+        if gap_justification:
+            push_doc = {
+                "id": str(uuid.uuid4()),
+                "field": "gap_justification",
+                "old_value": None,
+                "new_value": None,
+                "reason": gap_justification,
+                "adjusted_by": admin_name,
+                "adjusted_at": now_iso,
+                "type": "billettage_gap",
+            }
+
+        if push_doc:
+            await db.financial_points.update_one(
+                {"id": point_id},
+                {"$set": update_doc, "$push": {"adjustments": push_doc}},
+            )
+        else:
+            await db.financial_points.update_one({"id": point_id}, {"$set": update_doc})
 
         updated = await db.financial_points.find_one({"id": point_id}, {"_id": 0})
-        logger.info(f"Financial point {point_id} validated by admin {admin_name}")
+        logger.info(f"Financial point {point_id} validated by admin {admin_name}" + (f" (gap: {gap_justification})" if gap_justification else ""))
         return {"success": True, "financial_point": updated}
     except HTTPException:
         raise
