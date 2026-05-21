@@ -164,6 +164,50 @@ const PointsHistoryTab = ({ currentUser }) => {
     setDateFrom(""); setDateTo("");
   };
 
+  // Group daily entries by date so each day shows its 4 category reversements together.
+  // Weekly entries are kept in a separate flat list (they span multiple days).
+  const groupedDays = useMemo(() => {
+    const map = new Map();
+    for (const p of filtered) {
+      if (p.period_type !== "daily") continue;
+      const k = p.date || "—";
+      if (!map.has(k)) map.set(k, {});
+      const slot = map.get(k);
+      const cat = p.category || "all";
+      // If multiple points exist for the same (date, category), keep the most recently updated one
+      const existing = slot[cat];
+      if (!existing) slot[cat] = p;
+      else {
+        const a = existing.updated_at || existing.created_at || "";
+        const b = p.updated_at || p.created_at || "";
+        if (String(b) > String(a)) slot[cat] = p;
+      }
+    }
+    const arr = Array.from(map.entries()).map(([date, byCat]) => {
+      const cats = Object.values(byCat);
+      return {
+        date,
+        byCat,
+        total_amount: cats.reduce((s, p) => s + (p?.total_amount || 0), 0),
+        cash_amount: cats.reduce((s, p) => s + (p?.cash_amount || 0), 0),
+        mobile_amount: cats.reduce((s, p) => s + (p?.mobile_amount || 0), 0),
+        cheque_amount: cats.reduce((s, p) => s + (p?.cheque_amount || 0), 0),
+        wallet_amount: cats.reduce((s, p) => s + (p?.wallet_amount || 0), 0),
+        validated: cats.filter(p => p?.admin_validated).length,
+        signed: cats.filter(p => p && !p.admin_validated && p.signed).length,
+        pending: cats.filter(p => p && !p.signed && !p.admin_validated).length,
+        filled: cats.length,
+      };
+    });
+    arr.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    return arr;
+  }, [filtered]);
+
+  const weeklyEntries = useMemo(
+    () => filtered.filter(p => p.period_type === "weekly"),
+    [filtered]
+  );
+
   return (
     <div className="space-y-4" data-testid="points-history-tab">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -334,7 +378,7 @@ const PointsHistoryTab = ({ currentUser }) => {
         </CardContent>
       </Card>
 
-      {/* List */}
+      {/* List grouped by day */}
       <Card className="bg-slate-900/60 border-slate-700">
         <CardContent className="p-0">
           {loading ? (
@@ -342,111 +386,210 @@ const PointsHistoryTab = ({ currentUser }) => {
               <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
               Chargement…
             </div>
-          ) : filtered.length === 0 ? (
+          ) : (groupedDays.length === 0 && weeklyEntries.length === 0) ? (
             <div className="py-12 text-center text-slate-500">
               <History className="w-8 h-8 mx-auto mb-2 opacity-60" />
               Aucun reversement trouvé avec ces critères.
             </div>
           ) : (
             <div className="divide-y divide-slate-800">
-              {filtered.map((p) => {
-                const st = getStatus(p);
-                const StIcon = st.icon;
+              {/* === Reversements journaliers, groupés par jour === */}
+              {groupedDays.map((day) => {
+                const dayLabel = (() => {
+                  try { return format(parseISO(day.date), "EEEE dd MMMM yyyy", { locale: fr }); }
+                  catch { return day.date; }
+                })();
                 return (
-                  <div
-                    key={p.id}
-                    className="p-3 sm:p-4 hover:bg-slate-800/40 transition"
-                    data-testid={`history-row-${p.id}`}
-                  >
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <Badge className={`${st.color} text-xs`}>
-                            <StIcon className="w-3 h-3 mr-1" />
-                            {st.label}
+                  <div key={`day-${day.date}`} className="p-3 sm:p-4 hover:bg-slate-800/30 transition" data-testid={`history-day-${day.date}`}>
+                    {/* En-tête du jour */}
+                    <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Calendar className="w-5 h-5 text-cyan-400" />
+                        <span className="text-white font-semibold capitalize">{dayLabel}</span>
+                        <Badge className={`text-[10px] ${day.validated === 4 ? "bg-emerald-500/20 text-emerald-300" : day.filled > 0 ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/40 text-slate-400"}`}>
+                          {day.validated}/4 validés
+                        </Badge>
+                        {day.signed > 0 && (
+                          <Badge className="bg-blue-500/20 text-blue-300 text-[10px]">
+                            <Lock className="w-2.5 h-2.5 mr-1" /> {day.signed} signé(s)
                           </Badge>
-                          <Badge variant="outline" className="border-slate-600 text-slate-300 text-xs">
-                            <Calendar className="w-3 h-3 mr-1" />
-                            {p.period_type === "weekly" ? "Hebdo" : "Journalier"}
+                        )}
+                        {day.pending > 0 && (
+                          <Badge className="bg-amber-500/20 text-amber-300 text-[10px]">
+                            <Clock className="w-2.5 h-2.5 mr-1" /> {day.pending} brouillon(s)
                           </Badge>
-                          <span className="text-white font-medium">{formatPeriod(p)}</span>
-                        </div>
-                        <div className="text-xs text-slate-400 space-y-0.5">
-                          <p>Créé par <span className="text-slate-200">{p.created_by || "—"}</span></p>
-                          {p.signed && (
-                            <p>Signé par <span className="text-blue-300">{p.signed_by || "—"}</span>{p.signed_at && <> · {format(parseISO(p.signed_at), "dd/MM/yyyy HH:mm")}</>}</p>
-                          )}
-                          {p.admin_validated && (
-                            <p>Validé par <span className="text-emerald-300">{p.admin_validated_by || "—"}</span>{p.admin_validated_at && <> · {format(parseISO(p.admin_validated_at), "dd/MM/yyyy HH:mm")}</>}</p>
-                          )}
-                          {p.notes && <p className="italic text-slate-500">"{p.notes.slice(0, 120)}"</p>}
-                        </div>
+                        )}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-xl font-bold text-white">{fmt(p.total_amount)} F</p>
-                        <div className="flex gap-1 justify-end flex-wrap mt-1">
-                          <Button size="sm" variant="outline" onClick={() => viewPdf(p)} className="border-slate-700 text-slate-300 h-7 px-2 text-xs" data-testid={`history-view-${p.id}`}>
-                            <Eye className="w-3.5 h-3.5 mr-1" /> PDF
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => downloadPdf(p)} className="border-slate-700 text-slate-300 h-7 px-2 text-xs">
-                            <Download className="w-3.5 h-3.5" />
-                          </Button>
-                          {isAdmin && p.admin_validated && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => unlockPoint(p)}
-                              className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10 h-7 px-2 text-xs"
-                              data-testid={`history-unlock-${p.id}`}
-                            >
-                              <Unlock className="w-3.5 h-3.5 mr-1" /> Rouvrir
-                            </Button>
-                          )}
-                          {isAdmin && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => deletePoint(p)}
-                              className="border-rose-500/50 text-rose-300 hover:bg-rose-500/10 h-7 px-2"
-                              data-testid={`history-delete-${p.id}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-500 uppercase">Total du jour</p>
+                        <p className="text-xl font-bold text-cyan-300">{fmt(day.total_amount)} F</p>
                       </div>
                     </div>
 
-                    {/* Amount breakdown (compact) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-3 text-xs">
-                      {p.cash_amount > 0 && (
-                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded px-2 py-1">
-                          <span className="text-emerald-300/80">Espèces : </span>
-                          <span className="text-emerald-300 font-semibold">{fmt(p.cash_amount)} F</span>
-                        </div>
-                      )}
-                      {p.mobile_amount > 0 && (
-                        <div className="bg-orange-500/5 border border-orange-500/20 rounded px-2 py-1">
-                          <span className="text-orange-300/80">Mobile : </span>
-                          <span className="text-orange-300 font-semibold">{fmt(p.mobile_amount)} F</span>
-                        </div>
-                      )}
-                      {p.cheque_amount > 0 && (
-                        <div className="bg-purple-500/5 border border-purple-500/20 rounded px-2 py-1">
-                          <span className="text-purple-300/80">Chèque : </span>
-                          <span className="text-purple-300 font-semibold">{fmt(p.cheque_amount)} F</span>
-                        </div>
-                      )}
-                      {p.wallet_amount > 0 && (
-                        <div className="bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1">
-                          <span className="text-amber-300/80">Crédit : </span>
-                          <span className="text-amber-300 font-semibold">{fmt(p.wallet_amount)} F</span>
-                        </div>
-                      )}
+                    {/* 4 catégories côte à côte */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {Object.entries(CATEGORY_INFO).map(([key, info]) => {
+                        const p = day.byCat[key];
+                        const Icon = info.icon;
+                        const colorClass = `text-${info.color}-400`;
+                        const borderClass = p
+                          ? (p.admin_validated ? "border-emerald-500/40 bg-emerald-500/5"
+                            : p.signed ? "border-blue-500/40 bg-blue-500/5"
+                            : "border-amber-500/40 bg-amber-500/5")
+                          : "border-slate-700 bg-slate-800/20";
+                        const st = p ? getStatus(p) : null;
+                        const StIcon = st?.icon;
+                        return (
+                          <div
+                            key={`${day.date}-${key}`}
+                            className={`rounded-lg p-2.5 border-2 transition-colors ${borderClass}`}
+                            data-testid={`history-day-${day.date}-cat-${key}`}
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Icon className={`w-4 h-4 ${colorClass} flex-shrink-0`} />
+                                <span className={`font-semibold text-xs ${colorClass} truncate`}>{info.label}</span>
+                              </div>
+                              {p ? (
+                                <Badge className={`${st.color} text-[9px] flex-shrink-0`}>
+                                  {StIcon && <StIcon className="w-2.5 h-2.5 mr-0.5" />}
+                                  {st.label}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-slate-700/40 text-slate-400 text-[9px] flex-shrink-0">Non saisi</Badge>
+                              )}
+                            </div>
+                            <p className={`text-base font-bold ${p ? colorClass : "text-slate-600"}`}>
+                              {p ? `${fmt(p.total_amount)} F` : "—"}
+                            </p>
+                            {p && (
+                              <>
+                                <div className="mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[9px] text-slate-400">
+                                  {p.cash_amount > 0 && <span>Esp&nbsp;: <strong className="text-emerald-300">{fmt(p.cash_amount)}</strong></span>}
+                                  {p.mobile_amount > 0 && <span>Momo&nbsp;: <strong className="text-orange-300">{fmt(p.mobile_amount)}</strong></span>}
+                                  {p.cheque_amount > 0 && <span>Chq&nbsp;: <strong className="text-purple-300">{fmt(p.cheque_amount)}</strong></span>}
+                                  {p.wallet_amount > 0 && <span>Cr&nbsp;: <strong className="text-amber-300">{fmt(p.wallet_amount)}</strong></span>}
+                                </div>
+                                {p.signed_by && <p className="text-[9px] text-slate-500 mt-1 truncate">Signé&nbsp;: {p.signed_by}</p>}
+                                <div className="flex gap-1 mt-1.5 flex-wrap">
+                                  <Button size="sm" variant="outline" onClick={() => viewPdf(p)} className="border-slate-700 text-slate-300 h-6 px-1.5 text-[10px]" data-testid={`history-view-${p.id}`}>
+                                    <Eye className="w-3 h-3 mr-0.5" /> PDF
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => downloadPdf(p)} className="border-slate-700 text-slate-300 h-6 px-1.5 text-[10px]">
+                                    <Download className="w-3 h-3" />
+                                  </Button>
+                                  {isAdmin && p.admin_validated && (
+                                    <Button size="sm" variant="outline" onClick={() => unlockPoint(p)} className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10 h-6 px-1.5 text-[10px]" data-testid={`history-unlock-${p.id}`}>
+                                      <Unlock className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                  {isAdmin && (
+                                    <Button size="sm" variant="outline" onClick={() => deletePoint(p)} className="border-rose-500/50 text-rose-300 hover:bg-rose-500/10 h-6 px-1.5" data-testid={`history-delete-${p.id}`}>
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {/* Récap moyens de paiement du jour */}
+                    {day.filled > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-3 text-xs">
+                        {day.cash_amount > 0 && (
+                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded px-2 py-1">
+                            <span className="text-emerald-300/80">Espèces&nbsp;: </span>
+                            <span className="text-emerald-300 font-semibold">{fmt(day.cash_amount)} F</span>
+                          </div>
+                        )}
+                        {day.mobile_amount > 0 && (
+                          <div className="bg-orange-500/5 border border-orange-500/20 rounded px-2 py-1">
+                            <span className="text-orange-300/80">Mobile&nbsp;: </span>
+                            <span className="text-orange-300 font-semibold">{fmt(day.mobile_amount)} F</span>
+                          </div>
+                        )}
+                        {day.cheque_amount > 0 && (
+                          <div className="bg-purple-500/5 border border-purple-500/20 rounded px-2 py-1">
+                            <span className="text-purple-300/80">Chèque&nbsp;: </span>
+                            <span className="text-purple-300 font-semibold">{fmt(day.cheque_amount)} F</span>
+                          </div>
+                        )}
+                        {day.wallet_amount > 0 && (
+                          <div className="bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1">
+                            <span className="text-amber-300/80">Crédit&nbsp;: </span>
+                            <span className="text-amber-300 font-semibold">{fmt(day.wallet_amount)} F</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
+
+              {/* === Reversements hebdomadaires (liste plate) === */}
+              {weeklyEntries.length > 0 && (
+                <div className="p-3 sm:p-4 bg-slate-800/20" data-testid="history-weekly-section">
+                  <p className="text-xs uppercase text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" /> Reversements hebdomadaires
+                  </p>
+                  <div className="divide-y divide-slate-800">
+                    {weeklyEntries.map((p) => {
+                      const st = getStatus(p);
+                      const StIcon = st.icon;
+                      return (
+                        <div key={p.id} className="py-2.5 hover:bg-slate-800/40 transition" data-testid={`history-row-${p.id}`}>
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <Badge className={`${st.color} text-xs`}>
+                                  <StIcon className="w-3 h-3 mr-1" /> {st.label}
+                                </Badge>
+                                <Badge variant="outline" className="border-slate-600 text-slate-300 text-xs">
+                                  <Calendar className="w-3 h-3 mr-1" /> Hebdo
+                                </Badge>
+                                <span className="text-white font-medium">{formatPeriod(p)}</span>
+                              </div>
+                              <div className="text-xs text-slate-400 space-y-0.5">
+                                <p>Créé par <span className="text-slate-200">{p.created_by || "—"}</span></p>
+                                {p.signed && (
+                                  <p>Signé par <span className="text-blue-300">{p.signed_by || "—"}</span>{p.signed_at && <> · {format(parseISO(p.signed_at), "dd/MM/yyyy HH:mm")}</>}</p>
+                                )}
+                                {p.admin_validated && (
+                                  <p>Validé par <span className="text-emerald-300">{p.admin_validated_by || "—"}</span>{p.admin_validated_at && <> · {format(parseISO(p.admin_validated_at), "dd/MM/yyyy HH:mm")}</>}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xl font-bold text-white">{fmt(p.total_amount)} F</p>
+                              <div className="flex gap-1 justify-end flex-wrap mt-1">
+                                <Button size="sm" variant="outline" onClick={() => viewPdf(p)} className="border-slate-700 text-slate-300 h-7 px-2 text-xs">
+                                  <Eye className="w-3.5 h-3.5 mr-1" /> PDF
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => downloadPdf(p)} className="border-slate-700 text-slate-300 h-7 px-2 text-xs">
+                                  <Download className="w-3.5 h-3.5" />
+                                </Button>
+                                {isAdmin && p.admin_validated && (
+                                  <Button size="sm" variant="outline" onClick={() => unlockPoint(p)} className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10 h-7 px-2 text-xs">
+                                    <Unlock className="w-3.5 h-3.5 mr-1" /> Rouvrir
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  <Button size="sm" variant="outline" onClick={() => deletePoint(p)} className="border-rose-500/50 text-rose-300 hover:bg-rose-500/10 h-7 px-2">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

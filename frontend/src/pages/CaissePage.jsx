@@ -411,8 +411,10 @@ const CaissePage = () => {
   // ============== FAIRE LE POINT (Rapport période : jour / semaine / personnalisé) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
-  // Sub-tab active inside the "Faire le point" tab ("point-hebdo" | "point-financier")
+  // Sub-tab active inside the "Faire le point" tab ("point-hebdo" | "reversement" | "point-history")
   const [hebdoSubTab, setHebdoSubTab] = useState("point-hebdo");
+  // Sub-sub-tab active inside the "Reversement" sub-menu ("bar" | "menu_combos" | "jeux" | "locations")
+  const [reversementSubTab, setReversementSubTab] = useState("bar");
   // End date (inclusive). Par défaut = dimanche de la semaine courante (preset "Cette semaine").
   const [weekEndDate, setWeekEndDate] = useState(() => {
     const d = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -5870,21 +5872,9 @@ _Gérante - Espace Maxo_
                   <BarChart3 className="w-4 h-4 mr-2" />
                   Faire le point
                 </TabsTrigger>
-                <TabsTrigger value="rev-bar" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-rev-bar">
-                  <Wine className="w-4 h-4 mr-1" />
-                  Reversement Bar
-                </TabsTrigger>
-                <TabsTrigger value="rev-menu" className="data-[state=active]:bg-green-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-rev-menu">
-                  <UtensilsCrossed className="w-4 h-4 mr-1" />
-                  Reversement Menu
-                </TabsTrigger>
-                <TabsTrigger value="rev-jeux" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-rev-jeux">
-                  <Gamepad2 className="w-4 h-4 mr-1" />
-                  Reversement Jeux
-                </TabsTrigger>
-                <TabsTrigger value="rev-locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-rev-locations">
-                  <Building2 className="w-4 h-4 mr-1" />
-                  Reversement Locations
+                <TabsTrigger value="reversement" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-reversement">
+                  <Coins className="w-4 h-4 mr-2" />
+                  Reversement
                 </TabsTrigger>
                 <TabsTrigger value="point-history" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-history">
                   <History className="w-4 h-4 mr-2" />
@@ -5907,23 +5897,46 @@ _Gérante - Espace Maxo_
                     refreshWeekly={fetchWeeklyReport}
                     isAdmin={currentUser?.role === 'admin'}
                     currentUser={currentUser}
-                    onGoToReversement={() => setHebdoSubTab("rev-bar")}
+                    onGoToReversement={() => { setHebdoSubTab("reversement"); setReversementSubTab("bar"); }}
                   />
                 </DayClosureGuard>
               </TabsContent>
 
-              {/* 4 onglets distincts — un par catégorie de reversement */}
-              <TabsContent value="rev-bar">
-                <PointFinancierTab currentUser={currentUser} fixedCategory="bar" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
-              </TabsContent>
-              <TabsContent value="rev-menu">
-                <PointFinancierTab currentUser={currentUser} fixedCategory="menu_combos" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
-              </TabsContent>
-              <TabsContent value="rev-jeux">
-                <PointFinancierTab currentUser={currentUser} fixedCategory="jeux" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
-              </TabsContent>
-              <TabsContent value="rev-locations">
-                <PointFinancierTab currentUser={currentUser} fixedCategory="locations" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
+              {/* Sous-menu unique "Reversement" — 4 catégories côte à côte */}
+              <TabsContent value="reversement">
+                <Tabs value={reversementSubTab} onValueChange={setReversementSubTab} className="w-full">
+                  <TabsList className="bg-slate-900/60 border border-slate-700 mb-4 flex-wrap h-auto" data-testid="reversement-subtabs">
+                    <TabsTrigger value="bar" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="rev-subtab-bar">
+                      <Wine className="w-4 h-4 mr-1" />
+                      Bar
+                    </TabsTrigger>
+                    <TabsTrigger value="menu_combos" className="data-[state=active]:bg-green-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="rev-subtab-menu">
+                      <UtensilsCrossed className="w-4 h-4 mr-1" />
+                      Menu &amp; Combos
+                    </TabsTrigger>
+                    <TabsTrigger value="jeux" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="rev-subtab-jeux">
+                      <Gamepad2 className="w-4 h-4 mr-1" />
+                      Jeux
+                    </TabsTrigger>
+                    <TabsTrigger value="locations" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="rev-subtab-locations">
+                      <Building2 className="w-4 h-4 mr-1" />
+                      Locations
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="bar">
+                    <PointFinancierTab currentUser={currentUser} fixedCategory="bar" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
+                  </TabsContent>
+                  <TabsContent value="menu_combos">
+                    <PointFinancierTab currentUser={currentUser} fixedCategory="menu_combos" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
+                  </TabsContent>
+                  <TabsContent value="jeux">
+                    <PointFinancierTab currentUser={currentUser} fixedCategory="jeux" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
+                  </TabsContent>
+                  <TabsContent value="locations">
+                    <PointFinancierTab currentUser={currentUser} fixedCategory="locations" onGotoHebdo={() => setHebdoSubTab("point-hebdo")} />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
 
               <TabsContent value="point-history">

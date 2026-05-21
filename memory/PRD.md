@@ -2180,6 +2180,7 @@ Régression validée : 26/26 tests passés (iteration_31).
 ## Prioritized Backlog
 
 ### P0 (Completed)
+- [x] **Regroupement des Reversements** : Sous-menu unique "Reversement" (Bar/Menu/Jeux/Locations) + Historique groupé par jour avec les 4 catégories côte à côte (21/05/2026)
 - [x] Dashboard Analytics Admin avec graphiques + MoM (17/04/2026)
 - [x] Refactoring Phase 1 : 3 tabs frontend + 1 router backend (17/04/2026)
 - [x] Bug Reversement/Hebdo concordance via assigned_week (17/04/2026)
