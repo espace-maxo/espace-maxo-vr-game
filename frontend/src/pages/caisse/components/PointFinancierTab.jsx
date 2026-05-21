@@ -829,7 +829,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
             return (<Card key={key} className={`bg-${color}-900/10 border-${color}-500/20`}><CardContent className="p-4 flex items-center justify-between"><div className="flex items-center gap-2"><Icon className={`w-4 h-4 text-${color}-400`} /><span className="text-slate-300 text-sm">{label}</span></div><span className={`text-${color}-400 font-bold`}>{formatPrice(val)} F</span></CardContent></Card>);
           })}
         </div>
-        {currentPoint.billettage && Object.values(currentPoint.billettage).some(v => parseInt(v) > 0) && <BillettageReadOnly billettage={currentPoint.billettage} />}
+        {!hideBillettage && currentPoint.billettage && Object.values(currentPoint.billettage).some(v => parseInt(v) > 0) && <BillettageReadOnly billettage={currentPoint.billettage} />}
         <ComparisonCard comparison={comparison} totalReversed={totalReversed} totalRecorded={totalRecorded} totalDiff={totalDiff} />
         <div className="flex flex-wrap gap-3 justify-center">
           <Button data-testid="fp-view-pdf-btn" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={viewPdf}><Eye className="w-4 h-4 mr-2" /> Consulter le PDF</Button>
@@ -878,7 +878,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
             return (<Card key={key} className={`bg-${color}-900/10 border-${color}-500/20`}><CardContent className="p-4 flex items-center justify-between"><div className="flex items-center gap-2"><Icon className={`w-4 h-4 text-${color}-400`} /><span className="text-slate-300 text-sm">{label}</span></div><span className={`text-${color}-400 font-bold`}>{formatPrice(val)} F</span></CardContent></Card>);
           })}
         </div>
-        {currentPoint.billettage && Object.values(currentPoint.billettage).some(v => parseInt(v) > 0) && <BillettageReadOnly billettage={currentPoint.billettage} />}
+        {!hideBillettage && currentPoint.billettage && Object.values(currentPoint.billettage).some(v => parseInt(v) > 0) && <BillettageReadOnly billettage={currentPoint.billettage} />}
         <ComparisonCard comparison={comparison} totalReversed={totalReversed} totalRecorded={totalRecorded} totalDiff={totalDiff} />
         <div className="flex flex-wrap gap-3 justify-end">
           {isAdmin && (<>
