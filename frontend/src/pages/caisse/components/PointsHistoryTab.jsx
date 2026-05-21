@@ -18,7 +18,15 @@ import {
 import {
   History, FileText, Download, CheckCircle2, Lock, Clock, Trash2, Search,
   Calendar, ShieldCheck, AlertTriangle, RefreshCw, TrendingUp, Unlock, Eye,
+  Wine, UtensilsCrossed, Gamepad2, Building2, ChevronRight,
 } from "lucide-react";
+
+const CATEGORY_INFO = {
+  bar:         { label: "Bar",                   icon: Wine,            color: "orange" },
+  menu_combos: { label: "Menu & Combos",         icon: UtensilsCrossed, color: "green" },
+  jeux:        { label: "Jeux",                  icon: Gamepad2,        color: "blue" },
+  locations:   { label: "Locations & Réservations", icon: Building2,    color: "purple" },
+};
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -50,6 +58,33 @@ const PointsHistoryTab = ({ currentUser }) => {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // === Tableau de bord du jour : statut des 4 reversements par catégorie ===
+  const [dashboardDate, setDashboardDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const dashboardByCategory = useMemo(() => {
+    // On prend les points journaliers (period_type=daily) de la date sélectionnée
+    const result = {};
+    for (const cat of Object.keys(CATEGORY_INFO)) {
+      result[cat] = null;
+    }
+    for (const p of points) {
+      if (p.period_type === "daily" && p.date === dashboardDate) {
+        const cat = p.category || "all";
+        if (cat in result) result[cat] = p;
+      }
+    }
+    return result;
+  }, [points, dashboardDate]);
+  const dashboardStats = useMemo(() => {
+    const cats = Object.values(dashboardByCategory);
+    return {
+      total_amount: cats.reduce((s, p) => s + (p?.total_amount || 0), 0),
+      validated: cats.filter(p => p?.admin_validated).length,
+      signed: cats.filter(p => p && !p.admin_validated && p.signed).length,
+      pending: cats.filter(p => p && !p.signed && !p.admin_validated).length,
+      missing: cats.filter(p => !p).length,
+    };
+  }, [dashboardByCategory]);
 
   const getStatus = (p) => {
     if (p.admin_validated) return { key: "admin_validated", label: "Validé", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40", icon: CheckCircle2 };
@@ -145,6 +180,83 @@ const PointsHistoryTab = ({ currentUser }) => {
           <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Actualiser
         </Button>
       </div>
+
+      {/* === Tableau de bord du jour : 4 reversements côte à côte === */}
+      <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/40 border-slate-700" data-testid="reversement-dashboard">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-white text-base flex items-center justify-between gap-3 flex-wrap">
+            <span className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-cyan-400" />
+              Tableau de bord des reversements
+            </span>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={dashboardDate}
+                onChange={(e) => setDashboardDate(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white h-8 w-[160px]"
+                data-testid="dashboard-date"
+              />
+              <Badge className={`text-xs ${dashboardStats.validated === 4 ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}`}>
+                {dashboardStats.validated}/4 validés
+              </Badge>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Object.entries(CATEGORY_INFO).map(([key, info]) => {
+              const p = dashboardByCategory[key];
+              const Icon = info.icon;
+              const colorClass = `text-${info.color}-400`;
+              const borderClass = p
+                ? (p.admin_validated ? "border-emerald-500/40 bg-emerald-500/5"
+                  : p.signed ? "border-blue-500/40 bg-blue-500/5"
+                  : "border-amber-500/40 bg-amber-500/5")
+                : "border-slate-700 bg-slate-800/30";
+              const statusBadge = p ? (
+                p.admin_validated
+                  ? <Badge className="bg-emerald-500/20 text-emerald-300 text-[10px]"><CheckCircle2 className="w-2.5 h-2.5 mr-1" /> Validé</Badge>
+                  : p.signed
+                  ? <Badge className="bg-blue-500/20 text-blue-300 text-[10px]"><Lock className="w-2.5 h-2.5 mr-1" /> Signé</Badge>
+                  : <Badge className="bg-amber-500/20 text-amber-300 text-[10px]"><Clock className="w-2.5 h-2.5 mr-1" /> Brouillon</Badge>
+              ) : <Badge className="bg-slate-700/40 text-slate-400 text-[10px]">Non saisi</Badge>;
+
+              return (
+                <div key={key} className={`rounded-lg p-3 border-2 transition-colors ${borderClass}`} data-testid={`dashboard-cat-${key}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Icon className={`w-4 h-4 ${colorClass}`} />
+                      <span className={`font-semibold text-sm ${colorClass}`}>{info.label}</span>
+                    </div>
+                    {statusBadge}
+                  </div>
+                  <p className={`text-lg font-bold ${colorClass}`}>
+                    {p ? `${fmt(p.total_amount)} F` : "—"}
+                  </p>
+                  {p && (
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
+                      {p.cash_amount > 0 && <span>Esp : <strong className="text-green-300">{fmt(p.cash_amount)}</strong></span>}
+                      {p.mobile_amount > 0 && <span>Momo : <strong className="text-orange-300">{fmt(p.mobile_amount)}</strong></span>}
+                      {p.cheque_amount > 0 && <span>Chq : <strong className="text-purple-300">{fmt(p.cheque_amount)}</strong></span>}
+                      {p.wallet_amount > 0 && <span>Cr : <strong className="text-amber-300">{fmt(p.wallet_amount)}</strong></span>}
+                    </div>
+                  )}
+                  {p?.signed_by && <p className="text-[10px] text-slate-500 mt-1 truncate">Signé par {p.signed_by}</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Récap général */}
+          <div className="mt-3 pt-3 border-t border-slate-700/50 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div className="text-slate-400">Total du jour : <strong className="text-cyan-300 text-sm">{fmt(dashboardStats.total_amount)} F</strong></div>
+            <div className="text-slate-400">Brouillons : <strong className="text-amber-300">{dashboardStats.pending}</strong></div>
+            <div className="text-slate-400">Signés : <strong className="text-blue-300">{dashboardStats.signed}</strong></div>
+            <div className="text-slate-400">Non saisis : <strong className="text-slate-500">{dashboardStats.missing}</strong></div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
