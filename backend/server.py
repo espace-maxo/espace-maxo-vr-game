@@ -43,6 +43,7 @@ from routers.gerante_advances import router as gerante_advances_router, set_db a
 from routers.journal import router as journal_router, set_db as set_journal_db
 from routers.day_closures import router as day_closures_router, set_db as set_day_closures_db
 from routers.billettage import router as billettage_router, set_db as set_billettage_db
+from routers.location_simulations import router as location_sim_router, set_db as set_location_sim_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -74,6 +75,7 @@ set_gerante_advances_db(db)
 set_journal_db(db)
 set_day_closures_db(db)
 set_billettage_db(db)
+set_location_sim_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -132,6 +134,7 @@ api_router.include_router(gerante_advances_router)
 api_router.include_router(journal_router)
 api_router.include_router(day_closures_router)
 api_router.include_router(billettage_router)
+api_router.include_router(location_sim_router)
 
 # Configure logging
 logging.basicConfig(

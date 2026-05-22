@@ -13,10 +13,11 @@ import { toast } from "sonner";
 import { 
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
   Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt,
-  CalendarDays, List,
+  CalendarDays, List, Calculator,
 } from "lucide-react";
 import { LOGO_BASE64 } from "../constants_logo";
 import LocationCalendarTab from "./LocationCalendarTab";
+import LocationSimulator from "./LocationSimulator";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -65,6 +66,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   const [locations, setLocations] = useState([]);
   const [proformas, setProformas] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState("list");
 
   // Append actor (manager/admin) info to write requests so they appear
   // in the admin audit trail.
@@ -780,7 +782,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
   };
 
   return (
-    <Tabs defaultValue="list" className="w-full">
+    <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
       <TabsList className="bg-slate-800/50 border border-slate-700 mb-4">
         <TabsTrigger value="list" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="loc-subtab-list">
           <List className="w-4 h-4 mr-1" /> Liste des réservations
@@ -788,9 +790,37 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         <TabsTrigger value="calendar" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="loc-subtab-calendar">
           <CalendarDays className="w-4 h-4 mr-1" /> Calendrier de disponibilité
         </TabsTrigger>
+        <TabsTrigger value="simulator" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="loc-subtab-simulator">
+          <Calculator className="w-4 h-4 mr-1" /> Simulateur de devis
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="calendar">
         <LocationCalendarTab formatPrice={formatPrice} />
+      </TabsContent>
+      <TabsContent value="simulator">
+        <LocationSimulator
+          currentUser={currentUser}
+          onCreateReservation={(sim) => {
+            // Pré-remplit le formulaire d'ajout de réservation avec les données de la simulation
+            setEditingLocation(null);
+            setFormData({
+              space_types: ["salle_fete"],
+              customer_name: sim.client_name || "",
+              customer_phone: "",
+              reservation_date: sim.event_date || "",
+              start_time: "",
+              end_time: "",
+              number_of_guests: sim.num_persons || 1,
+              event_type: "",
+              rental_amount: sim.sale_price_global || 0,
+              deposit_amount: 0,
+              notes: (sim.notes ? sim.notes + "\n\n" : "") + `(Issu de la simulation « ${sim.name} » — ${sim.items?.length || 0} article(s), marge ${sim.margin_type === "fixed" ? `+${sim.margin_value} F` : `+${sim.margin_value}%`})`,
+            });
+            setActiveSubTab("list");
+            setShowModal(true);
+            toast.success(`Réservation pré-remplie depuis « ${sim.name} »`);
+          }}
+        />
       </TabsContent>
       <TabsContent value="list">
     <div className="space-y-4">
