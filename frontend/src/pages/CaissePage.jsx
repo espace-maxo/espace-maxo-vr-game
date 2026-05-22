@@ -3394,55 +3394,144 @@ _Gérante - Espace Maxo_
   };
 
   // ============== INVOICE ACTIONS ==============
+  // (22/05/2026) — Nouveau flow : "ENVOYER LA COMMANDE" n'imprime PLUS la facture en BDD.
+  // Elle se contente d'enregistrer les items dans la table + lancer les bons cuisine/bar/jeux.
+  // La FACTURE est créée UNIQUEMENT au clic "Imprimer le bon client".
+
+  // Génère un numéro de bon temporaire pour les impressions de production (cuisine/bar/jeux)
+  // tant que la facture n'est pas encore créée en BDD.
+  const _tempBonNumber = () => `TMP-${Date.now().toString().slice(-6)}`;
+
+  const _buildInvoiceData = () => ({
+    customer_name: selectedClient?.name || "Client",
+    customer_phone: selectedClient?.phone || "",
+    items: currentBill,
+    subtotal,
+    discount,
+    discount_amount: discountAmount,
+    total,
+    payment_method: paymentMethod,
+    totals_by_department: totalByDepartment,
+    notes,
+    created_by: currentUser?.full_name || currentUser?.username || "admin",
+    validation_status: "validated",
+    validated_by: currentUser?.full_name || currentUser?.username || "admin",
+    validated_at: new Date().toISOString(),
+    table_number: activeTable?.table_number || null,
+  });
+
   const saveInvoice = async () => {
     if (currentBill.length === 0) {
       toast.error("Le bon est vide");
       return;
     }
 
-    // If Mobile Money payment, show payment options modal
+    // Mobile Money payment → flow d'attente paiement (création facture après paiement)
     if (paymentMethod === "mobile") {
-      const invoiceData = {
-        customer_name: selectedClient?.name || "Client",
-        customer_phone: selectedClient?.phone || "",
-        items: currentBill,
-        subtotal,
-        discount,
-        discount_amount: discountAmount,
-        total,
-        payment_method: paymentMethod,
-        totals_by_department: totalByDepartment,
-        notes,
-        created_by: currentUser?.full_name || currentUser?.username || "admin",
-        // Auto-validation à l'émission du bon client (pas de status pending)
-        validation_status: "validated",
-        validated_by: currentUser?.full_name || currentUser?.username || "admin",
-        validated_at: new Date().toISOString(),
-        table_number: activeTable?.table_number || null
-      };
+      const invoiceData = _buildInvoiceData();
       setPendingInvoiceData(invoiceData);
       setShowMobilePaymentModal(true);
       return;
     }
 
-    await createInvoice({
-      customer_name: selectedClient?.name || "Client",
-      customer_phone: selectedClient?.phone || "",
-      items: currentBill,
-      subtotal,
-      discount,
-      discount_amount: discountAmount,
-      total,
-      payment_method: paymentMethod,
-      totals_by_department: totalByDepartment,
-      notes,
-      created_by: currentUser?.full_name || currentUser?.username || "admin",
-      // Auto-validation à l'émission du bon client (pas de status pending)
-      validation_status: "validated",
-      validated_by: currentUser?.full_name || currentUser?.username || "admin",
-      validated_at: new Date().toISOString(),
-      table_number: activeTable?.table_number || null
-    });
+    // Cas "PAS DE TABLE ACTIVE" → vente directe : on crée la facture tout de suite (legacy)
+    if (!activeTableId) {
+      await createInvoice(_buildInvoiceData());
+      return;
+    }
+
+    // Cas "TABLE ACTIVE" → nouveau flow : on stocke dans la table + impressions production
+    // SANS créer la facture en BDD. La facture sera créée par "Imprimer le bon client".
+    try {
+      const tempBon = { invoice_number: _tempBonNumber(), items: currentBill, table_number: activeTable?.table_number };
+      // 1. Mettre à jour la table : conserver les items, passer en "ready_to_invoice"
+      await axios.put(`${API}/caisse/tables/${activeTableId}?${actorQs()}`, {
+        items: currentBill,
+        status: "ready_to_invoice",
+        client_name: selectedClient?.name || activeTable?.client_name || "Client",
+        last_order_sent_at: new Date().toISOString(),
+      });
+      // 2. Imprimer les bons de production (cuisine / bar / jeux) depuis le bon temporaire
+      try { printKitchenOrder(tempBon); } catch {}
+      try { printBarOrder(tempBon); } catch {}
+      try { printGamesOrder(tempBon); } catch {}
+
+      toast.success("✓ Commande envoyée en production. Cliquez sur « Imprimer le bon client » pour facturer.", {
+        duration: 5000,
+      });
+
+      // Nettoyer la zone de saisie (la table garde ses items côté serveur)
+      selectTable(null);
+      clearBill();
+      setSelectedClient(null);
+      setDiscount(0);
+      setNotes("");
+      setActiveTableId(null);
+      setCurrentBill([]);
+      await fetchAllData();
+      await fetchOpenTables(true);
+    } catch (e) {
+      console.error("Error sending order to kitchen:", e);
+      toast.error("Erreur lors de l'envoi en production");
+    }
+  };
+
+  // Imprime le bon client ET crée la facture en BDD (depuis une table "ready_to_invoice")
+  const printClientReceiptAndCreateInvoice = async (table) => {
+    if (!table || !table.id) return;
+    try {
+      // Recharger l'état frais de la table (au cas où)
+      const tRes = await axios.get(`${API}/caisse/tables/${table.id}`);
+      const fresh = tRes.data?.table || table;
+      const items = fresh.items || [];
+      if (items.length === 0) {
+        toast.error("Cette table n'a pas d'articles");
+        return;
+      }
+      const subtotalT = items.reduce((s, i) => s + (i.price || 0) * (i.quantity || 1), 0);
+      const totals_by_department = items.reduce((acc, it) => {
+        const dep = it.department || "autres";
+        acc[dep] = (acc[dep] || 0) + (it.price || 0) * (it.quantity || 1);
+        return acc;
+      }, {});
+      const invoiceData = {
+        customer_name: fresh.client_name || "Client",
+        customer_phone: "",
+        items,
+        subtotal: subtotalT,
+        discount: 0,
+        discount_amount: 0,
+        total: subtotalT,
+        payment_method: "cash",
+        totals_by_department,
+        notes: "",
+        created_by: currentUser?.full_name || currentUser?.username || "admin",
+        validation_status: "validated",
+        validated_by: currentUser?.full_name || currentUser?.username || "admin",
+        validated_at: new Date().toISOString(),
+        table_number: fresh.table_number,
+      };
+      // POST /invoices
+      const r = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
+      const created = r.data?.invoice || r.data;
+      // Imprimer le ticket client
+      try { printTicket(created); } catch {}
+      // Marquer la table : invoiced + items vidés
+      try {
+        await axios.put(`${API}/caisse/tables/${fresh.id}?${actorQs()}`, {
+          status: "invoiced",
+          items: [],
+          invoice_created_at: new Date().toISOString(),
+        });
+      } catch {}
+      toast.success("Bon client imprimé · Facture créée");
+      await fetchAllData();
+      await fetchOpenTables(true);
+      await fetchTablesStatus();
+    } catch (e) {
+      console.error("printClientReceiptAndCreateInvoice failed:", e);
+      toast.error(e?.response?.data?.detail || "Erreur lors de l'impression du bon client");
+    }
   };
 
   const createInvoice = async (invoiceData) => {
@@ -5824,6 +5913,7 @@ _Gérante - Espace Maxo_
               formatPrice={formatPrice}
               openTables={openTables}
               currentUser={currentUser}
+              onPrintClientReceipt={printClientReceiptAndCreateInvoice}
               onTakeOrder={(tableNumber) => {
                 // Navigate to commande tab
                 setActiveTab("commande");

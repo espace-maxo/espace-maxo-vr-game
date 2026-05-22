@@ -14,7 +14,8 @@ const TablesTab = ({
   formatPrice,
   openTables = [],  // Add openTables prop for order details
   onTakeOrder,      // Callback to navigate to order tab with selected table
-  currentUser       // Current user for role-based features
+  currentUser,      // Current user for role-based features
+  onPrintClientReceipt  // (22/05/2026) — Crée la facture en BDD + imprime le ticket client
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [autoStopEnabled, setAutoStopEnabled] = useState(() => {
@@ -185,6 +186,8 @@ const TablesTab = ({
                 ? 'bg-slate-800/50 border-slate-600 hover:border-slate-500' 
                 : table.status === 'invoiced'
                   ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
+                  : table.status === 'ready_to_invoice'
+                    ? 'bg-amber-900/30 border-amber-500 shadow-lg shadow-amber-500/20 animate-pulse'
                   : table.status_color === 'green'
                     ? 'bg-green-900/30 border-green-500 shadow-lg shadow-green-500/20'
                     : table.status_color === 'orange'
@@ -196,6 +199,8 @@ const TablesTab = ({
               ? `Table ${table.table_number} - Libre` 
               : table.status === 'invoiced'
                 ? `Table ${table.table_number} - Facturée`
+                : table.status === 'ready_to_invoice'
+                  ? `Table ${table.table_number} - Commande envoyée, à facturer`
                 : `Cliquez pour voir les détails`
             }
           >
@@ -204,15 +209,17 @@ const TablesTab = ({
             }`}>
               {table.table_number}
             </span>
-            {(table.status === 'occupied' || table.status === 'invoiced') && (
+            {(table.status === 'occupied' || table.status === 'invoiced' || table.status === 'ready_to_invoice') && (
               <>
                 <span className={`text-xs font-bold ${
+                  table.status === 'ready_to_invoice' ? 'text-amber-300' :
                   table.status_color === 'green' ? 'text-green-400' :
                   table.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
                 }`}>
                   {table.duration_formatted}
                 </span>
                 <Timer className={`w-3 h-3 absolute top-1 right-1 ${
+                  table.status === 'ready_to_invoice' ? 'text-amber-300' :
                   table.status_color === 'green' ? 'text-green-400' :
                   table.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
                 }`} />
@@ -248,12 +255,16 @@ const TablesTab = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {tablesStatus.tables?.filter(t => t.status === 'occupied' || t.status === 'invoiced')
+                  {tablesStatus.tables?.filter(t => t.status === 'occupied' || t.status === 'invoiced' || t.status === 'ready_to_invoice')
                     .sort((a, b) => b.duration_minutes - a.duration_minutes)
                     .map(table => (
                     <tr key={table.table_number} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                       <td className="p-2">
-                        <Badge className={table.status === 'invoiced' ? "bg-blue-500/20 text-blue-400 font-bold" : "bg-teal-500/20 text-teal-400 font-bold"}>
+                        <Badge className={
+                          table.status === 'invoiced' ? "bg-blue-500/20 text-blue-400 font-bold"
+                          : table.status === 'ready_to_invoice' ? "bg-amber-500/20 text-amber-300 font-bold"
+                          : "bg-teal-500/20 text-teal-400 font-bold"
+                        }>
                           Table {table.table_number}
                         </Badge>
                       </td>
@@ -264,22 +275,24 @@ const TablesTab = ({
                       <td className="p-2 text-center">
                         <span className={`font-bold ${
                           table.status === 'invoiced' ? 'text-blue-400' :
+                          table.status === 'ready_to_invoice' ? 'text-amber-300' :
                           table.status_color === 'green' ? 'text-green-400' :
                           table.status_color === 'orange' ? 'text-orange-400' : 'text-red-400'
                         }`}>
-                          {table.status === 'invoiced' ? 'Facturée' : table.duration_formatted}
+                          {table.status === 'invoiced' ? 'Facturée' : table.status === 'ready_to_invoice' ? 'À facturer' : table.duration_formatted}
                         </span>
                       </td>
                       <td className="p-2 text-center">
                         <div className={`w-4 h-4 rounded-full mx-auto ${
+                          table.status === 'ready_to_invoice' ? 'bg-amber-400 animate-pulse' :
                           table.status_color === 'green' ? 'bg-green-500' :
                           table.status_color === 'orange' ? 'bg-orange-500 animate-pulse' : 
                           'bg-red-500 animate-pulse'
                         }`}></div>
                       </td>
                       <td className="p-2 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {currentUser?.role === 'manager' && onTakeOrder && table.status !== 'invoiced' && (
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          {currentUser?.role === 'manager' && onTakeOrder && table.status !== 'invoiced' && table.status !== 'ready_to_invoice' && (
                             <Button 
                               size="sm"
                               onClick={() => onTakeOrder(table.table_number)}
@@ -287,6 +300,18 @@ const TablesTab = ({
                             >
                               <ShoppingCart className="w-4 h-4 mr-1" />
                               Commander
+                            </Button>
+                          )}
+                          {/* NEW (22/05/2026) : Imprimer le bon client → crée la facture en BDD */}
+                          {table.status === 'ready_to_invoice' && onPrintClientReceipt && (
+                            <Button 
+                              size="sm"
+                              onClick={() => onPrintClientReceipt({ id: table.table_id, table_number: table.table_number })}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+                              data-testid={`print-client-receipt-${table.table_number}`}
+                            >
+                              <Zap className="w-4 h-4 mr-1" />
+                              Imprimer le bon client
                             </Button>
                           )}
                           <Button 

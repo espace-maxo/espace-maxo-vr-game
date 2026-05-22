@@ -3914,13 +3914,69 @@ class CaisseTableUpdate(BaseModel):
     payment_method: Optional[str] = None
     discount: Optional[int] = None
     notes: Optional[str] = None
-    status: Optional[str] = None  # "open", "invoiced", "closed"
+    status: Optional[str] = None  # "open" | "ready_to_invoice" | "invoiced" | "closed"
     invoice_created_at: Optional[str] = None
+    last_order_sent_at: Optional[str] = None  # Timestamp dernier "ENVOYER LA COMMANDE"
 
 @api_router.get("/caisse/tables/status")
 async def get_tables_status():
-    """Get status of all 20 tables (free/occupied/invoiced with timing)"""
+    """Get status of all 20 tables (free/occupied/invoiced with timing).
+
+    AUTO-LIBÉRATION : les tables `invoiced` depuis plus de 30 minutes sont
+    automatiquement libérées (supprimées) pour éviter qu'elles restent
+    indéfiniment dans la collection si l'auto-stop frontend n'est pas activé.
+    """
     try:
+        # Auto-libérer les tables invoiced > 30 min (avant lecture)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        threshold = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        try:
+            # Tables invoiced anciennes (avec ou sans invoice_created_at)
+            stale = await db.caisse_tables.find({
+                "status": "invoiced",
+                "$or": [
+                    {"invoice_created_at": {"$lt": threshold}},
+                    {"invoice_created_at": {"$exists": False}},
+                    {"invoice_created_at": None},
+                ],
+            }, {"_id": 0}).to_list(50)
+            # Pour les tables sans invoice_created_at, on filtre par created_at > 30 min
+            stale = [
+                s for s in stale
+                if s.get("invoice_created_at") or (
+                    s.get("created_at") and s["created_at"] < threshold
+                )
+            ]
+            for s in stale:
+                # Archive in service_stats avant suppression
+                try:
+                    created_at = datetime.fromisoformat(s["created_at"].replace("Z", "+00:00"))
+                    inv_at = datetime.fromisoformat(s.get("invoice_created_at", now_iso).replace("Z", "+00:00"))
+                    duration = max(0, int((inv_at - created_at).total_seconds() / 60))
+                    await db.service_stats.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "table_number": s.get("table_number"),
+                        "server_id": s.get("server_id", ""),
+                        "server_name": s.get("server_name", ""),
+                        "client_name": s.get("client_name", "Client"),
+                        "items_count": 0,
+                        "total_amount": 0,
+                        "duration_minutes": duration,
+                        "quality_status": "excellent" if duration < 15 else ("acceptable" if duration < 30 else "slow"),
+                        "started_at": s["created_at"],
+                        "stopped_at": now_iso,
+                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "auto_released": True,
+                    })
+                except Exception as _e:
+                    logger.warning(f"Auto-release stats save failed for table {s.get('table_number')}: {_e}")
+            if stale:
+                stale_ids = [s["id"] for s in stale]
+                deleted = await db.caisse_tables.delete_many({"id": {"$in": stale_ids}})
+                logger.info(f"Auto-released {deleted.deleted_count} stale invoiced tables")
+        except Exception as _e:
+            logger.warning(f"Auto-release of stale invoiced tables failed: {_e}")
+
         # Get all tables (occupied or invoiced)
         all_tables = await db.caisse_tables.find({}, {"_id": 0}).to_list(100)
         
@@ -3939,9 +3995,24 @@ async def get_tables_status():
                 table_status = table.get("status", "occupied")  # Default to occupied for backwards compatibility
                 
                 # Calculate service duration in minutes
+                # IMPORTANT: pour les tables FACTURÉES, on FIGE le timer à invoice_created_at.
+                # Pour les tables READY_TO_INVOICE, on FIGE à last_order_sent_at (commande envoyée).
+                # Sinon le timer continue de tourner indéfiniment et fausse les statistiques.
                 created_at = datetime.fromisoformat(table["created_at"].replace("Z", "+00:00"))
-                duration_seconds = (now - created_at).total_seconds()
-                duration_minutes = int(duration_seconds / 60)
+                if table_status == "invoiced" and table.get("invoice_created_at"):
+                    try:
+                        end_at = datetime.fromisoformat(table["invoice_created_at"].replace("Z", "+00:00"))
+                    except Exception:
+                        end_at = now
+                elif table_status == "ready_to_invoice" and table.get("last_order_sent_at"):
+                    try:
+                        end_at = datetime.fromisoformat(table["last_order_sent_at"].replace("Z", "+00:00"))
+                    except Exception:
+                        end_at = now
+                else:
+                    end_at = now
+                duration_seconds = (end_at - created_at).total_seconds()
+                duration_minutes = max(0, int(duration_seconds / 60))
                 
                 # Determine status color based on duration and invoice status
                 if table_status == "invoiced":
@@ -3958,7 +4029,12 @@ async def get_tables_status():
                 
                 tables_status.append({
                     "table_number": i,
-                    "status": table_status if table_status == "invoiced" else "occupied",
+                    # Conserver le statut sémantique pour l'UI : "occupied" | "ready_to_invoice" | "invoiced"
+                    "status": (
+                        "invoiced" if table_status == "invoiced"
+                        else "ready_to_invoice" if table_status == "ready_to_invoice"
+                        else "occupied"
+                    ),
                     "status_color": status_color,
                     "server_name": table.get("server_name", ""),
                     "server_id": table.get("server_id", ""),
@@ -4103,6 +4179,8 @@ async def update_caisse_table(
             update_data["status"] = table_data.status
         if table_data.invoice_created_at is not None:
             update_data["invoice_created_at"] = table_data.invoice_created_at
+        if table_data.last_order_sent_at is not None:
+            update_data["last_order_sent_at"] = table_data.last_order_sent_at
         
         result = await db.caisse_tables.update_one(
             {"id": table_id},
