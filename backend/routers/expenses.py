@@ -468,6 +468,15 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
         # Skip stock sync for "paiement" expenses (charges/services without inventory impact).
         is_paiement = (update_data.get("expense_type") or expense.get("expense_type")) == "paiement"
         if update.status == "completed" and not was_completed_before and not is_paiement:
+            # === RÉPERTOIRE DES PRIX D'ACHAT (22/05/2026) ===
+            # Alimente automatiquement purchase_price_history avec une entrée par item.
+            try:
+                from .purchase_price_history import record_expense_completion as _record_pph
+                refreshed = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+                if refreshed:
+                    await _record_pph(refreshed)
+            except Exception as _e:
+                logger.warning(f"purchase_price_history hook failed for expense {expense_id}: {_e}")
             try:
                 # Idempotency guard: skip if this expense was already synced (e.g. on hot-reload replay)
                 already_synced = await db.stock_purchases.find_one({

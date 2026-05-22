@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
 import DrinkPurchaseDialog from "./DrinkPurchaseDialog";
+import PurchasePriceHistoryTab from "./PurchasePriceHistoryTab";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -510,7 +511,22 @@ const AchatsTab = ({ ctx }) => {
                     {expenses.filter(e => e.status === 'rejected').length}
                   </Badge>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setAchatsSubView('repertoire_prix')}
+                  data-testid="achats-subtab-repertoire-prix"
+                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
+                    achatsSubView === 'repertoire_prix'
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 mr-1 inline" />
+                  Répertoire prix
+                </button>
               </div>
+
+              {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> : (<>
 
               {/* Categories legend */}
               <div className="flex flex-wrap gap-2 items-center justify-between">
@@ -2304,6 +2320,7 @@ const AchatsTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
               )}
+              </>)}
 
               {/* Modal : Achat Boissons (liaison directe au stock) */}
               <DrinkPurchaseDialog

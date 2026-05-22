@@ -45,6 +45,7 @@ from routers.day_closures import router as day_closures_router, set_db as set_da
 from routers.billettage import router as billettage_router, set_db as set_billettage_db
 from routers.location_simulations import router as location_sim_router, set_db as set_location_sim_db
 from routers.quick_products import router as quick_products_router, set_db as set_quick_products_db, seed_if_empty as seed_quick_products
+from routers.purchase_price_history import router as price_history_router, set_db as set_price_history_db, record_expense_completion as _record_purchase_price
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -78,6 +79,7 @@ set_day_closures_db(db)
 set_billettage_db(db)
 set_location_sim_db(db)
 set_quick_products_db(db)
+set_price_history_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -146,6 +148,7 @@ api_router.include_router(day_closures_router)
 api_router.include_router(billettage_router)
 api_router.include_router(location_sim_router)
 api_router.include_router(quick_products_router)
+api_router.include_router(price_history_router)
 
 # Configure logging
 logging.basicConfig(
