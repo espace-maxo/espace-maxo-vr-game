@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -797,17 +797,74 @@ export default function StockPage() {
   }, [dashboard]);
 
   // Product CRUD
+  // === ADJUSTMENT MODAL STATE (22/05/2026) ===
+  // Quand l'admin modifie la quantité d'un produit dans le catalogue, on demande
+  // un motif clair avant d'envoyer le PUT (qui créera un mouvement type 'ajustement').
+  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [adjustInfo, setAdjustInfo] = useState({ old: 0, new: 0, delta: 0, name: "" });
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustCustomReason, setAdjustCustomReason] = useState("");
+
+  const ADJUST_REASONS = [
+    "Inventaire physique",
+    "Casse / Avarie",
+    "Vol / Perte",
+    "Erreur de saisie",
+    "Don / Offre",
+    "Retour fournisseur",
+    "Autre (préciser)",
+  ];
+
+  const performProductSave = async (extraPayload = {}) => {
+    await axios.put(`${API}/products/${editingItem.id}`, { ...productForm, ...extraPayload });
+    toast.success("Produit mis a jour");
+    setShowProductModal(false); setEditingItem(null);
+    fetchProducts(); fetchDashboard(); fetchMovements();
+  };
+
   const saveProduct = async () => {
     try {
       if (editingItem) {
-        await axios.put(`${API}/products/${editingItem.id}`, productForm);
-        toast.success("Produit mis a jour");
+        const oldQty = Number(editingItem.quantity || 0);
+        const newQty = Number(productForm.quantity || 0);
+        const delta = newQty - oldQty;
+        // Si la quantité change, on demande d'abord un motif (ouvre une modale)
+        if (Math.abs(delta) > 0.0001) {
+          setAdjustInfo({ old: oldQty, new: newQty, delta, name: editingItem.name });
+          setAdjustReason("");
+          setAdjustCustomReason("");
+          setAdjustModalOpen(true);
+          return; // L'envoi se fera après confirmation du motif
+        }
+        await performProductSave();
       } else {
         await axios.post(`${API}/products`, productForm);
         toast.success("Produit cree");
+        setShowProductModal(false); setEditingItem(null); fetchProducts(); fetchDashboard();
       }
-      setShowProductModal(false); setEditingItem(null); fetchProducts(); fetchDashboard();
     } catch (e) { toast.error(e.response?.data?.detail || "Erreur"); }
+  };
+
+  const confirmAdjustmentAndSave = async () => {
+    let reason = adjustReason;
+    if (adjustReason === "Autre (préciser)") {
+      reason = (adjustCustomReason || "").trim();
+    }
+    if (!reason || reason.length < 3) {
+      toast.error("Motif obligatoire (min. 3 caractères)");
+      return;
+    }
+    try {
+      await performProductSave({
+        adjustment_reason: reason,
+        adjustment_user: "Administrateur",
+      });
+      setAdjustModalOpen(false);
+      setAdjustReason("");
+      setAdjustCustomReason("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de l'ajustement");
+    }
   };
 
   const deleteProduct = async (id) => {
@@ -4046,6 +4103,79 @@ export default function StockPage() {
             </div>
 
             <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={saveProduct}><Save className="w-4 h-4 mr-1" /> {editingItem ? "Mettre a jour" : "Enregistrer"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Modal AJUSTEMENT QUANTITÉ (motif obligatoire) === */}
+      <Dialog open={adjustModalOpen} onOpenChange={(open) => { if (!open) { setAdjustModalOpen(false); setAdjustReason(""); setAdjustCustomReason(""); } }}>
+        <DialogContent className="bg-slate-900 border-amber-500/50 text-white max-w-lg" data-testid="adjust-quantity-modal">
+          <DialogHeader>
+            <DialogTitle className="text-amber-300 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Ajustement de quantité — motif obligatoire
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm">
+              Un mouvement d'ajustement sera créé pour tracer cette modification.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+              <p className="text-xs text-slate-400 mb-1">Produit</p>
+              <p className="text-white font-semibold mb-2">{adjustInfo.name}</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[10px] uppercase text-slate-500 mb-0.5">Avant</p>
+                  <p className="text-base font-bold text-slate-300">{adjustInfo.old}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-500 mb-0.5">Delta</p>
+                  <p className={`text-base font-bold ${adjustInfo.delta > 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {adjustInfo.delta > 0 ? "+" : ""}{adjustInfo.delta}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-slate-500 mb-0.5">Après</p>
+                  <p className="text-base font-bold text-amber-300">{adjustInfo.new}</p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300 mb-1 block">Motif de l'ajustement *</Label>
+              <Select value={adjustReason} onValueChange={setAdjustReason}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white" data-testid="adjust-reason-select">
+                  <SelectValue placeholder="Choisir un motif…" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {ADJUST_REASONS.map((r) => (
+                    <SelectItem key={r} value={r} className="text-white">{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {adjustReason === "Autre (préciser)" && (
+              <div>
+                <Label className="text-xs text-slate-300 mb-1 block">Précisez le motif *</Label>
+                <Input
+                  value={adjustCustomReason}
+                  onChange={(e) => setAdjustCustomReason(e.target.value)}
+                  placeholder="ex: Correction inventaire mensuel"
+                  className="bg-slate-800 border-slate-700 text-white"
+                  data-testid="adjust-custom-reason-input"
+                />
+                {adjustCustomReason && adjustCustomReason.trim().length < 3 && (
+                  <p className="text-rose-400 text-[11px] mt-1">Motif trop court (min. 3 caractères)</p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-slate-700">
+            <Button variant="outline" className="border-slate-600 text-slate-300" onClick={() => { setAdjustModalOpen(false); setAdjustReason(""); setAdjustCustomReason(""); }} data-testid="adjust-cancel">
+              Annuler
+            </Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmAdjustmentAndSave} data-testid="adjust-confirm">
+              <Save className="w-4 h-4 mr-1" /> Confirmer & Enregistrer
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

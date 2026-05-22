@@ -325,6 +325,54 @@ async def update_product(product_id: str, data: dict = Body(...)):
     product = await db.stock_products.find_one({"id": product_id})
     if not product:
         raise HTTPException(404, "Produit non trouve")
+
+    # === AJUSTEMENT MOUVEMENT (22/05/2026) ===
+    # Si la quantité est modifiée manuellement dans le catalogue (édition produit),
+    # créer un mouvement type 'ajustement' pour tracer le delta et préserver
+    # l'historique cohérent. Le frontend peut envoyer `adjustment_reason` et
+    # `adjustment_user` pour qualifier l'ajustement.
+    old_qty = float(product.get("quantity", 0) or 0)
+    qty_in_data = data.get("quantity", None)
+    movement_created = None
+    if qty_in_data is not None:
+        try:
+            new_qty_val = float(qty_in_data)
+        except (TypeError, ValueError):
+            new_qty_val = old_qty
+        delta = new_qty_val - old_qty
+        if abs(delta) > 0.0001:
+            adj_reason = (data.pop("adjustment_reason", "") or "").strip() or "Ajustement manuel catalogue"
+            adj_user = (data.pop("adjustment_user", "") or "").strip() or "Admin"
+            unit_price = float(data.get("purchase_price", product.get("purchase_price", 0)) or 0)
+            movement_created = {
+                "id": str(uuid.uuid4()),
+                "product_id": product_id,
+                "product_name": product.get("name", ""),
+                "product_code": product.get("code", ""),
+                "movement_type": "ajustement",
+                # Quantité positive ; le signe est porté par adjustment_delta + reason.
+                "quantity": abs(delta),
+                "adjustment_delta": delta,  # signé : positif (entrée) ou négatif (sortie)
+                "previous_quantity": old_qty,
+                "new_quantity": new_qty_val,
+                "unit": product.get("unit", ""),
+                "unit_price": unit_price,
+                "total_value": abs(delta) * unit_price,
+                "reason": adj_reason,
+                "user_name": adj_user,
+                "source": "catalog_edit",
+                "created_at": data["updated_at"],
+            }
+            await db.stock_movements.insert_one(movement_created)
+            movement_created.pop("_id", None)
+            logger.info(
+                f"[ADJUSTMENT] {product.get('name')}: {old_qty} → {new_qty_val} "
+                f"(Δ {delta:+.2f}) by {adj_user} — {adj_reason}"
+            )
+    # Nettoyer toute clé d'ajustement qui pourrait rester dans data (sécurité)
+    data.pop("adjustment_reason", None)
+    data.pop("adjustment_user", None)
+
     qty = data.get("quantity", product.get("quantity", 0))
     price = data.get("purchase_price", product.get("purchase_price", 0))
     sale_price = data.get("sale_price", product.get("sale_price", 0))
@@ -334,7 +382,7 @@ async def update_product(product_id: str, data: dict = Body(...)):
     data["statut"] = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
     await db.stock_products.update_one({"id": product_id}, {"$set": data})
     updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
-    return {"success": True, "product": updated}
+    return {"success": True, "product": updated, "adjustment_movement": movement_created}
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str):
