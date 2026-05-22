@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, Save, Trash2, Plus, Percent, Banknote, Users, Package, Wine, Pen, RefreshCw, ChevronDown, ChevronUp, CalendarCheck } from "lucide-react";
+import { Calculator, Save, Trash2, Plus, Percent, Banknote, Users, Package, Wine, Pen, RefreshCw, ChevronDown, ChevronUp, CalendarCheck, ShoppingBasket, Settings, Edit3, X as XIcon } from "lucide-react";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -50,6 +50,11 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [productCatFilter, setProductCatFilter] = useState("all");
+  // Catalogue Marché/Supermarché (référentiel éditable)
+  const [marketProducts, setMarketProducts] = useState([]);
+  const [showMarketEditor, setShowMarketEditor] = useState(false);
+  const [editingMarketProd, setEditingMarketProd] = useState(null);
+  const [marketProdForm, setMarketProdForm] = useState({ name: "", category: "Boissons", unit_cost: 0, unit: "" });
 
   // Catégories pour le filtre (depuis les produits chargés)
   const stockCategories = useMemo(() => {
@@ -62,25 +67,34 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
     caisseProducts.forEach((p) => p.category && s.add(p.category));
     return Array.from(s).sort();
   }, [caisseProducts]);
+  const marketCategories = useMemo(() => {
+    const s = new Set();
+    marketProducts.forEach((p) => p.category && s.add(p.category));
+    return Array.from(s).sort();
+  }, [marketProducts]);
 
   // Produits filtrés pour la grille cliquable
   const filteredCatalogProducts = useMemo(() => {
     if (pickerType === "libre") return [];
-    const src = pickerType === "stock" ? stockProducts : caisseProducts;
+    const src = pickerType === "stock" ? stockProducts
+              : pickerType === "caisse" ? caisseProducts
+              : marketProducts;
     const q = productSearch.toLowerCase().trim();
     return src.filter((p) => {
       const catKey = pickerType === "stock" ? p.category_name : p.category;
       if (productCatFilter !== "all" && catKey !== productCatFilter) return false;
       if (q && !(p.name || "").toLowerCase().includes(q)) return false;
       return true;
-    }).slice(0, 200);
-  }, [pickerType, stockProducts, caisseProducts, productSearch, productCatFilter]);
+    }).slice(0, 300);
+  }, [pickerType, stockProducts, caisseProducts, marketProducts, productSearch, productCatFilter]);
 
   // Ajoute directement un produit catalogue à la simulation (clic sur tuile)
   const quickAddCatalogProduct = (p) => {
     const unit = pickerType === "stock"
       ? (p.purchase_price || 0)
-      : (p.purchase_price || p.cost || 0);
+      : pickerType === "caisse"
+        ? (p.purchase_price || p.cost || 0)
+        : (p.unit_cost || 0);
     setForm((prev) => ({
       ...prev,
       items: [
@@ -88,13 +102,57 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
         {
           type: pickerType,
           ref_id: p.id,
-          label: p.name,
+          label: p.name + (p.unit && pickerType === "market" ? ` (${p.unit})` : ""),
           unit_cost: unit,
           quantity: 1,
         },
       ],
     }));
     toast.success(`✓ ${p.name} ajouté`, { duration: 1500 });
+  };
+
+  // CRUD Marché — éditeur du référentiel
+  const refreshMarket = async () => {
+    try {
+      const mR = await axios.get(`${API}/quick-products`);
+      setMarketProducts(mR.data?.products || []);
+    } catch {}
+  };
+  const saveMarketProduct = async () => {
+    if (!(marketProdForm.name || "").trim()) {
+      toast.error("Nom obligatoire");
+      return;
+    }
+    try {
+      const payload = {
+        name: marketProdForm.name.trim(),
+        category: marketProdForm.category || "Autres",
+        unit_cost: parseFloat(marketProdForm.unit_cost) || 0,
+        unit: marketProdForm.unit || "",
+      };
+      if (editingMarketProd?.id) {
+        await axios.put(`${API}/quick-products/${editingMarketProd.id}`, payload);
+        toast.success("Produit mis à jour");
+      } else {
+        await axios.post(`${API}/quick-products`, payload);
+        toast.success("Produit ajouté");
+      }
+      setEditingMarketProd(null);
+      setMarketProdForm({ name: "", category: "Boissons", unit_cost: 0, unit: "" });
+      refreshMarket();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+  const deleteMarketProduct = async (id) => {
+    if (!window.confirm("Supprimer ce produit du référentiel ?")) return;
+    try {
+      await axios.delete(`${API}/quick-products/${id}`);
+      toast.success("Produit supprimé");
+      refreshMarket();
+    } catch (e) {
+      toast.error("Erreur de suppression");
+    }
   };
 
   useEffect(() => {
@@ -109,6 +167,11 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
         const cR = await axios.get(`${API}/caisse/products`);
         setCaisseProducts(cR.data?.products || []);
       } catch {}
+      try {
+        // Market / Supermarket reference catalog
+        const mR = await axios.get(`${API}/quick-products`);
+        setMarketProducts(mR.data?.products || []);
+      } catch {}
     })();
     fetchSimulations();
   }, []);
@@ -122,7 +185,7 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
     }
   };
 
-  // Auto-fill libellé + coût depuis le picker stock/caisse
+  // Auto-fill libellé + coût depuis le picker stock/caisse/market
   const handlePickerSelect = (refId) => {
     setPickerRefId(refId);
     if (!refId) return;
@@ -132,6 +195,9 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
     } else if (pickerType === "caisse") {
       const p = caisseProducts.find((x) => x.id === refId);
       if (p) setNewItem({ label: p.name, unit_cost: p.purchase_price || p.cost || 0, quantity: 1 });
+    } else if (pickerType === "market") {
+      const p = marketProducts.find((x) => x.id === refId);
+      if (p) setNewItem({ label: p.name + (p.unit ? ` (${p.unit})` : ""), unit_cost: p.unit_cost || 0, quantity: 1 });
     }
   };
 
@@ -336,6 +402,7 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       <SelectItem value="libre" className="text-white"><Pen className="inline w-3 h-3 mr-1" /> Libre</SelectItem>
+                      <SelectItem value="market" className="text-white"><ShoppingBasket className="inline w-3 h-3 mr-1" /> Marché / Supermarché</SelectItem>
                       <SelectItem value="stock" className="text-white"><Package className="inline w-3 h-3 mr-1" /> Stock</SelectItem>
                       <SelectItem value="caisse" className="text-white"><Wine className="inline w-3 h-3 mr-1" /> Caisse</SelectItem>
                     </SelectContent>
@@ -343,15 +410,17 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
                 </div>
                 {pickerType !== "libre" && (
                   <div className="flex-1 min-w-[200px]">
-                    <Label className="text-xs text-slate-400">{pickerType === "stock" ? "Produit Stock" : "Produit Caisse"}</Label>
+                    <Label className="text-xs text-slate-400">
+                      {pickerType === "stock" ? "Produit Stock" : pickerType === "caisse" ? "Produit Caisse" : "Produit Marché"}
+                    </Label>
                     <Select value={pickerRefId} onValueChange={handlePickerSelect}>
                       <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-9">
                         <SelectValue placeholder="Choisir un produit…" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
-                        {(pickerType === "stock" ? stockProducts : caisseProducts).map((p) => (
+                        {(pickerType === "stock" ? stockProducts : pickerType === "caisse" ? caisseProducts : marketProducts).map((p) => (
                           <SelectItem key={p.id} value={p.id} className="text-white">
-                            {p.name} {p.purchase_price ? `— ${fmt(p.purchase_price)} F` : ""}
+                            {p.name} {pickerType === "market" ? `— ${fmt(p.unit_cost)} F` : (p.purchase_price ? `— ${fmt(p.purchase_price)} F` : "")}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -390,7 +459,7 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
               <CardContent className="p-3 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs uppercase text-slate-400 font-semibold">
-                    Catalogue {pickerType === "stock" ? "Stock" : "Caisse"} — clic = ajout direct
+                    Catalogue {pickerType === "stock" ? "Stock" : pickerType === "caisse" ? "Caisse" : "Marché / Supermarché"} — clic = ajout direct
                   </span>
                   <Badge className="bg-purple-500/20 text-purple-300 text-[10px]">
                     {filteredCatalogProducts.length} produit(s)
@@ -410,11 +479,16 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700">
                         <SelectItem value="all" className="text-white">Toutes catégories</SelectItem>
-                        {(pickerType === "stock" ? stockCategories : caisseCategories).map((c) => (
+                        {(pickerType === "stock" ? stockCategories : pickerType === "caisse" ? caisseCategories : marketCategories).map((c) => (
                           <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {pickerType === "market" && (
+                      <Button size="sm" variant="outline" onClick={() => setShowMarketEditor(true)} className="border-purple-500/40 text-purple-300 h-8 text-xs" data-testid="market-edit-btn">
+                        <Settings className="w-3.5 h-3.5 mr-1" /> Gérer
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -425,12 +499,18 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
                     {filteredCatalogProducts.map((p) => {
                       const unit = pickerType === "stock"
                         ? (p.purchase_price || 0)
-                        : (p.purchase_price || p.cost || 0);
-                      const Icon = pickerType === "stock" ? Package : Wine;
+                        : pickerType === "caisse"
+                          ? (p.purchase_price || p.cost || 0)
+                          : (p.unit_cost || 0);
+                      const Icon = pickerType === "stock" ? Package : pickerType === "caisse" ? Wine : ShoppingBasket;
                       const colorClass = pickerType === "stock"
                         ? "border-emerald-500/30 bg-emerald-900/10 hover:bg-emerald-900/25"
-                        : "border-amber-500/30 bg-amber-900/10 hover:bg-amber-900/25";
-                      const iconColor = pickerType === "stock" ? "text-emerald-400" : "text-amber-400";
+                        : pickerType === "caisse"
+                          ? "border-amber-500/30 bg-amber-900/10 hover:bg-amber-900/25"
+                          : "border-purple-500/30 bg-purple-900/10 hover:bg-purple-900/25";
+                      const iconColor = pickerType === "stock" ? "text-emerald-400"
+                        : pickerType === "caisse" ? "text-amber-400"
+                        : "text-purple-300";
                       return (
                         <button
                           key={p.id}
@@ -451,6 +531,9 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
                             <p className="text-[9px] text-slate-500 truncate mt-0.5">
                               Stock&nbsp;: {p.quantity} {p.unit || ""}
                             </p>
+                          )}
+                          {pickerType === "market" && p.unit && (
+                            <p className="text-[9px] text-slate-500 truncate mt-0.5">{p.unit}</p>
                           )}
                         </button>
                       );
@@ -579,6 +662,99 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* === Modal Gérer le catalogue Marché === */}
+      {showMarketEditor && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowMarketEditor(false)}>
+          <Card className="bg-slate-900 border-purple-500/40 w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="market-editor-modal">
+            <CardHeader className="pb-2 border-b border-slate-700">
+              <CardTitle className="text-white flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-base">
+                  <ShoppingBasket className="w-5 h-5 text-purple-400" />
+                  Catalogue Marché / Supermarché
+                  <Badge className="bg-purple-500/20 text-purple-300 text-[10px]">{marketProducts.length}</Badge>
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setShowMarketEditor(false)} className="text-slate-300 h-7 w-7 p-0">
+                  <XIcon className="w-4 h-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 overflow-y-auto flex-1 space-y-3">
+              {/* Formulaire ajout / édition */}
+              <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-3">
+                <p className="text-xs uppercase text-slate-400 font-semibold mb-2">
+                  {editingMarketProd ? "Modifier le produit" : "Ajouter un produit"}
+                </p>
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-12 sm:col-span-4">
+                    <Label className="text-xs text-slate-400">Nom *</Label>
+                    <Input value={marketProdForm.name}
+                      onChange={(e) => setMarketProdForm({ ...marketProdForm, name: e.target.value })}
+                      className="bg-slate-900 border-slate-700 text-white h-9" data-testid="market-form-name" />
+                  </div>
+                  <div className="col-span-6 sm:col-span-3">
+                    <Label className="text-xs text-slate-400">Catégorie</Label>
+                    <Input value={marketProdForm.category}
+                      onChange={(e) => setMarketProdForm({ ...marketProdForm, category: e.target.value })}
+                      list="market-cats" className="bg-slate-900 border-slate-700 text-white h-9" />
+                    <datalist id="market-cats">
+                      {marketCategories.map((c) => <option key={c} value={c} />)}
+                    </datalist>
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <Label className="text-xs text-slate-400">Prix (F)</Label>
+                    <Input type="number" value={marketProdForm.unit_cost}
+                      onChange={(e) => setMarketProdForm({ ...marketProdForm, unit_cost: e.target.value })}
+                      className="bg-slate-900 border-slate-700 text-white h-9 text-right" data-testid="market-form-price" />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <Label className="text-xs text-slate-400">Unité</Label>
+                    <Input value={marketProdForm.unit}
+                      onChange={(e) => setMarketProdForm({ ...marketProdForm, unit: e.target.value })}
+                      placeholder="kg, pièce…" className="bg-slate-900 border-slate-700 text-white h-9" />
+                  </div>
+                  <div className="col-span-6 sm:col-span-1 flex gap-1">
+                    <Button onClick={saveMarketProduct} className="bg-purple-600 hover:bg-purple-700 h-9 flex-1" data-testid="market-form-save">
+                      <Save className="w-4 h-4" />
+                    </Button>
+                    {editingMarketProd && (
+                      <Button variant="outline" onClick={() => { setEditingMarketProd(null); setMarketProdForm({ name: "", category: "Boissons", unit_cost: 0, unit: "" }); }} className="h-9 border-slate-600 text-slate-300">
+                        <XIcon className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Liste par catégorie */}
+              {marketCategories.map((cat) => {
+                const prods = marketProducts.filter((p) => p.category === cat);
+                return (
+                  <div key={cat}>
+                    <p className="text-xs uppercase text-purple-300 font-semibold mb-1">{cat} ({prods.length})</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                      {prods.map((p) => (
+                        <div key={p.id} className="bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 flex items-center gap-2" data-testid={`market-row-${p.id}`}>
+                          <span className="text-sm text-slate-200 flex-1 truncate" title={p.name}>{p.name}</span>
+                          <span className="text-xs text-purple-300 font-semibold whitespace-nowrap">{fmt(p.unit_cost)} F</span>
+                          {p.unit && <Badge className="bg-slate-700/40 text-slate-400 text-[9px]">{p.unit}</Badge>}
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingMarketProd(p); setMarketProdForm({ name: p.name, category: p.category, unit_cost: p.unit_cost, unit: p.unit || "" }); }}
+                            className="text-slate-300 h-6 w-6 p-0" data-testid={`market-edit-${p.id}`}>
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deleteMarketProduct(p.id)} className="text-rose-400 h-6 w-6 p-0">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
