@@ -375,13 +375,15 @@ const CaissePage = () => {
     // Type & destination (29/04/2026)
     expense_type: "achat",
     destination: "cuisine",
+    // Stock flow (21/05/2026) — toggle global "Passer en stock"
+    to_stock: false,
   });
   // Available current accounts (for funding-source selector)
   const [availableAccounts, setAvailableAccounts] = useState([]);
   
   // Achats communs - multi-items
   const [commonItems, setCommonItems] = useState([]);
-  const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0, expense_type: "achat", destination: "cuisine" });
+  const [commonNewItem, setCommonNewItem] = useState({ category: "cuisine", description: "", quantity: 1, unit_price: 0, expense_type: "achat", destination: "cuisine", passer_en_stock: null });
 
   // Admin revision modal (modify expense before sending back to manager)
   const [showReviseModal, setShowReviseModal] = useState(false);
@@ -1185,6 +1187,8 @@ const CaissePage = () => {
             amount: (it.quantity || 1) * (it.unit_price || 0),
             expense_type: it.expense_type || expenseForm.expense_type || "achat",
             destination: it.destination || expenseForm.destination || null,
+            // Override par item ; null = utilise la valeur globale to_stock
+            passer_en_stock: (it.passer_en_stock === null || it.passer_en_stock === undefined) ? null : !!it.passer_en_stock,
           })),
           requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
           funded_by_account_id: expenseForm.funded_by_account_id || null,
@@ -1192,11 +1196,12 @@ const CaissePage = () => {
           funded_affects_ca: expenseForm.funded_affects_ca,
           expense_type: expenseForm.expense_type || "achat",
           destination: expenseForm.destination || null,
+          to_stock: !!expenseForm.to_stock,
         });
         toast.success(`Achats communs créés avec ${commonItems.length} article(s) !`);
         setShowExpenseModal(false);
         setCommonItems([]);
-        setCommonNewItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0 });
+        setCommonNewItem({ category: "cuisine", description: "", quantity: 1, unit_price: 0, passer_en_stock: null });
         setExpenseForm({
           category: "cuisine",
           description: "",
@@ -6977,6 +6982,29 @@ _Gérante - Espace Maxo_
                   />
                 </div>
 
+                {/* Toggle GLOBAL "Passer en stock" — visible UNIQUEMENT pour les achats */}
+                {expenseForm.expense_type !== "paiement" && (
+                  <div className="bg-emerald-900/15 border border-emerald-500/30 rounded-lg p-3 flex items-start gap-3" data-testid="to-stock-global-toggle-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setExpenseForm(p => ({ ...p, to_stock: !p.to_stock }))}
+                      className={`mt-0.5 w-10 h-6 rounded-full transition-colors flex-shrink-0 relative ${expenseForm.to_stock ? "bg-emerald-500" : "bg-slate-600"}`}
+                      data-testid="to-stock-global-toggle"
+                      aria-pressed={expenseForm.to_stock}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${expenseForm.to_stock ? "translate-x-4" : ""}`} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-emerald-200">
+                        Passer en stock {expenseForm.to_stock ? "(activé pour tous les articles)" : "(désactivé par défaut)"}
+                      </p>
+                      <p className="text-xs text-emerald-100/70 mt-0.5">
+                        Si activé, tous les articles iront dans le module Stock (mouvement attendu à l'approbation, validé à la complétion). Vous pouvez ensuite décocher ligne par ligne ci-dessous pour les exclure.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Add new article block */}
                 <Card className={`${expenseForm.expense_type === "paiement" ? "bg-rose-900/15 border-rose-500/30" : "bg-purple-900/20 border-purple-500/30"}`}>
                   <CardHeader className="pb-2">
@@ -7095,12 +7123,28 @@ _Gérante - Espace Maxo_
                     <CardContent className="space-y-2 max-h-[220px] overflow-y-auto">
                       {commonItems.map((it, idx) => {
                         const catLabel = { cuisine: "🍳 Cuisine", bar: "🍹 Bar", paiement: "💳 Paiement", autres: "📦 Autres" }[it.category] || it.category;
+                        // État effectif "passer en stock" : override item OU toggle global
+                        const itemToStock = (it.passer_en_stock === null || it.passer_en_stock === undefined) ? !!expenseForm.to_stock : !!it.passer_en_stock;
+                        const isPaiement = it.expense_type === "paiement" || it.category === "paiement";
                         return (
                           <div key={it.id} className="flex items-center justify-between gap-2 bg-slate-600/30 rounded-lg p-2">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <span className="text-slate-400 text-sm font-mono">{idx + 1}.</span>
                               <Badge className="text-xs shrink-0 bg-slate-700/50 text-slate-300">{catLabel}</Badge>
                               <span className="text-white truncate">{it.description}</span>
+                              {!isPaiement && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCommonItems(commonItems.map(ci => ci.id === it.id ? { ...ci, passer_en_stock: !itemToStock } : ci));
+                                  }}
+                                  className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-semibold transition flex-shrink-0 ${itemToStock ? "bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/40" : "bg-slate-700/40 text-slate-400 hover:bg-slate-700/60"}`}
+                                  title={itemToStock ? "Cet article ira en stock — cliquez pour désactiver" : "Cet article n'ira PAS en stock — cliquez pour activer"}
+                                  data-testid={`item-stock-toggle-${it.id}`}
+                                >
+                                  {itemToStock ? "→ stock" : "hors stock"}
+                                </button>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="text-slate-400 text-xs">

@@ -2029,7 +2029,6 @@ async def delete_supplier(supplier_id: str):
 
 @router.get("/purchases")
 async def get_purchases(supplier_id: str = None, date_from: str = None, date_to: str = None):
-    import re as _re
     query = {}
     if supplier_id:
         query["supplier_id"] = supplier_id
@@ -2041,7 +2040,7 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
     purchases = await db.stock_purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     # Also include caisse expenses not yet synced to stock_purchases
-    # BUT only items that match actual stock products
+    # Filtered by the "Passer en stock" flag (global to_stock or item override).
     synced_expense_ids = {p.get("expense_id") for p in purchases if p.get("expense_id")}
     
     expense_query = {}
@@ -2053,40 +2052,53 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
     
     caisse_expenses = await db.expenses.find(expense_query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
-    # Load all stock product names for matching
-    all_stock_names = [p["name"].lower() for p in await db.stock_products.find({"is_active": True}, {"name": 1, "_id": 0}).to_list(5000)]
-    
     for exp in caisse_expenses:
         if exp.get("id") in synced_expense_ids:
             continue
-        
+        # Skip "paiement" expenses (services/charges — never go to stock)
+        if exp.get("expense_type") == "paiement":
+            continue
+
+        # === STOCK FLOW FILTER (21/05/2026) ===
+        # On affiche dans la vue Stock seulement les achats AUTORISÉS à passer en stock :
+        # - le toggle global `to_stock` est True
+        # - OU au moins un item a `passer_en_stock=True`
+        global_to_stock = bool(exp.get("to_stock"))
         raw_items = []
         if exp.get("is_group") and exp.get("items"):
             raw_items = exp["items"]
         else:
             raw_items = [{"description": exp.get("description", ""), "quantity": exp.get("quantity", 1), "unit_price": exp.get("unit_price", 0) or exp.get("amount", 0)}]
-        
-        # Filter: only keep items that match a stock product (exact or starts-with match)
+
+        def _item_allowed(it):
+            v = it.get("passer_en_stock")
+            return bool(global_to_stock) if v is None else bool(v)
+
+        items_to_stock = [it for it in raw_items if _item_allowed(it) and not it.get("struck")]
+        if not items_to_stock:
+            continue
+
+        # Pour les items autorisés, on construit la ligne d'achat (sans contrainte
+        # de matching avec un produit stock existant : la création automatique se
+        # fera à la complétion via la sync expenses.py).
         matched_items = []
-        for item in raw_items:
-            desc = (item.get("description") or "").strip().lower()
-            if not desc or len(desc) < 2:
+        for item in items_to_stock:
+            desc = (item.get("description") or "").strip()
+            if not desc and not item.get("stock_product_id"):
                 continue
-            # Exact match or stock product name starts with the description
-            found = any(desc == sn or sn.startswith(desc + " ") or sn.startswith(desc + "s") or desc.rstrip("s") == sn for sn in all_stock_names)
-            if found:
-                matched_items.append({
-                    "product_name": item.get("description", ""),
-                    "quantity": item.get("quantity", 1),
-                    "unit_price": item.get("unit_price", 0)
-                })
-        
+            matched_items.append({
+                "product_name": desc,
+                "quantity": item.get("quantity", 1),
+                "unit_price": item.get("unit_price", 0),
+                "unit": item.get("unit", ""),
+            })
+
         if not matched_items:
             continue
-        
+
         matched_total = sum(i["quantity"] * i["unit_price"] for i in matched_items)
         status_map = {"pending": "en_attente", "approved": "approuve", "revision_requested": "en_revision", "rejected": "rejete", "completed": "valide"}
-        
+
         purchases.append({
             "id": f"caisse-{exp['id']}",
             "supplier_id": "",
@@ -2100,6 +2112,9 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
             "source": "caisse",
             "expense_id": exp.get("id"),
             "caisse_status": exp.get("status", ""),
+            "to_stock": global_to_stock,
+            "reception_status": exp.get("stock_reception_status", ""),
+            "reception_at": exp.get("stock_reception_at", ""),
             "created_at": exp.get("created_at", "")
         })
     

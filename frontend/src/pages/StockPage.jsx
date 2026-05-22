@@ -165,6 +165,10 @@ export default function StockPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  // Filtre "Source" pour la vue Approvisionnement : "all" | "caisse" | "stock"
+  const [purchaseSourceFilter, setPurchaseSourceFilter] = useState("all");
+  // Filtre statut réception : "all" | "expected" | "received"
+  const [purchaseReceptionFilter, setPurchaseReceptionFilter] = useState("all");
   const [stockUsers, setStockUsers] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [recipeSearch, setRecipeSearch] = useState("");
@@ -3551,15 +3555,70 @@ export default function StockPage() {
         )}
 
         {/* PURCHASES */}
-        {activeSection === "purchases" && (
+        {activeSection === "purchases" && (() => {
+          // Application des filtres Source + Réception
+          const filteredPurchases = purchases.filter(p => {
+            if (purchaseSourceFilter === "caisse" && p.source !== "caisse") return false;
+            if (purchaseSourceFilter === "stock" && p.source === "caisse") return false;
+            if (purchaseReceptionFilter === "expected" && (p.reception_status !== "expected" && p.source !== "caisse")) return false;
+            if (purchaseReceptionFilter === "expected" && p.source === "caisse" && p.caisse_status !== "approved") return false;
+            if (purchaseReceptionFilter === "received" && p.source === "caisse" && p.caisse_status !== "completed" && p.status !== "validated") return false;
+            return true;
+          });
+          const caisseCount = purchases.filter(p => p.source === "caisse").length;
+          const stockCount = purchases.filter(p => p.source !== "caisse").length;
+          return (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-2xl font-bold text-white">Achats / Approvisionnement</h2>
               <Button onClick={() => { setPurchaseForm({ supplier_id: "", supplier_name: "", purchase_date: new Date().toISOString().slice(0, 10), items: [], notes: "" }); setShowPurchaseModal(true); }}
                 className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-purchase-btn"><Plus className="w-4 h-4 mr-1" /> Nouvel Achat</Button>
             </div>
-            {isAdmin && <BulkBar count={selectedItems.filter(id => purchases.some(p => p.id === id && !id.startsWith('caisse-'))).length} label="achat(s)" endpoint="purchases/delete-bulk" ids={selectedItems.filter(id => purchases.some(p => p.id === id && !id.startsWith('caisse-')))} refreshFn={fetchPurchases} />}
-            {purchases.map(p => {
+
+            {/* Filtres Source + Réception */}
+            <Card className="bg-slate-900/60 border-slate-700">
+              <CardContent className="p-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase text-slate-400 mr-1">Source :</span>
+                <Button size="sm" variant={purchaseSourceFilter === "all" ? "default" : "outline"}
+                  onClick={() => setPurchaseSourceFilter("all")}
+                  className={`h-7 text-xs ${purchaseSourceFilter === "all" ? "bg-slate-600 text-white" : "border-slate-700 text-slate-300"}`}
+                  data-testid="filter-source-all">
+                  Tous ({purchases.length})
+                </Button>
+                <Button size="sm" variant={purchaseSourceFilter === "caisse" ? "default" : "outline"}
+                  onClick={() => setPurchaseSourceFilter("caisse")}
+                  className={`h-7 text-xs ${purchaseSourceFilter === "caisse" ? "bg-amber-600 text-white" : "border-amber-500/40 text-amber-300"}`}
+                  data-testid="filter-source-caisse">
+                  Caisse ({caisseCount})
+                </Button>
+                <Button size="sm" variant={purchaseSourceFilter === "stock" ? "default" : "outline"}
+                  onClick={() => setPurchaseSourceFilter("stock")}
+                  className={`h-7 text-xs ${purchaseSourceFilter === "stock" ? "bg-emerald-600 text-white" : "border-emerald-500/40 text-emerald-300"}`}
+                  data-testid="filter-source-stock">
+                  Stock direct ({stockCount})
+                </Button>
+                <div className="w-px h-6 bg-slate-700 mx-1" />
+                <span className="text-xs uppercase text-slate-400 mr-1">Réception :</span>
+                <Button size="sm" variant={purchaseReceptionFilter === "all" ? "default" : "outline"}
+                  onClick={() => setPurchaseReceptionFilter("all")}
+                  className={`h-7 text-xs ${purchaseReceptionFilter === "all" ? "bg-slate-600 text-white" : "border-slate-700 text-slate-300"}`}>
+                  Tous
+                </Button>
+                <Button size="sm" variant={purchaseReceptionFilter === "expected" ? "default" : "outline"}
+                  onClick={() => setPurchaseReceptionFilter("expected")}
+                  className={`h-7 text-xs ${purchaseReceptionFilter === "expected" ? "bg-blue-600 text-white" : "border-blue-500/40 text-blue-300"}`}>
+                  En attente
+                </Button>
+                <Button size="sm" variant={purchaseReceptionFilter === "received" ? "default" : "outline"}
+                  onClick={() => setPurchaseReceptionFilter("received")}
+                  className={`h-7 text-xs ${purchaseReceptionFilter === "received" ? "bg-emerald-600 text-white" : "border-emerald-500/40 text-emerald-300"}`}>
+                  Reçu
+                </Button>
+              </CardContent>
+            </Card>
+
+            {isAdmin && <BulkBar count={selectedItems.filter(id => filteredPurchases.some(p => p.id === id && !id.startsWith('caisse-'))).length} label="achat(s)" endpoint="purchases/delete-bulk" ids={selectedItems.filter(id => filteredPurchases.some(p => p.id === id && !id.startsWith('caisse-')))} refreshFn={fetchPurchases} />}
+            {filteredPurchases.map(p => {
               const statusBadge = p.source === "caisse" ? (
                 p.caisse_status === "completed" || p.status === "validated" ? <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Valide</Badge>
                 : p.caisse_status === "approved" || p.status === "approuve" ? <Badge className="bg-blue-500/20 text-blue-400 text-xs">Approuve</Badge>
@@ -3616,11 +3675,12 @@ export default function StockPage() {
               </Card>
               );
             })}
-            {purchases.length === 0 && (
-              <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-8 text-center text-slate-500">Aucun achat enregistre</CardContent></Card>
+            {filteredPurchases.length === 0 && (
+              <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-8 text-center text-slate-500">Aucun achat enregistre pour ces filtres</CardContent></Card>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* SUPPLIERS */}
         {activeSection === "suppliers" && (

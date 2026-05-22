@@ -143,6 +143,10 @@ class ExpenseItem(BaseModel):
     # Si renseigné, la synchro stock se fait DIRECTEMENT par id (plus de matching nom).
     stock_product_id: Optional[str] = None
     unit: Optional[str] = None  # ex: "bouteille", "casier"
+    # === STOCK FLOW FLAG === (added 21/05/2026)
+    # Override par item : si None (non spécifié), on suit la valeur globale `to_stock`.
+    # Si True/False, override explicite.
+    passer_en_stock: Optional[bool] = None
 
 
 class ExpenseCreate(BaseModel):
@@ -166,6 +170,11 @@ class ExpenseCreate(BaseModel):
     # Type & destination (added 29/04/2026)
     expense_type: Optional[str] = "achat"  # 'achat' | 'paiement'
     destination: Optional[str] = None  # 'cuisine' | 'bar' | 'salle' | 'jeux_vr' | 'jardin' | 'administratif'
+    # === STOCK FLOW (added 21/05/2026) ===
+    # Toggle GLOBAL "Passer en stock" — par défaut False.
+    # Si True, tous les items sans override iront en stock à l'approbation/complétion.
+    # Les items peuvent overrider via leur champ `passer_en_stock`.
+    to_stock: Optional[bool] = False
 
 
 class ExpenseUpdate(BaseModel):
@@ -191,6 +200,8 @@ class ExpenseUpdate(BaseModel):
     # Admin can re-classify (added 29/04/2026)
     expense_type: Optional[str] = None
     destination: Optional[str] = None
+    # Stock flow (added 21/05/2026)
+    to_stock: Optional[bool] = None
 
 
 # ==================== CRUD ====================
@@ -274,6 +285,8 @@ async def create_expense(
             # Type & destination
             "expense_type": expense.expense_type or "achat",
             "destination": expense.destination,
+            # Stock flow (21/05/2026) — global toggle "Passer en stock"
+            "to_stock": bool(expense.to_stock),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -408,6 +421,26 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                         update_data["amount"] = kept_total
             except Exception as recalc_err:
                 logger.warning(f"Approval amount recompute failed: {recalc_err}")
+
+            # === STOCK FLOW : marquer "réception attendue" si au moins 1 item va en stock ===
+            try:
+                is_paiement = (update_data.get("expense_type") or expense.get("expense_type")) == "paiement"
+                if not is_paiement:
+                    global_to_stock = bool(update_data.get("to_stock", expense.get("to_stock", False)))
+                    items_check = update_data.get("items") or expense.get("items") or [{
+                        "passer_en_stock": None,
+                        "struck": False,
+                    }]
+                    def _need_stock(it):
+                        if it.get("struck"):
+                            return False
+                        v = it.get("passer_en_stock")
+                        return bool(global_to_stock) if v is None else bool(v)
+                    if any(_need_stock(it) for it in items_check):
+                        update_data["stock_reception_status"] = "expected"
+                        update_data["stock_reception_expected_at"] = datetime.now(timezone.utc).isoformat()
+            except Exception as _e:
+                logger.warning(f"Stock reception flag failed: {_e}")
         elif update.status == "completed":
             update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -446,16 +479,31 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                 else:
                     updated_expense = await db.expenses.find_one({"id": expense_id})
 
+                    # STOCK FLOW GUARD (21/05/2026) :
+                    # Le toggle GLOBAL `to_stock` ou les overrides par item décident si
+                    # cet achat doit aller en stock. Si tout est False → on saute la sync.
+                    global_to_stock = bool(updated_expense.get("to_stock"))
+
                     if updated_expense.get("is_group") and updated_expense.get("items"):
-                        expense_items = updated_expense["items"]
+                        raw_items = updated_expense["items"]
                     else:
-                        expense_items = [{
+                        raw_items = [{
                             "description": updated_expense.get("description", ""),
                             "quantity": updated_expense.get("quantity", 1),
                             "unit_price": updated_expense.get("unit_price") or updated_expense.get("amount", 0),
                             "amount": updated_expense.get("amount", 0),
                             "category": updated_expense.get("category", ""),
                         }]
+
+                    # Garde les items qui doivent passer en stock : override par item
+                    # sinon valeur du toggle global.
+                    def _item_to_stock(it):
+                        v = it.get("passer_en_stock")
+                        return bool(global_to_stock) if v is None else bool(v)
+
+                    expense_items = [it for it in raw_items if _item_to_stock(it)]
+                    if not expense_items:
+                        logger.info(f"Expense {expense_id}: aucun item marqué 'passer_en_stock' — sync stock ignorée")
     
                     stock_synced = 0
                     purchase_items_for_stock = []
@@ -631,25 +679,41 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
                             })
                             stock_synced += 1
     
-                    total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
-                    stock_purchase = {
-                        "id": str(uuid.uuid4()),
-                        "supplier_id": "",
-                        "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
-                        "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                        "items": purchase_items_for_stock,
-                        "total_amount": total_amount,
-                        "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
-                        "user_name": updated_expense.get("requested_by", "Caisse"),
-                        "status": "validated",
-                        "source": "caisse",
-                        "expense_id": expense_id,
-                        "created_at": now_iso,
-                    }
-                    await db.stock_purchases.insert_one(stock_purchase)
-                    stock_purchase.pop("_id", None)
-    
-                    logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
+                    # Si rien n'a été synchronisé (aucun item to_stock), on saute la
+                    # création du stock_purchase ET on ne marque pas la réception.
+                    if stock_synced == 0:
+                        logger.info(f"Expense {expense_id}: 0 items à passer en stock → aucun stock_purchase créé")
+                    else:
+                        total_amount = sum(i.get("quantity", 0) * i.get("unit_price", 0) for i in purchase_items_for_stock)
+                        stock_purchase = {
+                            "id": str(uuid.uuid4()),
+                            "supplier_id": "",
+                            "supplier_name": updated_expense.get("supplier", "") or updated_expense.get("description", "Caisse"),
+                            "purchase_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                            "items": purchase_items_for_stock,
+                            "total_amount": total_amount,
+                            "notes": f"Achat depuis la Caisse - {updated_expense.get('description', '')}",
+                            "user_name": updated_expense.get("requested_by", "Caisse"),
+                            "status": "validated",
+                            "source": "caisse",
+                            "expense_id": expense_id,
+                            "created_at": now_iso,
+                        }
+                        await db.stock_purchases.insert_one(stock_purchase)
+                        stock_purchase.pop("_id", None)
+
+                        logger.info(f"Expense {expense_id} synced to stock: {stock_synced} products matched")
+                        # Marque la réception comme validée (passage attendu → reçu)
+                        try:
+                            await db.expenses.update_one(
+                                {"id": expense_id},
+                                {"$set": {
+                                    "stock_reception_status": "received",
+                                    "stock_reception_at": now_iso,
+                                }},
+                            )
+                        except Exception as _e:
+                            logger.warning(f"Stock reception=received flag failed: {_e}")
             except Exception as stock_err:
                 logger.error(f"Error syncing expense to stock: {stock_err}")
 
