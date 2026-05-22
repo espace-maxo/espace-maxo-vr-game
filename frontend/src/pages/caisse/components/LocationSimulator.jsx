@@ -48,6 +48,54 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
   const [newItem, setNewItem] = useState({ label: "", unit_cost: 0, quantity: 1 });
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [productCatFilter, setProductCatFilter] = useState("all");
+
+  // Catégories pour le filtre (depuis les produits chargés)
+  const stockCategories = useMemo(() => {
+    const s = new Set();
+    stockProducts.forEach((p) => p.category_name && s.add(p.category_name));
+    return Array.from(s).sort();
+  }, [stockProducts]);
+  const caisseCategories = useMemo(() => {
+    const s = new Set();
+    caisseProducts.forEach((p) => p.category && s.add(p.category));
+    return Array.from(s).sort();
+  }, [caisseProducts]);
+
+  // Produits filtrés pour la grille cliquable
+  const filteredCatalogProducts = useMemo(() => {
+    if (pickerType === "libre") return [];
+    const src = pickerType === "stock" ? stockProducts : caisseProducts;
+    const q = productSearch.toLowerCase().trim();
+    return src.filter((p) => {
+      const catKey = pickerType === "stock" ? p.category_name : p.category;
+      if (productCatFilter !== "all" && catKey !== productCatFilter) return false;
+      if (q && !(p.name || "").toLowerCase().includes(q)) return false;
+      return true;
+    }).slice(0, 200);
+  }, [pickerType, stockProducts, caisseProducts, productSearch, productCatFilter]);
+
+  // Ajoute directement un produit catalogue à la simulation (clic sur tuile)
+  const quickAddCatalogProduct = (p) => {
+    const unit = pickerType === "stock"
+      ? (p.purchase_price || 0)
+      : (p.purchase_price || p.cost || 0);
+    setForm((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          type: pickerType,
+          ref_id: p.id,
+          label: p.name,
+          unit_cost: unit,
+          quantity: 1,
+        },
+      ],
+    }));
+    toast.success(`✓ ${p.name} ajouté`, { duration: 1500 });
+  };
 
   useEffect(() => {
     (async () => {
@@ -335,6 +383,83 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
               </div>
             </CardContent>
           </Card>
+
+          {/* === GRILLE PRODUITS CLIQUABLES (Stock / Caisse) === */}
+          {pickerType !== "libre" && (
+            <Card className="bg-slate-800/40 border-slate-700" data-testid="catalog-grid">
+              <CardContent className="p-3 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase text-slate-400 font-semibold">
+                    Catalogue {pickerType === "stock" ? "Stock" : "Caisse"} — clic = ajout direct
+                  </span>
+                  <Badge className="bg-purple-500/20 text-purple-300 text-[10px]">
+                    {filteredCatalogProducts.length} produit(s)
+                  </Badge>
+                  <div className="ml-auto flex items-center gap-2 flex-wrap">
+                    <Input
+                      type="text"
+                      placeholder="Rechercher…"
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      className="bg-slate-900 border-slate-700 text-white h-8 w-[180px] text-sm"
+                      data-testid="catalog-search"
+                    />
+                    <Select value={productCatFilter} onValueChange={setProductCatFilter}>
+                      <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-8 w-[170px] text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="all" className="text-white">Toutes catégories</SelectItem>
+                        {(pickerType === "stock" ? stockCategories : caisseCategories).map((c) => (
+                          <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {filteredCatalogProducts.length === 0 ? (
+                  <p className="text-slate-500 text-sm text-center py-6">Aucun produit ne correspond aux filtres</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-[420px] overflow-y-auto pr-1">
+                    {filteredCatalogProducts.map((p) => {
+                      const unit = pickerType === "stock"
+                        ? (p.purchase_price || 0)
+                        : (p.purchase_price || p.cost || 0);
+                      const Icon = pickerType === "stock" ? Package : Wine;
+                      const colorClass = pickerType === "stock"
+                        ? "border-emerald-500/30 bg-emerald-900/10 hover:bg-emerald-900/25"
+                        : "border-amber-500/30 bg-amber-900/10 hover:bg-amber-900/25";
+                      const iconColor = pickerType === "stock" ? "text-emerald-400" : "text-amber-400";
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => quickAddCatalogProduct(p)}
+                          className={`group relative border-2 rounded-lg p-2 text-left transition transform hover:scale-105 ${colorClass}`}
+                          data-testid={`catalog-tile-${p.id}`}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <Icon className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${iconColor}`} />
+                            <span className="text-white text-xs font-medium leading-tight line-clamp-2 flex-1">{p.name}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1.5 flex items-center justify-between">
+                            <span className={iconColor}><strong>{fmt(unit)}</strong> F</span>
+                            <Plus className="w-3 h-3 text-slate-500 group-hover:text-white opacity-60 group-hover:opacity-100 transition" />
+                          </p>
+                          {pickerType === "stock" && p.quantity != null && (
+                            <p className="text-[9px] text-slate-500 truncate mt-0.5">
+                              Stock&nbsp;: {p.quantity} {p.unit || ""}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* ITEMS LIST */}
           {form.items.length > 0 && (
