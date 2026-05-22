@@ -3414,9 +3414,10 @@ _Gérante - Espace Maxo_
     totals_by_department: totalByDepartment,
     notes,
     created_by: currentUser?.full_name || currentUser?.username || "admin",
-    validation_status: "validated",
-    validated_by: currentUser?.full_name || currentUser?.username || "admin",
-    validated_at: new Date().toISOString(),
+    // (Bug fix) — un bon enregistré reste EN ATTENTE (pending). Il ne sera transformé
+    // en facture validée qu'au clic « Imprimer le bon client » (table)
+    // ou « Bon-Client » (vente directe, file Bons).
+    validation_status: "pending",
     table_number: activeTable?.table_number || null,
   });
 
@@ -3546,7 +3547,7 @@ _Gérante - Espace Maxo_
         });
       }
       
-      toast.success("✓ Bon client émis et validé automatiquement", {
+      toast.success("✓ Bon enregistré · en attente de validation par la gérante", {
         duration: 4000
       });
       
