@@ -3943,6 +3943,7 @@ class CaisseTableUpdate(BaseModel):
     status: Optional[str] = None  # "open" | "ready_to_invoice" | "invoiced" | "closed"
     invoice_created_at: Optional[str] = None
     last_order_sent_at: Optional[str] = None  # Timestamp dernier "ENVOYER LA COMMANDE"
+    pending_invoice_id: Optional[str] = None  # Bon en attente lié à la table (ready_to_invoice)
 
 @api_router.get("/caisse/tables/status")
 async def get_tables_status():
@@ -4216,6 +4217,9 @@ async def update_caisse_table(
             update_data["invoice_created_at"] = table_data.invoice_created_at
         if table_data.last_order_sent_at is not None:
             update_data["last_order_sent_at"] = table_data.last_order_sent_at
+        # Accept pending_invoice_id = "" or None to clear it
+        if table_data.pending_invoice_id is not None:
+            update_data["pending_invoice_id"] = table_data.pending_invoice_id or None
         
         result = await db.caisse_tables.update_one(
             {"id": table_id},

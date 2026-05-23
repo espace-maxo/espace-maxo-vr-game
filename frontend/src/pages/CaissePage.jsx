@@ -3444,23 +3444,33 @@ _Gérante - Espace Maxo_
       return;
     }
 
-    // Cas "TABLE ACTIVE" → nouveau flow : on stocke dans la table + impressions production
-    // SANS créer la facture en BDD. La facture sera créée par "Imprimer le bon client".
+    // Cas "TABLE ACTIVE" → flow : on stocke dans la table + impressions production
+    // ET on crée immédiatement un bon (pending) visible dans BONS. La facture
+    // sera validée par "Imprimer le bon client".
     try {
-      const tempBon = { invoice_number: _tempBonNumber(), items: currentBill, table_number: activeTable?.table_number };
-      // 1. Mettre à jour la table : conserver les items, passer en "ready_to_invoice"
+      // 1. Créer le bon (facture en pending) — visible dans BONS
+      const invoiceData = _buildInvoiceData();
+      const invResp = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
+      const createdInvoice = invResp.data?.invoice || null;
+      const tempBon = createdInvoice
+        ? { invoice_number: createdInvoice.invoice_number, items: currentBill, table_number: activeTable?.table_number }
+        : { invoice_number: _tempBonNumber(), items: currentBill, table_number: activeTable?.table_number };
+
+      // 2. Mettre à jour la table : items + ready_to_invoice + lien vers la facture
       await axios.put(`${API}/caisse/tables/${activeTableId}?${actorQs()}`, {
         items: currentBill,
         status: "ready_to_invoice",
         client_name: selectedClient?.name || activeTable?.client_name || "Client",
         last_order_sent_at: new Date().toISOString(),
+        pending_invoice_id: createdInvoice?.id || null,
       });
-      // 2. Imprimer les bons de production (cuisine / bar / jeux) depuis le bon temporaire
+
+      // 3. Imprimer les bons de production (cuisine / bar / jeux)
       try { printKitchenOrder(tempBon); } catch {}
       try { printBarOrder(tempBon); } catch {}
       try { printGamesOrder(tempBon); } catch {}
 
-      toast.success("✓ Commande envoyée en production. Cliquez sur « Imprimer le bon client » pour facturer.", {
+      toast.success("✓ Bon créé et commande envoyée en production. Visible dans l'onglet BONS.", {
         duration: 5000,
       });
 
@@ -3497,32 +3507,52 @@ _Gérante - Espace Maxo_
         toast.error("Cette table n'a pas d'articles");
         return;
       }
-      const subtotalT = items.reduce((s, i) => s + (i.price || 0) * (i.quantity || 1), 0);
-      const totals_by_department = items.reduce((acc, it) => {
-        const dep = it.department || "autres";
-        acc[dep] = (acc[dep] || 0) + (it.price || 0) * (it.quantity || 1);
-        return acc;
-      }, {});
-      const invoiceData = {
-        customer_name: fresh.client_name || "Client",
-        customer_phone: "",
-        items,
-        subtotal: subtotalT,
-        discount: 0,
-        discount_amount: 0,
-        total: subtotalT,
-        payment_method: "cash",
-        totals_by_department,
-        notes: "",
-        created_by: currentUser?.full_name || currentUser?.username || "admin",
-        validation_status: "validated",
-        validated_by: currentUser?.full_name || currentUser?.username || "admin",
-        validated_at: new Date().toISOString(),
-        table_number: fresh.table_number,
-      };
-      // POST /invoices
-      const r = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
-      const created = r.data?.invoice || r.data;
+
+      let created = null;
+
+      // Si la table possède déjà un bon pending → on le VALIDE (pas de doublon)
+      if (fresh.pending_invoice_id) {
+        try {
+          const v = await axios.put(`${API}/invoices/${fresh.pending_invoice_id}?${actorQs()}`, {
+            validation_status: "validated",
+            validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+            validated_at: new Date().toISOString(),
+          });
+          created = v.data?.invoice || v.data;
+        } catch (_vErr) {
+          console.warn("Validate pending invoice failed, fallback to create:", _vErr?.response?.data);
+        }
+      }
+
+      // Fallback : créer une nouvelle facture (legacy ou si pending introuvable)
+      if (!created) {
+        const subtotalT = items.reduce((s, i) => s + (i.price || 0) * (i.quantity || 1), 0);
+        const totals_by_department = items.reduce((acc, it) => {
+          const dep = it.department || "autres";
+          acc[dep] = (acc[dep] || 0) + (it.price || 0) * (it.quantity || 1);
+          return acc;
+        }, {});
+        const invoiceData = {
+          customer_name: fresh.client_name || "Client",
+          customer_phone: "",
+          items,
+          subtotal: subtotalT,
+          discount: 0,
+          discount_amount: 0,
+          total: subtotalT,
+          payment_method: "cash",
+          totals_by_department,
+          notes: "",
+          created_by: currentUser?.full_name || currentUser?.username || "admin",
+          validation_status: "validated",
+          validated_by: currentUser?.full_name || currentUser?.username || "admin",
+          validated_at: new Date().toISOString(),
+          table_number: fresh.table_number,
+        };
+        const r = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
+        created = r.data?.invoice || r.data;
+      }
+
       // Imprimer le ticket client
       try { printTicket(created); } catch {}
       // Marquer la table : invoiced + items vidés
@@ -3531,6 +3561,7 @@ _Gérante - Espace Maxo_
           status: "invoiced",
           items: [],
           invoice_created_at: new Date().toISOString(),
+          pending_invoice_id: null,
         });
       } catch {}
       toast.success("Bon client imprimé · Facture créée");
