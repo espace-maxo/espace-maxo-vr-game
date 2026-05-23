@@ -5322,13 +5322,12 @@ _Gérante - Espace Maxo_
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       <SelectItem value="all" className="text-white">Toutes</SelectItem>
-                      <SelectItem value="pending" className="text-yellow-400">En attente</SelectItem>
                       <SelectItem value="validated" className="text-green-400">Validees</SelectItem>
                       <SelectItem value="cancelled" className="text-red-400">Annulees</SelectItem>
                     </SelectContent>
                   </Select>
                   <Badge className="bg-blue-500/20 text-blue-400">
-                    {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length} facture(s)
+                    {invoices.filter(i => i.validation_status !== 'pending' && (filterValidation === 'all' || i.validation_status === filterValidation)).length} facture(s)
                   </Badge>
                   {stats && (
                     <Badge className="bg-amber-500/20 text-amber-400">
@@ -5343,7 +5342,7 @@ _Gérante - Espace Maxo_
                 )}
               </div>
 
-              {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).length === 0 ? (
+              {invoices.filter(i => i.validation_status !== 'pending' && (filterValidation === 'all' || i.validation_status === filterValidation)).length === 0 ? (
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
@@ -5352,7 +5351,7 @@ _Gérante - Espace Maxo_
                 </Card>
               ) : (
                 <div className="grid gap-3">
-                  {invoices.filter(i => filterValidation === 'all' || i.validation_status === filterValidation).map((invoice) => (
+                  {invoices.filter(i => i.validation_status !== 'pending' && (filterValidation === 'all' || i.validation_status === filterValidation)).map((invoice) => (
                     <Card key={invoice.id} className={`bg-slate-800/50 ${invoice.validation_status === 'validated' ? 'border-green-500/30' : invoice.validation_status === 'cancelled' ? 'border-red-500/30' : 'border-yellow-500/30'}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
