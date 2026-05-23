@@ -1,36 +1,44 @@
 # PRD — Caisse Pro + Gestion Stock (Espace Maxo)
 
 ## Original Problem Statement
-Application POS ("Caisse Pro") et module Gestion de Stock nécessitant stricte séparation des recettes, contrôle rigoureux du workflow financier, et synchronisation intelligente entre Caisse et Stock.
+Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparation des recettes, contrôle financier rigoureux, et synchronisation Caisse ↔ Stock.
 
 ## Personae
-- Administrateur : supervise, valide, fait la réconciliation.
-- Gérante / Serveuse (PIN) : prises de commandes, achats, journées, billettage.
+- Administrateur : supervision, validation, réconciliation.
+- Gérante (manager) : gestion quotidienne, prises de commandes, achats, journée.
+- Serveuses (server, PIN) : prises de commandes uniquement.
 
 ## Core Requirements
-- Fermeture de journée fiable, billettage global unique, traçabilité des ajustements.
-- Workflow Achats → Validation Admin → Sync conditionnelle vers Stock.
+- Workflow d'ouverture/fermeture de journée avec garde-fous stricts.
+- Billettage global unique + traçabilité des ajustements.
+- Workflow Achats → Validation Admin → Sync Stock conditionnelle.
 - Facturation différée à l'impression du bon client.
-- Simulateur de devis Location (Stock + Marché) sans impact stock.
-- Répertoire historique des prix d'achat alimenté automatiquement.
-- Kill-switch SMS Twilio (désactivé en dur).
+- Simulateur de devis Location (Stock + Marché).
+- Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
-- Billettage global unique + auto-création + traçabilité des ajustements
-- Réconciliation garde-fou (admin doit justifier les écarts)
-- Sync Caisse ↔ Stock (toggle "Passer en stock" sur les items d'achat)
-- Auto-ajustement stock lors d'une modification du catalogue
-- Facture générée uniquement à l'impression du bon client
-- Tracking figé des durées d'occupation tables (last_order_sent_at)
-- Simulateur devis Locations + création de réservation depuis simulation
-- Catalogue produits cliquable Stock + Marché dans le simulateur
-- Catalogue Marché/Supermarché (93 produits seedés)
-- Notifications Twilio totalement désactivées (kill-switch)
-- **Répertoire des prix d'achat** : backend (`purchase_price_history.py`) + UI (`PurchasePriceHistoryTab.jsx`), branché sur expense.completed, 5/5 tests Pytest OK
-- **Nettoyage données de test PPH effectué le 22/05/2026** (12 entrées test purgées)
+- Billettage global unique + auto-création + traçabilité ajustements
+- Réconciliation garde-fou (justification écarts par l'admin)
+- Sync Caisse ↔ Stock (toggle "Passer en stock" sur items d'achat)
+- Auto-ajustement stock lors modification catalogue
+- Facture créée uniquement à l'impression du bon client (vente sur table)
+- Bons en VENTE DIRECTE restent `pending` jusqu'à validation gérante
+- Onglet Factures n'affiche plus les bons `pending`
+- Tracking figé des tables (last_order_sent_at)
+- Simulateur devis Locations + création réservation
+- Catalogue produits cliquable Stock + Marché (93 produits Marché seedés)
+- Notifications Twilio désactivées (kill-switch)
+- Répertoire des prix d'achat (5/5 tests Pytest)
+- **MODULE JOURNÉE (Ouverture / Fermeture / Historique)** — implémenté le 23/05/2026
+  - Nouveau tab "Journée" visible Gérante + Admin
+  - Ouverture avec fonds de caisse OPTIONNEL et notes
+  - **Blocage strict (423 LOCKED)** : impossible de créer facture ou table sans ouverture
+  - Garde-fou : impossible d'ouvrir si jour précédent (avec activité) non fermé (admin peut forcer)
+  - Hook bidirectionnel : la fermeture (day_closures) marque l'ouverture comme `closed`, la réouverture inversement
+  - 21 tests Pytest + 35 tests regression — tous verts (testing agent itération 82)
 
 ## Backlog (Priorisé)
-- **P1** : Alertes de péremption produits sur dashboard Stock
+- **P1** : Alertes de péremption produits (dashboard Stock)
 - **P2** : Export PDF/Excel du Compte courant (relevé bancaire)
 - **P3** : Intégration Resend pour mot de passe oublié
 - **P4** : Refactoring continu `CaissePage.jsx` / `StockPage.jsx`
@@ -39,13 +47,17 @@ Application POS ("Caisse Pro") et module Gestion de Stock nécessitant stricte s
 ## Architecture
 - Backend : FastAPI + MongoDB (motor) — routes dans `/app/backend/routers/`
 - Frontend : React + Tailwind + shadcn/ui — pages dans `/app/frontend/src/pages/`
-- Tests : Pytest dans `/app/backend/tests/` (≥30 tests, tous verts)
+- Tests : Pytest dans `/app/backend/tests/` (≥36 fichiers, tous verts)
 
-## Key Endpoints
+## Key Endpoints (récents)
+- `GET /api/day-openings/{date}` · `POST /api/day-openings/{date}/open` · `GET /api/day-openings/history/list`
 - `GET /api/purchase-price-history` (+ `/by-product`, `/backfill`)
 - `GET /api/quick-products/`
 - `POST /api/location-simulations/`
 - `POST /api/billettage/close-day-auto-fill`
+
+## DB Schema (récent)
+- `day_openings` : `{ id, date, status (open/closed), opened_by, opened_by_role, opened_at, initial_cash, notes, closed_at }`
 
 ## Integrations
 - Twilio (DISABLED via kill-switch)
