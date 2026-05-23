@@ -46,6 +46,7 @@ from routers.billettage import router as billettage_router, set_db as set_billet
 from routers.location_simulations import router as location_sim_router, set_db as set_location_sim_db
 from routers.quick_products import router as quick_products_router, set_db as set_quick_products_db, seed_if_empty as seed_quick_products
 from routers.purchase_price_history import router as price_history_router, set_db as set_price_history_db, record_expense_completion as _record_purchase_price
+from routers.day_openings import router as day_openings_router, set_db as set_day_openings_db, is_day_open as _is_day_open
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -80,6 +81,7 @@ set_billettage_db(db)
 set_location_sim_db(db)
 set_quick_products_db(db)
 set_price_history_db(db)
+set_day_openings_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -149,6 +151,7 @@ api_router.include_router(billettage_router)
 api_router.include_router(location_sim_router)
 api_router.include_router(quick_products_router)
 api_router.include_router(price_history_router)
+api_router.include_router(day_openings_router)
 
 # Configure logging
 logging.basicConfig(
@@ -4130,6 +4133,15 @@ async def get_caisse_tables(server_id: Optional[str] = None):
 async def create_caisse_table(table_data: CaisseTableCreate):
     """Create a new table/draft invoice"""
     try:
+        # === Garde-fou : journée du jour DOIT être ouverte ===
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        opening = await db.day_openings.find_one({"date": today_str}, {"_id": 0, "status": 1})
+        if not opening or opening.get("status") != "open":
+            raise HTTPException(
+                status_code=423,
+                detail="La journée n'est pas ouverte. Veuillez ouvrir la journée avant d'ouvrir une table."
+            )
+
         # Check if table number is already in use by this server
         existing = await db.caisse_tables.find_one({
             "server_id": table_data.server_id,

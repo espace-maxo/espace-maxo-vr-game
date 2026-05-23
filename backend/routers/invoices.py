@@ -181,6 +181,16 @@ async def create_invoice(
 ):
     """Create a new invoice"""
     try:
+        # === Garde-fou : journée du jour DOIT être ouverte (strict) ===
+        # Bypass pour les ventes "tagged-date" (back-fill) via `assigned_date` ? non, on bloque sur today.
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        opening = await db.day_openings.find_one({"date": today_str}, {"_id": 0, "status": 1})
+        if not opening or opening.get("status") != "open":
+            raise HTTPException(
+                status_code=423,  # 423 Locked
+                detail="La journée n'est pas ouverte. La Gérante doit ouvrir la journée avant toute saisie de vente."
+            )
+
         today = datetime.now(timezone.utc).strftime("%Y%m%d")
         count = await db.invoices.count_documents({
             "created_at": {"$regex": f"^{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"}
@@ -217,6 +227,8 @@ async def create_invoice(
             None,
         )
         return {"success": True, "invoice": {k: v for k, v in invoice_dict.items() if k != "_id"}}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating invoice: {e}")
         raise HTTPException(status_code=500, detail=str(e))

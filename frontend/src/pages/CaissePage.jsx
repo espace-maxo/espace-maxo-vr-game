@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import ActiviteTab from "./caisse/components/ActiviteTab";
 import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
 import PointCaisseTab from "./caisse/components/PointCaisseTab";
+import JourneeTab from "./caisse/components/JourneeTab";
 import ClosureLockBanner from "./caisse/components/ClosureLockBanner";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
@@ -3473,7 +3474,12 @@ _Gérante - Espace Maxo_
       await fetchOpenTables(true);
     } catch (e) {
       console.error("Error sending order to kitchen:", e);
-      toast.error("Erreur lors de l'envoi en production");
+      const detail = e.response?.data?.detail;
+      if (e.response?.status === 423 && detail) {
+        toast.error(detail, { duration: 6000 });
+      } else {
+        toast.error(detail || "Erreur lors de l'envoi en production");
+      }
     }
   };
 
@@ -3589,7 +3595,12 @@ _Gérante - Espace Maxo_
       
     } catch (error) {
       console.error("Error saving invoice:", error);
-      toast.error("Erreur lors de l'enregistrement");
+      const detail = error.response?.data?.detail;
+      if (error.response?.status === 423 && detail) {
+        toast.error(detail, { duration: 6000 });
+      } else {
+        toast.error(detail || "Erreur lors de l'enregistrement");
+      }
     }
   };
 
@@ -5120,6 +5131,12 @@ _Gérante - Espace Maxo_
                 <Receipt className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Point de la Caisse</span>
               </TabsTrigger>
             )}
+            {/* 8.6 JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Gérante */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <TabsTrigger value="journee" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-journee">
+                <Sunrise className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Journée</span>
+              </TabsTrigger>
+            )}
             {/* 8.7 JOURNAL (ex-Prévisions) (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="forecasts" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-forecasts">
@@ -6114,6 +6131,13 @@ _Gérante - Espace Maxo_
           {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
           <TabsContent value="point_caisse">
             <PointCaisseTab currentUser={currentUser} />
+          </TabsContent>
+          )}
+
+          {/* ==================== JOURNÉE TAB (Ouverture / Fermeture / Historique) ==================== */}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+          <TabsContent value="journee">
+            <JourneeTab currentUser={currentUser} />
           </TabsContent>
           )}
 

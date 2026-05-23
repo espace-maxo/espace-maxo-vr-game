@@ -256,6 +256,15 @@ async def close_day(date: str, data: DayClosureClose):
         await db.day_closures.update_one({"date": date}, {"$set": doc}, upsert=True)
         logger.info(f"Day {date} closed by {data.closed_by}")
 
+        # Marque aussi l'ouverture comme close (si elle existe).
+        try:
+            await db.day_openings.update_one(
+                {"date": date, "status": "open"},
+                {"$set": {"status": "closed", "closed_at": now}}
+            )
+        except Exception as _e:
+            logger.warning(f"day_openings update on close failed: {_e}")
+
         # === AUTO-CRÉATION des 4 reversements (Bar / Menu / Jeux / Locations) ===
         # Pré-rempli à partir des ventes du jour. La Gérante pourra ajuster
         # chaque montant avec un motif obligatoire (traçabilité).
@@ -342,6 +351,16 @@ async def reopen_day(date: str, data: DayClosureReopen):
             "reopen_reason": data.reason or "",
         }})
         logger.info(f"Day {date} reopened by {data.reopened_by}")
+
+        # Réouvre aussi l'ouverture (si elle existe).
+        try:
+            await db.day_openings.update_one(
+                {"date": date},
+                {"$set": {"status": "open", "closed_at": None}}
+            )
+        except Exception as _e:
+            logger.warning(f"day_openings reopen failed: {_e}")
+
         return {"success": True}
     except HTTPException:
         raise
