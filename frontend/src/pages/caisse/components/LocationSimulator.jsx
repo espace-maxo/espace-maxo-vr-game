@@ -797,15 +797,37 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowMarketEditor(false)}>
           <Card className="bg-slate-900 border-purple-500/40 w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="market-editor-modal">
             <CardHeader className="pb-2 border-b border-slate-700">
-              <CardTitle className="text-white flex items-center justify-between gap-2">
+              <CardTitle className="text-white flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-2 text-base">
                   <ShoppingBasket className="w-5 h-5 text-purple-400" />
                   Catalogue Marché / Supermarché
                   <Badge className="bg-purple-500/20 text-purple-300 text-[10px]">{marketProducts.length}</Badge>
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => setShowMarketEditor(false)} className="text-slate-300 h-7 w-7 p-0">
-                  <XIcon className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const r = await axios.post(`${API}/quick-products/import-missing`);
+                        const ins = r.data?.inserted || 0;
+                        if (ins > 0) toast.success(`${ins} produits importés ✅`);
+                        else toast.info("Catalogue déjà à jour");
+                        const mR = await axios.get(`${API}/quick-products`);
+                        setMarketProducts(mR.data?.products || []);
+                      } catch {
+                        toast.error("Erreur d'import");
+                      }
+                    }}
+                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-7 text-[11px]"
+                    data-testid="market-import-default"
+                  >
+                    Importer les produits par défaut
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowMarketEditor(false)} className="text-slate-300 h-7 w-7 p-0">
+                    <XIcon className="w-4 h-4" />
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 overflow-y-auto flex-1 space-y-3">
