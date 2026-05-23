@@ -44,6 +44,7 @@ import UsersTab from "./caisse/components/UsersTab";
 import ClientsTab from "./caisse/components/ClientsTab";
 import PointCaisseTab from "./caisse/components/PointCaisseTab";
 import JourneeTab from "./caisse/components/JourneeTab";
+import QuickProductPicker from "./caisse/components/QuickProductPicker";
 import ClosureLockBanner from "./caisse/components/ClosureLockBanner";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
@@ -7223,6 +7224,18 @@ _Gérante - Espace Maxo_
                           quantity={commonNewItem.quantity}
                           onApply={(desc, qty) => setCommonNewItem({ ...commonNewItem, description: desc, quantity: qty })}
                           testIdPrefix="common"
+                        />
+                        {/* Picker rapide de produits du catalogue Marché */}
+                        <QuickProductPicker
+                          dataTestidPrefix="expense-qpp"
+                          onPick={(p) => {
+                            setCommonNewItem({
+                              ...commonNewItem,
+                              description: p.unit ? `${p.name} (${p.unit})` : p.name,
+                              unit_price: Number(p.unit_cost || 0),
+                              quantity: commonNewItem.quantity || 1,
+                            });
+                          }}
                         />
                       </>
                     )}
