@@ -422,6 +422,70 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
             except Exception as recalc_err:
                 logger.warning(f"Approval amount recompute failed: {recalc_err}")
 
+            # === SUIVI COURSES (auto-import dans shopping_list_items) ===
+            # Lors de l'approbation par l'admin, on crée automatiquement les
+            # entrées dans la liste de courses (Restaurant) pour que la
+            # Gérante puisse cocher au fur et à mesure des achats.
+            try:
+                _src = update_data.get("items") if update_data.get("items") is not None else expense.get("items") or []
+                _items_for_courses = []
+                for idx, it in enumerate(_src):
+                    if it.get("struck"):
+                        continue
+                    if it.get("category") == "paiement" or it.get("expense_type") == "paiement":
+                        continue
+                    _items_for_courses.append((idx, it))
+                if not _items_for_courses and not expense.get("is_group"):
+                    # Legacy single-item expense
+                    _items_for_courses = [(0, {
+                        "description": expense.get("description") or "",
+                        "quantity": expense.get("quantity") or 1,
+                        "unit_price": expense.get("unit_price") or expense.get("amount") or 0,
+                        "category": expense.get("category", ""),
+                    })]
+                # Skip already-imported (idempotent)
+                _existing = []
+                async for e in db.shopping_list_items.find(
+                    {"expense_id": expense_id}, {"_id": 0, "expense_item_index": 1}
+                ):
+                    _existing.append(e.get("expense_item_index"))
+                existing_idx_set = set(_existing)
+                now_iso = datetime.now(timezone.utc).isoformat()
+                docs = []
+                for idx, it in _items_for_courses:
+                    if idx in existing_idx_set:
+                        continue
+                    qty = float(it.get("quantity") or 1)
+                    unit = float(it.get("unit_price") or 0)
+                    docs.append({
+                        "id": str(uuid.uuid4()),
+                        "name": (it.get("description") or "").strip() or "Article",
+                        "quantity": qty,
+                        "unit": "",
+                        "estimated_unit_price": unit,
+                        "estimated_total": qty * unit,
+                        "scope": "restaurant",
+                        "reservation_id": None,
+                        "reservation_label": None,
+                        "expense_id": expense_id,
+                        "expense_item_index": idx,
+                        "category": (it.get("category") or "").strip(),
+                        "notes": "",
+                        "status": "pending",
+                        "done_by": None,
+                        "done_at": None,
+                        "real_unit_price": None,
+                        "real_supplier": "",
+                        "real_total": None,
+                        "created_at": now_iso,
+                        "created_by": (update_data.get("approved_by") or expense.get("approved_by") or "admin"),
+                    })
+                if docs:
+                    await db.shopping_list_items.insert_many(docs)
+                    logger.info(f"Auto-imported {len(docs)} items into shopping_list for expense {expense_id}")
+            except Exception as _e:
+                logger.warning(f"shopping_list auto-import failed for expense {expense_id}: {_e}")
+
             # === STOCK FLOW : marquer "réception attendue" si au moins 1 item va en stock ===
             try:
                 is_paiement = (update_data.get("expense_type") or expense.get("expense_type")) == "paiement"

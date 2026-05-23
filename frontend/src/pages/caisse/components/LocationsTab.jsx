@@ -76,6 +76,9 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
     return `actor_name=${n}&actor_role=${r}`;
   };
   const [editingLocation, setEditingLocation] = useState(null);
+  // Items issus du simulateur en attente d'import dans la liste de courses,
+  // déclenché à la sauvegarde de la réservation.
+  const [pendingCoursesSimItems, setPendingCoursesSimItems] = useState([]);
   const [viewingLocation, setViewingLocation] = useState(null);
   const [filterSpace, setFilterSpace] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -227,8 +230,26 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         await axios.put(`${API}/locations/${editingLocation.id}?${actorQs()}`, submitData);
         toast.success("Location modifiée avec succès");
       } else {
-        await axios.post(`${API}/locations?${actorQs()}`, submitData);
+        const r = await axios.post(`${API}/locations?${actorQs()}`, submitData);
         toast.success("Location créée avec succès");
+        // === Auto-import items de la simulation dans la liste de courses ===
+        if (pendingCoursesSimItems && pendingCoursesSimItems.length > 0) {
+          const reservationId = r.data?.location?.id || r.data?.id;
+          if (reservationId && window.confirm(`Importer les ${pendingCoursesSimItems.length} articles de la simulation dans la liste de courses ?`)) {
+            try {
+              await axios.post(`${API}/shopping-list/from-reservation`, {
+                reservation_id: reservationId,
+                reservation_label: `${submitData.customer_name || 'Réservation'} — ${submitData.reservation_date || ''}`,
+                items: pendingCoursesSimItems,
+                created_by: currentUser?.full_name || currentUser?.username || '',
+              });
+              toast.success(`${pendingCoursesSimItems.length} articles ajoutés à la liste de courses 🛒`);
+            } catch {
+              toast.error("Erreur lors de l'import en liste de courses");
+            }
+          }
+          setPendingCoursesSimItems([]);
+        }
       }
       setShowModal(false);
       setEditingLocation(null);
@@ -803,6 +824,7 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
           onCreateReservation={(sim) => {
             // Pré-remplit le formulaire d'ajout de réservation avec les données de la simulation
             setEditingLocation(null);
+            setPendingCoursesSimItems(sim.items || []);
             setFormData({
               space_types: ["salle_fete"],
               customer_name: sim.client_name || "",

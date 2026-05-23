@@ -45,6 +45,7 @@ import ClientsTab from "./caisse/components/ClientsTab";
 import PointCaisseTab from "./caisse/components/PointCaisseTab";
 import JourneeTab from "./caisse/components/JourneeTab";
 import QuickProductPicker from "./caisse/components/QuickProductPicker";
+import CoursesTab from "./caisse/components/CoursesTab";
 import ClosureLockBanner from "./caisse/components/ClosureLockBanner";
 import ProductsTab from "./caisse/components/ProductsTab";
 import LinkStockModal from "./caisse/components/LinkStockModal";
@@ -5097,6 +5098,12 @@ _Gérante - Espace Maxo_
                 <NotifBadge count={effectiveCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
               </TabsTrigger>
             )}
+            {/* 5.1 SUIVI COURSES (Restaurant + Réservations) */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="courses" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-courses">
+                <ShoppingCart className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Courses</span>
+              </TabsTrigger>
+            )}
             {/* 5.5 LISTE DE BESOINS */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="needs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-needs">
@@ -6140,6 +6147,13 @@ _Gérante - Espace Maxo_
           {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
           <TabsContent value="journee">
             <JourneeTab currentUser={currentUser} />
+          </TabsContent>
+          )}
+
+          {/* ==================== COURSES TAB ==================== */}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+          <TabsContent value="courses">
+            <CoursesTab currentUser={currentUser} />
           </TabsContent>
           )}
 
