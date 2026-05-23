@@ -124,7 +124,7 @@ class TestDayOpeningsEdgeCases:
         # Close the day via day_closures endpoint (with force to bypass server point check)
         r2 = requests.post(
             f"{API}/day-closures/{today}/close",
-            json={"closed_by": "PytestEdge", "notes": "Test closure", "force": True},
+            json={"closed_by": "PytestEdge", "closed_by_role": "admin", "notes": "Test closure", "force": True},
         )
         assert r2.status_code == 200, f"Expected 200 got {r2.status_code} body={r2.text}"
         
@@ -152,7 +152,7 @@ class TestDayOpeningsEdgeCases:
         # Close the day
         requests.post(
             f"{API}/day-closures/{today}/close",
-            json={"closed_by": "PytestEdge", "force": True},
+            json={"closed_by": "PytestEdge", "closed_by_role": "admin", "force": True},
         )
         
         # Verify it's closed
@@ -259,7 +259,7 @@ class TestDayOpeningsEdgeCases:
         # Close the day
         requests.post(
             f"{API}/day-closures/{today}/close",
-            json={"closed_by": "PytestEdge", "force": True},
+            json={"closed_by": "PytestEdge", "closed_by_role": "admin", "force": True},
         )
         
         # Get history
@@ -375,14 +375,14 @@ class TestDayClosuresIntegration:
         # First close
         r1 = requests.post(
             f"{API}/day-closures/{today}/close",
-            json={"closed_by": "PytestInteg", "force": True},
+            json={"closed_by": "PytestInteg", "closed_by_role": "admin", "force": True},
         )
         assert r1.status_code == 200
         
         # Second close (should be idempotent)
         r2 = requests.post(
             f"{API}/day-closures/{today}/close",
-            json={"closed_by": "PytestInteg", "force": True},
+            json={"closed_by": "PytestInteg", "closed_by_role": "admin", "force": True},
         )
         assert r2.status_code == 200
         body = r2.json()

@@ -68,17 +68,34 @@ export default function DayClosureGuard({ currentUser, children }) {
     } finally { setBusy(false); }
   };
 
-  const closeDayHandler = async (force = false) => {
+  const closeDayHandler = async (force = false, password = null) => {
     setBusy(true);
     try {
-      await axios.post(`${API}/day-closures/${date}/close`, {
+      const payload = {
         closed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        closed_by_role: currentUser?.role || "",
         force,
-      });
+      };
+      if (password) payload.password = password;
+      await axios.post(`${API}/day-closures/${date}/close`, payload);
       toast.success("Journée fermée");
       refresh();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Erreur de fermeture");
+      const detail = e.response?.data?.detail || "Erreur de fermeture";
+      const status = e.response?.status;
+      // Si non-admin et mot de passe requis → demander
+      if ((status === 401 || status === 403) && !isAdmin) {
+        if (status === 403) {
+          toast.error(detail);
+        } else {
+          const pw = window.prompt("Saisissez le mot de passe Journée pour fermer :");
+          if (pw) {
+            return closeDayHandler(force, pw);
+          }
+        }
+      } else {
+        toast.error(detail);
+      }
     } finally { setBusy(false); }
   };
 

@@ -44,8 +44,10 @@ class ServerPointCreate(BaseModel):
 
 class DayClosureClose(BaseModel):
     closed_by: str
+    closed_by_role: Optional[str] = ""  # 'admin' | 'manager'
     notes: Optional[str] = ""
     force: bool = False  # Admin uniquement : ignorer la vérification serveurs
+    password: Optional[str] = ""  # Mot de passe Journée — requis sauf admin
 
 
 class DayClosureReopen(BaseModel):
@@ -218,6 +220,20 @@ async def close_day(date: str, data: DayClosureClose):
         existing = await db.day_closures.find_one({"date": date}, {"_id": 0})
         if existing and existing.get("status") == "closed":
             return {"success": True, "already_closed": True, "closure": existing}
+
+        # Vérif mot de passe Journée — obligatoire pour les non-admins.
+        if (data.closed_by_role or "").lower() != "admin":
+            from .journee_settings import is_password_set, verify_password as _verify_pw
+            if not await is_password_set():
+                raise HTTPException(
+                    status_code=403,
+                    detail="Aucun mot de passe Journée n'est défini. Demandez à l'Administrateur d'en créer un (Tab Journée → Paramètres)."
+                )
+            if not await _verify_pw(data.password or ""):
+                raise HTTPException(
+                    status_code=401,
+                    detail="Mot de passe Journée incorrect."
+                )
 
         # Vérification : seuls les serveurs qui ont pris des commandes doivent avoir validé
         if not data.force:

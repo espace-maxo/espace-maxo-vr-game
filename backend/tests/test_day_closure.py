@@ -41,7 +41,7 @@ class TestDayClosureFlow:
 
     def test_close_blocked_when_servers_missing(self):
         r = requests.post(f"{BASE_URL}/api/day-closures/{self.DATE}/close",
-                          json={"closed_by": "TestGerante"})
+                          json={"closed_by": "TestGerante", "closed_by_role": "admin"})
         # if there are active servers and none validated -> 400
         status = requests.get(f"{BASE_URL}/api/server-points/status", params={"date": self.DATE}).json()
         if status["total_servers"] > 0 and status["validated_count"] < status["total_servers"]:
@@ -53,7 +53,7 @@ class TestDayClosureFlow:
 
     def test_force_close_admin(self):
         r = requests.post(f"{BASE_URL}/api/day-closures/{self.DATE}/close",
-                          json={"closed_by": "Admin", "force": True})
+                          json={"closed_by": "Admin", "closed_by_role": "admin", "force": True})
         assert r.status_code == 200
         assert r.json()["closure"]["status"] == "closed"
 
@@ -70,9 +70,9 @@ class TestDayClosureFlow:
 
     def test_force_close_idempotent(self):
         requests.post(f"{BASE_URL}/api/day-closures/{self.DATE}/close",
-                      json={"closed_by": "Admin", "force": True})
+                      json={"closed_by": "Admin", "closed_by_role": "admin", "force": True})
         r2 = requests.post(f"{BASE_URL}/api/day-closures/{self.DATE}/close",
-                           json={"closed_by": "Other", "force": True})
+                           json={"closed_by": "Other", "closed_by_role": "admin", "force": True})
         assert r2.status_code == 200
         assert r2.json().get("already_closed") is True
         # Cleanup
@@ -97,7 +97,7 @@ class TestDayClosureFlow:
         requests.post(f"{BASE_URL}/api/day-closures/{future_date}/reopen",
                       json={"reopened_by": "Test", "reason": "cleanup"})
         r = requests.post(f"{BASE_URL}/api/day-closures/{future_date}/close",
-                          json={"closed_by": "TestGerante"})
+                          json={"closed_by": "TestGerante", "closed_by_role": "admin"})
         assert r.status_code == 200, r.text
         # Cleanup
         requests.post(f"{BASE_URL}/api/day-closures/{future_date}/reopen",

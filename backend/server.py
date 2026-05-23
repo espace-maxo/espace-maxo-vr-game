@@ -47,6 +47,7 @@ from routers.location_simulations import router as location_sim_router, set_db a
 from routers.quick_products import router as quick_products_router, set_db as set_quick_products_db, seed_if_empty as seed_quick_products
 from routers.purchase_price_history import router as price_history_router, set_db as set_price_history_db, record_expense_completion as _record_purchase_price
 from routers.day_openings import router as day_openings_router, set_db as set_day_openings_db, is_day_open as _is_day_open
+from routers.journee_settings import router as journee_settings_router, set_db as set_journee_settings_db, verify_password as _verify_journee_pw, is_password_set as _is_journee_pw_set
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -82,6 +83,7 @@ set_location_sim_db(db)
 set_quick_products_db(db)
 set_price_history_db(db)
 set_day_openings_db(db)
+set_journee_settings_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -152,6 +154,7 @@ api_router.include_router(location_sim_router)
 api_router.include_router(quick_products_router)
 api_router.include_router(price_history_router)
 api_router.include_router(day_openings_router)
+api_router.include_router(journee_settings_router)
 
 # Configure logging
 logging.basicConfig(

@@ -45,6 +45,7 @@ class DayOpeningCreate(BaseModel):
     initial_cash: Optional[float] = 0
     notes: Optional[str] = ""
     force: bool = False  # Admin uniquement : ignorer la vérif jour précédent
+    password: Optional[str] = ""  # Mot de passe Journée — requis sauf admin
 
 
 # ============================================================================
@@ -90,6 +91,20 @@ async def open_day(date: str, data: DayOpeningCreate):
     existing = await db.day_openings.find_one({"date": date}, {"_id": 0})
     if existing and existing.get("status") == "open":
         return {"success": True, "already_open": True, "opening": existing}
+
+    # Vérif mot de passe Journée — obligatoire pour les non-admins.
+    if (data.opened_by_role or "").lower() != "admin":
+        from .journee_settings import is_password_set, verify_password as _verify_pw
+        if not await is_password_set():
+            raise HTTPException(
+                status_code=403,
+                detail="Aucun mot de passe Journée n'est défini. Demandez à l'Administrateur d'en créer un (Tab Journée → Paramètres)."
+            )
+        if not await _verify_pw(data.password or ""):
+            raise HTTPException(
+                status_code=401,
+                detail="Mot de passe Journée incorrect."
+            )
 
     # Garde-fou : jour précédent doit être fermé si activité.
     # NB : on regarde "hier", "avant-hier", etc. jusqu'à 7 jours en arrière.
