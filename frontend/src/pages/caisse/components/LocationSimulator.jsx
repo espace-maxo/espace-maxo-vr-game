@@ -768,6 +768,43 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
               <Printer className="w-4 h-4 mr-1" />
               Imprimer / PDF
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                if (form.items.length === 0) {
+                  toast.error("Ajoutez au moins un article avant d'envoyer aux courses");
+                  return;
+                }
+                try {
+                  const r = await axios.post(`${API}/shopping-list/from-reservation`, {
+                    reservation_id: `sim-${form.id || Date.now()}`,
+                    reservation_label: `Simulation — ${form.name || (form.client_name ? form.client_name : 'sans nom')}`,
+                    items: form.items.map((it) => ({
+                      name: it.label || "Article",
+                      quantity: it.quantity || 1,
+                      unit_cost: it.unit_cost || 0,
+                      source_type: it.source_type,
+                    })),
+                    created_by: "",
+                  });
+                  const ins = r.data?.inserted || 0;
+                  if (ins > 0) {
+                    toast.success(`${ins} articles ajoutés à la liste de courses 🛒  (onglet Courses)`, { duration: 6000 });
+                  } else {
+                    toast.info("Tous ces articles sont déjà dans la liste de courses");
+                  }
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Erreur lors de l'envoi");
+                }
+              }}
+              disabled={form.items.length === 0}
+              className="border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
+              data-testid="sim-to-courses"
+            >
+              <ShoppingBasket className="w-4 h-4 mr-1" />
+              Envoyer en liste de courses
+            </Button>
             {onCreateReservation && (
               <Button
                 onClick={() => onCreateReservation({

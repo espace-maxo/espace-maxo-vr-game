@@ -233,20 +233,27 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
         const r = await axios.post(`${API}/locations?${actorQs()}`, submitData);
         toast.success("Location créée avec succès");
         // === Auto-import items de la simulation dans la liste de courses ===
+        // (déclenché si la réservation a été initiée depuis le Simulateur)
         if (pendingCoursesSimItems && pendingCoursesSimItems.length > 0) {
-          const reservationId = r.data?.location?.id || r.data?.id;
-          if (reservationId && window.confirm(`Importer les ${pendingCoursesSimItems.length} articles de la simulation dans la liste de courses ?`)) {
+          const reservationId = r.data?.location?.id || r.data?.id || r.data?.location_id;
+          if (reservationId) {
             try {
-              await axios.post(`${API}/shopping-list/from-reservation`, {
+              const imp = await axios.post(`${API}/shopping-list/from-reservation`, {
                 reservation_id: reservationId,
                 reservation_label: `${submitData.customer_name || 'Réservation'} — ${submitData.reservation_date || ''}`,
                 items: pendingCoursesSimItems,
                 created_by: currentUser?.full_name || currentUser?.username || '',
               });
-              toast.success(`${pendingCoursesSimItems.length} articles ajoutés à la liste de courses 🛒`);
-            } catch {
-              toast.error("Erreur lors de l'import en liste de courses");
+              const inserted = imp.data?.inserted || 0;
+              if (inserted > 0) {
+                toast.success(`${inserted} articles ajoutés à la liste de courses 🛒  (onglet Courses)`, { duration: 6000 });
+              }
+            } catch (importErr) {
+              console.error("shopping-list/from-reservation failed", importErr);
+              toast.error("Réservation créée, mais l'import en liste de courses a échoué");
             }
+          } else {
+            console.warn("Reservation id introuvable dans la réponse, items non importés", r.data);
           }
           setPendingCoursesSimItems([]);
         }
