@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, Save, Trash2, Plus, Percent, Banknote, Users, Package, Wine, Pen, RefreshCw, ChevronDown, ChevronUp, CalendarCheck, ShoppingBasket, Settings, Edit3, X as XIcon } from "lucide-react";
+import { Calculator, Save, Trash2, Plus, Percent, Banknote, Users, Package, Wine, Pen, RefreshCw, ChevronDown, ChevronUp, CalendarCheck, ShoppingBasket, Settings, Edit3, X as XIcon, Printer } from "lucide-react";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -242,6 +242,124 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
       marginAmount: sale - totalCost,
     };
   }, [form.items, form.margin_type, form.margin_value, form.num_persons]);
+
+  // ============== IMPRESSION / PDF ==============
+  // Ouvre une nouvelle fenêtre avec un rendu "devis" propre puis lance le dialog
+  // d'impression du navigateur (l'utilisateur peut choisir Imprimer ou
+  // Enregistrer en PDF).
+  const printSimulation = () => {
+    if (form.items.length === 0) {
+      toast.error("Ajoutez au moins un article avant d'imprimer");
+      return;
+    }
+    const w = window.open("", "_blank", "width=900,height=1100");
+    if (!w) {
+      toast.error("Impossible d'ouvrir la fenêtre d'impression (popup bloqué ?)");
+      return;
+    }
+    const persons = Math.max(1, parseInt(form.num_persons) || 1);
+    const rows = form.items.map((it) => {
+      const unit = parseFloat(it.unit_cost) || 0;
+      const qty = parseFloat(it.quantity) || 0;
+      const total = unit * qty;
+      const tag = it.source_type === "stock" ? "Stock"
+                : it.source_type === "caisse" ? "Caisse"
+                : it.source_type === "market" ? "Marché"
+                : "Libre";
+      return `<tr>
+        <td>${(it.label || "—").replace(/</g, "&lt;")}</td>
+        <td class="muted">${tag}</td>
+        <td class="num">${fmt(qty)}</td>
+        <td class="num">${fmt(unit)} F</td>
+        <td class="num"><strong>${fmt(total)} F</strong></td>
+      </tr>`;
+    }).join("");
+    const marginLabel = form.margin_type === "fixed"
+      ? `+ ${fmt(form.margin_value)} F (fixe)`
+      : `+ ${form.margin_value || 0}%`;
+    const today = new Date().toLocaleDateString("fr-FR");
+    const eventDate = form.event_date
+      ? new Date(form.event_date).toLocaleDateString("fr-FR")
+      : "—";
+    const notesHtml = form.notes
+      ? `<div class="notes"><strong>Notes :</strong> ${form.notes.replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>`
+      : "";
+    const html = `<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8" />
+<title>Devis Location — ${(form.name || "Sans nom").replace(/</g, "&lt;")}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;margin:0;padding:24px;color:#1a1a1a;background:#fff}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6b21a8;padding-bottom:12px;margin-bottom:18px}
+  h1{font-size:22px;margin:0;color:#6b21a8;letter-spacing:.5px}
+  .sub{color:#666;font-size:11px;margin-top:4px}
+  .meta{font-size:11px;color:#444;text-align:right}
+  .meta strong{color:#000}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .card{background:#f7f6fb;border:1px solid #e5e1f0;border-radius:8px;padding:10px 12px;font-size:12px}
+  .card .label{text-transform:uppercase;font-size:9px;color:#777;letter-spacing:.6px;margin-bottom:4px}
+  .card .val{font-size:14px;color:#222;font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{background:#6b21a8;color:#fff;text-align:left;padding:6px 8px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  td{padding:6px 8px;border-bottom:1px solid #ece8f5}
+  td.num,th.num{text-align:right}
+  td.muted{color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+  .totals{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .totals .box{border:1px solid #e5e1f0;border-radius:8px;padding:10px;text-align:center}
+  .totals .box.global{background:#6b21a8;color:#fff;border-color:#6b21a8}
+  .totals .box .l{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:4px}
+  .totals .box.global .l{color:#e9d5ff}
+  .totals .box .v{font-size:18px;font-weight:700}
+  .margin{margin-top:10px;font-size:11px;text-align:center;color:#666;background:#faf7ff;border:1px dashed #c9bedd;padding:6px;border-radius:6px}
+  .notes{margin-top:18px;background:#fffaeb;border:1px solid #fde68a;border-radius:6px;padding:10px;font-size:11px;color:#92400e}
+  .foot{margin-top:30px;text-align:center;font-size:10px;color:#999;border-top:1px solid #eee;padding-top:10px}
+  @media print { body{padding:12px} button{display:none!important} }
+</style>
+</head><body>
+  <div class="head">
+    <div>
+      <h1>DEVIS — SIMULATION LOCATION</h1>
+      <div class="sub">${(form.name || "Sans nom").replace(/</g, "&lt;")}</div>
+    </div>
+    <div class="meta">
+      <div>Édité le <strong>${today}</strong></div>
+      <div>Évènement : <strong>${eventDate}</strong></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Client</div><div class="val">${(form.client_name || "—").replace(/</g, "&lt;")}</div></div>
+    <div class="card"><div class="label">Nombre de personnes</div><div class="val">${persons}</div></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Article</th><th>Source</th><th class="num">Qté</th><th class="num">Prix unitaire</th><th class="num">Total</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <div class="margin">Marge appliquée : ${marginLabel}</div>
+
+  <div class="totals">
+    <div class="box"><div class="l">Prix de revient</div><div class="v">${fmt(totals.totalCost)} F</div></div>
+    <div class="box global"><div class="l">Prix global</div><div class="v">${fmt(totals.saleGlobal)} F</div></div>
+    <div class="box"><div class="l">Par personne</div><div class="v">${fmt(totals.pricePerPerson)} F</div></div>
+  </div>
+
+  ${notesHtml}
+
+  <div class="foot">Devis simulation — Espace Maxo · ne tient pas lieu de facture</div>
+
+  <script>
+    window.onload = function(){ setTimeout(function(){ window.print(); }, 250); };
+  </script>
+</body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
 
   const saveSimulation = async () => {
     if (!form.name || form.name.trim().length === 0) {
@@ -638,7 +756,18 @@ const LocationSimulator = ({ currentUser, onCreateReservation }) => {
               placeholder="Conditions particulières, contraintes…"
               className="bg-slate-800 border-slate-700 text-white" rows={2} />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={printSimulation}
+              disabled={form.items.length === 0}
+              className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+              data-testid="sim-print"
+            >
+              <Printer className="w-4 h-4 mr-1" />
+              Imprimer / PDF
+            </Button>
             {onCreateReservation && (
               <Button
                 onClick={() => onCreateReservation({

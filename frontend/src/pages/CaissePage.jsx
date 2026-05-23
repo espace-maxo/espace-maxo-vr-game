@@ -5053,6 +5053,12 @@ _Gérante - Espace Maxo_
             />
           )}
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start text-xs sm:text-sm">
+            {/* 0. JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Gérante, en PREMIER */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+              <TabsTrigger value="journee" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-journee">
+                <Sunrise className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Journée</span>
+              </TabsTrigger>
+            )}
             {/* 1. TABLES */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
               <TabsTrigger value="tables" className="data-[state=active]:bg-teal-500 data-[state=active]:text-white px-2 sm:px-3">
@@ -5131,12 +5137,7 @@ _Gérante - Espace Maxo_
                 <Receipt className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Point de la Caisse</span>
               </TabsTrigger>
             )}
-            {/* 8.6 JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Gérante */}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
-              <TabsTrigger value="journee" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-journee">
-                <Sunrise className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Journée</span>
-              </TabsTrigger>
-            )}
+            {/* 8.6 JOURNÉE déplacée tout en haut */}
             {/* 8.7 JOURNAL (ex-Prévisions) (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="forecasts" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-forecasts">
