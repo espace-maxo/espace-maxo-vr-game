@@ -4867,8 +4867,8 @@ _Gérante - Espace Maxo_
                 </div>
               )}
 
-              {/* Revision Notifications for Manager (Achats à réviser) */}
-              {currentUser?.role === 'manager' && revisionExpensesCount > 0 && (
+              {/* Revision Notifications for Manager (Achats à réviser) — désactivé : la Gérante n'a plus accès à Achats (24/05/2026) */}
+              {false && currentUser?.role === 'manager' && revisionExpensesCount > 0 && (
                 <Button 
                   variant="ghost" 
                   onClick={() => setActiveTab('achats')}
@@ -5122,11 +5122,11 @@ _Gérante - Espace Maxo_
                 <Building2 className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Locations</span>
               </TabsTrigger>
             )}
-            {/* 5. ACHATS */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+            {/* 5. ACHATS — Admin only (24/05/2026) */}
+            {currentUser?.role === 'admin' && (
               <TabsTrigger value="achats" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3">
                 <ShoppingCart className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Achats</span>
-                <NotifBadge count={effectiveCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
+                <NotifBadge count={effectiveCounts.expenses} color="purple" testid="badge-achats" />
               </TabsTrigger>
             )}
             {/* 5.1 APPRO MANAGER (Suivi courses + Scan reçus + Transfert vers Achats) — Admin only */}
@@ -5144,8 +5144,8 @@ _Gérante - Espace Maxo_
                 )}
               </TabsTrigger>
             )}
-            {/* 5.6 FOURNISSEURS & BC */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+            {/* 5.6 FOURNISSEURS & BC — Admin only (24/05/2026) */}
+            {currentUser?.role === 'admin' && (
               <TabsTrigger value="po" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-po">
                 <Truck className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Fournisseurs</span>
                 <NotifBadge count={effectiveCounts.purchase_orders} color="sky" testid="badge-po" />
@@ -5981,8 +5981,8 @@ _Gérante - Espace Maxo_
           </TabsContent>
           )}
 
-          {/* ==================== ACHATS/DÉPENSES TAB (Manager) ==================== */}
-          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          {/* ==================== ACHATS/DÉPENSES TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
           <TabsContent value="achats">
             <AchatsTab ctx={{
               currentUser,
@@ -6202,8 +6202,8 @@ _Gérante - Espace Maxo_
           </TabsContent>
           )}
 
-          {/* ==================== FOURNISSEURS & BONS DE COMMANDE (Manager & Admin) ==================== */}
-          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          {/* ==================== FOURNISSEURS & BONS DE COMMANDE (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
           <TabsContent value="po">
             <PurchaseOrdersTab currentUser={currentUser} />
           </TabsContent>

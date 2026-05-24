@@ -57,6 +57,9 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Snapshot Point de la Caisse fusionne maintenant `expenses` + `shopping_list_items` pour fonds_propres
   - 16/16 tests backend (iteration_84) — Gérante n'a pas accès à Appro Manager
   - Endpoints : `POST /api/shopping-list/{id}/reimburse`, `/reimburse-all`, `GET /api/shopping-list/payment-mode-cumul` + extensions de `/done`, `PATCH`, `/undo`
+- **GÉRANTE — Restriction renforcée des menus (24/05/2026)**
+  - Menus cachés à la Gérante : Achats, Appro Manager, Fournisseurs, Activité & Historique, Statistiques & Rapport, Journal, Utilisateurs, Audit, Compte courant
+  - Menus visibles : Journée, Tables, BONS, Prise de commandes, Factures, Locations, Besoins, Proforma, Point de la Caisse, Faire le point, Produits, Clients, Abonnements, Notes, Pourboires, Points Serveurs
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
