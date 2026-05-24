@@ -407,124 +407,111 @@ const AchatsTab = ({ ctx }) => {
                 )}
               </div>
 
-              {/* Sub-navigation: Validation en cours / À réviser / Validés / Rejetés */}
+              {/* Sub-navigation — 3 onglets maximum :
+                  1. À valider (pending + admin_review + revision_requested + mes demandes)
+                  2. Achats Manager (validés + terminés, dont ceux issus de Appro Manager)
+                  3. Historique (rejetés + répertoire prix d'achat)
+              */}
               <div className="flex items-center gap-2 border-b border-slate-700 pb-2 overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('en_cours')}
-                  data-testid="achats-subtab-en-cours"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'en_cours'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  Validation en cours
-                  <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'pending' || e.status === 'admin_review').length}
-                  </Badge>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('a_reviser')}
-                  data-testid="achats-subtab-a-reviser"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'a_reviser'
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  <Edit2 className="w-4 h-4 mr-1 inline" />
-                  Réviser la demande
-                  <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'revision_requested').length}
-                  </Badge>
-                </button>
-                {currentUser?.role === 'admin' && (
-                  <button
-                    type="button"
-                    onClick={() => setAchatsSubView('mes_demandes')}
-                    data-testid="achats-subtab-mes-demandes"
-                    className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                      achatsSubView === 'mes_demandes'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <ShoppingCart className="w-4 h-4 mr-1 inline" />
-                    Mes demandes
-                    <Badge className="ml-2 bg-white/20 text-white text-xs">
-                      {expenses.filter(e => {
-                        const me = currentUser?.full_name || currentUser?.username || '';
-                        return e.requested_by === me || e.requested_by === currentUser?.username;
-                      }).length}
-                    </Badge>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('valides')}
-                  data-testid="achats-subtab-valides"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'valides'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  <CheckCircle className="w-4 h-4 mr-1 inline" />
-                  Achats validés
-                  <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'approved').length}
-                  </Badge>
-                </button>
-                {currentUser?.role === 'admin' && (
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('termines')}
-                  data-testid="achats-subtab-termines"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'termines'
-                      ? 'bg-slate-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  <FileText className="w-4 h-4 mr-1 inline" />
-                  Achats &amp; prestations terminés
-                  <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(isFinished).length}
-                  </Badge>
-                </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('rejetes')}
-                  data-testid="achats-subtab-rejetes"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'rejetes'
-                      ? 'bg-rose-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  <X className="w-4 h-4 mr-1 inline" />
-                  Rejetés
-                  <Badge className="ml-2 bg-white/20 text-white text-xs">
-                    {expenses.filter(e => e.status === 'rejected').length}
-                  </Badge>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAchatsSubView('repertoire_prix')}
-                  data-testid="achats-subtab-repertoire-prix"
-                  className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${
-                    achatsSubView === 'repertoire_prix'
-                      ? 'bg-cyan-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50'
-                  }`}
-                >
-                  <FileText className="w-4 h-4 mr-1 inline" />
-                  Répertoire prix
-                </button>
+                {(() => {
+                  const groups = [
+                    {
+                      key: 'a_valider', label: 'À valider', color: 'purple',
+                      sub: ['en_cours', 'a_reviser', ...(currentUser?.role === 'admin' ? ['mes_demandes'] : [])],
+                      countFn: () => expenses.filter(e =>
+                        e.status === 'pending' || e.status === 'admin_review' || e.status === 'revision_requested'
+                      ).length,
+                    },
+                    {
+                      key: 'achats_manager', label: 'Achats Manager', color: 'green',
+                      sub: ['valides', ...(currentUser?.role === 'admin' ? ['termines'] : [])],
+                      countFn: () => expenses.filter(e =>
+                        e.status === 'approved' || (currentUser?.role === 'admin' && e.status === 'completed')
+                      ).length,
+                    },
+                    {
+                      key: 'historique', label: 'Historique', color: 'cyan',
+                      sub: ['rejetes', 'repertoire_prix'],
+                      countFn: () => expenses.filter(e => e.status === 'rejected').length,
+                    },
+                  ];
+                  // Currently active group based on subview
+                  const activeGroup = groups.find(g => g.sub.includes(achatsSubView)) || groups[0];
+                  return (
+                    <>
+                      {groups.map((g) => {
+                        const isActive = g.key === activeGroup.key;
+                        const colorMap = {
+                          purple: isActive ? 'bg-purple-600 text-white' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+                          green:  isActive ? 'bg-green-600 text-white'  : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+                          cyan:   isActive ? 'bg-cyan-600 text-white'   : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+                        };
+                        return (
+                          <button
+                            key={g.key}
+                            type="button"
+                            onClick={() => setAchatsSubView(g.sub[0])}
+                            data-testid={`achats-maintab-${g.key}`}
+                            className={`px-3 py-2 rounded-t text-sm font-medium transition-colors whitespace-nowrap ${colorMap[g.color]}`}
+                          >
+                            {g.label}
+                            <Badge className="ml-2 bg-white/20 text-white text-xs">{g.countFn()}</Badge>
+                          </button>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
               </div>
+
+              {/* Sub-filtres secondaires (selon onglet principal actif) */}
+              {(() => {
+                const subFilters = {
+                  a_valider: [
+                    { key: 'en_cours', label: 'Validation en cours', count: expenses.filter(e => e.status === 'pending' || e.status === 'admin_review').length },
+                    { key: 'a_reviser', label: 'À réviser', count: expenses.filter(e => e.status === 'revision_requested').length },
+                    ...(currentUser?.role === 'admin' ? [{ key: 'mes_demandes', label: 'Mes demandes', count: expenses.filter(e => {
+                      const me = currentUser?.full_name || currentUser?.username || '';
+                      return e.requested_by === me || e.requested_by === currentUser?.username;
+                    }).length }] : []),
+                  ],
+                  achats_manager: [
+                    { key: 'valides', label: 'Validés', count: expenses.filter(e => e.status === 'approved').length },
+                    ...(currentUser?.role === 'admin' ? [{ key: 'termines', label: 'Terminés', count: expenses.filter(isFinished).length }] : []),
+                  ],
+                  historique: [
+                    { key: 'rejetes', label: 'Rejetés', count: expenses.filter(e => e.status === 'rejected').length },
+                    { key: 'repertoire_prix', label: 'Répertoire prix' },
+                  ],
+                };
+                const groupKey = ['en_cours', 'a_reviser', 'mes_demandes'].includes(achatsSubView) ? 'a_valider'
+                  : ['valides', 'termines'].includes(achatsSubView) ? 'achats_manager'
+                  : 'historique';
+                const list = subFilters[groupKey] || [];
+                if (list.length <= 1) return null;
+                return (
+                  <div className="flex gap-1.5 flex-wrap" data-testid="achats-subfilters">
+                    {list.map((f) => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setAchatsSubView(f.key)}
+                        data-testid={`achats-subtab-${f.key.replace(/_/g, '-')}`}
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition ${
+                          achatsSubView === f.key
+                            ? 'bg-amber-500 text-slate-900'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                        }`}
+                      >
+                        {f.label}
+                        {typeof f.count === 'number' && (
+                          <span className="ml-1.5 opacity-80 text-[10px]">({f.count})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> : (<>
 
@@ -1739,6 +1726,12 @@ const AchatsTab = ({ ctx }) => {
                                   }`}>{expense.category}</Badge>
                                 )}
                                 <span className="text-white font-medium">{expense.description}</span>
+                                {expense.source === 'appro_manager' && (
+                                  <Badge className="text-[10px] bg-cyan-500/30 text-cyan-200 border border-cyan-500/40" title="Issu d'Appro Manager">📋 Appro</Badge>
+                                )}
+                                {expense.source === 'receipt_scan' && (
+                                  <Badge className="text-[10px] bg-amber-500/30 text-amber-200 border border-amber-500/40" title="Scanné via reçu">🔍 Scan</Badge>
+                                )}
                                 {expense.category === 'paiement' && expense.is_paid && (
                                   <Badge className="text-xs bg-amber-500/30 text-amber-300 border border-amber-500/50" data-testid={`paid-badge-${expense.id}`}>
                                     💰 Payé
