@@ -69,6 +69,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Le bouton crée une `cancellation_request` → notification Admin qui valide/refuse
   - Admin garde le Trash2 direct + workflow d'approbation existant (reuses `requestCancellation` + `cancellationRequests`)
   - Factures validées déjà admin-only (inchangé)
+- **PROFIL Resp. Op. (24/05/2026)**
+  - Renommage du badge profil "Manager" → "**Resp. Op.**" (Responsable Opérationnelle)
+  - Nouveau **bandeau d'accueil personnalisé** (`RespOpWelcome.jsx`) :
+    - Salutation contextuelle (Bonjour/Bonsoir/Bon après-midi) + nom + date complète
+    - 5 KPI cliquables : Journée / Tables ouvertes / Bons à valider / Besoins en attente / Pourboires du jour
+    - Animation rouge pulsante si journée non ouverte / besoins en attente / bons > 5
+    - Collapsible (bouton chevron)
+    - Visible UNIQUEMENT pour la Resp. Op. (role='manager')
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)

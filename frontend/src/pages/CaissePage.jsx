@@ -27,6 +27,7 @@ import { fr } from "date-fns/locale";
 
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
+import RespOpWelcome from "./caisse/components/RespOpWelcome";
 import HebdoReport from "./caisse/components/HebdoReport";
 import DayClosureGuard from "./caisse/components/DayClosureGuard";
 import BillettageGlobalCard from "./caisse/components/BillettageGlobalCard";
@@ -441,6 +442,15 @@ const CaissePage = () => {
 
   // ============== TABLE STATUS (Suivi Tables) ==============
   const [tablesStatus, setTablesStatus] = useState({ tables: [], stats: { total_tables: 20, occupied: 0, free: 20 } });
+  // Statut de la journée courante (utilisé par le welcome banner Resp. Op.)
+  const [dayOpening, setDayOpening] = useState(null);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const today = format(new Date(), 'yyyy-MM-dd');
+    axios.get(`${API}/day-openings/${today}`)
+      .then((r) => setDayOpening(r.data || null))
+      .catch(() => setDayOpening(null));
+  }, [isAuthenticated, activeTab]);
 
   const formatPrice = (price) => new Intl.NumberFormat('fr-FR').format(price);
 
@@ -5086,6 +5096,17 @@ _Gérante - Espace Maxo_
         ) : (
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Welcome banner Resp. Op. (Gérante) — affiché en haut de toutes les pages (24/05/2026) */}
+          {currentUser?.role === 'manager' && (
+            <RespOpWelcome
+              currentUser={currentUser}
+              tables={openTables}
+              invoices={invoices}
+              effectiveCounts={effectiveCounts}
+              isJourneeOpen={dayOpening?.status === 'open'}
+              onGoTo={(tab) => setActiveTab(tab)}
+            />
+          )}
           {/* Closure lock banner (admin only) — affiché si la journée du filtre est clôturée */}
           {currentUser?.role === 'admin' && (
             <ClosureLockBanner
