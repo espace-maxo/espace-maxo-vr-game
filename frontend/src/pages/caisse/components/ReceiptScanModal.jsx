@@ -19,7 +19,7 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
 const fmt = (n) => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0));
 
-const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
+const ReceiptScanModal = ({ open, onClose, onCreated, currentUser, target = "expense" }) => {
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -104,18 +104,26 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
         mime_type: "image/jpeg",
         auto_create_expense: true,
         receipt_type: receiptType,
+        target: target,
         requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
         requested_by_role: currentUser?.role || "manager",
       }, { timeout: 120000 });
 
       const extracted = r.data?.extracted || {};
-      setExtractResult({ ...extracted, expense_id: r.data?.expense_id });
+      const isAppro = (r.data?.target || target) === "appro";
+      setExtractResult({
+        ...extracted,
+        expense_id: r.data?.expense_id,
+        appro_inserted: r.data?.appro_inserted || 0,
+        is_appro: isAppro,
+      });
 
       const itemsCount = (extracted.items || []).length;
-      if (r.data?.expense_id && itemsCount > 0) {
-        toast.success(`✓ Ticket scanné · ${itemsCount} articles · ${fmt(extracted.total)} F · Demande d'achat créée`, {
-          duration: 6000,
-        });
+      if (isAppro && (r.data?.appro_inserted || 0) > 0) {
+        toast.success(`✓ Ticket scanné · ${r.data.appro_inserted} articles ajoutés à Appro Manager`, { duration: 6000 });
+        if (onCreated) onCreated();
+      } else if (!isAppro && r.data?.expense_id && itemsCount > 0) {
+        toast.success(`✓ Ticket scanné · ${itemsCount} articles · ${fmt(extracted.total)} F · Demande d'achat créée`, { duration: 6000 });
         if (onCreated) onCreated(r.data.expense_id);
       } else {
         toast.warning("Scan effectué mais peu de données extraites. Vérifiez la qualité de l'image.");
@@ -302,13 +310,17 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
                 )}
               </div>
 
-              {extractResult.expense_id ? (
+              {extractResult.is_appro ? (
+                <div className="bg-emerald-900/20 border border-emerald-500/30 rounded p-2 text-sm text-emerald-300 text-center">
+                  ✓ <strong>{extractResult.appro_inserted}</strong> articles ajoutés à <strong>Appro Manager</strong> — sélectionnez-les pour les transférer en Achat quand vous voulez
+                </div>
+              ) : extractResult.expense_id ? (
                 <div className="bg-emerald-900/20 border border-emerald-500/30 rounded p-2 text-sm text-emerald-300 text-center">
                   ✓ Demande d'achat créée automatiquement (statut <strong>en attente</strong>) — visible dans Achats
                 </div>
               ) : (
                 <div className="bg-rose-900/20 border border-rose-500/30 rounded p-2 text-sm text-rose-300 text-center">
-                  ⚠ Demande d'achat non créée — données insuffisantes
+                  ⚠ Aucune création — données insuffisantes
                 </div>
               )}
 

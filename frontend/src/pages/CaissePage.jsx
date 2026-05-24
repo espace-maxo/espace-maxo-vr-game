@@ -5129,10 +5129,10 @@ _Gérante - Espace Maxo_
                 <NotifBadge count={effectiveCounts.expenses} color={currentUser?.role === 'manager' ? 'amber' : 'purple'} testid="badge-achats" />
               </TabsTrigger>
             )}
-            {/* 5.1 SUIVI COURSES (Restaurant + Réservations) */}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="courses" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-courses">
-                <ShoppingCart className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Courses</span>
+            {/* 5.1 APPRO MANAGER (Suivi courses + Scan reçus + Transfert vers Achats) — Admin only */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="courses" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-appro-manager">
+                <ShoppingCart className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Appro Manager</span>
               </TabsTrigger>
             )}
             {/* 5.5 LISTE DE BESOINS */}
@@ -6181,8 +6181,8 @@ _Gérante - Espace Maxo_
           </TabsContent>
           )}
 
-          {/* ==================== COURSES TAB ==================== */}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+          {/* ==================== APPRO MANAGER TAB (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
           <TabsContent value="courses">
             <CoursesTab currentUser={currentUser} />
           </TabsContent>

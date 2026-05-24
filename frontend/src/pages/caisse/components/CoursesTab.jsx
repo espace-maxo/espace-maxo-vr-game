@@ -18,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag } from 'lucide-react';
+import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight } from 'lucide-react';
 import QuickProductPicker from './QuickProductPicker';
+import ReceiptScanModal from './ReceiptScanModal';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -45,6 +46,15 @@ const CoursesTab = ({ currentUser }) => {
   const [addQty, setAddQty] = useState(1);
   const [addUnitPrice, setAddUnitPrice] = useState('');
   const [addScope, setAddScope] = useState('restaurant');
+
+  // Scan receipt modal
+  const [showScan, setShowScan] = useState(false);
+
+  // Multi-select for "Transfer to Achats"
+  const [selected, setSelected] = useState({}); // {id: true}
+  const [transferring, setTransferring] = useState(false);
+  const [transferSupplier, setTransferSupplier] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -140,6 +150,39 @@ const CoursesTab = ({ currentUser }) => {
     }
   };
 
+  const selectedIds = Object.keys(selected).filter((k) => selected[k]);
+  const toggleSelect = (id) => setSelected((s) => ({ ...s, [id]: !s[id] }));
+  const selectAllVisible = () => {
+    const sel = {};
+    items.filter((i) => i.status === 'pending').forEach((i) => { sel[i.id] = true; });
+    setSelected(sel);
+  };
+  const clearSelection = () => setSelected({});
+
+  const handleTransfer = async () => {
+    if (selectedIds.length === 0) {
+      toast.error("Sélectionnez au moins un article");
+      return;
+    }
+    setTransferring(true);
+    try {
+      const r = await axios.post(`${API}/shopping-list/to-expense`, {
+        item_ids: selectedIds,
+        supplier: transferSupplier,
+        requested_by: currentUser?.full_name || currentUser?.username || 'Admin',
+        requested_by_role: currentUser?.role || 'admin',
+        mark_done: true,
+      });
+      toast.success(`${r.data?.items_transferred || selectedIds.length} articles transférés vers Achats (demande en attente)`, { duration: 6000 });
+      setShowTransferModal(false);
+      setTransferSupplier('');
+      clearSelection();
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors du transfert");
+    } finally { setTransferring(false); }
+  };
+
   const StatusPill = ({ value }) => (
     <Badge className={value === 'done' ? "bg-emerald-500/20 text-emerald-300 text-[10px]" : "bg-amber-500/20 text-amber-200 text-[10px]"}>
       {value === 'done' ? 'Fait' : 'À faire'}
@@ -148,12 +191,23 @@ const CoursesTab = ({ currentUser }) => {
 
   const renderItem = (it) => {
     const isDone = it.status === 'done';
+    const isSelected = !!selected[it.id];
     return (
       <div
         key={it.id}
-        className={`flex items-center gap-2 p-2 rounded border ${isDone ? 'bg-emerald-900/15 border-emerald-500/30' : 'bg-amber-900/10 border-amber-500/30'}`}
+        className={`flex items-center gap-2 p-2 rounded border ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : isDone ? 'bg-emerald-900/15 border-emerald-500/30' : 'bg-amber-900/10 border-amber-500/30'}`}
         data-testid={`course-item-${it.id}`}
       >
+        {!isDone && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleSelect(it.id)}
+            className="w-4 h-4 accent-cyan-500 flex-shrink-0"
+            data-testid={`select-${it.id}`}
+            title="Sélectionner pour transférer en Achat"
+          />
+        )}
         <button
           type="button"
           onClick={() => isDone ? undoItem(it.id) : openMarkModal(it)}
@@ -204,12 +258,17 @@ const CoursesTab = ({ currentUser }) => {
           <CardTitle className="text-white flex items-center gap-2 flex-wrap justify-between">
             <span className="flex items-center gap-2">
               <ShoppingCart className="w-6 h-6 text-amber-400" />
-              Suivi des courses
+              Appro Manager
               <Badge className="bg-amber-500/30 text-amber-100">{stats.done} / {stats.total}</Badge>
             </span>
-            <Button size="sm" onClick={refresh} variant="outline" className="border-amber-500/40 text-amber-200 hover:bg-amber-500/10 h-8">
-              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Actualiser
-            </Button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Button size="sm" onClick={() => setShowScan(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white h-8" data-testid="appro-scan-btn">
+                <ScanLine className="w-3.5 h-3.5 mr-1" /> Scanner un reçu
+              </Button>
+              <Button size="sm" onClick={refresh} variant="outline" className="border-amber-500/40 text-amber-200 hover:bg-amber-500/10 h-8">
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Actualiser
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -256,11 +315,36 @@ const CoursesTab = ({ currentUser }) => {
               </button>
             ))}
           </div>
-          <span className="ml-auto">
+          <span className="ml-auto flex gap-1.5 flex-wrap">
             <Button size="sm" onClick={() => setShowAdd((s) => !s)} className="bg-amber-600 hover:bg-amber-700 text-white h-8" data-testid="course-add-toggle">
               <Plus className="w-3.5 h-3.5 mr-1" /> {showAdd ? 'Fermer' : 'Ajouter un article'}
             </Button>
           </span>
+        </CardContent>
+      </Card>
+
+      {/* Sélection multi + bouton Transférer en Achat */}
+      <Card className="bg-slate-900/60 border-slate-700">
+        <CardContent className="py-2 flex items-center gap-2 flex-wrap text-sm">
+          <button type="button" onClick={selectAllVisible} className="text-cyan-300 hover:text-cyan-200 text-xs underline" data-testid="appro-select-all">
+            Tout sélectionner (à acheter)
+          </button>
+          <span className="text-slate-600 mx-1">·</span>
+          <button type="button" onClick={clearSelection} className="text-slate-400 hover:text-white text-xs underline">
+            Vider la sélection
+          </button>
+          <span className="text-slate-300 ml-2">
+            <strong className="text-amber-300">{selectedIds.length}</strong> sélectionné(s)
+          </span>
+          <Button
+            size="sm"
+            onClick={() => setShowTransferModal(true)}
+            disabled={selectedIds.length === 0}
+            className="bg-cyan-600 hover:bg-cyan-700 text-white h-8 ml-auto"
+            data-testid="appro-transfer-btn"
+          >
+            <ArrowRight className="w-3.5 h-3.5 mr-1" /> Transférer en Achat ({selectedIds.length})
+          </Button>
         </CardContent>
       </Card>
 
@@ -345,6 +429,59 @@ const CoursesTab = ({ currentUser }) => {
             <p className="text-xs mt-1">Ajoutez un article ou importez depuis une demande d'achat.</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Modal — Scan reçu */}
+      <ReceiptScanModal
+        open={showScan}
+        onClose={() => setShowScan(false)}
+        currentUser={currentUser}
+        target="appro"
+        onCreated={() => refresh()}
+      />
+
+      {/* Modal — Transférer en Achat */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowTransferModal(false)}>
+          <Card className="bg-slate-900 border-cyan-500/40 w-full max-w-md" onClick={(e) => e.stopPropagation()} data-testid="appro-transfer-modal">
+            <CardHeader className="pb-2 border-b border-slate-700">
+              <CardTitle className="text-white text-base flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <ArrowRight className="w-5 h-5 text-cyan-400" />
+                  Transférer en demande d'achat
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setShowTransferModal(false)} className="text-slate-300 h-7 w-7 p-0">
+                  <XIcon className="w-4 h-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-3">
+              <div className="bg-slate-800/50 rounded p-2 text-sm">
+                <strong className="text-cyan-300">{selectedIds.length}</strong> article(s) seront transférés vers <strong className="text-white">Achats</strong> sous forme d'une nouvelle <strong>demande d'achat</strong> en attente de validation Admin.
+              </div>
+              <div>
+                <Label className="text-slate-300 text-sm">Fournisseur (optionnel)</Label>
+                <Input
+                  value={transferSupplier}
+                  onChange={(e) => setTransferSupplier(e.target.value)}
+                  placeholder="Laisser vide pour détection auto"
+                  className="bg-slate-800 border-slate-700 text-white"
+                  data-testid="transfer-supplier"
+                />
+                <p className="text-slate-500 text-[11px] mt-1">Si vide : reprend le fournisseur du scan (si commun) ou « Multi ».</p>
+              </div>
+              <div className="bg-amber-900/15 border border-amber-500/20 rounded p-2 text-xs text-amber-300">
+                ⚠️ Une fois transférés, les articles seront marqués comme <strong>achetés</strong> dans Appro Manager et la demande d'achat sera soumise à validation Admin.
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setShowTransferModal(false)} className="border-slate-700 text-slate-300">Annuler</Button>
+                <Button onClick={handleTransfer} disabled={transferring} className="bg-cyan-600 hover:bg-cyan-700" data-testid="appro-transfer-confirm">
+                  <ArrowRight className="w-4 h-4 mr-1" /> {transferring ? "Transfert..." : "Confirmer le transfert"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Modal — Marquer comme acheté */}

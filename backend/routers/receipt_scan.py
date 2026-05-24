@@ -45,6 +45,7 @@ class ScanPayload(BaseModel):
     requested_by: Optional[str] = ""
     requested_by_role: Optional[str] = "manager"
     receipt_type: Optional[str] = "auto"  # "auto" | "printed" | "handwritten"
+    target: Optional[str] = "expense"  # "expense" | "appro" (liste shopping_list)
 
 
 # ============================================================================
@@ -238,45 +239,83 @@ async def extract_receipt(payload: ScanPayload):
         "confidence": confidence,
     }
 
-    # Optionnel : créer une demande d'achat en pending
+    # Optionnel : créer une demande d'achat OU insérer en liste Appro Manager
     created_expense_id = None
+    appro_inserted = 0
+    target_mode = (payload.target or "expense").lower()
     if payload.auto_create_expense and items:
-        try:
-            now = datetime.now(timezone.utc).isoformat()
-            doc = {
-                "id": str(uuid.uuid4()),
-                "description": f"Scan ticket — {supplier}",
-                "amount": total,
-                "supplier": supplier,
-                "category": "fournitures",
-                "expense_type": "courant",
-                "is_group": True,
-                "items": [
-                    {
-                        **it,
+        if target_mode == "appro":
+            # Insérer chaque item dans shopping_list_items (Appro Manager)
+            try:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                docs = []
+                for it in items:
+                    qty = float(it["quantity"] or 1)
+                    unit = float(it["unit_price"] or 0)
+                    docs.append({
                         "id": str(uuid.uuid4()),
-                        "expense_type": "courant",
-                    }
-                    for it in items
-                ],
-                "original_items": [
-                    {**it, "id": str(uuid.uuid4()), "expense_type": "courant"}
-                    for it in items
-                ],
-                "status": "pending",
-                "requested_by": payload.requested_by or "Gérante",
-                "requested_by_role": payload.requested_by_role or "manager",
-                "created_at": now,
-                "updated_at": now,
-                "source": "receipt_scan",
-            }
-            await db.expenses.insert_one(doc)
-            created_expense_id = doc["id"]
-        except Exception as e:
-            logger.error(f"Auto-create expense failed: {e}")
+                        "name": it["description"],
+                        "quantity": qty,
+                        "unit": "",
+                        "estimated_unit_price": unit,
+                        "estimated_total": qty * unit,
+                        "scope": "restaurant",
+                        "reservation_id": None,
+                        "reservation_label": None,
+                        "expense_id": None,
+                        "expense_item_index": None,
+                        "category": it.get("category") or "",
+                        "notes": f"Importé du scan ticket — {supplier}",
+                        "status": "pending",
+                        "done_by": None,
+                        "done_at": None,
+                        "real_unit_price": None,
+                        "real_supplier": supplier,  # pré-remplit le fournisseur
+                        "real_total": None,
+                        "created_at": now_iso,
+                        "created_by": (payload.requested_by or "Gérante"),
+                        "scan_supplier": supplier,
+                    })
+                if docs:
+                    await db.shopping_list_items.insert_many(docs)
+                    appro_inserted = len(docs)
+            except Exception as e:
+                logger.error(f"Appro insert failed: {e}")
+        else:
+            try:
+                now = datetime.now(timezone.utc).isoformat()
+                doc = {
+                    "id": str(uuid.uuid4()),
+                    "description": f"Scan ticket — {supplier}",
+                    "amount": total,
+                    "supplier": supplier,
+                    "category": "fournitures",
+                    "expense_type": "courant",
+                    "is_group": True,
+                    "items": [
+                        {**it, "id": str(uuid.uuid4()), "expense_type": "courant"}
+                        for it in items
+                    ],
+                    "original_items": [
+                        {**it, "id": str(uuid.uuid4()), "expense_type": "courant"}
+                        for it in items
+                    ],
+                    "status": "pending",
+                    "requested_by": payload.requested_by or "Gérante",
+                    "requested_by_role": payload.requested_by_role or "manager",
+                    "created_at": now,
+                    "updated_at": now,
+                    "source": "receipt_scan",
+                }
+                await db.expenses.insert_one(doc)
+                created_expense_id = doc["id"]
+            except Exception as e:
+                logger.error(f"Auto-create expense failed: {e}")
 
     return {
         "success": True,
         "extracted": extracted,
         "expense_id": created_expense_id,
+        "appro_inserted": appro_inserted,
+        "target": target_mode,
     }

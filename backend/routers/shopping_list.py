@@ -394,6 +394,94 @@ async def stats_by_scope():
                 out["by_reservation"][key]["done"] += 1
             else:
                 out["by_reservation"][key]["pending"] += 1
-    # Normalize by_reservation to list
     out["by_reservation"] = list(out["by_reservation"].values())
     return out
+
+
+class TransferToExpensePayload(BaseModel):
+    item_ids: List[str]
+    supplier: Optional[str] = ""
+    description: Optional[str] = ""
+    requested_by: Optional[str] = ""
+    requested_by_role: Optional[str] = "admin"
+    mark_done: bool = True  # marque les items shopping_list comme "done" après transfert
+
+
+@router.post("/shopping-list/to-expense")
+async def to_expense(data: TransferToExpensePayload):
+    """Crée une demande d'achat (expense) à partir d'items sélectionnés
+    dans Appro Manager. Marque les items comme « done » (rangés dans achats)
+    sauf si mark_done=False."""
+    if not data.item_ids:
+        raise HTTPException(400, "Aucun item sélectionné")
+
+    rows = await db.shopping_list_items.find(
+        {"id": {"$in": data.item_ids}}, {"_id": 0}
+    ).to_list(500)
+    if not rows:
+        raise HTTPException(404, "Items introuvables")
+
+    now = datetime.now(timezone.utc).isoformat()
+    # Heuristique fournisseur : utilise data.supplier sinon le scan_supplier
+    # commun des items sinon "Multi"
+    supplier = (data.supplier or "").strip()
+    if not supplier:
+        suppliers = set(filter(None, [(r.get("scan_supplier") or r.get("real_supplier") or "").strip() for r in rows]))
+        supplier = suppliers.pop() if len(suppliers) == 1 else "Multi"
+
+    expense_items = []
+    total = 0.0
+    for r in rows:
+        qty = float(r.get("quantity") or 1)
+        # Préfère le prix réel s'il existe, sinon estimé
+        unit = float(r.get("real_unit_price") if r.get("real_unit_price") is not None else (r.get("estimated_unit_price") or 0))
+        amount = qty * unit
+        total += amount
+        expense_items.append({
+            "id": str(uuid.uuid4()),
+            "description": r.get("name"),
+            "quantity": qty,
+            "unit_price": unit,
+            "amount": amount,
+            "category": r.get("category") or "fournitures",
+            "expense_type": "courant",
+        })
+
+    desc = (data.description or "").strip() or f"Transfert Appro Manager — {supplier}"
+    doc = {
+        "id": str(uuid.uuid4()),
+        "description": desc,
+        "amount": total,
+        "supplier": supplier,
+        "category": "fournitures",
+        "expense_type": "courant",
+        "is_group": True,
+        "items": expense_items,
+        "original_items": [dict(it, id=str(uuid.uuid4())) for it in expense_items],
+        "status": "pending",
+        "requested_by": data.requested_by or "Admin",
+        "requested_by_role": data.requested_by_role or "admin",
+        "created_at": now,
+        "updated_at": now,
+        "source": "appro_manager",
+    }
+    await db.expenses.insert_one(doc)
+
+    # Marquer les items comme done + lien vers l'expense
+    if data.mark_done:
+        await db.shopping_list_items.update_many(
+            {"id": {"$in": data.item_ids}},
+            {"$set": {
+                "status": "done",
+                "done_by": data.requested_by or "Admin",
+                "done_at": now,
+                "expense_id": doc["id"],
+            }},
+        )
+
+    return {
+        "success": True,
+        "expense_id": doc["id"],
+        "expense_total": total,
+        "items_transferred": len(expense_items),
+    }
