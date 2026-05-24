@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 83 - Testing Achats Manager features (payment modes, reimbursements, cumul). All 11 backend tests pass. Frontend verified: Admin sees 'Achats Manager' tab with 3 sub-tabs (À acheter, Acheté, Cumul mode de paiement). Gérante correctly does NOT see 'Achats Manager' or 'Appro Manager' tabs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "AchatsTab.jsx",
+        "issues": ["Minor React hydration warnings in console (span inside select/tbody) - cosmetic, doesn't affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_achats_manager_iter83.py",
+    "/app/test_reports/pytest/achats_manager_iter83_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All Achats Manager backend endpoints working correctly:",
+    "- POST /api/expenses/{id}/mark-bought: Sets payment_mode, status=completed, is_paid=true, reimbursed=false for fonds_propres",
+    "- POST /api/expenses/{id}/reimburse-fonds-propres: Sets reimbursed=true, reimbursed_at, refuses if not fonds_propres or already reimbursed",
+    "- POST /api/expenses/reimburse-all-fonds-propres: Bulk reimburse all pending fonds_propres, returns count + total_amount",
+    "- GET /api/expenses/payment-mode-cumul: Returns correct structure with fonds_propres (total, count, reimbursed_*, pending_*) and caisse_restau (total, count)",
+    "- GET /api/cash-closures/live: Contains fonds_propres_reimbursed_today_total/count and fonds_propres_pending_total/count",
+    "- PUT /api/expenses/{id}: Accepts payment_mode, reimbursed, reimbursed_at, reimbursed_by in payload",
+    "Frontend role-based visibility working correctly:",
+    "- Admin: Sees 'Achats Manager' as 4th sub-menu in Achats with 3 sub-tabs",
+    "- Gérante: Does NOT see 'Achats Manager' sub-menu (only À valider, Validés, Historique)",
+    "- Gérante: Does NOT see 'Appro Manager' top-level tab"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_achats_manager_iter83.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11 tests passed)",
+    "frontend": "100% (role-based visibility verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Test expenses created and cleaned up during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 83 confirmed Achats Manager features are fully functional. Key behaviors tested: (1) mark-bought with fonds_propres/caisse_restau payment modes, (2) reimburse-fonds-propres individual and bulk, (3) payment-mode-cumul endpoint returns correct structure, (4) cash-closures/live snapshot includes fonds_propres fields, (5) PUT expenses accepts payment fields. Frontend role-based visibility: Admin sees Achats Manager tab, Gérante does not. Note: source field cannot be set via PUT /api/expenses/{id} - it's set internally when transferring from Appro Manager.",
+  "features_tested": [
+    "POST /api/expenses/{id}/mark-bought with payment_mode=fonds_propres",
+    "POST /api/expenses/{id}/mark-bought with payment_mode=caisse_restau",
+    "POST /api/expenses/{id}/mark-bought with invalid payment_mode returns 400",
+    "POST /api/expenses/{id}/reimburse-fonds-propres success",
+    "POST /api/expenses/{id}/reimburse-fonds-propres fails for non-fonds_propres",
+    "POST /api/expenses/{id}/reimburse-fonds-propres fails for already reimbursed",
+    "POST /api/expenses/reimburse-all-fonds-propres bulk reimburse",
+    "GET /api/expenses/payment-mode-cumul structure validation",
+    "GET /api/expenses/payment-mode-cumul with data",
+    "GET /api/cash-closures/live contains fonds_propres fields",
+    "PUT /api/expenses/{id} accepts payment_mode, reimbursed, reimbursed_at, reimbursed_by",
+    "Frontend: Admin sees Achats Manager tab with 3 sub-tabs",
+    "Frontend: Gérante does NOT see Achats Manager tab",
+    "Frontend: Gérante does NOT see Appro Manager tab"
+  ]
+}

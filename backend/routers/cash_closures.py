@@ -188,6 +188,29 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
         - gerante_reimbursed_today_total
     )
 
+    # 5. Fonds Propres (Achats Manager) — remboursements effectués aujourd'hui
+    fonds_propres_reimbursed_today_total = 0.0
+    fonds_propres_reimbursed_today_count = 0
+    fonds_propres_pending_total = 0.0
+    fonds_propres_pending_count = 0
+    try:
+        fp_today = await db.expenses.find(
+            {"payment_mode": "fonds_propres", "reimbursed": True,
+             "reimbursed_at": {"$regex": f"^{date_iso}"}},
+            {"_id": 0},
+        ).to_list(2000)
+        fonds_propres_reimbursed_today_total = sum(float(a.get("amount") or 0) for a in fp_today)
+        fonds_propres_reimbursed_today_count = len(fp_today)
+
+        fp_pending = await db.expenses.find(
+            {"payment_mode": "fonds_propres", "reimbursed": {"$ne": True}},
+            {"_id": 0},
+        ).to_list(5000)
+        fonds_propres_pending_total = sum(float(a.get("amount") or 0) for a in fp_pending)
+        fonds_propres_pending_count = len(fp_pending)
+    except Exception:
+        pass
+
     return {
         "date": date_iso,
         "per_method": per_method,
@@ -203,6 +226,10 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
         "gerante_reimbursed_today_total": gerante_reimbursed_today_total,
         "gerante_reimbursed_today_count": gerante_reimbursed_today_count,
         "expected_cash_in_drawer": expected_cash_in_drawer,
+        "fonds_propres_reimbursed_today_total": fonds_propres_reimbursed_today_total,
+        "fonds_propres_reimbursed_today_count": fonds_propres_reimbursed_today_count,
+        "fonds_propres_pending_total": fonds_propres_pending_total,
+        "fonds_propres_pending_count": fonds_propres_pending_count,
     }
 
 

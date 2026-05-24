@@ -202,6 +202,12 @@ class ExpenseUpdate(BaseModel):
     destination: Optional[str] = None
     # Stock flow (added 21/05/2026)
     to_stock: Optional[bool] = None
+    # Achats Manager — mode de paiement (24/05/2026)
+    # payment_mode ∈ {"fonds_propres", "caisse_restau", None}
+    payment_mode: Optional[str] = None
+    reimbursed: Optional[bool] = None
+    reimbursed_at: Optional[str] = None
+    reimbursed_by: Optional[str] = None
 
 
 # ==================== CRUD ====================
@@ -1308,3 +1314,122 @@ async def receive_stock_for_expense(expense_id: str, body: dict = Body(default={
     except Exception as e:
         logger.error(f"Receive stock error: {e}")
         raise HTTPException(500, str(e))
+
+
+# ==================== ACHATS MANAGER — Payment mode flow (24/05/2026) ====================
+
+class MarkBoughtBody(BaseModel):
+    payment_mode: str  # "fonds_propres" | "caisse_restau"
+    paid_by: Optional[str] = None
+
+
+class ReimburseBody(BaseModel):
+    reimbursed_by: Optional[str] = None
+
+
+@router.post("/expenses/{expense_id}/mark-bought")
+async def mark_expense_bought(expense_id: str, body: MarkBoughtBody):
+    """Marque une dépense (typiquement issue d'Appro Manager) comme achetée.
+
+    Renseigne payment_mode + paid_at + status="completed" + is_paid=true.
+    Le mode de paiement est choisi par l'admin au moment du transfert "À acheter → Acheté".
+    """
+    if body.payment_mode not in ("fonds_propres", "caisse_restau"):
+        raise HTTPException(400, "payment_mode invalide (fonds_propres | caisse_restau)")
+    expense = await db.expenses.find_one({"id": expense_id})
+    if not expense:
+        raise HTTPException(404, "Dépense introuvable")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {
+        "payment_mode": body.payment_mode,
+        "is_paid": True,
+        "paid_at": now_iso,
+        "paid_by": body.paid_by or "Administrateur",
+        "status": "completed",
+        "completed_at": now_iso,
+        "updated_at": now_iso,
+    }
+    # Si Fonds Propres → flag remboursable, pas encore remboursé.
+    if body.payment_mode == "fonds_propres":
+        update["reimbursed"] = False
+    await db.expenses.update_one({"id": expense_id}, {"$set": update})
+    doc = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    return {"success": True, "expense": doc}
+
+
+@router.post("/expenses/{expense_id}/reimburse-fonds-propres")
+async def reimburse_fonds_propres(expense_id: str, body: ReimburseBody):
+    """Marque une dépense Fonds Propres comme remboursée par la caisse.
+    Apparaîtra dans le Point de la Caisse du jour (cf cash_closures snapshot).
+    """
+    expense = await db.expenses.find_one({"id": expense_id})
+    if not expense:
+        raise HTTPException(404, "Dépense introuvable")
+    if expense.get("payment_mode") != "fonds_propres":
+        raise HTTPException(400, "Cette dépense n'est pas en Fonds Propres")
+    if expense.get("reimbursed"):
+        raise HTTPException(400, "Déjà remboursée")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.expenses.update_one({"id": expense_id}, {"$set": {
+        "reimbursed": True,
+        "reimbursed_at": now_iso,
+        "reimbursed_by": body.reimbursed_by or "Administrateur",
+        "updated_at": now_iso,
+    }})
+    return {"success": True}
+
+
+@router.post("/expenses/reimburse-all-fonds-propres")
+async def reimburse_all_fonds_propres(body: ReimburseBody):
+    """Rembourse en bloc toutes les dépenses Fonds Propres encore non remboursées."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    by = body.reimbursed_by or "Administrateur"
+    cursor = db.expenses.find(
+        {"payment_mode": "fonds_propres", "reimbursed": {"$ne": True}},
+        {"_id": 0},
+    )
+    docs = await cursor.to_list(5000)
+    if not docs:
+        return {"success": True, "count": 0, "total_amount": 0}
+    ids = [d["id"] for d in docs]
+    total = sum(float(d.get("amount") or 0) for d in docs)
+    await db.expenses.update_many(
+        {"id": {"$in": ids}},
+        {"$set": {
+            "reimbursed": True,
+            "reimbursed_at": now_iso,
+            "reimbursed_by": by,
+            "updated_at": now_iso,
+        }},
+    )
+    return {"success": True, "count": len(ids), "total_amount": total}
+
+
+@router.get("/expenses/payment-mode-cumul")
+async def payment_mode_cumul(
+    source: Optional[str] = Query(None, description="Filtre par source (ex: appro_manager)"),
+):
+    """Retourne le cumul des dépenses par mode de paiement.
+    Si source fourni, filtre uniquement ces dépenses (ex: appro_manager)."""
+    q = {"payment_mode": {"$in": ["fonds_propres", "caisse_restau"]}}
+    if source:
+        q["source"] = source
+    rows = await db.expenses.find(q, {"_id": 0}).to_list(5000)
+    fonds = [r for r in rows if r.get("payment_mode") == "fonds_propres"]
+    caisse = [r for r in rows if r.get("payment_mode") == "caisse_restau"]
+    fonds_reimb = [r for r in fonds if r.get("reimbursed")]
+    fonds_pending = [r for r in fonds if not r.get("reimbursed")]
+    return {
+        "fonds_propres": {
+            "total": sum(float(r.get("amount") or 0) for r in fonds),
+            "count": len(fonds),
+            "reimbursed_total": sum(float(r.get("amount") or 0) for r in fonds_reimb),
+            "reimbursed_count": len(fonds_reimb),
+            "pending_total": sum(float(r.get("amount") or 0) for r in fonds_pending),
+            "pending_count": len(fonds_pending),
+        },
+        "caisse_restau": {
+            "total": sum(float(r.get("amount") or 0) for r in caisse),
+            "count": len(caisse),
+        },
+    }

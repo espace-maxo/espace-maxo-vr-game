@@ -335,6 +335,35 @@ const PointCaisseTab = ({ currentUser }) => {
                       </p>
                     </div>
                   </div>
+                  {/* === Achats Manager — Fonds Propres remboursés aujourd'hui === */}
+                  {(s.fonds_propres_reimbursed_today_count > 0 || s.fonds_propres_pending_count > 0) && (
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="fonds-propres-summary">
+                      <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Wallet className="w-4 h-4 text-purple-300" />
+                          <p className="text-xs text-purple-300/80 uppercase tracking-wider">Fonds Propres remboursés (jour)</p>
+                        </div>
+                        <p className="text-2xl font-bold text-purple-200" data-testid="fp-reimbursed-today-amount">
+                          - {fmt(s.fonds_propres_reimbursed_today_total)} F
+                        </p>
+                        <p className="text-xs text-purple-300/60">
+                          {s.fonds_propres_reimbursed_today_count} remboursement(s) effectué(s) aujourd'hui
+                        </p>
+                      </div>
+                      <div className="bg-rose-900/20 border border-rose-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Wallet className="w-4 h-4 text-rose-300" />
+                          <p className="text-xs text-rose-300/80 uppercase tracking-wider">Fonds Propres en attente</p>
+                        </div>
+                        <p className="text-2xl font-bold text-rose-200">
+                          {fmt(s.fonds_propres_pending_total)} F
+                        </p>
+                        <p className="text-xs text-rose-300/60">
+                          {s.fonds_propres_pending_count} dépense(s) à rembourser (Achats Manager)
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
