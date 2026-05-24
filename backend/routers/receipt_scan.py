@@ -44,39 +44,98 @@ class ScanPayload(BaseModel):
     auto_create_expense: bool = True  # crée une demande d'achat en pending
     requested_by: Optional[str] = ""
     requested_by_role: Optional[str] = "manager"
+    receipt_type: Optional[str] = "auto"  # "auto" | "printed" | "handwritten"
 
 
 # ============================================================================
-# PROMPT
+# PROMPTS
 # ============================================================================
 
-EXTRACTION_PROMPT = """Tu es un assistant d'extraction de données depuis un ticket/reçu d'achat.
+PROMPT_PRINTED = """Tu es un assistant d'extraction de données depuis un ticket de caisse imprimé.
 
-L'image fournie est un ticket de caisse ou un reçu d'achat (probablement en français, contexte béninois).
-Extrait les informations suivantes et réponds STRICTEMENT en JSON valide, sans texte additionnel,
-sans markdown, sans bloc ```.
+L'image est un ticket de caisse / reçu IMPRIMÉ (probablement thermique, contexte béninois, en français).
 
-Schéma attendu:
+Schéma de réponse (JSON STRICT, sans markdown, sans texte additionnel) :
 {
-  "supplier": "Nom du fournisseur/magasin (ex: 'Champion', 'Dantokpa', 'Boulangerie X', 'Marché Tokpa')",
-  "items": [
-    { "description": "Nom de l'article", "quantity": <nombre>, "unit_price": <nombre en F CFA>, "amount": <nombre = qty*unit_price> }
-  ],
-  "total": <total en F CFA>,
+  "supplier": "Nom du magasin/fournisseur (ex: 'Champion', 'Erevan', 'Marché Tokpa')",
+  "items": [ { "description": "...", "quantity": <nb>, "unit_price": <nb F CFA>, "amount": <nb> } ],
+  "total": <nb F CFA>,
   "currency": "F CFA",
   "confidence": "high" | "medium" | "low"
 }
 
-Règles strictes :
-- Tous les prix sont en F CFA (Franc CFA). NE PAS convertir en euros.
-- Si la quantité n'est pas explicitement mentionnée, mets quantity=1.
-- Si tu ne peux pas extraire un item correctement, ignore-le.
-- Si plusieurs articles sont identiques, regroupe-les avec quantity > 1.
-- Si le supplier est introuvable, mets "supplier": "Inconnu".
-- Si le total est introuvable, calcule-le comme la somme des amount.
-- "confidence" reflète ta certitude globale (high si tout est clair, low si le ticket est flou/illisible).
-- Réponds UNIQUEMENT le JSON, RIEN d'autre.
+Règles :
+- Prix en F CFA — NE PAS convertir.
+- Si quantité absente : quantity=1.
+- Regroupe les doublons.
+- supplier inconnu → "Inconnu".
+- total manquant → calcule la somme.
+- Réponds UNIQUEMENT le JSON.
 """
+
+PROMPT_HANDWRITTEN = """Tu es un assistant expert en extraction de données depuis un REÇU MANUSCRIT (écrit à la main).
+
+L'image est un reçu écrit à la main (cahier de marché, bon de livraison fournisseur, ticket manuscrit), souvent en français du Bénin/Afrique de l'Ouest avec des particularités:
+  - Écriture parfois inclinée, irrégulière ou en majuscules
+  - Orthographe approximative (ex: "tomatte", "ougnons", "huil") — corrige intelligemment vers le mot le plus probable
+  - Prix barrés/raturés → utilise le prix FINAL (le plus à droite ou le dernier corrigé)
+  - Unités fréquentes : "sac", "kg", "tas", "paquet", "boîte", "pièce", "bidon", "litre"
+  - Symbole monétaire varié : "FCFA", "F CFA", "F", parfois rien — toujours considérer F CFA
+  - Marqueurs de quantité : "x 3", "x3", "3 x", "(3)" ou simplement "3 sacs", "2 kg"
+
+Schéma de réponse (JSON STRICT, sans markdown, sans texte additionnel) :
+{
+  "supplier": "Nom du fournisseur ou lieu (ex: 'Marché Dantokpa', 'Mama Ayaba', 'Boutique Erevan')",
+  "items": [ { "description": "Description corrigée et lisible", "quantity": <nb>, "unit_price": <nb F CFA>, "amount": <nb> } ],
+  "total": <nb F CFA>,
+  "currency": "F CFA",
+  "confidence": "high" | "medium" | "low"
+}
+
+Règles critiques :
+- Tous les prix sont en F CFA.
+- Corrige l'orthographe vers les mots de cuisine/marché courants ("tomatte" → "Tomates", "ougnons" → "Oignons", "huil" → "Huile").
+- Si une ligne est totalement illisible, ignore-la.
+- Si tu détectes un total écrit (ex: "Total 12500" ou "T : 12500" ou un montant souligné/encadré), utilise-le. Sinon calcule.
+- Confiance : "high" si le reçu est lisible, "medium" si quelques mots sont incertains, "low" si plus de la moitié est illisible/raturée.
+- Si le fournisseur est introuvable, mets "Reçu manuscrit".
+- Réponds UNIQUEMENT le JSON.
+"""
+
+PROMPT_AUTO = """Tu es un assistant d'extraction de données depuis un ticket/reçu d'achat.
+
+Détecte automatiquement si le document est :
+- un ticket IMPRIMÉ (ticket de caisse thermique, facture imprimée) ;
+- ou un reçu MANUSCRIT (cahier marché, bon de livraison fournisseur écrit à la main).
+
+Contexte : Bénin, français. Tous les prix sont en F CFA (jamais en €).
+
+Schéma JSON STRICT (sans markdown, sans texte additionnel) :
+{
+  "supplier": "Nom du magasin OU lieu OU 'Reçu manuscrit' OU 'Inconnu'",
+  "items": [ { "description": "...", "quantity": <nb>, "unit_price": <nb F CFA>, "amount": <nb> } ],
+  "total": <nb F CFA>,
+  "currency": "F CFA",
+  "confidence": "high" | "medium" | "low"
+}
+
+Règles :
+- Si manuscrit : corrige intelligemment l'orthographe vers des termes de cuisine/marché courants (ex: "tomatte" → "Tomates", "ougnons" → "Oignons", "huil" → "Huile végétale"). Utilise le PRIX FINAL si plusieurs sont barrés/raturés.
+- Si quantité absente, mets 1.
+- Si total absent, calcule la somme des amounts.
+- Regroupe les doublons.
+- Ignore les lignes totalement illisibles (manuscrit).
+- Réponds UNIQUEMENT le JSON.
+"""
+
+
+def _prompt_for(receipt_type: str) -> str:
+    rt = (receipt_type or "auto").lower()
+    if rt == "handwritten" or rt == "manuscrit":
+        return PROMPT_HANDWRITTEN
+    if rt == "printed" or rt == "imprime" or rt == "imprimé":
+        return PROMPT_PRINTED
+    return PROMPT_AUTO
 
 
 def _strip_markdown(text: str) -> str:
@@ -127,11 +186,12 @@ async def extract_receipt(payload: ScanPayload):
     chat = LlmChat(
         api_key=key,
         session_id=f"receipt-{uuid.uuid4().hex[:8]}",
-        system_message="Tu es un extracteur de données de tickets/reçus. Tu réponds UNIQUEMENT en JSON valide.",
+        system_message="Tu es un expert en extraction de données de tickets imprimés ET de reçus manuscrits (contexte béninois). Tu réponds UNIQUEMENT en JSON valide.",
     ).with_model("gemini", "gemini-3.1-pro-preview")
 
     img = ImageContent(image_base64=img_b64)
-    msg = UserMessage(text=EXTRACTION_PROMPT, file_contents=[img])
+    prompt = _prompt_for(payload.receipt_type or "auto")
+    msg = UserMessage(text=prompt, file_contents=[img])
 
     try:
         response_text = await chat.send_message(msg)

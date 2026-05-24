@@ -25,6 +25,7 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
   const canvasRef = useRef(null);
 
   const [mode, setMode] = useState("upload"); // 'upload' | 'camera'
+  const [receiptType, setReceiptType] = useState("auto"); // 'auto' | 'printed' | 'handwritten'
   const [imageData, setImageData] = useState(null); // dataURL
   const [busy, setBusy] = useState(false);
   const [streamActive, setStreamActive] = useState(false);
@@ -102,9 +103,10 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
         image_base64: imageData,
         mime_type: "image/jpeg",
         auto_create_expense: true,
+        receipt_type: receiptType,
         requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
         requested_by_role: currentUser?.role || "manager",
-      }, { timeout: 90000 });
+      }, { timeout: 120000 });
 
       const extracted = r.data?.extracted || {};
       setExtractResult({ ...extracted, expense_id: r.data?.expense_id });
@@ -146,6 +148,38 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser }) => {
         <CardContent className="space-y-3 pt-3">
           {!extractResult && (
             <>
+              {/* Sélecteur Type de reçu */}
+              <div>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-1.5">Type de reçu</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {[
+                    { v: "auto", label: "🔍 Détection auto", desc: "Imprimé ou manuscrit" },
+                    { v: "printed", label: "🖨️ Imprimé", desc: "Ticket de caisse, facture" },
+                    { v: "handwritten", label: "✍️ Manuscrit", desc: "Reçu/cahier écrit à la main" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setReceiptType(opt.v)}
+                      title={opt.desc}
+                      className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition ${
+                        receiptType === opt.v
+                          ? "bg-amber-500 text-slate-900"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700"
+                      }`}
+                      data-testid={`scan-type-${opt.v}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {receiptType === "handwritten" && (
+                  <p className="text-amber-300 text-[11px] mt-1.5 bg-amber-900/15 border border-amber-500/20 rounded px-2 py-1">
+                    ✍️ Mode manuscrit activé : l'IA corrige les fautes d'orthographe et gère les prix barrés.
+                  </p>
+                )}
+              </div>
+
               {/* Mode switcher */}
               <div className="flex gap-2">
                 <Button
