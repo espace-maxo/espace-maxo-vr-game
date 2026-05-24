@@ -49,6 +49,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Point de la Caisse : nouvelles cartes "Fonds Propres remboursés (jour)" + "Fonds Propres en attente"
   - 11/11 tests backend (test_achats_manager_iter83.py) — visibility role-based 100%
   - Endpoints : `POST /api/expenses/{id}/mark-bought`, `/reimburse-fonds-propres`, `/reimburse-all-fonds-propres`, `GET /api/expenses/payment-mode-cumul`
+- **APPRO MANAGER — Même workflow paiement (24/05/2026)**
+  - 3 sous-onglets dans Appro Manager (menu principal Admin only) : **À ACHETER** / **ACHETÉ** / **CUMUL MODE DE PAIEMENT**
+  - Édition PU/Qté inline via modal avec total auto
+  - Choix Fonds Propres / Caisse Restau lors du "Marquer comme acheté"
+  - Remboursement individuel (bouton sur ligne FP non remboursée) + groupé
+  - Snapshot Point de la Caisse fusionne maintenant `expenses` + `shopping_list_items` pour fonds_propres
+  - 16/16 tests backend (iteration_84) — Gérante n'a pas accès à Appro Manager
+  - Endpoints : `POST /api/shopping-list/{id}/reimburse`, `/reimburse-all`, `GET /api/shopping-list/payment-mode-cumul` + extensions de `/done`, `PATCH`, `/undo`
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
