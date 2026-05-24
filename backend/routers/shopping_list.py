@@ -69,6 +69,8 @@ class ShoppingItemMarkDone(BaseModel):
     real_unit_price: Optional[float] = None
     real_supplier: Optional[str] = ""
     notes: Optional[str] = None
+    # Achats Manager / Appro Manager — mode de paiement (24/05/2026)
+    payment_mode: Optional[str] = None  # "fonds_propres" | "caisse_restau"
 
 
 class ShoppingItemUpdate(BaseModel):
@@ -76,8 +78,14 @@ class ShoppingItemUpdate(BaseModel):
     quantity: Optional[float] = None
     unit: Optional[str] = None
     estimated_unit_price: Optional[float] = None
+    real_unit_price: Optional[float] = None
     category: Optional[str] = None
     notes: Optional[str] = None
+    payment_mode: Optional[str] = None
+
+
+class ShoppingItemReimburse(BaseModel):
+    reimbursed_by: Optional[str] = None
 
 
 # ============================================================================
@@ -176,12 +184,24 @@ async def update_item(item_id: str, data: ShoppingItemUpdate):
     if data.unit is not None: update["unit"] = data.unit.strip()
     if data.estimated_unit_price is not None:
         update["estimated_unit_price"] = float(data.estimated_unit_price)
+    if data.real_unit_price is not None:
+        update["real_unit_price"] = float(data.real_unit_price)
     if data.category is not None: update["category"] = data.category.strip()
     if data.notes is not None: update["notes"] = data.notes.strip()
+    if data.payment_mode is not None:
+        if data.payment_mode not in ("fonds_propres", "caisse_restau", ""):
+            raise HTTPException(400, "payment_mode invalide")
+        update["payment_mode"] = data.payment_mode or None
+        if data.payment_mode == "fonds_propres" and existing.get("reimbursed") is None:
+            update["reimbursed"] = False
     # Recompute estimated_total
     qty = update.get("quantity", existing.get("quantity") or 0)
     eup = update.get("estimated_unit_price", existing.get("estimated_unit_price") or 0)
     update["estimated_total"] = qty * eup
+    # Recompute real_total if needed
+    rup = update.get("real_unit_price", existing.get("real_unit_price"))
+    if rup is not None:
+        update["real_total"] = qty * rup
     await db.shopping_list_items.update_one({"id": item_id}, {"$set": update})
     doc = await db.shopping_list_items.find_one({"id": item_id}, {"_id": 0})
     return {"success": True, "item": doc}
@@ -205,6 +225,13 @@ async def mark_done(item_id: str, data: ShoppingItemMarkDone):
         "real_supplier": (data.real_supplier or "").strip(),
         "real_total": real_unit * qty,
     }
+    # Mode de paiement (optionnel mais recommandé)
+    if data.payment_mode:
+        if data.payment_mode not in ("fonds_propres", "caisse_restau"):
+            raise HTTPException(400, "payment_mode invalide (fonds_propres | caisse_restau)")
+        update["payment_mode"] = data.payment_mode
+        if data.payment_mode == "fonds_propres":
+            update["reimbursed"] = False
     if data.notes is not None:
         update["notes"] = (data.notes or "").strip()
     await db.shopping_list_items.update_one({"id": item_id}, {"$set": update})
@@ -226,10 +253,91 @@ async def mark_undone(item_id: str):
             "real_unit_price": None,
             "real_supplier": "",
             "real_total": None,
+            "payment_mode": None,
+            "reimbursed": None,
+            "reimbursed_at": None,
+            "reimbursed_by": None,
         }},
     )
     doc = await db.shopping_list_items.find_one({"id": item_id}, {"_id": 0})
     return {"success": True, "item": doc}
+
+
+@router.post("/shopping-list/{item_id}/reimburse")
+async def reimburse_item(item_id: str, data: ShoppingItemReimburse):
+    """Marque un item Fonds Propres comme remboursé depuis la caisse.
+    Apparaîtra dans le Point de la Caisse du jour."""
+    existing = await db.shopping_list_items.find_one({"id": item_id})
+    if not existing:
+        raise HTTPException(404, "Item non trouvé")
+    if existing.get("payment_mode") != "fonds_propres":
+        raise HTTPException(400, "Cet item n'est pas en Fonds Propres")
+    if existing.get("reimbursed"):
+        raise HTTPException(400, "Déjà remboursé")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.shopping_list_items.update_one(
+        {"id": item_id},
+        {"$set": {
+            "reimbursed": True,
+            "reimbursed_at": now,
+            "reimbursed_by": (data.reimbursed_by or "Administrateur"),
+        }},
+    )
+    return {"success": True}
+
+
+@router.post("/shopping-list/reimburse-all")
+async def reimburse_all_items(data: ShoppingItemReimburse):
+    """Rembourse en bloc tous les items Fonds Propres pending (non remboursés)."""
+    now = datetime.now(timezone.utc).isoformat()
+    by = data.reimbursed_by or "Administrateur"
+    cursor = db.shopping_list_items.find(
+        {"payment_mode": "fonds_propres", "reimbursed": {"$ne": True}, "status": "done"},
+        {"_id": 0},
+    )
+    docs = await cursor.to_list(5000)
+    if not docs:
+        return {"success": True, "count": 0, "total_amount": 0}
+    ids = [d["id"] for d in docs]
+    total = sum(float(d.get("real_total") or d.get("estimated_total") or 0) for d in docs)
+    await db.shopping_list_items.update_many(
+        {"id": {"$in": ids}},
+        {"$set": {
+            "reimbursed": True,
+            "reimbursed_at": now,
+            "reimbursed_by": by,
+        }},
+    )
+    return {"success": True, "count": len(ids), "total_amount": total}
+
+
+@router.get("/shopping-list/payment-mode-cumul")
+async def shopping_payment_mode_cumul():
+    """Cumul des items shopping_list achetés par mode de paiement."""
+    rows = await db.shopping_list_items.find(
+        {"status": "done", "payment_mode": {"$in": ["fonds_propres", "caisse_restau"]}},
+        {"_id": 0},
+    ).to_list(10000)
+    def _amt(r):
+        return float(r.get("real_total") if r.get("real_total") is not None else (r.get("estimated_total") or 0))
+    fonds = [r for r in rows if r.get("payment_mode") == "fonds_propres"]
+    caisse = [r for r in rows if r.get("payment_mode") == "caisse_restau"]
+    fonds_reimb = [r for r in fonds if r.get("reimbursed")]
+    fonds_pending = [r for r in fonds if not r.get("reimbursed")]
+    return {
+        "fonds_propres": {
+            "total": sum(_amt(r) for r in fonds),
+            "count": len(fonds),
+            "reimbursed_total": sum(_amt(r) for r in fonds_reimb),
+            "reimbursed_count": len(fonds_reimb),
+            "pending_total": sum(_amt(r) for r in fonds_pending),
+            "pending_count": len(fonds_pending),
+        },
+        "caisse_restau": {
+            "total": sum(_amt(r) for r in caisse),
+            "count": len(caisse),
+        },
+    }
 
 
 @router.delete("/shopping-list/{item_id}")

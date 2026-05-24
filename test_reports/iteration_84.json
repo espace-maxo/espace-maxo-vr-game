@@ -1,0 +1,77 @@
+{
+  "summary": "Iteration 84 - Testing Appro Manager (Shopping List) features. All 16 backend tests pass. Frontend verified: Admin sees Appro Manager tab with 3 sub-tabs (À ACHETER, ACHETÉ, CUMUL MODE DE PAIEMENT). Edit modal with PU/Qté and auto-calculated total works. Mark-done modal shows Fonds Propres and Caisse Restau payment mode buttons. Gérante correctly does NOT see Appro Manager tab (admin-only).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_appro_manager_iter84.py",
+    "/app/test_reports/pytest/appro_manager_iter84_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All Appro Manager (Shopping List) backend endpoints working correctly:",
+    "- POST /api/shopping-list/{id}/done with payment_mode=fonds_propres: Sets payment_mode + reimbursed=false + status=done",
+    "- POST /api/shopping-list/{id}/done with payment_mode=caisse_restau: Sets payment_mode + status=done (no reimbursed field)",
+    "- POST /api/shopping-list/{id}/done with invalid payment_mode: Returns 400",
+    "- POST /api/shopping-list/{id}/done without payment_mode: Still works (backward compat)",
+    "- PATCH /api/shopping-list/{id} with quantity/estimated_unit_price: Recalculates estimated_total",
+    "- PATCH /api/shopping-list/{id} with real_unit_price: Recalculates real_total",
+    "- POST /api/shopping-list/{id}/reimburse: Sets reimbursed=true, reimbursed_at, reimbursed_by",
+    "- POST /api/shopping-list/{id}/reimburse: Fails if not fonds_propres or already reimbursed",
+    "- POST /api/shopping-list/reimburse-all: Bulk reimburse returns count + total_amount",
+    "- POST /api/shopping-list/{id}/undo: Resets payment_mode, reimbursed, reimbursed_at to null",
+    "- GET /api/shopping-list/payment-mode-cumul: Returns correct structure with fonds_propres (total, count, reimbursed_*, pending_*) and caisse_restau (total, count)",
+    "- GET /api/cash-closures/live: Includes shopping_list items in fonds_propres_pending_total and fonds_propres_reimbursed_today_total",
+    "- POST /api/shopping-list/to-expense: Regression test passes - transfer still works",
+    "Frontend role-based visibility working correctly:",
+    "- Admin: Sees 'Appro Manager' tab with 3 sub-tabs (À ACHETER, ACHETÉ, CUMUL MODE DE PAIEMENT)",
+    "- Admin: Edit modal shows Quantité, Prix unitaire (F), and auto-calculated TOTAL",
+    "- Admin: Mark-done modal shows 'Fonds Propres' and 'Caisse Restau' payment mode buttons",
+    "- Admin: CUMUL tab shows Fonds Propres and Caisse Restau cards with reimbursement breakdown",
+    "- Gérante: Does NOT see 'Appro Manager' tab (admin-only feature)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_appro_manager_iter84.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "Admin", "password": "Caisse2026"},
+    "gerante": {"username": "Mères AHOUANDJINOU", "pin": "2468"}
+  },
+  "seed_data_creation": "Test shopping_list items created and cleaned up during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 84 confirmed Appro Manager (Shopping List) features are fully functional. Key behaviors tested: (1) mark-done with fonds_propres/caisse_restau payment modes, (2) reimburse individual and bulk, (3) undo resets all payment fields, (4) payment-mode-cumul endpoint returns correct structure, (5) cash-closures/live snapshot includes shopping_list items in fonds_propres fields, (6) PATCH recalculates estimated_total and real_total, (7) to-expense transfer still works (regression). Frontend: Admin sees Appro Manager with 3 sub-tabs, edit modal with auto-calc total, mark-done modal with payment mode selector. Gérante does NOT see Appro Manager tab.",
+  "features_tested": [
+    "POST /api/shopping-list/{id}/done with payment_mode=fonds_propres",
+    "POST /api/shopping-list/{id}/done with payment_mode=caisse_restau",
+    "POST /api/shopping-list/{id}/done with invalid payment_mode returns 400",
+    "POST /api/shopping-list/{id}/done without payment_mode (backward compat)",
+    "PATCH /api/shopping-list/{id} recalculates estimated_total",
+    "PATCH /api/shopping-list/{id} recalculates real_total",
+    "POST /api/shopping-list/{id}/reimburse success",
+    "POST /api/shopping-list/{id}/reimburse fails for non-fonds_propres",
+    "POST /api/shopping-list/{id}/reimburse fails for already reimbursed",
+    "POST /api/shopping-list/reimburse-all bulk reimburse",
+    "POST /api/shopping-list/{id}/undo resets payment fields",
+    "GET /api/shopping-list/payment-mode-cumul structure validation",
+    "GET /api/shopping-list/payment-mode-cumul with data",
+    "GET /api/cash-closures/live includes shopping_list fonds_propres",
+    "POST /api/shopping-list/to-expense regression test",
+    "Old items without payment_mode still work",
+    "Frontend: Admin sees Appro Manager with 3 sub-tabs",
+    "Frontend: Edit modal with PU/Qté and auto-calculated total",
+    "Frontend: Mark-done modal with payment mode selector",
+    "Frontend: CUMUL tab shows Fonds Propres and Caisse Restau cards",
+    "Frontend: Gérante does NOT see Appro Manager tab"
+  ]
+}

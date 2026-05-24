@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight } from 'lucide-react';
+import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight, Edit2, Wallet, Banknote, Undo2, Coins } from 'lucide-react';
 import QuickProductPicker from './QuickProductPicker';
 import ReceiptScanModal from './ReceiptScanModal';
 
@@ -33,12 +33,24 @@ const CoursesTab = ({ currentUser }) => {
 
   // Filters
   const [filterScope, setFilterScope] = useState('all'); // all | restaurant | reservation
-  const [filterStatus, setFilterStatus] = useState('pending'); // all | pending | done
+  const [filterStatus, setFilterStatus] = useState('pending'); // 'pending' | 'done' | 'cumul'
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Edit item modal (PU + Qté)
+  const [editItem, setEditItem] = useState(null);
+  const [editQty, setEditQty] = useState(0);
+  const [editPU, setEditPU] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Cumul mode de paiement (récap)
+  const [cumul, setCumul] = useState(null);
+  const [cumulLoading, setCumulLoading] = useState(false);
 
   // Mark-done modal
   const [markModalItem, setMarkModalItem] = useState(null);
   const [markRealPrice, setMarkRealPrice] = useState('');
   const [markSupplier, setMarkSupplier] = useState('');
+  const [markPaymentMode, setMarkPaymentMode] = useState('fonds_propres');
 
   // Add manual item form
   const [showAdd, setShowAdd] = useState(false);
@@ -61,7 +73,8 @@ const CoursesTab = ({ currentUser }) => {
     try {
       const params = {};
       if (filterScope !== 'all') params.scope = filterScope;
-      if (filterStatus !== 'all') params.status = filterStatus;
+      // Only pass status filter if not 'all' (cumul is virtual)
+      if (filterStatus === 'pending' || filterStatus === 'done') params.status = filterStatus;
       const r = await axios.get(`${API}/shopping-list`, { params });
       setItems(r.data?.items || []);
       setStats(r.data?.stats || { total: 0, done: 0, pending: 0, estimated_total: 0, real_total_spent: 0 });
@@ -70,7 +83,20 @@ const CoursesTab = ({ currentUser }) => {
     } finally { setLoading(false); }
   }, [filterScope, filterStatus]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const loadCumul = useCallback(async () => {
+    setCumulLoading(true);
+    try {
+      const r = await axios.get(`${API}/shopping-list/payment-mode-cumul`);
+      setCumul(r.data);
+    } catch {
+      setCumul(null);
+    } finally { setCumulLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (filterStatus === 'cumul') loadCumul();
+    else refresh();
+  }, [filterStatus, refresh, loadCumul]);
 
   // Group items by scope (and reservation for clarity)
   const grouped = useMemo(() => {
@@ -93,6 +119,7 @@ const CoursesTab = ({ currentUser }) => {
     setMarkModalItem(item);
     setMarkRealPrice(String(item.estimated_unit_price || ''));
     setMarkSupplier('');
+    setMarkPaymentMode('fonds_propres');
   };
 
   const confirmMarkDone = async () => {
@@ -102,12 +129,66 @@ const CoursesTab = ({ currentUser }) => {
         done_by: currentUser?.full_name || currentUser?.username || 'Gérante',
         real_unit_price: Number(markRealPrice) || 0,
         real_supplier: markSupplier,
+        payment_mode: markPaymentMode,
       });
       toast.success("Achat enregistré ✅");
       setMarkModalItem(null);
       refresh();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  // ===== Edit PU/Qté =====
+  const openEditModal = (item) => {
+    setEditItem(item);
+    setEditQty(item.quantity || 0);
+    setEditPU(item.estimated_unit_price || 0);
+  };
+  const editTotal = useMemo(() => (Number(editQty) || 0) * (Number(editPU) || 0), [editQty, editPU]);
+  const saveEdit = async () => {
+    if (!editItem) return;
+    setEditSaving(true);
+    try {
+      await axios.patch(`${API}/shopping-list/${editItem.id}`, {
+        quantity: Number(editQty) || 0,
+        estimated_unit_price: Number(editPU) || 0,
+      });
+      toast.success("Article modifié");
+      setEditItem(null);
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    } finally { setEditSaving(false); }
+  };
+
+  // ===== Remboursement Fonds Propres =====
+  const reimburseOne = async (item) => {
+    const amt = item.real_total || item.estimated_total || 0;
+    if (!window.confirm(`Rembourser ${fmt(amt)} F (${item.name}) depuis la caisse ?`)) return;
+    try {
+      await axios.post(`${API}/shopping-list/${item.id}/reimburse`, {
+        reimbursed_by: currentUser?.full_name || currentUser?.username || 'Administrateur',
+      });
+      toast.success("Remboursement enregistré");
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+  const reimburseAll = async () => {
+    const pending = items.filter((i) => i.payment_mode === 'fonds_propres' && !i.reimbursed && i.status === 'done');
+    if (pending.length === 0) { toast.info("Aucun Fonds Propres en attente"); return; }
+    const total = pending.reduce((s, i) => s + (i.real_total || i.estimated_total || 0), 0);
+    if (!window.confirm(`Rembourser TOUS les Fonds Propres en attente ?\n${pending.length} ligne(s) — Total ${fmt(total)} F`)) return;
+    try {
+      const r = await axios.post(`${API}/shopping-list/reimburse-all`, {
+        reimbursed_by: currentUser?.full_name || currentUser?.username || 'Administrateur',
+      });
+      toast.success(`${r.data.count} item(s) remboursé(s) · ${fmt(r.data.total_amount)} F`);
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
     }
   };
 
@@ -229,18 +310,41 @@ const CoursesTab = ({ currentUser }) => {
             <StatusPill value={it.status} />
           </div>
           {isDone && (
-            <div className="text-xs text-emerald-300 mt-0.5">
-              Acheté par <strong>{it.done_by}</strong>
-              {it.done_at && (
-                <> · {format(new Date(it.done_at), 'dd/MM HH:mm', { locale: fr })}</>
+            <div className="text-xs text-emerald-300 mt-0.5 flex items-center gap-2 flex-wrap">
+              <span>
+                Acheté par <strong>{it.done_by}</strong>
+                {it.done_at && (<> · {format(new Date(it.done_at), 'dd/MM HH:mm', { locale: fr })}</>)}
+                {it.real_supplier && <> · <strong>{it.real_supplier}</strong></>}
+                {(it.real_unit_price ?? null) !== null && it.real_unit_price !== it.estimated_unit_price && (
+                  <> · PU réel <strong>{fmt(it.real_unit_price)} F</strong></>
+                )}
+              </span>
+              {it.payment_mode === 'fonds_propres' && (
+                <Badge className="bg-purple-500/20 text-purple-200 border border-purple-500/30 text-[10px]">
+                  <Wallet className="w-3 h-3 mr-1" /> Fonds Propres
+                  {it.reimbursed
+                    ? <span className="ml-1 text-emerald-300">· ✓ Remboursé</span>
+                    : <span className="ml-1 text-rose-300">· À rembourser</span>}
+                </Badge>
               )}
-              {it.real_supplier && <> · <strong>{it.real_supplier}</strong></>}
-              {(it.real_unit_price ?? null) !== null && it.real_unit_price !== it.estimated_unit_price && (
-                <> · PU réel <strong>{fmt(it.real_unit_price)} F</strong> (estimé {fmt(it.estimated_unit_price)} F)</>
+              {it.payment_mode === 'caisse_restau' && (
+                <Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-[10px]">
+                  <Banknote className="w-3 h-3 mr-1" /> Caisse Restau
+                </Badge>
               )}
             </div>
           )}
         </div>
+        {!isDone && (
+          <Button size="sm" variant="ghost" onClick={() => openEditModal(it)} className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 h-7 w-7 p-0 flex-shrink-0" title="Modifier PU/Qté" data-testid={`course-edit-${it.id}`}>
+            <Edit2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {isAdmin && isDone && it.payment_mode === 'fonds_propres' && !it.reimbursed && (
+          <Button size="sm" onClick={() => reimburseOne(it)} className="bg-purple-600 hover:bg-purple-700 h-7 px-2 text-[11px] flex-shrink-0" data-testid={`course-reimburse-${it.id}`}>
+            <Undo2 className="w-3 h-3 mr-1" /> Rembourser
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={() => deleteItem(it.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0 flex-shrink-0">
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
@@ -296,10 +400,38 @@ const CoursesTab = ({ currentUser }) => {
         </CardContent>
       </Card>
 
-      {/* Filters */}
+      {/* === 3 SOUS-MENUS principaux : À acheter / Acheté / Cumul mode de paiement === */}
+      <div className="flex items-center gap-2 border-b border-slate-700 pb-2 overflow-x-auto" data-testid="appro-main-subtabs">
+        {[
+          { key: 'pending', label: 'À ACHETER', color: 'amber' },
+          { key: 'done', label: 'ACHETÉ', color: 'emerald' },
+          ...(isAdmin ? [{ key: 'cumul', label: 'CUMUL MODE DE PAIEMENT', color: 'cyan' }] : []),
+        ].map((t) => {
+          const isActive = filterStatus === t.key;
+          const colorMap = {
+            amber: isActive ? 'bg-amber-500 text-slate-900' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+            emerald: isActive ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+            cyan: isActive ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+          };
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setFilterStatus(t.key)}
+              data-testid={`appro-subtab-${t.key}`}
+              className={`px-3 py-2 rounded-t text-sm font-bold transition-colors whitespace-nowrap ${colorMap[t.color]}`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filtres scope (visibles uniquement en mode liste) */}
+      {filterStatus !== 'cumul' && (
       <Card className="bg-slate-900/60 border-slate-700">
         <CardContent className="py-3 flex items-center gap-2 flex-wrap">
-          <span className="text-slate-400 text-xs flex items-center gap-1"><Filter className="w-3.5 h-3.5" />Filtrer :</span>
+          <span className="text-slate-400 text-xs flex items-center gap-1"><Filter className="w-3.5 h-3.5" />Périmètre :</span>
           <div className="flex gap-1">
             {['all', 'restaurant', 'reservation'].map((v) => (
               <button key={v} type="button" onClick={() => setFilterScope(v)} className={`text-[11px] px-2 py-1 rounded-full ${filterScope === v ? 'bg-amber-500 text-slate-900 font-semibold' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`} data-testid={`filter-scope-${v}`}>
@@ -307,14 +439,11 @@ const CoursesTab = ({ currentUser }) => {
               </button>
             ))}
           </div>
-          <span className="text-slate-600 mx-1">|</span>
-          <div className="flex gap-1">
-            {['pending', 'done', 'all'].map((v) => (
-              <button key={v} type="button" onClick={() => setFilterStatus(v)} className={`text-[11px] px-2 py-1 rounded-full ${filterStatus === v ? 'bg-amber-500 text-slate-900 font-semibold' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`} data-testid={`filter-status-${v}`}>
-                {v === 'all' ? 'Tous' : v === 'pending' ? 'À acheter' : 'Achetés'}
-              </button>
-            ))}
-          </div>
+          {isAdmin && filterStatus === 'done' && (
+            <Button size="sm" onClick={reimburseAll} className="bg-purple-600 hover:bg-purple-700 text-white h-8 ml-2" data-testid="appro-reimburse-all-btn">
+              <Undo2 className="w-3.5 h-3.5 mr-1" /> Rembourser tous les Fonds Propres
+            </Button>
+          )}
           <span className="ml-auto flex gap-1.5 flex-wrap">
             <Button size="sm" onClick={() => setShowAdd((s) => !s)} className="bg-amber-600 hover:bg-amber-700 text-white h-8" data-testid="course-add-toggle">
               <Plus className="w-3.5 h-3.5 mr-1" /> {showAdd ? 'Fermer' : 'Ajouter un article'}
@@ -322,7 +451,11 @@ const CoursesTab = ({ currentUser }) => {
           </span>
         </CardContent>
       </Card>
+      )}
 
+      {/* === LISTE (pending / done) === */}
+      {filterStatus !== 'cumul' && (
+      <>
       {/* Sélection multi + bouton Transférer en Achat */}
       <Card className="bg-slate-900/60 border-slate-700">
         <CardContent className="py-2 flex items-center gap-2 flex-wrap text-sm">
@@ -430,6 +563,71 @@ const CoursesTab = ({ currentUser }) => {
           </CardContent>
         </Card>
       )}
+      </>
+      )}
+
+      {/* === CUMUL MODE DE PAIEMENT (Admin only) === */}
+      {filterStatus === 'cumul' && isAdmin && (
+        <Card className="bg-gradient-to-br from-cyan-900/30 to-indigo-900/20 border-cyan-500/40" data-testid="appro-cumul-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-cyan-200 flex items-center gap-2">
+              <Coins className="w-5 h-5" /> CUMUL — MODE DE PAIEMENT
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {cumulLoading || !cumul ? (
+              <p className="text-slate-400 text-center py-6">Chargement…</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Card className="bg-purple-900/20 border-purple-500/40" data-testid="appro-cumul-fonds-propres">
+                    <CardContent className="py-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Wallet className="w-5 h-5 text-purple-300" />
+                        <p className="text-purple-200 font-bold uppercase text-sm">Fonds Propres</p>
+                      </div>
+                      <p className="text-3xl font-bold text-purple-100">{fmt(cumul.fonds_propres.total)} <span className="text-base text-purple-400/70">F</span></p>
+                      <p className="text-purple-300/70 text-xs mt-1">{cumul.fonds_propres.count} achat{cumul.fonds_propres.count > 1 ? 's' : ''}</p>
+                      <div className="mt-3 space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-emerald-300">✓ Remboursés</span>
+                          <span className="text-emerald-200 font-bold">{fmt(cumul.fonds_propres.reimbursed_total)} F ({cumul.fonds_propres.reimbursed_count})</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-rose-300">⏳ En attente</span>
+                          <span className="text-rose-200 font-bold">{fmt(cumul.fonds_propres.pending_total)} F ({cumul.fonds_propres.pending_count})</span>
+                        </div>
+                      </div>
+                      {cumul.fonds_propres.pending_count > 0 && (
+                        <Button size="sm" onClick={reimburseAll} className="w-full mt-3 bg-purple-600 hover:bg-purple-700" data-testid="cumul-reimburse-all-btn">
+                          <Undo2 className="w-3.5 h-3.5 mr-1" /> Rembourser tout en attente
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-emerald-900/20 border-emerald-500/40" data-testid="appro-cumul-caisse-restau">
+                    <CardContent className="py-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Banknote className="w-5 h-5 text-emerald-300" />
+                        <p className="text-emerald-200 font-bold uppercase text-sm">Caisse Restau</p>
+                      </div>
+                      <p className="text-3xl font-bold text-emerald-100">{fmt(cumul.caisse_restau.total)} <span className="text-base text-emerald-400/70">F</span></p>
+                      <p className="text-emerald-300/70 text-xs mt-1">{cumul.caisse_restau.count} achat{cumul.caisse_restau.count > 1 ? 's' : ''}</p>
+                      <p className="text-emerald-300/60 text-[11px] italic mt-3">
+                        Ces dépenses sont déjà déduites du CA du jour dans le Point de la Caisse.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div className="bg-slate-800/40 rounded p-3 border border-slate-700 text-xs text-slate-400">
+                  <p>💡 <strong className="text-slate-200">Fonds Propres</strong> : avance personnelle — à rembourser depuis la caisse. Le remboursement apparaît dans le Point journalier le jour où il est effectué.</p>
+                  <p className="mt-1">💡 <strong className="text-slate-200">Caisse Restau</strong> : payé directement depuis les recettes de la caisse — déjà reflété dans le CA.</p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Modal — Scan reçu */}
       <ReceiptScanModal
@@ -514,10 +712,95 @@ const CoursesTab = ({ currentUser }) => {
                 <Label className="text-slate-300 text-sm">Fournisseur (où acheté)</Label>
                 <Input value={markSupplier} onChange={(e) => setMarkSupplier(e.target.value)} placeholder="Ex: Dantokpa, Champion..." className="bg-slate-800 border-slate-700 text-white" data-testid="course-mark-supplier" />
               </div>
+              <div>
+                <Label className="text-slate-300 text-sm mb-2 block">Mode de paiement</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarkPaymentMode("fonds_propres")}
+                    data-testid="course-pm-fonds-propres"
+                    className={`p-3 rounded-lg border-2 transition ${
+                      markPaymentMode === "fonds_propres"
+                        ? "bg-purple-500/20 border-purple-400 text-purple-200"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"
+                    }`}
+                  >
+                    <Wallet className="w-5 h-5 mx-auto mb-1" />
+                    <p className="text-xs font-bold">Fonds Propres</p>
+                    <p className="text-[9px] opacity-80">Remboursable</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkPaymentMode("caisse_restau")}
+                    data-testid="course-pm-caisse-restau"
+                    className={`p-3 rounded-lg border-2 transition ${
+                      markPaymentMode === "caisse_restau"
+                        ? "bg-emerald-500/20 border-emerald-400 text-emerald-200"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"
+                    }`}
+                  >
+                    <Banknote className="w-5 h-5 mx-auto mb-1" />
+                    <p className="text-xs font-bold">Caisse Restau</p>
+                    <p className="text-[9px] opacity-80">Affecte le CA</p>
+                  </button>
+                </div>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setMarkModalItem(null)} className="border-slate-700 text-slate-300">Annuler</Button>
                 <Button onClick={confirmMarkDone} className="bg-emerald-600 hover:bg-emerald-700" data-testid="course-mark-confirm">
                   <CheckCircle2 className="w-4 h-4 mr-1" /> Confirmer
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      {/* Modal — Modifier PU / Qté */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setEditItem(null)}>
+          <Card className="bg-slate-900 border-amber-500/40 w-full max-w-md" onClick={(e) => e.stopPropagation()} data-testid="course-edit-modal">
+            <CardHeader className="pb-2 border-b border-slate-700">
+              <CardTitle className="text-white text-base flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Edit2 className="w-5 h-5 text-amber-400" />
+                  Modifier — {editItem.name}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setEditItem(null)} className="text-slate-300 h-7 w-7 p-0">
+                  <XIcon className="w-4 h-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-slate-300 text-sm">Quantité</Label>
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={editQty}
+                    onChange={(e) => setEditQty(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="course-edit-qty"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-300 text-sm">Prix unitaire (F)</Label>
+                  <Input
+                    type="number" min="0" step="1"
+                    value={editPU}
+                    onChange={(e) => setEditPU(e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="course-edit-pu"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                <span className="text-amber-300 text-sm uppercase">Total</span>
+                <span className="text-amber-200 text-2xl font-bold" data-testid="course-edit-total">{fmt(editTotal)} F</span>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setEditItem(null)} className="border-slate-700 text-slate-300">Annuler</Button>
+                <Button onClick={saveEdit} disabled={editSaving} className="bg-amber-600 hover:bg-amber-700" data-testid="course-edit-save">
+                  {editSaving ? "Enregistrement…" : "Enregistrer"}
                 </Button>
               </div>
             </CardContent>

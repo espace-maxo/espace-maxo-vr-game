@@ -208,6 +208,24 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
         ).to_list(5000)
         fonds_propres_pending_total = sum(float(a.get("amount") or 0) for a in fp_pending)
         fonds_propres_pending_count = len(fp_pending)
+
+        # Also include shopping_list items (Appro Manager direct buys)
+        def _amt(r):
+            return float(r.get("real_total") if r.get("real_total") is not None else (r.get("estimated_total") or 0))
+        sl_today = await db.shopping_list_items.find(
+            {"payment_mode": "fonds_propres", "reimbursed": True,
+             "reimbursed_at": {"$regex": f"^{date_iso}"}},
+            {"_id": 0},
+        ).to_list(2000)
+        fonds_propres_reimbursed_today_total += sum(_amt(a) for a in sl_today)
+        fonds_propres_reimbursed_today_count += len(sl_today)
+
+        sl_pending = await db.shopping_list_items.find(
+            {"payment_mode": "fonds_propres", "reimbursed": {"$ne": True}, "status": "done"},
+            {"_id": 0},
+        ).to_list(5000)
+        fonds_propres_pending_total += sum(_amt(a) for a in sl_pending)
+        fonds_propres_pending_count += len(sl_pending)
     except Exception:
         pass
 
