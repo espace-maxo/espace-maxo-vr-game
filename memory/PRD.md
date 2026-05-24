@@ -40,8 +40,15 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - 4 sous-menus dans Achats : À valider / Validés / Historique / **Achats Manager**
   - "Achats Manager" (4ᵉ sous-menu) **invisible pour la Gérante** (Admin only)
   - "Appro Manager" (menu principal) déjà **invisible pour la Gérante** (Admin only)
-  - 4ᵉ sous-menu regroupe : dépenses issues d'Appro Manager + Terminés
   - Vérifié via screenshots admin (4 sous-tabs) + gérante (3 sous-tabs)
+- **ACHATS MANAGER — Workflow paiement complet (24/05/2026)**
+  - 3 sous-onglets dans Achats Manager : **À acheter** / **Acheté** / **Cumul mode de paiement**
+  - Modal d'édition PU/Qté (items simples + liste groupée) avec calcul auto du total
+  - Modal "Marquer acheté" : choix du mode **Fonds Propres** (remboursable) ou **Caisse Restau** (déduit du CA)
+  - Remboursement individuel ou groupé des Fonds Propres
+  - Point de la Caisse : nouvelles cartes "Fonds Propres remboursés (jour)" + "Fonds Propres en attente"
+  - 11/11 tests backend (test_achats_manager_iter83.py) — visibility role-based 100%
+  - Endpoints : `POST /api/expenses/{id}/mark-bought`, `/reimburse-fonds-propres`, `/reimburse-all-fonds-propres`, `GET /api/expenses/payment-mode-cumul`
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
