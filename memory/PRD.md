@@ -64,6 +64,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Point de la Caisse : onglet "Historique" caché pour la Gérante (Admin only)
   - Faire le point : onglet "Historique" caché pour la Gérante (Admin only)
   - Factures : date picker masqué + force la Gérante sur la date du jour (impossible de voir les factures passées)
+- **GÉRANTE — Plus de suppression directe de bons/factures (24/05/2026)**
+  - La Gérante voit désormais "Demander suppression" (au lieu du Trash2 direct) sur ses bons
+  - Le bouton crée une `cancellation_request` → notification Admin qui valide/refuse
+  - Admin garde le Trash2 direct + workflow d'approbation existant (reuses `requestCancellation` + `cancellationRequests`)
+  - Factures validées déjà admin-only (inchangé)
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)

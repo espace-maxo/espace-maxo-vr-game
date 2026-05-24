@@ -38,6 +38,7 @@ const BonsTab = ({
   setViewInvoice,
   startEditingInvoice,
   requestModification,
+  requestCancellation,
   validateInvoice,
   deleteInvoice,
 }) => {
@@ -262,9 +263,28 @@ const BonsTab = ({
                               <FileText className="w-4 h-4 mr-1" />
                               Bon-Client
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => deleteInvoice(invoice.id)} className="text-red-400 hover:text-red-300">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {/* Suppression directe : Admin only (24/05/2026)
+                                La Gérante doit demander l'autorisation via "Demander annulation". */}
+                            {isAdmin ? (
+                              <Button size="sm" variant="ghost" onClick={() => deleteInvoice(invoice.id)} className="text-red-400 hover:text-red-300" title="Supprimer">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => requestCancellation(invoice)}
+                                className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                                disabled={cancellationRequests.some(r => r.invoice_id === invoice.id)}
+                                data-testid={`bon-request-delete-${invoice.id}`}
+                                title="Demander la suppression à l'administrateur"
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                <span className="text-xs">
+                                  {cancellationRequests.some(r => r.invoice_id === invoice.id) ? "Demande envoyée" : "Demander suppression"}
+                                </span>
+                              </Button>
+                            )}
                           </>
                         )}
                       </div>

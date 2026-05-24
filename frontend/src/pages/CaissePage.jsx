@@ -5279,6 +5279,7 @@ _Gérante - Espace Maxo_
               setViewInvoice={setViewInvoice}
               startEditingInvoice={startEditingInvoice}
               requestModification={requestModification}
+              requestCancellation={requestCancellation}
               validateInvoice={validateInvoice}
               deleteInvoice={deleteInvoice}
             />
