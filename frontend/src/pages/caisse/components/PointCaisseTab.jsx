@@ -275,9 +275,11 @@ const PointCaisseTab = ({ currentUser }) => {
           <TabsTrigger value="live" className="data-[state=active]:bg-emerald-600" data-testid="point-caisse-tab-live">
             <TrendingUp className="w-4 h-4 mr-1" /> Vue {isToday ? "live" : "du jour"}
           </TabsTrigger>
-          <TabsTrigger value="history" className="data-[state=active]:bg-cyan-600" data-testid="point-caisse-tab-history">
-            <History className="w-4 h-4 mr-1" /> Historique ({closures.length})
-          </TabsTrigger>
+          {currentUser?.role === 'admin' && (
+            <TabsTrigger value="history" className="data-[state=active]:bg-cyan-600" data-testid="point-caisse-tab-history">
+              <History className="w-4 h-4 mr-1" /> Historique ({closures.length})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ============== LIVE ============== */}
@@ -587,7 +589,8 @@ const PointCaisseTab = ({ currentUser }) => {
           )}
         </TabsContent>
 
-        {/* ============== HISTORY ============== */}
+        {/* ============== HISTORY (Admin only) ============== */}
+        {currentUser?.role === 'admin' && (
         <TabsContent value="history" className="space-y-3 mt-4">
           {closures.length === 0 ? (
             <Card className="bg-slate-800/50 border-slate-700">
@@ -687,6 +690,7 @@ const PointCaisseTab = ({ currentUser }) => {
             })
           )}
         </TabsContent>
+        )}
       </Tabs>
     </div>
   );

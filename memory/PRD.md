@@ -60,6 +60,10 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **GÉRANTE — Restriction renforcée des menus (24/05/2026)**
   - Menus cachés à la Gérante : Achats, Appro Manager, Fournisseurs, Activité & Historique, Statistiques & Rapport, Journal, Utilisateurs, Audit, Compte courant
   - Menus visibles : Journée, Tables, BONS, Prise de commandes, Factures, Locations, Besoins, Proforma, Point de la Caisse, Faire le point, Produits, Clients, Abonnements, Notes, Pourboires, Points Serveurs
+- **GÉRANTE — Suppression des historiques sensibles (24/05/2026)**
+  - Point de la Caisse : onglet "Historique" caché pour la Gérante (Admin only)
+  - Faire le point : onglet "Historique" caché pour la Gérante (Admin only)
+  - Factures : date picker masqué + force la Gérante sur la date du jour (impossible de voir les factures passées)
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)

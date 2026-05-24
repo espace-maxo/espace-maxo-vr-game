@@ -276,6 +276,14 @@ const CaissePage = () => {
   const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
   const [filterValidation, setFilterValidation] = useState("all"); // all, pending, validated
+
+  // Force la Gérante à n'avoir que la date du jour (pas d'historique factures)
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      const today = format(new Date(), "yyyy-MM-dd");
+      if (filterDate !== today) setFilterDate(today);
+    }
+  }, [currentUser, filterDate]);
   
   // Modals
   const [viewInvoice, setViewInvoice] = useState(null);
@@ -5364,15 +5372,24 @@ _Gérante - Espace Maxo_
               {/* Filter bar */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-slate-400" />
-                    <Input
-                      type="date"
-                      value={filterDate}
-                      onChange={(e) => setFilterDate(e.target.value)}
-                      className="bg-slate-800/50 border-slate-700 text-white w-auto"
-                    />
-                  </div>
+                  {/* Date picker — Admin only (la Gérante ne voit que les factures du jour) */}
+                  {currentUser?.role === 'admin' && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-slate-400" />
+                      <Input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="bg-slate-800/50 border-slate-700 text-white w-auto"
+                      />
+                    </div>
+                  )}
+                  {currentUser?.role !== 'admin' && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-slate-400" />
+                      <Badge className="bg-slate-700 text-slate-300">Aujourd'hui</Badge>
+                    </div>
+                  )}
                   <Select value={filterValidation} onValueChange={setFilterValidation}>
                     <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white w-40">
                       <SelectValue />
@@ -6031,10 +6048,12 @@ _Gérante - Espace Maxo_
                   <Coins className="w-4 h-4 mr-2" />
                   Reversement
                 </TabsTrigger>
-                <TabsTrigger value="point-history" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-history">
-                  <History className="w-4 h-4 mr-2" />
-                  Historique
-                </TabsTrigger>
+                {currentUser?.role === 'admin' && (
+                  <TabsTrigger value="point-history" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-history">
+                    <History className="w-4 h-4 mr-2" />
+                    Historique
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="point-hebdo">
@@ -6110,9 +6129,11 @@ _Gérante - Espace Maxo_
                 </div>
               </TabsContent>
 
+              {currentUser?.role === 'admin' && (
               <TabsContent value="point-history">
                 <PointsHistoryTab currentUser={currentUser} />
               </TabsContent>
+              )}
             </Tabs>
           </TabsContent>
           )}
