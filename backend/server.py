@@ -49,6 +49,7 @@ from routers.purchase_price_history import router as price_history_router, set_d
 from routers.day_openings import router as day_openings_router, set_db as set_day_openings_db, is_day_open as _is_day_open
 from routers.journee_settings import router as journee_settings_router, set_db as set_journee_settings_db, verify_password as _verify_journee_pw, is_password_set as _is_journee_pw_set
 from routers.shopping_list import router as shopping_list_router, set_db as set_shopping_list_db
+from routers.receipt_scan import router as receipt_scan_router, set_db as set_receipt_scan_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -86,6 +87,7 @@ set_price_history_db(db)
 set_day_openings_db(db)
 set_journee_settings_db(db)
 set_shopping_list_db(db)
+set_receipt_scan_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -158,6 +160,7 @@ api_router.include_router(price_history_router)
 api_router.include_router(day_openings_router)
 api_router.include_router(journee_settings_router)
 api_router.include_router(shopping_list_router)
+api_router.include_router(receipt_scan_router)
 
 # Configure logging
 logging.basicConfig(

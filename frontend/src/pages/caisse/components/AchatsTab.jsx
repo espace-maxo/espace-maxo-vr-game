@@ -18,10 +18,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ShoppingCart, Plus, Eye, CheckCircle, AlertCircle, Edit2, Trash2,
-  FileText, Printer, Receipt, Calendar, X, Truck, Wallet, Ban, Wine, PackagePlus,
+  FileText, Printer, Receipt, Calendar, X, Truck, Wallet, Ban, Wine, PackagePlus, ScanLine,
 } from "lucide-react";
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
 import DrinkPurchaseDialog from "./DrinkPurchaseDialog";
+import ReceiptScanModal from "./ReceiptScanModal";
 import PurchasePriceHistoryTab from "./PurchasePriceHistoryTab";
 
 const STRIKE_REASONS = [
@@ -186,6 +187,7 @@ const AchatsTab = ({ ctx }) => {
     e.status === 'completed' ||
     (e.category === 'paiement' && e.is_paid === true);
   const isAdminUser = currentUser?.role === 'admin';
+  const [showScanModal, setShowScanModal] = React.useState(false);
   // List of unique authors found in current expenses (for the dropdown of "other")
   const allAuthors = React.useMemo(() => {
     const set = new Set();
@@ -390,6 +392,14 @@ const AchatsTab = ({ ctx }) => {
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       {currentUser?.role === 'admin' ? "Nouvelle demande d'achat" : "Achats communs"}
+                    </Button>
+                    <Button
+                      onClick={() => setShowScanModal(true)}
+                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                      data-testid="scan-receipt-btn"
+                    >
+                      <ScanLine className="w-4 h-4 mr-2" />
+                      Scanner un reçu
                     </Button>
                     {currentUser?.role === 'manager' && (
                       <Button 
@@ -2326,6 +2336,14 @@ const AchatsTab = ({ ctx }) => {
               <DrinkPurchaseDialog
                 open={showDrinksPurchase}
                 onClose={() => setShowDrinksPurchase(false)}
+                currentUser={currentUser}
+                onCreated={() => { if (fetchExpenses) fetchExpenses(); }}
+              />
+
+              {/* Modal : Scanner un reçu (OCR via IA Gemini) */}
+              <ReceiptScanModal
+                open={showScanModal}
+                onClose={() => setShowScanModal(false)}
                 currentUser={currentUser}
                 onCreated={() => { if (fetchExpenses) fetchExpenses(); }}
               />
