@@ -53,6 +53,12 @@ const MethodCard = ({ method, data }) => {
 const PointCaisseTab = ({ currentUser }) => {
   const today = format(new Date(), "yyyy-MM-dd");
   const [date, setDate] = useState(today);
+  // Force la Resp. Op. à toujours rester sur la date du jour
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin' && date !== today) {
+      setDate(today);
+    }
+  }, [currentUser, date, today]);
   const [snapshot, setSnapshot] = useState(null);
   const [closures, setClosures] = useState([]);
   const [declaredCash, setDeclaredCash] = useState(0);
@@ -257,13 +263,18 @@ const PointCaisseTab = ({ currentUser }) => {
           <Badge className="bg-emerald-500/30 text-emerald-200 ml-2">Z journalier</Badge>
         </h2>
         <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-slate-800 border-slate-700 text-white w-auto"
-            data-testid="point-caisse-date"
-          />
+          {/* Date picker — Admin only (la Resp. Op. ne voit que le jour) */}
+          {currentUser?.role === 'admin' ? (
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-slate-800 border-slate-700 text-white w-auto"
+              data-testid="point-caisse-date"
+            />
+          ) : (
+            <Badge className="bg-slate-700 text-slate-300">Aujourd'hui</Badge>
+          )}
           <Button onClick={() => fetchSnapshot(date)} variant="outline" size="sm" className="border-slate-700 text-slate-300">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>

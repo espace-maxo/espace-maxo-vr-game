@@ -432,6 +432,13 @@ const CaissePage = () => {
   const [reversementSubTab, setReversementSubTab] = useState("bar");
   // Date du billettage global (par défaut : aujourd'hui)
   const [billettageDate, setBillettageDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  // Force la Resp. Op. sur la date du jour pour le billettage
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      const today = format(new Date(), "yyyy-MM-dd");
+      if (billettageDate !== today) setBillettageDate(today);
+    }
+  }, [currentUser, billettageDate]);
   // End date (inclusive). Par défaut = dimanche de la semaine courante (preset "Cette semaine").
   const [weekEndDate, setWeekEndDate] = useState(() => {
     const d = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -6104,13 +6111,17 @@ _Gérante - Espace Maxo_
                   {/* Billettage GLOBAL — unique pour les 4 reversements */}
                   <div className="flex items-center justify-end gap-2 mb-1">
                     <Label className="text-xs text-slate-400">Date du billettage&nbsp;:</Label>
-                    <Input
-                      type="date"
-                      value={billettageDate}
-                      onChange={(e) => setBillettageDate(e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-white h-8 w-[160px]"
-                      data-testid="billettage-date-picker"
-                    />
+                    {currentUser?.role === 'admin' ? (
+                      <Input
+                        type="date"
+                        value={billettageDate}
+                        onChange={(e) => setBillettageDate(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white h-8 w-[160px]"
+                        data-testid="billettage-date-picker"
+                      />
+                    ) : (
+                      <Badge className="bg-slate-700 text-slate-300 h-8 px-3 flex items-center">Aujourd'hui</Badge>
+                    )}
                   </div>
                   <BillettageGlobalCard date={billettageDate} currentUser={currentUser} />
 
