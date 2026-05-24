@@ -407,10 +407,11 @@ const AchatsTab = ({ ctx }) => {
                 )}
               </div>
 
-              {/* Sub-navigation — 3 onglets maximum :
+              {/* Sub-navigation — 4 onglets :
                   1. À valider (pending + admin_review + revision_requested + mes demandes)
-                  2. Achats Manager (validés + terminés, dont ceux issus de Appro Manager)
+                  2. Validés (approved standard)
                   3. Historique (rejetés + répertoire prix d'achat)
+                  4. Achats Manager (Admin only — terminés + dépenses issues d'Appro Manager)
               */}
               <div className="flex items-center gap-2 border-b border-slate-700 pb-2 overflow-x-auto">
                 {(() => {
@@ -423,19 +424,26 @@ const AchatsTab = ({ ctx }) => {
                       ).length,
                     },
                     {
-                      key: 'achats_manager', label: 'Achats Manager', color: 'green',
-                      sub: ['valides', ...(currentUser?.role === 'admin' ? ['termines'] : [])],
-                      countFn: () => expenses.filter(e =>
-                        e.status === 'approved' || (currentUser?.role === 'admin' && e.status === 'completed')
-                      ).length,
+                      key: 'valides_group', label: 'Validés', color: 'green',
+                      sub: ['valides'],
+                      countFn: () => expenses.filter(e => e.status === 'approved').length,
                     },
                     {
                       key: 'historique', label: 'Historique', color: 'cyan',
                       sub: ['rejetes', 'repertoire_prix'],
                       countFn: () => expenses.filter(e => e.status === 'rejected').length,
                     },
+                    // 4ème sous-menu : Achats Manager — strictement Admin
+                    ...(isAdminUser ? [{
+                      key: 'achats_manager', label: 'Achats Manager', color: 'amber',
+                      sub: ['appro_manager', 'termines'],
+                      countFn: () => expenses.filter(e =>
+                        e.source === 'appro_manager' || e.status === 'completed' ||
+                        (e.category === 'paiement' && e.is_paid === true)
+                      ).length,
+                    }] : []),
                   ];
-                  // Currently active group based on subview
+                  // Currently active group based on subview — fall back to default if hidden for current role
                   const activeGroup = groups.find(g => g.sub.includes(achatsSubView)) || groups[0];
                   return (
                     <>
@@ -445,6 +453,7 @@ const AchatsTab = ({ ctx }) => {
                           purple: isActive ? 'bg-purple-600 text-white' : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
                           green:  isActive ? 'bg-green-600 text-white'  : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
                           cyan:   isActive ? 'bg-cyan-600 text-white'   : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
+                          amber:  isActive ? 'bg-amber-600 text-white'  : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700/50',
                         };
                         return (
                           <button
@@ -475,17 +484,21 @@ const AchatsTab = ({ ctx }) => {
                       return e.requested_by === me || e.requested_by === currentUser?.username;
                     }).length }] : []),
                   ],
-                  achats_manager: [
+                  valides_group: [
                     { key: 'valides', label: 'Validés', count: expenses.filter(e => e.status === 'approved').length },
-                    ...(currentUser?.role === 'admin' ? [{ key: 'termines', label: 'Terminés', count: expenses.filter(isFinished).length }] : []),
                   ],
                   historique: [
                     { key: 'rejetes', label: 'Rejetés', count: expenses.filter(e => e.status === 'rejected').length },
                     { key: 'repertoire_prix', label: 'Répertoire prix' },
                   ],
+                  achats_manager: [
+                    { key: 'appro_manager', label: 'Issus Appro Manager', count: expenses.filter(e => e.source === 'appro_manager').length },
+                    { key: 'termines', label: 'Terminés', count: expenses.filter(isFinished).length },
+                  ],
                 };
                 const groupKey = ['en_cours', 'a_reviser', 'mes_demandes'].includes(achatsSubView) ? 'a_valider'
-                  : ['valides', 'termines'].includes(achatsSubView) ? 'achats_manager'
+                  : ['valides'].includes(achatsSubView) ? 'valides_group'
+                  : ['appro_manager', 'termines'].includes(achatsSubView) ? 'achats_manager'
                   : 'historique';
                 const list = subFilters[groupKey] || [];
                 if (list.length <= 1) return null;
@@ -1971,6 +1984,124 @@ const AchatsTab = ({ ctx }) => {
                     ))}
                   </CardContent>
                 </Card>
+                );
+              })()}
+
+              {/* === ACHATS MANAGER — Issus d'Appro Manager (Admin only) === */}
+              {achatsSubView === 'appro_manager' && isAdminUser && (() => {
+                const approList = expenses.filter(e => e.source === 'appro_manager');
+                return approList.length > 0 ? (
+                  <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border-amber-500/50" data-testid="appro-manager-expenses-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-amber-200 flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="w-5 h-5" />
+                          Achats issus d'Appro Manager
+                          <Badge className="bg-amber-500/30 text-amber-200 ml-2">
+                            {approList.length}
+                          </Badge>
+                          <Badge className="bg-emerald-500/30 text-emerald-300">
+                            Total : {formatPrice(approList.reduce((s, e) => s + (e.amount || 0), 0))} F
+                          </Badge>
+                        </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
+                      <p className="text-xs text-amber-300/80 italic mb-2">
+                        Toutes les dépenses transférées depuis le module <strong>Appro Manager</strong> (suivi des courses).
+                      </p>
+                      {approList.map(expense => {
+                        const statusMeta = {
+                          pending: { label: 'En attente', color: 'bg-amber-500/20 text-amber-300' },
+                          admin_review: { label: 'En correction', color: 'bg-orange-500/20 text-orange-300' },
+                          revision_requested: { label: 'À réviser', color: 'bg-rose-500/20 text-rose-300' },
+                          approved: { label: 'Validée', color: 'bg-emerald-500/20 text-emerald-300' },
+                          completed: { label: 'Terminée', color: 'bg-blue-500/20 text-blue-300' },
+                          rejected: { label: 'Rejetée', color: 'bg-slate-500/20 text-slate-400' },
+                        }[expense.status] || { label: expense.status, color: 'bg-slate-500/20 text-slate-400' };
+                        return (
+                          <div key={expense.id} className="bg-slate-800/40 rounded-lg p-3 border border-amber-500/20" data-testid={`appro-expense-${expense.id}`}>
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {expense.is_group ? (
+                                    <Badge className="text-xs bg-indigo-500/30 text-indigo-300">📦 Liste ({expense.items?.length || 0} articles)</Badge>
+                                  ) : (
+                                    <Badge className={`text-xs ${
+                                      expense.category === 'cuisine' ? 'bg-green-500/20 text-green-400' :
+                                      expense.category === 'bar' ? 'bg-orange-500/20 text-orange-400' :
+                                      expense.category === 'paiement' ? 'bg-blue-500/20 text-blue-400' :
+                                      'bg-slate-500/20 text-slate-400'
+                                    }`}>{expense.category}</Badge>
+                                  )}
+                                  <span className="text-white font-medium">{expense.description}</span>
+                                  <Badge className={`text-xs ${statusMeta.color}`}>{statusMeta.label}</Badge>
+                                  <TypeDestBadges expense={expense} />
+                                </div>
+                                <p className="text-amber-300 font-bold text-lg mt-1">{formatPrice(expense.amount)} F</p>
+                                <p className="text-slate-500 text-xs">
+                                  Demandé par : {expense.requested_by} • {expense.created_at ? new Date(expense.created_at).toLocaleDateString('fr-FR') : '—'}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 flex-wrap shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openExpenseForEdit(expense)}
+                                  className="h-8 text-amber-300 hover:bg-amber-500/20"
+                                  data-testid={`appro-edit-${expense.id}`}
+                                >
+                                  <Edit2 className="w-4 h-4 mr-1" />
+                                  Modifier
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => printSingleExpenseTicket(expense)}
+                                  className="h-8 text-slate-300 hover:bg-slate-700/30"
+                                  data-testid={`appro-print-${expense.id}`}
+                                >
+                                  <Receipt className="w-4 h-4 mr-1" />
+                                  Ticket
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => deleteExpense(expense.id)}
+                                  className="h-8 text-rose-400 hover:bg-rose-500/20"
+                                  data-testid={`appro-delete-${expense.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            {expense.is_group && expense.items && expense.items.length > 0 && (
+                              <div className="bg-slate-900/40 rounded p-2 mt-2">
+                                <div className="space-y-1">
+                                  {expense.items.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-1">
+                                      <span className="text-slate-300">{idx + 1}. {item.description}</span>
+                                      <span className="text-amber-300 font-bold">{item.quantity} × {formatPrice(item.unit_price)} = {formatPrice(item.amount)} F</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="bg-slate-800/30 border-slate-700">
+                    <CardContent className="py-12 text-center">
+                      <ShoppingCart className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-500">Aucun achat issu d'Appro Manager pour l'instant</p>
+                      <p className="text-slate-600 text-xs mt-1">
+                        Les courses transférées depuis le module <strong>Appro Manager</strong> apparaîtront ici.
+                      </p>
+                    </CardContent>
+                  </Card>
                 );
               })()}
 

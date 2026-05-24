@@ -36,6 +36,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Garde-fou : impossible d'ouvrir si jour précédent (avec activité) non fermé (admin peut forcer)
   - Hook bidirectionnel : la fermeture (day_closures) marque l'ouverture comme `closed`, la réouverture inversement
   - 21 tests Pytest + 35 tests regression — tous verts (testing agent itération 82)
+- **NAVIGATION ACHATS — 4 sous-menus + isolation rôle (24/05/2026)**
+  - 4 sous-menus dans Achats : À valider / Validés / Historique / **Achats Manager**
+  - "Achats Manager" (4ᵉ sous-menu) **invisible pour la Gérante** (Admin only)
+  - "Appro Manager" (menu principal) déjà **invisible pour la Gérante** (Admin only)
+  - 4ᵉ sous-menu regroupe : dépenses issues d'Appro Manager + Terminés
+  - Vérifié via screenshots admin (4 sous-tabs) + gérante (3 sous-tabs)
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
