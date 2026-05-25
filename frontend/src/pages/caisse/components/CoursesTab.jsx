@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import PaymentModeTransferPanel from "./PaymentModeTransferPanel";
 import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight, Edit2, Wallet, Banknote, Undo2, Coins } from 'lucide-react';
 import QuickProductPicker from './QuickProductPicker';
 import ReceiptScanModal from './ReceiptScanModal';
@@ -623,6 +624,11 @@ const CoursesTab = ({ currentUser }) => {
                   <p>💡 <strong className="text-slate-200">Fonds Propres</strong> : avance personnelle — à rembourser depuis la caisse. Le remboursement apparaît dans le Point journalier le jour où il est effectué.</p>
                   <p className="mt-1">💡 <strong className="text-slate-200">Caisse Restau</strong> : payé directement depuis les recettes de la caisse — déjà reflété dans le CA.</p>
                 </div>
+                <PaymentModeTransferPanel
+                  cumul={cumul}
+                  onChanged={loadCumul}
+                  currentUser={currentUser}
+                />
               </>
             )}
           </CardContent>

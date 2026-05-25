@@ -88,6 +88,20 @@ class ShoppingItemReimburse(BaseModel):
     reimbursed_by: Optional[str] = None
 
 
+# Achats Manager Cumul — corrections de mode de paiement (25/05/2026)
+class PaymentModeSwitch(BaseModel):
+    target_mode: str  # "fonds_propres" | "caisse_restau"
+    switched_by: Optional[str] = None
+
+
+class PaymentModeTransfer(BaseModel):
+    from_mode: str  # "fonds_propres" | "caisse_restau"
+    to_mode: str    # "fonds_propres" | "caisse_restau"
+    amount: float
+    note: Optional[str] = None
+    created_by: Optional[str] = None
+
+
 # ============================================================================
 # HELPERS
 # ============================================================================
@@ -313,7 +327,7 @@ async def reimburse_all_items(data: ShoppingItemReimburse):
 
 @router.get("/shopping-list/payment-mode-cumul")
 async def shopping_payment_mode_cumul():
-    """Cumul des items shopping_list achetés par mode de paiement."""
+    """Cumul des items shopping_list achetés par mode de paiement, avec ajustements de transfert."""
     rows = await db.shopping_list_items.find(
         {"status": "done", "payment_mode": {"$in": ["fonds_propres", "caisse_restau"]}},
         {"_id": 0},
@@ -324,20 +338,130 @@ async def shopping_payment_mode_cumul():
     caisse = [r for r in rows if r.get("payment_mode") == "caisse_restau"]
     fonds_reimb = [r for r in fonds if r.get("reimbursed")]
     fonds_pending = [r for r in fonds if not r.get("reimbursed")]
+
+    # Ajustements via transferts manuels (corrections d'erreurs)
+    # On déduit/ajoute UNIQUEMENT sur le pending de fonds_propres (cf. règle métier 2-a)
+    transfers = await db.payment_mode_transfers.find({}, {"_id": 0}).to_list(5000)
+    fp_to_cr = sum(float(t.get("amount") or 0) for t in transfers
+                   if t.get("from_mode") == "fonds_propres" and t.get("to_mode") == "caisse_restau")
+    cr_to_fp = sum(float(t.get("amount") or 0) for t in transfers
+                   if t.get("from_mode") == "caisse_restau" and t.get("to_mode") == "fonds_propres")
+
+    fonds_total = sum(_amt(r) for r in fonds)
+    fonds_reimb_total = sum(_amt(r) for r in fonds_reimb)
+    fonds_pending_total = sum(_amt(r) for r in fonds_pending)
+    caisse_total = sum(_amt(r) for r in caisse)
+
+    # Application des ajustements
+    fonds_pending_total = fonds_pending_total - fp_to_cr + cr_to_fp
+    fonds_total = fonds_reimb_total + fonds_pending_total
+    caisse_total = caisse_total + fp_to_cr - cr_to_fp
+
     return {
         "fonds_propres": {
-            "total": sum(_amt(r) for r in fonds),
+            "total": fonds_total,
             "count": len(fonds),
-            "reimbursed_total": sum(_amt(r) for r in fonds_reimb),
+            "reimbursed_total": fonds_reimb_total,
             "reimbursed_count": len(fonds_reimb),
-            "pending_total": sum(_amt(r) for r in fonds_pending),
+            "pending_total": fonds_pending_total,
             "pending_count": len(fonds_pending),
         },
         "caisse_restau": {
-            "total": sum(_amt(r) for r in caisse),
+            "total": caisse_total,
             "count": len(caisse),
         },
+        "transfers_adjustment": {
+            "fp_to_cr": fp_to_cr,
+            "cr_to_fp": cr_to_fp,
+        },
     }
+
+
+@router.post("/shopping-list/{item_id}/switch-payment-mode")
+async def switch_payment_mode(item_id: str, data: PaymentModeSwitch):
+    """Bascule le mode de paiement d'un item (Fonds Propres ↔ Caisse Restau).
+    Règle métier : seul un item Fonds Propres NON remboursé peut basculer vers Caisse Restau.
+    """
+    if data.target_mode not in ("fonds_propres", "caisse_restau"):
+        raise HTTPException(400, "target_mode invalide")
+    existing = await db.shopping_list_items.find_one({"id": item_id})
+    if not existing:
+        raise HTTPException(404, "Item non trouvé")
+    if existing.get("status") != "done":
+        raise HTTPException(400, "Item non finalisé (status != done)")
+    current = existing.get("payment_mode")
+    if current == data.target_mode:
+        return {"success": True, "noop": True}
+    if current == "fonds_propres" and existing.get("reimbursed"):
+        raise HTTPException(400, "Cet item Fonds Propres a déjà été remboursé, impossible de basculer")
+    now = datetime.now(timezone.utc).isoformat()
+    update = {"payment_mode": data.target_mode, "switched_at": now,
+              "switched_by": (data.switched_by or "Administrateur")}
+    if data.target_mode == "fonds_propres":
+        update["reimbursed"] = False
+        update["reimbursed_at"] = None
+        update["reimbursed_by"] = None
+    else:  # caisse_restau
+        update["reimbursed"] = None
+        update["reimbursed_at"] = None
+        update["reimbursed_by"] = None
+    await db.shopping_list_items.update_one({"id": item_id}, {"$set": update})
+    doc = await db.shopping_list_items.find_one({"id": item_id}, {"_id": 0})
+    return {"success": True, "item": doc}
+
+
+@router.post("/shopping-list/payment-mode-transfer")
+async def create_payment_mode_transfer(data: PaymentModeTransfer):
+    """Crée un transfert (ajustement) entre Fonds Propres et Caisse Restau (ou inverse).
+    N'altère AUCUN item — l'ajustement est purement comptable et impacte le cumul.
+    Cas d'usage : corriger une erreur de saisie sans avoir à retoucher chaque item.
+    """
+    if data.from_mode == data.to_mode:
+        raise HTTPException(400, "from_mode et to_mode doivent être différents")
+    for m in (data.from_mode, data.to_mode):
+        if m not in ("fonds_propres", "caisse_restau"):
+            raise HTTPException(400, f"Mode invalide : {m}")
+    amount = float(data.amount or 0)
+    if amount <= 0:
+        raise HTTPException(400, "Montant doit être > 0")
+
+    # Vérification du solde disponible avant transfert
+    cumul = await shopping_payment_mode_cumul()
+    if data.from_mode == "fonds_propres":
+        available = float(cumul["fonds_propres"]["pending_total"])
+        if amount > available + 0.01:
+            raise HTTPException(400, f"Solde Fonds Propres (pending) insuffisant : {available:.0f} F disponibles")
+    else:
+        available = float(cumul["caisse_restau"]["total"])
+        if amount > available + 0.01:
+            raise HTTPException(400, f"Solde Caisse Restau insuffisant : {available:.0f} F disponibles")
+
+    transfer_doc = {
+        "id": str(uuid.uuid4()),
+        "from_mode": data.from_mode,
+        "to_mode": data.to_mode,
+        "amount": amount,
+        "note": (data.note or "").strip(),
+        "created_by": (data.created_by or "Administrateur"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "appro_manager",
+    }
+    await db.payment_mode_transfers.insert_one(transfer_doc.copy())
+    return {"success": True, "transfer": transfer_doc}
+
+
+@router.get("/shopping-list/payment-mode-transfers")
+async def list_payment_mode_transfers():
+    rows = await db.payment_mode_transfers.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"transfers": rows, "count": len(rows)}
+
+
+@router.delete("/shopping-list/payment-mode-transfers/{transfer_id}")
+async def delete_payment_mode_transfer(transfer_id: str):
+    r = await db.payment_mode_transfers.delete_one({"id": transfer_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Transfert introuvable")
+    return {"success": True}
 
 
 @router.delete("/shopping-list/{item_id}")
