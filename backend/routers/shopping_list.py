@@ -717,3 +717,108 @@ async def to_expense(data: TransferToExpensePayload):
         "expense_total": total,
         "items_transferred": len(expense_items),
     }
+
+
+# ========== TRANSFERT CAISSE RESTAU → ACHATS MANAGER (25/05/2026) ==========
+# Pour chaque item Acheté en mode Caisse Restau, crée UNE dépense par item
+# dans Achats > Achats Manager (visible dans le sous-onglet "Acheté").
+# L'item Appro Manager reste mais est marqué `transferred_to_achat=true`.
+
+class TransferCaisseToAchatPayload(BaseModel):
+    item_ids: List[str] = []
+    requested_by: Optional[str] = "Administrateur"
+
+
+async def _transfer_one_caisse_item(item: dict, requested_by: str) -> Optional[dict]:
+    """Crée une dépense individuelle dans Achats Manager pour un item shopping_list
+    payé en Caisse Restau. Retourne le doc d'expense créé, ou None si déjà transféré."""
+    if item.get("transferred_to_achat") and item.get("transferred_expense_id"):
+        return None
+    qty = float(item.get("quantity") or 1)
+    unit = float(item.get("real_unit_price")
+                 if item.get("real_unit_price") is not None
+                 else (item.get("estimated_unit_price") or 0))
+    amount = qty * unit
+    now = datetime.now(timezone.utc).isoformat()
+    # Mappe la catégorie shopping_list vers la catégorie expense (cuisine/bar/autres)
+    raw_cat = (item.get("category") or "").lower()
+    if raw_cat in ("bar", "boisson", "drink"):
+        category = "bar"
+    elif raw_cat in ("cuisine", "alimentaire", "food"):
+        category = "cuisine"
+    else:
+        category = "autres"
+    doc = {
+        "id": str(uuid.uuid4()),
+        "description": item.get("name") or "Achat Restau",
+        "amount": amount,
+        "quantity": qty,
+        "unit_price": unit,
+        "supplier": item.get("real_supplier") or item.get("scan_supplier") or "",
+        "category": category,
+        "expense_type": "courant",
+        "is_group": False,
+        "items": [],
+        "status": "completed",
+        "is_paid": True,
+        "paid_at": now,
+        "paid_by": item.get("done_by") or requested_by,
+        "payment_mode": "caisse_restau",
+        "completed_at": now,
+        "source": "appro_manager",
+        "requested_by": item.get("done_by") or requested_by,
+        "requested_by_role": "admin",
+        "created_at": now,
+        "updated_at": now,
+        "origin_shopping_item_id": item["id"],
+    }
+    await db.expenses.insert_one(doc.copy())
+    # Marque l'item Appro Manager comme transféré (badge "Transféré en Achats")
+    await db.shopping_list_items.update_one(
+        {"id": item["id"]},
+        {"$set": {
+            "transferred_to_achat": True,
+            "transferred_expense_id": doc["id"],
+            "transferred_at": now,
+            "transferred_by": requested_by,
+        }},
+    )
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@router.post("/shopping-list/{item_id}/transfer-to-achat-restau")
+async def transfer_item_to_achat_restau(item_id: str, data: TransferCaisseToAchatPayload):
+    """Transfère un item Caisse Restau Acheté vers Achats Manager (1 dépense)."""
+    item = await db.shopping_list_items.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(404, "Item introuvable")
+    if item.get("status") != "done":
+        raise HTTPException(400, "L'item n'est pas marqué comme acheté")
+    if item.get("payment_mode") != "caisse_restau":
+        raise HTTPException(400, "Seuls les items en Caisse Restau peuvent être transférés en Achat Restau")
+    if item.get("transferred_to_achat"):
+        raise HTTPException(400, "Item déjà transféré dans Achats Manager")
+    created = await _transfer_one_caisse_item(item, data.requested_by or "Administrateur")
+    return {"success": True, "expense": created}
+
+
+@router.post("/shopping-list/transfer-all-caisse-to-achat-restau")
+async def transfer_all_caisse_to_achat_restau(data: TransferCaisseToAchatPayload):
+    """Transfère tous les items Caisse Restau Achetés (non encore transférés) vers Achats Manager."""
+    query = {"status": "done", "payment_mode": "caisse_restau",
+             "transferred_to_achat": {"$ne": True}}
+    if data.item_ids:
+        query["id"] = {"$in": data.item_ids}
+    items = await db.shopping_list_items.find(query, {"_id": 0}).to_list(2000)
+    created_list = []
+    total = 0.0
+    for it in items:
+        r = await _transfer_one_caisse_item(it, data.requested_by or "Administrateur")
+        if r:
+            created_list.append(r)
+            total += float(r.get("amount") or 0)
+    return {
+        "success": True,
+        "count": len(created_list),
+        "total_amount": total,
+    }

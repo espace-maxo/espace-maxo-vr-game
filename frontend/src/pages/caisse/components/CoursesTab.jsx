@@ -193,6 +193,40 @@ const CoursesTab = ({ currentUser }) => {
     }
   };
 
+  // ===== Transfert vers Achats Manager (Caisse Restau uniquement) =====
+  const transferOneToAchat = async (item) => {
+    if (item.transferred_to_achat) { toast.info("Déjà transféré"); return; }
+    const amt = item.real_total || item.estimated_total || 0;
+    if (!window.confirm(`Transférer "${item.name}" (${fmt(amt)} F) vers Achats > Achats Manager ?`)) return;
+    try {
+      await axios.post(`${API}/shopping-list/${item.id}/transfer-to-achat-restau`, {
+        requested_by: currentUser?.full_name || currentUser?.username || 'Administrateur',
+      });
+      toast.success("Transféré dans Achats Manager ✅");
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+
+  const transferAllCaisseToAchat = async () => {
+    const elig = items.filter((i) =>
+      i.status === 'done' && i.payment_mode === 'caisse_restau' && !i.transferred_to_achat
+    );
+    if (elig.length === 0) { toast.info("Aucun item Caisse Restau à transférer"); return; }
+    const total = elig.reduce((s, i) => s + (i.real_total || i.estimated_total || 0), 0);
+    if (!window.confirm(`Transférer TOUS les ${elig.length} achats Caisse Restau (${fmt(total)} F) vers Achats Manager ?`)) return;
+    try {
+      const r = await axios.post(`${API}/shopping-list/transfer-all-caisse-to-achat-restau`, {
+        requested_by: currentUser?.full_name || currentUser?.username || 'Administrateur',
+      });
+      toast.success(`${r.data.count} achat(s) transféré(s) — ${fmt(r.data.total_amount)} F`);
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+
   // Bascule FP <-> Caisse Restau pour un item (Admin only)
   const switchItemMode = async (item) => {
     const target = item.payment_mode === 'fonds_propres' ? 'caisse_restau' : 'fonds_propres';
@@ -381,6 +415,24 @@ const CoursesTab = ({ currentUser }) => {
             {it.payment_mode === 'fonds_propres' ? '→ Caisse' : '→ FP'}
           </Button>
         )}
+        {/* Transfert Caisse Restau → Achats Manager (1 expense par item) */}
+        {isAdmin && isDone && it.payment_mode === 'caisse_restau' && !it.transferred_to_achat && (
+          <Button
+            size="sm"
+            onClick={() => transferOneToAchat(it)}
+            className="bg-emerald-600 hover:bg-emerald-700 h-7 px-2 text-[11px] flex-shrink-0"
+            data-testid={`course-transfer-achat-${it.id}`}
+            title="Transférer en Achat Restau (Achats Manager)"
+          >
+            <ArrowRight className="w-3 h-3 mr-1" />
+            Achat Restau
+          </Button>
+        )}
+        {isAdmin && isDone && it.transferred_to_achat && (
+          <Badge className="bg-slate-700/60 text-slate-300 border border-slate-500/30 text-[10px] h-6 px-2 flex-shrink-0">
+            ✓ Transféré en Achats
+          </Badge>
+        )}
         <Button size="sm" variant="ghost" onClick={() => deleteItem(it.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0 flex-shrink-0">
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
@@ -476,9 +528,14 @@ const CoursesTab = ({ currentUser }) => {
             ))}
           </div>
           {isAdmin && filterStatus === 'done' && (
-            <Button size="sm" onClick={reimburseAll} className="bg-purple-600 hover:bg-purple-700 text-white h-8 ml-2" data-testid="appro-reimburse-all-btn">
-              <Undo2 className="w-3.5 h-3.5 mr-1" /> Rembourser tous les Fonds Propres
-            </Button>
+            <>
+              <Button size="sm" onClick={reimburseAll} className="bg-purple-600 hover:bg-purple-700 text-white h-8 ml-2" data-testid="appro-reimburse-all-btn">
+                <Undo2 className="w-3.5 h-3.5 mr-1" /> Rembourser tous les Fonds Propres
+              </Button>
+              <Button size="sm" onClick={transferAllCaisseToAchat} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8" data-testid="appro-transfer-all-caisse-btn">
+                <ArrowRight className="w-3.5 h-3.5 mr-1" /> Transférer tout Caisse Restau → Achats
+              </Button>
+            </>
           )}
           <span className="ml-auto flex gap-1.5 flex-wrap">
             <Button size="sm" onClick={() => setShowAdd((s) => !s)} className="bg-amber-600 hover:bg-amber-700 text-white h-8" data-testid="course-add-toggle">
