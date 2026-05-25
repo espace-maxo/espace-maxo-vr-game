@@ -79,6 +79,16 @@ import { LOGO_BASE64 } from "./caisse/constants_logo";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Helper — Renvoie le libellé de validation avec rôle (utilisé sur les tickets imprimés)
+// Ex: "Mères AHOUANDJINOU — Responsable des Opérations & Logistique"
+const formatValidatorLabel = (user) => {
+  if (!user) return "Utilisateur";
+  const name = user.full_name || user.username || "Utilisateur";
+  if (user.role === "manager") return `${name} — Responsable des Opérations & Logistique`;
+  if (user.role === "admin") return `${name} — Administrateur`;
+  return name;
+};
+
 // Default catalog items
 const DEFAULT_CATALOG = {
   salle_jardin: [
@@ -3540,7 +3550,7 @@ _Gérante - Espace Maxo_
         try {
           const v = await axios.put(`${API}/invoices/${fresh.pending_invoice_id}?${actorQs()}`, {
             validation_status: "validated",
-            validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+            validated_by: formatValidatorLabel(currentUser),
             validated_at: new Date().toISOString(),
           });
           created = v.data?.invoice || v.data;
@@ -3570,7 +3580,7 @@ _Gérante - Espace Maxo_
           notes: "",
           created_by: currentUser?.full_name || currentUser?.username || "admin",
           validation_status: "validated",
-          validated_by: currentUser?.full_name || currentUser?.username || "admin",
+          validated_by: formatValidatorLabel(currentUser),
           validated_at: new Date().toISOString(),
           table_number: fresh.table_number,
         };
@@ -3768,7 +3778,7 @@ _Gérante - Espace Maxo_
       
       await axios.put(`${API}/invoices/${pendingValidationInvoice.id}?${actorQs()}`, {
         validation_status: "validated",
-        validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        validated_by: formatValidatorLabel(currentUser),
         validated_at: new Date().toISOString(),
         payment_method: selectedPaymentMethod,
         created_at: newCreatedAt // Update the invoice date
@@ -4487,7 +4497,7 @@ _Gérante - Espace Maxo_
           </div>
           ${invoice.validation_status === 'validated' ? `
           <div class="validation">
-            Validé par: ${invoice.validated_by || 'Gérante'}
+            Validé par: ${invoice.validated_by || formatValidatorLabel(currentUser)}
           </div>
           ` : `
           <div class="validation" style="color: red;">
