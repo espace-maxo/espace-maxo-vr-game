@@ -4936,7 +4936,7 @@ _Gérante - Espace Maxo_
                   'bg-slate-500/20 text-slate-400'
                 }>
                   {currentUser?.role === 'admin' ? 'Administrateur' : 
-                   currentUser?.role === 'manager' ? 'Resp. Op.' : 
+                   currentUser?.role === 'manager' ? 'Responsable des Opérations & Logistique' : 
                    currentUser?.role === 'cuisinier' ? 'Cuisinier' :
                    currentUser?.role === 'coach_jeux' ? 'Coach Jeux' :
                    'Serveur'}
@@ -6677,7 +6677,7 @@ _Gérante - Espace Maxo_
                     <SelectItem value="server">Serveur</SelectItem>
                     <SelectItem value="cuisinier">Cuisinier</SelectItem>
                     <SelectItem value="coach_jeux">Coach Jeux</SelectItem>
-                    <SelectItem value="manager">Resp. Op.</SelectItem>
+                    <SelectItem value="manager">Responsable des Opérations & Logistique</SelectItem>
                     <SelectItem value="admin">Administrateur</SelectItem>
                   </SelectContent>
                 </Select>

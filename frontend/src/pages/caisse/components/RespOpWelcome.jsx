@@ -81,7 +81,7 @@ const RespOpWelcome = ({
                 {greetTxt}, {firstName || "Resp. Op."} <span className="text-amber-300">👋</span>
               </p>
               <p className="text-amber-200/70 text-xs capitalize">
-                {dateStr} · <span className="text-amber-300">Resp. Op.</span>
+                {dateStr} · <span className="text-amber-300 normal-case">Responsable des Opérations &amp; Logistique</span>
               </p>
             </div>
           </div>
