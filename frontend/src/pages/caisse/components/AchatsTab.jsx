@@ -437,9 +437,9 @@ const AchatsTab = ({ ctx }) => {
                     // 4ème sous-menu : Achats Manager — strictement Admin
                     ...(isAdminUser ? [{
                       key: 'achats_manager', label: 'Achats Manager', color: 'amber',
-                      sub: ['a_acheter', 'achete', 'cumul_paiement'],
+                      sub: ['achete'],
                       countFn: () => expenses.filter(e =>
-                        e.source === 'appro_manager'
+                        e.source === 'appro_manager' && e.payment_mode
                       ).length,
                     }] : []),
                   ];
@@ -492,14 +492,12 @@ const AchatsTab = ({ ctx }) => {
                     { key: 'repertoire_prix', label: 'Répertoire prix' },
                   ],
                   achats_manager: [
-                    { key: 'a_acheter', label: 'À acheter', count: expenses.filter(e => e.source === 'appro_manager' && !e.payment_mode).length },
-                    { key: 'achete', label: 'Acheté', count: expenses.filter(e => e.source === 'appro_manager' && e.payment_mode).length },
-                    { key: 'cumul_paiement', label: 'Cumul mode de paiement' },
+                    { key: 'achete', label: 'Produits achetés', count: expenses.filter(e => e.source === 'appro_manager' && e.payment_mode).length },
                   ],
                 };
                 const groupKey = ['en_cours', 'a_reviser', 'mes_demandes'].includes(achatsSubView) ? 'a_valider'
                   : ['valides'].includes(achatsSubView) ? 'valides_group'
-                  : ['a_acheter', 'achete', 'cumul_paiement'].includes(achatsSubView) ? 'achats_manager'
+                  : ['achete'].includes(achatsSubView) ? 'achats_manager'
                   : 'historique';
                 const list = subFilters[groupKey] || [];
                 if (list.length <= 1) return null;
@@ -1988,8 +1986,8 @@ const AchatsTab = ({ ctx }) => {
                 );
               })()}
 
-              {/* === ACHATS MANAGER — 3 panneaux : À acheter / Acheté / Cumul (Admin only) === */}
-              {(achatsSubView === 'a_acheter' || achatsSubView === 'achete' || achatsSubView === 'cumul_paiement') && isAdminUser && (
+              {/* === ACHATS MANAGER — Uniquement les produits achetés (Admin only) === */}
+              {achatsSubView === 'achete' && isAdminUser && (
                 <AchatsManagerPanels
                   subView={achatsSubView}
                   expenses={expenses}
