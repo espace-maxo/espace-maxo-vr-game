@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import PaymentModeTransferPanel from "./PaymentModeTransferPanel";
-import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight, Edit2, Wallet, Banknote, Undo2, Coins } from 'lucide-react';
+import { ShoppingCart, CheckCircle2, Circle, Trash2, Plus, Calendar, Building2, Filter, RefreshCw, X as XIcon, CheckSquare, Square, Tag, ScanLine, ArrowRight, ArrowRightLeft, Edit2, Wallet, Banknote, Undo2, Coins } from 'lucide-react';
 import QuickProductPicker from './QuickProductPicker';
 import ReceiptScanModal from './ReceiptScanModal';
 
@@ -193,6 +193,24 @@ const CoursesTab = ({ currentUser }) => {
     }
   };
 
+  // Bascule FP <-> Caisse Restau pour un item (Admin only)
+  const switchItemMode = async (item) => {
+    const target = item.payment_mode === 'fonds_propres' ? 'caisse_restau' : 'fonds_propres';
+    const amt = item.real_total || item.estimated_total || 0;
+    const label = target === 'fonds_propres' ? 'Fonds Propres' : 'Caisse Restau';
+    if (!window.confirm(`Basculer "${item.name}" (${fmt(amt)} F) en ${label} ?`)) return;
+    try {
+      await axios.post(`${API}/shopping-list/${item.id}/switch-payment-mode`, {
+        target_mode: target,
+        switched_by: currentUser?.full_name || currentUser?.username || 'Administrateur',
+      });
+      toast.success(`Item basculé en ${label}`);
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    }
+  };
+
   const undoItem = async (id) => {
     try {
       await axios.post(`${API}/shopping-list/${id}/undo`);
@@ -344,6 +362,23 @@ const CoursesTab = ({ currentUser }) => {
         {isAdmin && isDone && it.payment_mode === 'fonds_propres' && !it.reimbursed && (
           <Button size="sm" onClick={() => reimburseOne(it)} className="bg-purple-600 hover:bg-purple-700 h-7 px-2 text-[11px] flex-shrink-0" data-testid={`course-reimburse-${it.id}`}>
             <Undo2 className="w-3 h-3 mr-1" /> Rembourser
+          </Button>
+        )}
+        {/* Bascule rapide FP <-> Caisse Restau (Admin only, item FP non remboursé OU item CR) */}
+        {isAdmin && isDone && (
+          (it.payment_mode === 'fonds_propres' && !it.reimbursed) ||
+          it.payment_mode === 'caisse_restau'
+        ) && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => switchItemMode(it)}
+            className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-7 px-2 text-[11px] flex-shrink-0"
+            data-testid={`course-switch-${it.id}`}
+            title={it.payment_mode === 'fonds_propres' ? 'Basculer en Caisse Restau' : 'Basculer en Fonds Propres'}
+          >
+            <ArrowRightLeft className="w-3 h-3 mr-1" />
+            {it.payment_mode === 'fonds_propres' ? '→ Caisse' : '→ FP'}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => deleteItem(it.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/20 h-7 w-7 p-0 flex-shrink-0">
