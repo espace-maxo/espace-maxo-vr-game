@@ -466,10 +466,39 @@ async def get_revenue_by_payment_method(week_start: str = None, date: str = None
 
         by_method["wallet"] = by_method.get("wallet", 0) + by_method.pop("credit", 0)
 
+        # Compte les serveurs distincts ayant effectué au moins une vente sur la période.
+        # Permet à la Resp. Op. de faire un reversement direct si aucun serveur n'a vendu.
+        # On exclut les "managers/admin" en croisant avec la collection users.
+        try:
+            distinct_creators = list({(inv.get("created_by") or "").strip() for inv in invoices if (inv.get("created_by") or "").strip()})
+            servers_with_sales = 0
+            if distinct_creators:
+                users = await db.users.find(
+                    {"$or": [
+                        {"full_name": {"$in": distinct_creators}},
+                        {"username": {"$in": distinct_creators}},
+                    ]},
+                    {"_id": 0, "full_name": 1, "username": 1, "role": 1},
+                ).to_list(200)
+                creators_role_map = {}
+                for u in users:
+                    creators_role_map[u.get("full_name") or ""] = u.get("role")
+                    creators_role_map[u.get("username") or ""] = u.get("role")
+                # Server = role 'server' OR unknown (legacy invoices without proper user record)
+                for c in distinct_creators:
+                    role = creators_role_map.get(c)
+                    if role in ("server", "cuisinier", "coach_jeux", None, ""):
+                        # Counts as server-like activity (excludes admin & manager)
+                        if role not in ("admin", "manager"):
+                            servers_with_sales += 1
+        except Exception as _:
+            servers_with_sales = 0
+
         return {
             "period_start": start_str,
             "total": total,
             "count": len(invoices),
+            "servers_with_sales": servers_with_sales,
             "by_method": {
                 "cash": by_method.get("cash", 0),
                 "mobile": by_method.get("mobile", 0),

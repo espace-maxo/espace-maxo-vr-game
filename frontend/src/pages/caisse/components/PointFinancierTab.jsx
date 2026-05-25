@@ -295,15 +295,20 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
         saved = r.data?.financial_point || currentPoint;
         if (!silent) toast.success("Reversement mis a jour");
       } else {
+        // Indique si la Resp. Op. fait un reversement direct (aucun serveur n'a vendu)
+        const directGerante = !isAdmin && (revenueData?.servers_with_sales === 0);
         const r = await axios.post(`${API}/financial-points`, {
           date: periodType === "weekly" ? weekStart : selectedDate,
           end_date: periodType === "weekly" ? weekEnd : "", period_type: periodType,
           category: activeCategory,
           ...payload,
-          created_by: currentUser?.full_name || currentUser?.username
+          created_by: directGerante
+            ? `Reversement direct (Sans serveur) — ${currentUser?.full_name || currentUser?.username}`
+            : (currentUser?.full_name || currentUser?.username),
+          direct_gerante: directGerante,
         });
         saved = r.data?.financial_point || null;
-        if (!silent) toast.success(`Reversement ${CATEGORY_LABEL[activeCategory]} enregistré`);
+        if (!silent) toast.success(`Reversement ${CATEGORY_LABEL[activeCategory]} enregistré${directGerante ? " (Sans serveur)" : ""}`);
       }
       // Refresh local state IMMEDIATELY so currentPoint reflects the saved id
       if (saved) {
@@ -746,7 +751,12 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
 
   // ===== BLOCAGE : Gérante doit valider "Faire le point" avant Reversement =====
   // Ne s'applique PAS à l'Admin (bypass), et seulement si aucun reversement n'a encore été créé.
-  const needsValidation = !isAdmin && !pointValidation && Object.keys(pointsByCategory).length === 0;
+  // BYPASS aussi si AUCUN serveur n'a fait de vente sur la période (Resp. Op. peut alors faire un
+  // "reversement direct" sans passer par "Faire le point").
+  const noServerActivity = revenueData?.servers_with_sales === 0;
+  const needsValidation = !isAdmin && !pointValidation
+    && Object.keys(pointsByCategory).length === 0
+    && !noServerActivity;
   if (!pointValidationLoading && needsValidation) {
     return (
       <div className="space-y-6" data-testid="point-financier-tab">
@@ -896,6 +906,23 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   return (
     <div className="space-y-6" data-testid="point-financier-tab">
       <PendingValidationsBanner />
+      {/* Banner Reversement direct (Resp. Op., sans serveur) */}
+      {!isAdmin && noServerActivity && !pointValidation && (
+        <Card className="bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border-purple-500/40" data-testid="direct-gerante-banner">
+          <CardContent className="p-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-purple-300" />
+            </div>
+            <div className="flex-1">
+              <p className="text-purple-200 font-bold text-sm uppercase mb-0.5">Mode Reversement direct (Sans serveur)</p>
+              <p className="text-purple-300/80 text-xs">
+                Aucun serveur n'a effectué de vente sur cette période. Vous pouvez faire le reversement directement,
+                sans passer par "Faire le point". Le reversement sera enregistré comme <strong className="text-white">"Reversement direct (Sans serveur)"</strong>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Reversement des recettes par catégorie (Bar / Menu / Jeux / Locations)" />
       <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
 

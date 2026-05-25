@@ -77,6 +77,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
     - Animation rouge pulsante si journée non ouverte / besoins en attente / bons > 5
     - Collapsible (bouton chevron)
     - Visible UNIQUEMENT pour la Resp. Op. (role='manager')
+  - Date pickers verrouillés sur "Aujourd'hui" : Point de la Caisse + Reversement billettage + Factures
+- **REVERSEMENT DIRECT — Resp. Op. peut bypasser "Faire le point" (25/05/2026)**
+  - Si **aucun serveur n'a vendu** sur la période (`servers_with_sales=0`), la Resp. Op. peut faire un reversement directement
+  - Le reversement est marqué `direct_gerante: true` + `created_by: "Reversement direct (Sans serveur) — [Nom]"`
+  - Bandeau visuel violet "MODE REVERSEMENT DIRECT (SANS SERVEUR)" affiché dans la page
+  - Endpoint `/reports/revenue-by-payment` retourne maintenant `servers_with_sales`
+  - Le check exclut les rôles admin/manager — compte les ventes faites par les serveurs uniquement
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
