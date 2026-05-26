@@ -75,13 +75,13 @@ async def _check_invoice_billettage_diff(start_iso, end_iso, findings):
     if total_bil > 0 and abs(total_inv - total_bil) > 1.0:
         gap = total_inv - total_bil
         findings.append({
-            "code": "A_INVOICE_VS_BILLETTAGE",
+            "code": "ECART_FACTURES_BILLETTAGE",
             "severity": SEV_CRITICAL if abs(gap) > 5000 else SEV_WARNING,
-            "title": "Écart entre factures validées et billettage signé",
-            "detail": f"Total factures: {total_inv:.0f} F · Total billettage: {total_bil:.0f} F · Écart: {gap:+.0f} F",
+            "title": "Écart entre les factures validées et le billettage signé",
+            "detail": f"Total des factures : {total_inv:.0f} F · Total compté au billettage : {total_bil:.0f} F · Écart : {gap:+.0f} F",
             "amount": abs(gap),
             "actions": ["Comparer chaque facture validée avec son billettage",
-                        "Vérifier les modes de paiement (cash/mobile/cheque)"],
+                        "Vérifier la répartition des modes de paiement (espèces / mobile / chèque)"],
         })
 
 
@@ -101,13 +101,13 @@ async def _check_invoice_vs_reversements(start_iso, end_iso, findings):
     gap = total_inv - total_rev
     if total_inv > 0 and abs(gap) > 1.0:
         findings.append({
-            "code": "B_INVOICE_VS_REVERSEMENT",
+            "code": "ECART_FACTURES_REVERSEMENT",
             "severity": SEV_CRITICAL if abs(gap) > 10000 else SEV_WARNING,
-            "title": "Écart entre factures et reversements (Bar/Menu/Jeux/Locations)",
-            "detail": f"Total factures: {total_inv:.0f} F · Total reversé: {total_rev:.0f} F · Écart: {gap:+.0f} F",
+            "title": "Écart entre les factures et les reversements (Bar / Menu / Jeux / Locations)",
+            "detail": f"Total des factures : {total_inv:.0f} F · Total reversé : {total_rev:.0f} F · Écart : {gap:+.0f} F",
             "amount": abs(gap),
-            "actions": ["Vérifier que chaque catégorie a été reversée",
-                        "Comparer ventilations par département vs reversement par catégorie"],
+            "actions": ["Vérifier que chaque catégorie a bien été reversée",
+                        "Comparer les ventilations par département avec les reversements par catégorie"],
         })
 
 
@@ -120,12 +120,12 @@ async def _check_pending_invoices(start_iso, end_iso, findings):
     if pending:
         total = sum(_amt(p, "total") for p in pending)
         findings.append({
-            "code": "C_PENDING_INVOICES",
+            "code": "FACTURES_EN_ATTENTE",
             "severity": SEV_WARNING,
             "title": f"{len(pending)} facture(s) encore en attente de validation",
             "detail": f"Total cumulé non encaissé : {total:.0f} F",
             "amount": total,
-            "actions": ["Aller dans BONS pour les valider ou les annuler",
+            "actions": ["Aller dans le menu BONS pour les valider ou les annuler",
                         "Si elles datent de plusieurs jours, demander à la Resp. Op."],
             "items": [{"id": p["id"], "label": f"Table {p.get('table_number','?')} · {_amt(p,'total'):.0f} F", "by": p.get("created_by")} for p in pending[:50]],
         })
@@ -142,15 +142,16 @@ async def _check_cancellations_deletions(start_iso, end_iso, findings):
     gerante_logs = [l for l in logs if (l.get("author_role") == "manager") or ("gérante" in (l.get("author") or "").lower())]
     if gerante_logs:
         total = sum(_amt(l.get("entity_snapshot") or {}, "total") for l in gerante_logs)
+        action_label = {"cancel": "Annulation", "delete": "Suppression"}
         findings.append({
-            "code": "D_CANCEL_DELETE_BY_GERANTE",
+            "code": "ANNULATIONS_PAR_GERANTE",
             "severity": SEV_CRITICAL,
-            "title": f"{len(gerante_logs)} annulation(s)/suppression(s) par la Resp. Op.",
-            "detail": f"Total des factures/bons annulés : {total:.0f} F",
+            "title": f"{len(gerante_logs)} annulation(s) ou suppression(s) par la Resp. Op.",
+            "detail": f"Total des factures / bons concernés : {total:.0f} F",
             "amount": total,
-            "actions": ["Examiner chaque action dans le log Audit pour justifier",
-                        "Si suspect, vérifier avec la Resp. Op. les raisons"],
-            "items": [{"id": l.get("entity_id"), "label": f"{l.get('action')} · {l.get('author')}", "by": l.get("author")} for l in gerante_logs[:50]],
+            "actions": ["Examiner chaque action dans le journal d'audit pour vérifier la justification",
+                        "Si suspect, vérifier avec la Resp. Op. les raisons précises"],
+            "items": [{"id": l.get("entity_id"), "label": f"{action_label.get(l.get('action'), l.get('action'))} · {l.get('author')}", "by": l.get("author")} for l in gerante_logs[:50]],
         })
 
 
@@ -169,12 +170,13 @@ async def _check_price_changes_validated(start_iso, end_iso, findings):
             suspects.append(l)
     if suspects:
         findings.append({
-            "code": "E_PRICE_CHANGE_ON_VALIDATED",
+            "code": "PRIX_MODIFIE_FACTURE_VALIDEE",
             "severity": SEV_CRITICAL,
-            "title": f"{len(suspects)} modification(s) de prix sur factures DÉJÀ validées",
-            "detail": "Une fois validée, une facture ne devrait pas changer de montant/articles.",
+            "title": f"{len(suspects)} modification(s) de prix sur des factures DÉJÀ validées",
+            "detail": "Une fois validée, une facture ne devrait plus changer de montant ou d'articles.",
             "amount": 0,
-            "actions": ["Identifier l'auteur et le motif", "Vérifier si fraude possible"],
+            "actions": ["Identifier l'auteur et le motif de la modification",
+                        "Vérifier s'il s'agit d'une fraude potentielle"],
             "items": [{"id": l.get("entity_id"), "label": f"{l.get('author')} · {format_when(l.get('created_at'))}", "by": l.get("author")} for l in suspects[:50]],
         })
 
@@ -194,23 +196,18 @@ async def _check_articles_added_after_validation(start_iso, end_iso, findings):
             suspects.append(l)
     if suspects:
         findings.append({
-            "code": "F_ITEMS_CHANGED_AFTER_SEND",
+            "code": "ARTICLES_MODIFIES_APRES_ENVOI",
             "severity": SEV_WARNING,
-            "title": f"{len(suspects)} commande(s) modifiée(s) après envoi/validation",
-            "detail": "Articles ajoutés ou retirés alors que la commande avait déjà été envoyée en cuisine.",
+            "title": f"{len(suspects)} commande(s) modifiée(s) après envoi en cuisine",
+            "detail": "Des articles ont été ajoutés ou retirés alors que la commande avait déjà été envoyée.",
             "amount": 0,
-            "actions": ["Vérifier si ces modifications sont justifiées (ex: oubli, retour)"],
+            "actions": ["Vérifier si ces modifications sont justifiées (oubli, retour client, etc.)"],
             "items": [{"id": l.get("entity_id"), "label": f"{l.get('author')}", "by": l.get("author")} for l in suspects[:50]],
         })
 
 
 async def _check_tables_closed_without_invoice(start_iso, end_iso, findings):
     """h) Tables fermées sans facture générée."""
-    table_events = await db.table_events.find({
-        "created_at": {"$gte": start_iso, "$lt": end_iso},
-        "event_type": {"$in": ["close", "closed"]},
-    }, {"_id": 0}).to_list(5000) if "table_events" in await db.list_collection_names() else []
-
     invoices = await db.invoices.find({
         "created_at": {"$gte": start_iso, "$lt": end_iso},
     }, {"_id": 0, "table_number": 1, "id": 1}).to_list(20000)
@@ -227,12 +224,12 @@ async def _check_tables_closed_without_invoice(start_iso, end_iso, findings):
                 suspect_tables.append(t)
     if suspect_tables:
         findings.append({
-            "code": "H_TABLE_CLOSED_NO_INVOICE",
+            "code": "TABLES_FERMEES_SANS_FACTURE",
             "severity": SEV_WARNING,
-            "title": f"{len(suspect_tables)} table(s) fermée(s) sans facture",
-            "detail": "Une table fermée doit normalement avoir produit au moins une facture.",
+            "title": f"{len(suspect_tables)} table(s) fermée(s) sans facture générée",
+            "detail": "Une table fermée devrait normalement avoir produit au moins une facture.",
             "amount": 0,
-            "actions": ["Vérifier si ces tables ont été des essais (consultations non facturées) ou des oublis"],
+            "actions": ["Vérifier si ces tables ont été des essais (consultations sans facturation) ou des oublis"],
             "items": [{"id": t.get("id"), "label": f"Table {t.get('number')}", "by": t.get("closed_by", "")} for t in suspect_tables[:50]],
         })
 
@@ -245,7 +242,6 @@ async def _check_direct_reversement_with_servers_present(start_iso, end_iso, fin
     }, {"_id": 0}).to_list(500)
     if not direct_revs:
         return
-    # On vérifie si des invoices créées le même jour ont des serveurs comme créateurs
     suspects = []
     for r in direct_revs:
         d = (r.get("date") or "")[:10]
@@ -257,7 +253,6 @@ async def _check_direct_reversement_with_servers_present(start_iso, end_iso, fin
             "validated_at": {"$gte": day_s, "$lt": day_e},
         }, {"_id": 0, "created_by": 1}).to_list(5000)
         creators = list({(i.get("created_by") or "").strip() for i in invoices if i.get("created_by")})
-        # Exclude obvious admin/manager creators
         users = await db.users.find({"full_name": {"$in": creators}}, {"_id": 0, "full_name": 1, "role": 1}).to_list(200)
         role_map = {u.get("full_name", ""): u.get("role") for u in users}
         servers = [c for c in creators if role_map.get(c) not in ("admin", "manager")]
@@ -266,14 +261,14 @@ async def _check_direct_reversement_with_servers_present(start_iso, end_iso, fin
     if suspects:
         total = sum(_amt(s, "amount") for s in suspects)
         findings.append({
-            "code": "J_DIRECT_REV_WITH_SERVERS",
+            "code": "REVERSEMENT_DIRECT_AVEC_SERVEURS",
             "severity": SEV_CRITICAL,
-            "title": f"{len(suspects)} reversement(s) direct(s) alors que des serveurs ont vendu",
-            "detail": f"Total : {total:.0f} F. La Resp. Op. a fait un reversement 'Sans serveur' alors qu'il y avait bien des serveurs actifs.",
+            "title": f"{len(suspects)} reversement(s) « direct(s) » alors que des serveurs ont vendu",
+            "detail": f"Total : {total:.0f} F. La Resp. Op. a fait un reversement « Sans serveur » alors qu'il y avait bien des serveurs actifs.",
             "amount": total,
             "actions": ["Examiner les serveurs ayant fait des ventes ce jour-là",
-                        "Demander pourquoi le reversement direct a été choisi"],
-            "items": [{"id": s.get("id"), "label": f"{s.get('category')} · {s.get('servers_found')} ignorés", "by": s.get("created_by")} for s in suspects[:50]],
+                        "Demander pourquoi le reversement direct a été choisi à la place"],
+            "items": [{"id": s.get("id"), "label": f"{s.get('category')} · serveur(s) ignoré(s) : {', '.join(s.get('servers_found') or [])}", "by": s.get("created_by")} for s in suspects[:50]],
         })
 
 
@@ -293,13 +288,13 @@ async def _check_day_closed_too_early(start_iso, end_iso, findings):
             pass
     if suspects:
         findings.append({
-            "code": "K_DAY_CLOSED_TOO_EARLY",
+            "code": "JOURNEE_FERMEE_TROP_TOT",
             "severity": SEV_WARNING,
             "title": f"{len(suspects)} fermeture(s) de journée avant 18h",
             "detail": "Une journée normale se ferme après le service du soir.",
             "amount": 0,
-            "actions": ["Vérifier si fermeture justifiée (jour férié, panne, etc.)"],
-            "items": [{"id": s.get("id"), "label": f"Fermée à {s.get('_local_hour')}h locale par {s.get('closed_by')}", "by": s.get("closed_by")} for s in suspects[:50]],
+            "actions": ["Vérifier si la fermeture anticipée est justifiée (jour férié, panne technique, etc.)"],
+            "items": [{"id": s.get("id"), "label": f"Fermée à {s.get('_local_hour')}h (heure locale) par {s.get('closed_by')}", "by": s.get("closed_by")} for s in suspects[:50]],
         })
 
 
@@ -308,18 +303,17 @@ async def _check_multiple_day_openings(start_iso, end_iso, findings):
     dates = _date_strs(start_iso[:10], (datetime.fromisoformat(end_iso.replace("Z","+00:00"))-timedelta(days=1)).strftime("%Y-%m-%d"))
     suspects = []
     for d in dates:
-        # Compter via day_openings (un doc par date normalement)
         openings = await db.day_openings.find({"date": d}, {"_id": 0}).to_list(50)
         closures = await db.day_closures.find({"date": d}, {"_id": 0}).to_list(50)
         if len(openings) > 1:
-            suspects.append({"date": d, "kind": "openings", "count": len(openings)})
+            suspects.append({"date": d, "kind": "ouvertures", "count": len(openings)})
         if len(closures) > 1:
-            suspects.append({"date": d, "kind": "closures", "count": len(closures)})
+            suspects.append({"date": d, "kind": "fermetures", "count": len(closures)})
     if suspects:
         findings.append({
-            "code": "L_MULTIPLE_OPEN_CLOSE",
+            "code": "OUVERTURES_FERMETURES_MULTIPLES",
             "severity": SEV_WARNING,
-            "title": "Ouvertures/fermetures multiples sur une même journée",
+            "title": "Plusieurs ouvertures / fermetures de journée sur une même date",
             "detail": f"{len(suspects)} occurrence(s) de double action.",
             "amount": 0,
             "actions": ["Demander la raison à la Resp. Op."],
@@ -374,9 +368,9 @@ async def run_audit(payload: AuditRequest):
             await check(start_iso, end_iso, findings)
         except Exception as e:
             findings.append({
-                "code": "X_CHECK_FAILED",
+                "code": "ERREUR_DE_CONTROLE",
                 "severity": SEV_INFO,
-                "title": f"Erreur lors de la vérification {check.__name__}",
+                "title": f"Erreur lors de la vérification ({check.__name__})",
                 "detail": str(e),
                 "amount": 0,
                 "actions": [],

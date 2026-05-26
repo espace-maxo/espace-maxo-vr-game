@@ -45,7 +45,8 @@ const Finding = ({ f }) => {
               <p className={`text-sm font-bold ${meta.color.split(" ").find((c) => c.startsWith("text-"))}`}>
                 {meta.dot} {f.title}
               </p>
-              <p className="text-slate-400 text-xs mt-0.5 truncate">{f.detail}</p>
+              <p className="text-slate-400 text-xs mt-0.5">{f.detail}</p>
+              <Badge className="bg-slate-800/60 text-slate-400 text-[9px] mt-1 font-mono">{(f.code || '').toLowerCase().replace(/_/g, ' ')}</Badge>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
