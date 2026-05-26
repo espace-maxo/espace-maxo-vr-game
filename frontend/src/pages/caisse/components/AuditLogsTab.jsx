@@ -26,6 +26,7 @@ import {
   ClipboardList, Search, RefreshCw, ShieldAlert, FilePen, Trash2, FileCheck2,
   CheckCircle2, XCircle, FilePlus2, Eye, User, Clock,
 } from "lucide-react";
+import AuditorPanel from "./AuditorPanel";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -156,6 +157,8 @@ const AuditLogsTab = ({ currentUser }) => {
 
   return (
     <div className="space-y-4" data-testid="audit-logs-tab">
+      {/* Auditeur intelligent — rapport d'incohérences sur une période */}
+      <AuditorPanel />
       {/* Header + KPIs */}
       <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/60 border-slate-700">
         <CardHeader className="pb-3">

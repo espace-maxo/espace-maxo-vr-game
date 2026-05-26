@@ -50,6 +50,7 @@ from routers.day_openings import router as day_openings_router, set_db as set_da
 from routers.journee_settings import router as journee_settings_router, set_db as set_journee_settings_db, verify_password as _verify_journee_pw, is_password_set as _is_journee_pw_set
 from routers.shopping_list import router as shopping_list_router, set_db as set_shopping_list_db
 from routers.receipt_scan import router as receipt_scan_router, set_db as set_receipt_scan_db
+from routers.audit_engine import router as audit_engine_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -161,6 +162,7 @@ api_router.include_router(day_openings_router)
 api_router.include_router(journee_settings_router)
 api_router.include_router(shopping_list_router)
 api_router.include_router(receipt_scan_router)
+api_router.include_router(audit_engine_router)
 
 # Configure logging
 logging.basicConfig(
