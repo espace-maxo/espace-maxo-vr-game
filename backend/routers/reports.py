@@ -68,11 +68,21 @@ def extract_revenue_groups(invoice: dict) -> dict:
 # ==================== ENDPOINTS ====================
 
 @router.get("/invoices/stats")
-async def get_invoice_stats(date: str = Query(None)):
-    """Get invoice statistics by date, respecting assigned_week transfers"""
+async def get_invoice_stats(date: str = Query(None), include_pending: bool = Query(False)):
+    """Get invoice statistics by date, respecting assigned_week transfers.
+
+    Par défaut (include_pending=False) : ne compte QUE les factures validées,
+    pour rester cohérent avec le Point de la Caisse.
+    Si include_pending=True : inclut les pending (vue brouillon).
+    """
     try:
+        # Filtre commun : pending exclues par défaut (cohérence avec Point de la Caisse)
+        status_filter = {} if include_pending else {
+            "validation_status": "validated"
+        }
         if date:
             invoices_by_date = await db.invoices.find({
+                **status_filter,
                 "created_at": {"$regex": f"^{date}"},
                 "$or": [
                     {"assigned_week": {"$exists": False}},
@@ -84,6 +94,7 @@ async def get_invoice_stats(date: str = Query(None)):
             d = datetime.fromisoformat(date)
             week_monday = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
             invoices_assigned = await db.invoices.find({
+                **status_filter,
                 "assigned_week": week_monday,
                 "created_at": {"$regex": f"^{date}"}
             }, {"_id": 0}).to_list(1000)
@@ -95,7 +106,7 @@ async def get_invoice_stats(date: str = Query(None)):
                     seen.add(inv.get("id"))
                     invoices.append(inv)
         else:
-            invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+            invoices = await db.invoices.find(status_filter, {"_id": 0}).to_list(1000)
 
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
         total_discounts = sum(inv.get("discount_amount", 0) for inv in invoices)
@@ -137,6 +148,7 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
         date_prefix = f"{year}-{month:02d}"
 
         invoices_native = await db.invoices.find({
+            "validation_status": "validated",
             "created_at": {"$regex": f"^{date_prefix}"},
             "$or": [
                 {"assigned_week": {"$exists": False}},
@@ -159,6 +171,7 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
         invoices_assigned = []
         if mondays:
             invoices_assigned = await db.invoices.find({
+                "validation_status": "validated",
                 "assigned_week": {"$in": mondays}
             }, {"_id": 0}).to_list(10000)
 
@@ -256,6 +269,7 @@ async def get_analytics_dashboard(year: int = Query(None), month: int = Query(No
         async def compute_month(y, m):
             date_prefix = f"{y}-{m:02d}"
             native = await db.invoices.find({
+                "validation_status": "validated",
                 "created_at": {"$regex": f"^{date_prefix}"},
                 "$or": [
                     {"assigned_week": {"$exists": False}},
@@ -275,6 +289,7 @@ async def get_analytics_dashboard(year: int = Query(None), month: int = Query(No
             assigned_in = []
             if mondays:
                 assigned_in = await db.invoices.find({
+                    "validation_status": "validated",
                     "assigned_week": {"$in": mondays}
                 }, {"_id": 0}).to_list(10000)
 

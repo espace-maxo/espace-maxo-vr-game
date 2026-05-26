@@ -60,6 +60,41 @@ def _amt(d: dict, *keys) -> float:
 
 # ───────────────────────── Checkers ─────────────────────────
 
+async def _check_stats_vs_point_caisse(start_iso, end_iso, findings):
+    """Écart entre 'Statistiques & Rapport' (toutes factures) et Point de la Caisse (validées).
+    Si présent : signale les factures pending qui gonflent les Statistiques mais ne sont pas
+    encaissées."""
+    all_invoices = await db.invoices.find({
+        "created_at": {"$gte": start_iso, "$lt": end_iso},
+        "validation_status": {"$nin": ["cancelled", "deleted"]},
+    }, {"_id": 0}).to_list(20000)
+    pending_invoices = [i for i in all_invoices if i.get("validation_status") == "pending"]
+    if not pending_invoices:
+        return
+    total_pending = sum(_amt(i, "total") for i in pending_invoices)
+    total_validated = sum(_amt(i, "total") for i in all_invoices if i.get("validation_status") == "validated")
+    if total_pending > 0:
+        findings.append({
+            "code": "ECART_STATS_POINT_CAISSE",
+            "severity": SEV_CRITICAL if total_pending > 5000 else SEV_WARNING,
+            "title": "Écart entre Statistiques & Rapport et Point de la Caisse",
+            "detail": (
+                f"Statistiques (toutes factures non annulées) : {total_validated + total_pending:.0f} F · "
+                f"Point de la Caisse (factures validées seulement) : {total_validated:.0f} F · "
+                f"Écart : {total_pending:.0f} F dû à {len(pending_invoices)} facture(s) en attente"
+            ),
+            "amount": total_pending,
+            "actions": [
+                "Aller dans BONS pour valider ou annuler chaque facture en attente",
+                "Les factures pending sont les bons jamais transformés en facture client (pas d'impression)",
+            ],
+            "items": [
+                {"id": p.get("id"), "label": f"Table {p.get('table_number','?')} · {_amt(p,'total'):.0f} F · créée le {(p.get('created_at') or '')[:10]}", "by": p.get("created_by")}
+                for p in pending_invoices[:50]
+            ],
+        })
+
+
 async def _check_invoice_billettage_diff(start_iso, end_iso, findings):
     """a) Écart entre total des factures validées et total billettage signé (cash_closures)."""
     invoices = await db.invoices.find({
@@ -352,6 +387,7 @@ async def run_audit(payload: AuditRequest):
     # Exécute toutes les vérifications (séquentiel mais rapide car les collections
     # sont petites et indexées).
     checks = [
+        _check_stats_vs_point_caisse,
         _check_invoice_billettage_diff,
         _check_invoice_vs_reversements,
         _check_pending_invoices,
