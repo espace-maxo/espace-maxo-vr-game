@@ -84,12 +84,27 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Bandeau visuel violet "MODE REVERSEMENT DIRECT (SANS SERVEUR)" affiché dans la page
   - Endpoint `/reports/revenue-by-payment` retourne maintenant `servers_with_sales`
   - Le check exclut les rôles admin/manager — compte les ventes faites par les serveurs uniquement
+- **AUDITEUR INTELLIGENT (26/05/2026)**
+  - Backend `/api/audit/run` qui scrute les incohérences de la journée (factures pending, écarts de caisse, clôtures anticipées)
+  - Frontend `AuditorPanel.jsx` (Admin only) avec checks traduits en français
+- **STATISTIQUES — Fix critique (26/05/2026)**
+  - Les statistiques excluaient à tort les factures `pending`; correction du CA dans `/reports/*` pour ne compter que `validated`
+- **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
+  - Backend `/api/journal/ohada?start_date=&end_date=&account=&search=` : transforme factures, achats, reversements, avances gérante, fonds propres, ouvertures de journée en écritures à double entrée (D/C)
+  - Mapping comptes OHADA : 571 Caisse · 521 Banques · 467 Compte courant (Gérante/FP) · 70x Ventes · 60x Achats · 61x Services · 658 Divers · 581 Virement de fonds
+  - Frontend `OhadaJournal.jsx` intégré en 3ème sous-onglet "Plan OHADA" du menu Journal (Admin only)
+  - Vue Brouillard (5 colonnes : Date / Libellé / Compte D / Compte C / Montant) + Vue 2 colonnes (Débit / Crédit côte à côte)
+  - Filtres : période (presets Aujourd'hui/Hier/7j/Mois) + numéro de compte + recherche libre
+  - KPI : Total Débit, Total Crédit, Nombre d'écritures, Équilibre (✓ OK)
+  - Soldes par compte affichés (D, C, Solde)
+  - **Export Excel (CSV UTF-8 BOM)** et **Export PDF (impression navigateur)** opérationnels
+  - Itération 85 : 13/13 tests backend ✓ · UI 100% vérifiée
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
 - **P2** : Export PDF/Excel du Compte courant (relevé bancaire)
 - **P3** : Intégration Resend pour mot de passe oublié
-- **P4** : Refactoring continu `CaissePage.jsx` / `StockPage.jsx`
+- **P4** : Refactoring continu `CaissePage.jsx` (>8000 lignes) / `StockPage.jsx`
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Architecture
