@@ -15,9 +15,10 @@ import {
   Wallet, TrendingUp, TrendingDown, AlertTriangle, BookOpen, CalendarRange,
   RefreshCw, ArrowDownCircle, ArrowUpCircle, ChefHat, Receipt, Users, Package,
   Send, Bot, Trash2, Sparkles, Plus, Loader2, Link as LinkIcon, Search, X,
-  CheckCircle2,
+  CheckCircle2, BookText,
 } from "lucide-react";
 import ForecastsTab from "./ForecastsTab";
+import OhadaJournal from "./OhadaJournal";
 import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -419,9 +420,19 @@ const JournalTab = () => {
         >
           <CalendarRange className="w-4 h-4 mr-1" /> Prévisionnel
         </Button>
+        <Button
+          variant={view === "ohada" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("ohada")}
+          className={view === "ohada" ? "bg-cyan-600 hover:bg-cyan-700 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
+          data-testid="journal-view-ohada"
+        >
+          <BookText className="w-4 h-4 mr-1" /> Plan OHADA
+        </Button>
       </div>
 
       {view === "forecast" && <ForecastsTab />}
+      {view === "ohada" && <OhadaJournal />}
 
       {view === "real" && (
         <>
