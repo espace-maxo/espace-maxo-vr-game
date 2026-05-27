@@ -51,6 +51,7 @@ from routers.journee_settings import router as journee_settings_router, set_db a
 from routers.shopping_list import router as shopping_list_router, set_db as set_shopping_list_db
 from routers.receipt_scan import router as receipt_scan_router, set_db as set_receipt_scan_db
 from routers.audit_engine import router as audit_engine_router
+from routers.journal_ohada import router as journal_ohada_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -163,6 +164,7 @@ api_router.include_router(journee_settings_router)
 api_router.include_router(shopping_list_router)
 api_router.include_router(receipt_scan_router)
 api_router.include_router(audit_engine_router)
+api_router.include_router(journal_ohada_router)
 
 # Configure logging
 logging.basicConfig(
