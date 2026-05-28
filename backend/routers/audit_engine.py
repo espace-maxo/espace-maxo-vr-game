@@ -167,57 +167,194 @@ async def _check_pending_invoices(start_iso, end_iso, findings):
 
 
 async def _check_cancellations_deletions(start_iso, end_iso, findings):
-    """d) Annulations/suppressions de factures ou bons effectuées par la Gérante."""
+    """d) Toutes les annulations/suppressions de factures et bons sur la période.
+    Affiche le détail complet de chaque facture concernée."""
     logs = await db.audit_logs.find({
         "created_at": {"$gte": start_iso, "$lt": end_iso},
         "action": {"$in": ["cancel", "delete"]},
-    }, {"_id": 0}).to_list(2000)
+    }, {"_id": 0}).sort("created_at", -1).to_list(2000)
     if not logs:
         return
-    gerante_logs = [l for l in logs if (l.get("author_role") == "manager") or ("gérante" in (l.get("author") or "").lower())]
-    if gerante_logs:
-        total = sum(_amt(l.get("entity_snapshot") or {}, "total") for l in gerante_logs)
-        action_label = {"cancel": "Annulation", "delete": "Suppression"}
-        findings.append({
-            "code": "ANNULATIONS_PAR_GERANTE",
-            "severity": SEV_CRITICAL,
-            "title": f"{len(gerante_logs)} annulation(s) ou suppression(s) par la Resp. Op.",
-            "detail": f"Total des factures / bons concernés : {total:.0f} F",
-            "amount": total,
-            "actions": ["Examiner chaque action dans le journal d'audit pour vérifier la justification",
-                        "Si suspect, vérifier avec la Resp. Op. les raisons précises"],
-            "items": [{"id": l.get("entity_id"), "label": f"{action_label.get(l.get('action'), l.get('action'))} · {l.get('author')}", "by": l.get("author")} for l in gerante_logs[:50]],
+    action_label = {"cancel": "Annulation", "delete": "Suppression"}
+    total = sum(_amt(l.get("snapshot") or {}, "total") for l in logs)
+    details = []
+    for l in logs:
+        snap = l.get("snapshot") or {}
+        items = snap.get("items") or []
+        items_summary = [
+            {
+                "name": it.get("name") or it.get("product_name") or "?",
+                "quantity": it.get("quantity") or 1,
+                "price": _amt(it, "price"),
+                "total": _amt(it, "price") * float(it.get("quantity") or 1),
+                "department": it.get("department") or it.get("category") or "",
+            }
+            for it in items[:50]
+        ]
+        details.append({
+            "id": l.get("entity_id"),
+            "entity_type": l.get("entity_type"),
+            "action": l.get("action"),
+            "action_label": action_label.get(l.get("action"), l.get("action")),
+            "actor_name": l.get("actor_name") or "—",
+            "actor_role": l.get("actor_role") or "—",
+            "action_at": l.get("created_at"),
+            "action_at_fmt": format_when(l.get("created_at")),
+            "invoice_number": snap.get("invoice_number") or l.get("invoice_number"),
+            "table_number": snap.get("table_number") or l.get("table_number"),
+            "server_name": snap.get("server_name"),
+            "client_name": snap.get("client_name"),
+            "payment_method": snap.get("payment_method") or "—",
+            "validation_status": snap.get("validation_status"),
+            "subtotal": snap.get("subtotal"),
+            "discount": snap.get("discount"),
+            "discount_amount": snap.get("discount_amount"),
+            "total": snap.get("total"),
+            "items_count": snap.get("items_count") or len(items),
+            "items": items_summary,
+            "totals_by_department": snap.get("totals_by_department"),
+            "created_at": snap.get("created_at"),
+            "validated_at": snap.get("validated_at"),
         })
+    # Compute role split (informational)
+    by_role = {}
+    for d in details:
+        role = d.get("actor_role") or "—"
+        by_role[role] = by_role.get(role, 0) + 1
+    findings.append({
+        "code": "FACTURES_SUPPRIMEES_OU_ANNULEES",
+        "severity": SEV_CRITICAL,
+        "title": f"{len(details)} facture(s) / bon(s) supprimé(s) ou annulé(s)",
+        "detail": (
+            f"Total cumulé : {total:.0f} F · "
+            + " · ".join(f"{r}: {n}" for r, n in by_role.items())
+        ),
+        "amount": total,
+        "actions": [
+            "Examinez chaque ligne ci-dessous pour vérifier la justification",
+            "Si une suppression vous paraît anormale, contactez l'auteur",
+        ],
+        # Backward-compat: keep `items` simple list for older UI
+        "items": [
+            {
+                "id": d["id"],
+                "label": (
+                    f"{d['action_label']} · "
+                    f"{('Facture ' + (d['invoice_number'] or d['id'] or '?')[:10]) if d['entity_type'] == 'invoice' else 'Bon Table ' + str(d['table_number'] or '?')}"
+                    f" · {_amt(d, 'total'):.0f} F · {d['action_at_fmt']}"
+                ),
+                "by": d["actor_name"],
+            }
+            for d in details[:50]
+        ],
+        # NEW: full details for rich UI rendering
+        "details": details[:200],
+    })
 
 
 async def _check_price_changes_validated(start_iso, end_iso, findings):
-    """e) Modifications de prix sur factures DÉJÀ VALIDÉES."""
+    """e) Modifications d'articles ou de prix sur les factures (avant ou après validation).
+    Affiche le détail complet : auteur, date, items, total avant/après, mode de paiement."""
     logs = await db.audit_logs.find({
         "created_at": {"$gte": start_iso, "$lt": end_iso},
         "action": "update",
         "entity_type": "invoice",
-    }, {"_id": 0}).to_list(5000)
+    }, {"_id": 0}).sort("created_at", -1).to_list(5000)
     suspects = []
     for l in logs:
         diff = (l.get("changes") or {})
-        snap = (l.get("entity_snapshot") or {})
-        if snap.get("validation_status") == "validated" and ("total" in diff or "items" in diff or "subtotal" in diff):
+        # On capte toute modification touchant les items / total / subtotal / discount
+        if any(k in diff for k in ("total", "items", "subtotal", "discount", "discount_amount")):
             suspects.append(l)
-    if suspects:
-        findings.append({
-            "code": "PRIX_MODIFIE_FACTURE_VALIDEE",
-            "severity": SEV_CRITICAL,
-            "title": f"{len(suspects)} modification(s) de prix sur des factures DÉJÀ validées",
-            "detail": "Une fois validée, une facture ne devrait plus changer de montant ou d'articles.",
-            "amount": 0,
-            "actions": ["Identifier l'auteur et le motif de la modification",
-                        "Vérifier s'il s'agit d'une fraude potentielle"],
-            "items": [{"id": l.get("entity_id"), "label": f"{l.get('author')} · {format_when(l.get('created_at'))}", "by": l.get("author")} for l in suspects[:50]],
+    if not suspects:
+        return
+    details = []
+    for l in suspects:
+        snap = l.get("snapshot") or {}
+        diff = l.get("changes") or {}
+        items = snap.get("items") or []
+        items_summary = [
+            {
+                "name": it.get("name") or it.get("product_name") or "?",
+                "quantity": it.get("quantity") or 1,
+                "price": _amt(it, "price"),
+                "total": _amt(it, "price") * float(it.get("quantity") or 1),
+                "department": it.get("department") or it.get("category") or "",
+            }
+            for it in items[:50]
+        ]
+        # Total change (before/after)
+        total_change = diff.get("total") if isinstance(diff.get("total"), dict) else None
+        items_change = diff.get("items") if isinstance(diff.get("items"), dict) else None
+        details.append({
+            "id": l.get("entity_id"),
+            "entity_type": l.get("entity_type"),
+            "action": "update",
+            "action_label": "Modification",
+            "actor_name": l.get("actor_name") or "—",
+            "actor_role": l.get("actor_role") or "—",
+            "action_at": l.get("created_at"),
+            "action_at_fmt": format_when(l.get("created_at")),
+            "invoice_number": snap.get("invoice_number") or l.get("invoice_number"),
+            "table_number": snap.get("table_number") or l.get("table_number"),
+            "server_name": snap.get("server_name"),
+            "client_name": snap.get("client_name"),
+            "payment_method": snap.get("payment_method") or "—",
+            "validation_status": snap.get("validation_status"),
+            "validation_status_when_modified": snap.get("validation_status"),
+            "was_validated": snap.get("validation_status") == "validated",
+            "subtotal": snap.get("subtotal"),
+            "discount": snap.get("discount"),
+            "discount_amount": snap.get("discount_amount"),
+            "total": snap.get("total"),
+            "items_count": snap.get("items_count") or len(items),
+            "items": items_summary,
+            "totals_by_department": snap.get("totals_by_department"),
+            "created_at": snap.get("created_at"),
+            "validated_at": snap.get("validated_at"),
+            "changes": diff,
+            "total_before": (total_change or {}).get("from"),
+            "total_after": (total_change or {}).get("to"),
+            "items_before": (items_change or {}).get("from"),
+            "items_after": (items_change or {}).get("to"),
         })
+    n_validated = sum(1 for d in details if d["was_validated"])
+    severity = SEV_CRITICAL if n_validated > 0 else SEV_WARNING
+    findings.append({
+        "code": "FACTURES_MODIFIEES",
+        "severity": severity,
+        "title": (
+            f"{len(details)} facture(s) modifiée(s)"
+            + (f" — dont {n_validated} DÉJÀ validée(s) ⚠️" if n_validated else "")
+        ),
+        "detail": (
+            "Modifications d'articles, de prix, de remise ou de total détectées. "
+            + ("Des factures déjà validées ont été altérées : à vérifier en priorité." if n_validated else
+               "Toutes les modifications concernent des factures non encore validées.")
+        ),
+        "amount": 0,
+        "actions": [
+            "Examinez chaque modification : avant / après, articles ajoutés ou retirés",
+            "Si la facture était déjà validée, identifier l'auteur et le motif",
+        ],
+        "items": [
+            {
+                "id": d["id"],
+                "label": (
+                    f"{d['action_label']} · Facture {('#' + d['invoice_number']) if d.get('invoice_number') else (d['id'] or '?')[:10]}"
+                    f" · {_amt(d, 'total'):.0f} F · {d['action_at_fmt']}"
+                    + (" · ⚠️ déjà validée" if d["was_validated"] else "")
+                ),
+                "by": d["actor_name"],
+            }
+            for d in details[:50]
+        ],
+        "details": details[:200],
+    })
 
 
 async def _check_articles_added_after_validation(start_iso, end_iso, findings):
-    """f) Articles ajoutés/retirés d'une commande après validation."""
+    """f) Articles ajoutés/retirés d'une commande après envoi en cuisine."""
     logs = await db.audit_logs.find({
         "created_at": {"$gte": start_iso, "$lt": end_iso},
         "action": "update",
@@ -226,7 +363,7 @@ async def _check_articles_added_after_validation(start_iso, end_iso, findings):
     suspects = []
     for l in logs:
         diff = (l.get("changes") or {})
-        snap = (l.get("entity_snapshot") or {})
+        snap = (l.get("snapshot") or {})
         if snap.get("status") in ("validated", "sent", "completed") and "items" in diff:
             suspects.append(l)
     if suspects:
@@ -237,7 +374,7 @@ async def _check_articles_added_after_validation(start_iso, end_iso, findings):
             "detail": "Des articles ont été ajoutés ou retirés alors que la commande avait déjà été envoyée.",
             "amount": 0,
             "actions": ["Vérifier si ces modifications sont justifiées (oubli, retour client, etc.)"],
-            "items": [{"id": l.get("entity_id"), "label": f"{l.get('author')}", "by": l.get("author")} for l in suspects[:50]],
+            "items": [{"id": l.get("entity_id"), "label": f"{l.get('actor_name') or '—'} · {format_when(l.get('created_at'))}", "by": l.get("actor_name")} for l in suspects[:50]],
         })
 
 

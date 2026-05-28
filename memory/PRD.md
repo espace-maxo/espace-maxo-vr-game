@@ -99,6 +99,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Soldes par compte affichés (D, C, Solde)
   - **Export Excel (CSV UTF-8 BOM)** et **Export PDF (impression navigateur)** opérationnels
   - Itération 85 : 13/13 tests backend ✓ · UI 100% vérifiée
+- **AUDITEUR — Détails complets des factures supprimées/modifiées (27/05/2026)** ✅
+  - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
+  - `audit_engine.py` : 2 contrôles enrichis
+    - `FACTURES_SUPPRIMEES_OU_ANNULEES` (anciennement filtré aux gérantes) — affiche TOUTES les annulations/suppressions sans filtre, avec auteur et rôle
+    - `FACTURES_MODIFIEES` (anciennement uniquement validées) — capte toute modification d'items/prix/total/discount; sévérité critique si la facture était déjà validée
+  - Frontend `AuditorPanel.jsx` : nouveau composant `FactureCard` expansible avec n° facture, table, serveur, client, mode de paiement, dates, articles détaillés (qté/PU/total/département), ventilation par département, before/after du total si modifié
+  - Fix bug field-name : `actor_role`/`snapshot` (au lieu de `author_role`/`entity_snapshot` qui n'existaient pas)
 
 ## Backlog (Priorisé)
 - **P1** : Alertes de péremption produits (dashboard Stock)
