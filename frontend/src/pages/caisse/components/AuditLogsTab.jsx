@@ -437,27 +437,108 @@ const AuditLogsTab = ({ currentUser }) => {
                 )}
               </div>
 
-              {/* Snapshot */}
+              {/* Résumé monétaire */}
               {selected.snapshot && (
-                <div className="rounded border border-slate-700 p-3">
-                  <div className="text-xs text-slate-400 mb-2">État de la facture/bon</div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {Object.entries(selected.snapshot).map(([k, v]) => (
-                      v !== null && v !== undefined ? (
-                        <div key={k} className="flex justify-between border-b border-slate-800 pb-1">
-                          <span className="text-slate-400">{FIELD_LABELS[k] || k}</span>
-                          <span className="text-slate-200">{formatVal(v)}</span>
-                        </div>
-                      ) : null
-                    ))}
-                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {selected.snapshot.total != null && (
+                    <div className="rounded bg-amber-900/30 border border-amber-500/40 px-3 py-2">
+                      <div className="text-[10px] uppercase text-amber-300">Total</div>
+                      <div className="font-bold text-amber-200">{fmt(selected.snapshot.total)} F</div>
+                    </div>
+                  )}
+                  {selected.snapshot.subtotal != null && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Sous-total</div>
+                      <div className="font-mono text-slate-200">{fmt(selected.snapshot.subtotal)} F</div>
+                    </div>
+                  )}
+                  {selected.snapshot.discount_amount != null && selected.snapshot.discount_amount > 0 && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Remise</div>
+                      <div className="font-mono text-slate-200">- {fmt(selected.snapshot.discount_amount)} F ({selected.snapshot.discount || 0}%)</div>
+                    </div>
+                  )}
+                  {selected.snapshot.payment_method && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Mode paiement</div>
+                      <div className="text-slate-200">{selected.snapshot.payment_method}</div>
+                    </div>
+                  )}
+                  {selected.snapshot.validation_status && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Statut</div>
+                      <div className={selected.snapshot.validation_status === "validated" ? "font-bold text-rose-300" : "text-slate-200"}>
+                        {selected.snapshot.validation_status}
+                        {selected.snapshot.validation_status === "validated" && " ⚠️"}
+                      </div>
+                    </div>
+                  )}
+                  {selected.snapshot.client_name && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Client</div>
+                      <div className="text-slate-200 truncate">{selected.snapshot.client_name}</div>
+                    </div>
+                  )}
+                  {selected.snapshot.server_name && (
+                    <div className="rounded bg-slate-800 px-3 py-2">
+                      <div className="text-[10px] uppercase text-slate-400">Serveur</div>
+                      <div className="text-slate-200 truncate">{selected.snapshot.server_name}</div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Detailed diff */}
+              {/* Articles détaillés (nouvelles suppressions uniquement) */}
+              {Array.isArray(selected.snapshot?.items) && selected.snapshot.items.length > 0 ? (
+                <div className="rounded border border-slate-700 p-3" data-testid="audit-items-detail">
+                  <div className="text-xs text-amber-300 mb-2 font-bold flex items-center gap-1">
+                    <FilePen className="w-3.5 h-3.5" /> Articles ({selected.snapshot.items.length})
+                  </div>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {selected.snapshot.items.map((it, i) => {
+                      const qty = Number(it.quantity || 1);
+                      const price = Number(it.price || 0);
+                      const lineTotal = qty * price;
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-slate-800 last:border-0">
+                          <span className="text-slate-200 flex-1 truncate">{it.name || it.product_name || "?"}</span>
+                          {(it.department || it.category) && (
+                            <Badge className="bg-slate-700 text-slate-300 text-[9px] border-0">
+                              {it.department || it.category}
+                            </Badge>
+                          )}
+                          <span className="text-slate-400 font-mono">x{qty}</span>
+                          <span className="text-slate-400 font-mono">@{fmt(price)}</span>
+                          <span className="text-amber-200 font-mono font-bold w-20 text-right">{fmt(lineTotal)} F</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selected.snapshot.totals_by_department && Object.keys(selected.snapshot.totals_by_department).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-800 flex flex-wrap gap-1.5">
+                      {Object.entries(selected.snapshot.totals_by_department).map(([dept, val]) => (
+                        <Badge key={dept} className="bg-cyan-500/15 text-cyan-200 border border-cyan-500/30 text-[10px]">
+                          {dept}: {fmt(val)} F
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : selected.snapshot?.items_count > 0 && (
+                <div className="rounded border border-slate-700 bg-slate-800/40 p-3 text-xs text-slate-400" data-testid="audit-items-legacy">
+                  <p className="text-amber-300 font-medium mb-1">⚠️ Articles non disponibles</p>
+                  <p>
+                    Cette suppression a été enregistrée avant l'activation de la traçabilité détaillée des articles
+                    (mise en place le 27/05/2026). Seul le résumé est conservé : <strong className="text-slate-200">{selected.snapshot.items_count} ligne(s)</strong> pour un total de <strong className="text-amber-200">{fmt(selected.snapshot.total || 0)} F</strong>.
+                  </p>
+                  <p className="mt-1 text-slate-500">Les prochaines suppressions afficheront le détail complet de chaque article.</p>
+                </div>
+              )}
+
+              {/* Detailed diff (modifications) */}
               {selected.changes && Object.keys(selected.changes).length > 0 && (
                 <div className="rounded border border-slate-700 p-3">
-                  <div className="text-xs text-slate-400 mb-2">Changements détaillés</div>
+                  <div className="text-xs text-amber-300 mb-2 font-bold">Modifications appliquées</div>
                   <div className="space-y-1.5">
                     {Object.entries(selected.changes).map(([field, val]) => (
                       <div key={field} className="text-xs flex flex-wrap gap-1 items-center">
