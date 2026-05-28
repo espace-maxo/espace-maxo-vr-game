@@ -157,16 +157,20 @@ const StatsTab = ({
             <div className="space-y-1.5 sm:space-y-2 max-h-[420px] sm:max-h-[480px] overflow-y-auto">
               {Object.entries(monthlyStats.daily_stats || {}).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => {
                 const g = data.by_revenue_group || {};
+                const isToday = date === format(new Date(), "yyyy-MM-dd");
                 return (
-                <div key={date} className="bg-slate-700/30 rounded-lg p-2.5 sm:p-3">
+                <div key={date} className={`rounded-lg p-2.5 sm:p-3 ${isToday ? "bg-emerald-900/30 border border-emerald-500/40 ring-1 ring-emerald-500/30" : "bg-slate-700/30"}`} data-testid={isToday ? "stats-daily-today" : `stats-daily-${date}`}>
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="text-white font-medium text-sm sm:text-base truncate">
+                      <p className={`font-medium text-sm sm:text-base truncate flex items-center gap-1.5 ${isToday ? "text-emerald-200" : "text-white"}`}>
                         {format(new Date(date), "EEE d MMM", { locale: fr })}
+                        {isToday && (
+                          <span className="text-[9px] uppercase font-bold bg-emerald-500 text-slate-900 px-1.5 py-0.5 rounded">Aujourd'hui</span>
+                        )}
                       </p>
-                      <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}</p>
+                      <p className="text-slate-400 text-xs">{data.count} bon{data.count > 1 ? 's' : ''}{isToday && data.count === 0 ? " · aucune facture validée pour l'instant" : ""}</p>
                     </div>
-                    <p className="text-amber-500 font-bold text-sm sm:text-lg ml-2 whitespace-nowrap">
+                    <p className={`font-bold text-sm sm:text-lg ml-2 whitespace-nowrap ${isToday ? "text-emerald-300" : "text-amber-500"}`}>
                       {formatPrice(data.revenue)} F
                     </p>
                   </div>

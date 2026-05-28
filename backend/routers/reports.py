@@ -203,6 +203,16 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
             for k in daily_stats[day]["by_revenue_group"]:
                 daily_stats[day]["by_revenue_group"][k] += g[k]
 
+        # Si on consulte le mois en cours, on garantit la présence d'une ligne
+        # "aujourd'hui" même sans facture validée (utile pour visualiser une journée
+        # en cours en temps réel).
+        today_str = now.strftime("%Y-%m-%d")
+        if year == now.year and month == now.month and today_str not in daily_stats:
+            daily_stats[today_str] = {
+                "revenue": 0, "count": 0,
+                "by_revenue_group": {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0},
+            }
+
         total_revenue = sum(inv.get("total", 0) for inv in invoices)
 
         by_department = {"salle_jardin": 0, "accompagnements": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
