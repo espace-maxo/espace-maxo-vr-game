@@ -55,6 +55,7 @@ import BonsTab from "./caisse/components/BonsTab";
 import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
+import OfflineIndicator from "../components/OfflineIndicator";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
@@ -4807,11 +4808,8 @@ _Gérante - Espace Maxo_
                 <h1 className="text-base sm:text-xl font-bold text-amber-500 truncate">CAISSE PRO</h1>
                 <p className="text-slate-400 text-[10px] sm:text-xs truncate hidden xs:block">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
               </div>
-              {/* Real-time sync indicator */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span className="text-green-400 text-xs font-medium">Sync auto</span>
-              </div>
+              {/* Real-time sync + offline indicator (Phase 1) */}
+              <OfflineIndicator />
             </div>
             
             <div className="flex items-center gap-4">
