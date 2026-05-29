@@ -56,6 +56,7 @@ import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
 import OfflineIndicator from "../components/OfflineIndicator";
+import { trySync } from "../lib/offlineSync";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
@@ -576,7 +577,8 @@ const CaissePage = () => {
   const createNewTable = async (tableNumber) => {
     if (!currentUser) return;
     try {
-      const response = await axios.post(`${API}/caisse/tables`, {
+      const payload = {
+        id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `t_${Date.now()}`,
         table_number: tableNumber,
         server_id: currentUser.id || currentUser.username,
         server_name: currentUser.full_name || currentUser.username,
@@ -585,12 +587,25 @@ const CaissePage = () => {
         payment_method: "cash",
         discount: 0,
         notes: ""
+      };
+      const r = await trySync({
+        type: "create_table",
+        payload,
+        user: { name: currentUser.full_name || currentUser.username, role: currentUser.role },
       });
-      
-      if (response.data.success) {
+      if (r.queued) {
+        toast.warning(`Table ${tableNumber} créée hors-ligne — sera synchronisée au retour de la connexion`);
+        // Optimistic UI: add table locally
+        const localTable = { ...payload, _offline_pending: true, created_at: new Date().toISOString() };
+        await fetchOpenTables();
+        selectTable(localTable);
+        setShowNewTableModal(false);
+        return;
+      }
+      if (r.data?.success) {
         toast.success(`Table ${tableNumber} ouverte !`);
         await fetchOpenTables();
-        selectTable(response.data.table);
+        selectTable(r.data.table);
         setShowNewTableModal(false);
       }
     } catch (error) {
@@ -3612,14 +3627,30 @@ _Gérante - Espace Maxo_
 
   const createInvoice = async (invoiceData) => {
     try {
-      const response = await axios.post(`${API}/invoices?${actorQs()}`, invoiceData);
+      const enriched = {
+        ...invoiceData,
+        id: invoiceData.id || ((typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `inv_${Date.now()}`),
+      };
+      const r = await trySync({
+        type: "create_invoice",
+        payload: enriched,
+        user: { name: currentUser?.full_name || currentUser?.username, role: currentUser?.role },
+      });
+      if (r.queued) {
+        toast.warning("Facture créée hors-ligne — sera synchronisée au retour de la connexion", { duration: 5000 });
+        // Skip side-effects requiring server (client stats, table mutation)
+        return;
+      }
+      const response = { data: r.data };
       
       // Update client stats if selected
       if (selectedClient) {
-        await axios.put(`${API}/caisse/clients/${selectedClient.id}`, {
-          total_spent: (selectedClient.total_spent || 0) + invoiceData.total,
-          visit_count: (selectedClient.visit_count || 0) + 1
-        });
+        try {
+          await axios.put(`${API}/caisse/clients/${selectedClient.id}`, {
+            total_spent: (selectedClient.total_spent || 0) + invoiceData.total,
+            visit_count: (selectedClient.visit_count || 0) + 1
+          });
+        } catch {}
       }
       
       toast.success("✓ Bon enregistré · en attente de validation par la gérante", {

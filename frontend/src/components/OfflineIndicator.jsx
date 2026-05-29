@@ -20,9 +20,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import useOnlineStatus from "../hooks/useOnlineStatus";
 import { getSnapshot, saveSnapshot, getMeta, listQueue } from "../lib/offlineCache";
+import { processQueue, subscribe } from "../lib/offlineSync";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 min
+
+const LABEL_MAP = {
+  create_table:   "Nouvelle table",
+  update_table:   "MAJ table",
+  delete_table:   "Fermer table",
+  create_invoice: "Nouvelle facture",
+};
 
 const fmtAgo = (iso) => {
   if (!iso) return "jamais";
@@ -38,12 +46,16 @@ const OfflineIndicator = () => {
   const [meta, setMeta] = useState({ lastSnapshotAt: null, queueSize: 0 });
   const [snapInfo, setSnapInfo] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [wasOnline, setWasOnline] = useState(online);
+  const [queueDetail, setQueueDetail] = useState([]);
 
   const refreshMeta = useCallback(async () => {
     try {
       const m = await getMeta();
       setMeta(m);
+      const q = await listQueue();
+      setQueueDetail(q);
       const snap = await getSnapshot();
       if (snap) {
         setSnapInfo({
@@ -59,6 +71,31 @@ const OfflineIndicator = () => {
       // IndexedDB not available — silent fail
     }
   }, []);
+
+  // S'abonner aux changements de queue
+  useEffect(() => {
+    const unsub = subscribe(() => refreshMeta());
+    return unsub;
+  }, [refreshMeta]);
+
+  const doSync = useCallback(async () => {
+    if (!online) return;
+    setSyncing(true);
+    try {
+      const r = await processQueue();
+      if (r.processed > 0) {
+        const parts = [];
+        if (r.ok > 0) parts.push(`${r.ok} succès`);
+        if (r.duplicate > 0) parts.push(`${r.duplicate} déjà sync.`);
+        if (r.conflict > 0) parts.push(`${r.conflict} en conflit (Admin gagne)`);
+        if (r.error > 0) parts.push(`${r.error} échec(s)`);
+        toast.success(`Sync : ${parts.join(" · ")}`);
+      }
+      await refreshMeta();
+    } finally {
+      setSyncing(false);
+    }
+  }, [online, refreshMeta]);
 
   const doSnapshot = useCallback(async (silent = false) => {
     if (!online) return;
@@ -88,17 +125,18 @@ const OfflineIndicator = () => {
     return () => clearInterval(id);
   }, [online, doSnapshot]);
 
-  // Toast on connection change
+  // Toast on connection change + auto-sync queue
   useEffect(() => {
     if (online === wasOnline) return;
     if (online) {
       toast.success("Connexion rétablie — synchronisation en cours…", { duration: 4000 });
       doSnapshot(true);
+      doSync();
     } else {
       toast.warning("Mode hors-ligne activé — vos actions seront synchronisées au retour", { duration: 5000 });
     }
     setWasOnline(online);
-  }, [online, wasOnline, doSnapshot]);
+  }, [online, wasOnline, doSnapshot, doSync]);
 
   // Refresh queue indicator every 10s
   useEffect(() => {
@@ -179,7 +217,40 @@ const OfflineIndicator = () => {
               <ListTodo className="w-3.5 h-3.5" /> File d'attente
             </p>
             {queue > 0 ? (
-              <p className="text-amber-300">{queue} action{queue > 1 ? "s" : ""} en attente de synchronisation</p>
+              <>
+                <p className="text-amber-300 mb-1.5">
+                  {queue} action{queue > 1 ? "s" : ""} en attente de synchronisation
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                  {queueDetail.slice(0, 6).map((q) => (
+                    <div key={q.id} className="bg-slate-900/60 rounded px-1.5 py-1 text-[10px]" data-testid={`queue-item-${q.id}`}>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-slate-300 truncate">{LABEL_MAP[q.type] || q.type}</span>
+                        <span className="text-slate-500 shrink-0">{q.queued_at ? fmtAgo(q.queued_at) : ""}</span>
+                      </div>
+                      {q.payload?.table_number !== undefined && (
+                        <span className="text-cyan-300">Table {q.payload.table_number}</span>
+                      )}
+                      {q.payload?.total !== undefined && (
+                        <span className="text-amber-300 ml-2">{Math.round(q.payload.total)} F</span>
+                      )}
+                    </div>
+                  ))}
+                  {queueDetail.length > 6 && (
+                    <p className="text-slate-500 italic text-[10px]">+ {queueDetail.length - 6} autres…</p>
+                  )}
+                </div>
+                <Button
+                  onClick={doSync}
+                  disabled={!online || syncing}
+                  size="sm"
+                  className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 h-7 text-[11px]"
+                  data-testid="offline-process-queue"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${syncing ? "animate-spin" : ""}`} />
+                  Synchroniser la file ({queue})
+                </Button>
+              </>
             ) : (
               <p className="text-emerald-300 flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Tout est synchronisé
