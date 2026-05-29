@@ -865,15 +865,20 @@ const CaissePage = () => {
     }
   };
 
+  const initialTabSet = useRef(false);
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllData();
       fetchOpenTables();
-      
-      // Set default tab based on role
-      if (currentUser?.role === 'manager' || currentUser?.role === 'admin') {
-        setActiveTab("commande"); // Manager & Admin start on Commande tab
+
+      // Set default tab ONLY on initial auth, not on every filterDate change
+      if (!initialTabSet.current && (currentUser?.role === 'manager' || currentUser?.role === 'admin')) {
+        setActiveTab("commande");
+        initialTabSet.current = true;
       }
+    } else {
+      // Reset so the default tab applies again after re-login
+      initialTabSet.current = false;
     }
   }, [filterDate, isAuthenticated]);
 

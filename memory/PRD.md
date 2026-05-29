@@ -108,14 +108,19 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - `reports.py`: `daily_stats` inclut la date du jour même sans facture validée (consultation mois en cours)
   - Frontend `StatsTab.jsx` : badge vert "AUJOURD'HUI" + fond émeraude + message "aucune facture validée pour l'instant"
 - **MODE HORS-LIGNE — Phase 1 + Phase 2 (29/05/2026)** ✅
-  - Backend : `sync_snapshot.py` (snapshot complet catalogue) + `sync_queue.py` (batch idempotent avec stratégie Admin-gagne)
-  - Endpoints : `GET /api/sync/ping`, `GET /api/sync/snapshot`, `POST /api/sync/queue/process`, `GET /api/sync/queue/status`
-  - Frontend : IndexedDB (`offlineCache.js`), `useOnlineStatus` (ping HTTP 15s), `offlineSync.js` (trySync + processQueue), `OfflineIndicator.jsx` (badge + popover détaillé)
-  - Wiring : `createNewTable` et `createInvoice` dans CaissePage.jsx utilisent `trySync` (fallback queue si offline)
-  - Auto-sync au retour de connexion + snapshot auto toutes les 5 min
-  - Idempotency par `client_id` (UUID v4) — actions stockées dans `sync_queue_processed`
-  - Marqueurs `_offline_origin: true` et `_offline_client_id` sur les docs créés via queue
-  - Itération 86 : 12/12 tests backend ✓ · UI 100% vérifiée
+  - Backend : sync_snapshot.py + sync_queue.py (idempotent, Admin-gagne)
+  - Frontend : OfflineIndicator + IndexedDB + auto-sync au retour
+  - Itération 86 : 12/12 backend ✓
+- **RÉGULARISATION DE BONS À DATE PASSÉE (29/05/2026)** ✅
+  - Backend `regularization.py` : POST /create-invoice (Admin + Resp. Op.), PATCH /update-invoice-date/{id} (Admin only), GET /list
+  - Plage max 7 jours en arrière, motif obligatoire, validation post-clôture explicite si journée fermée
+  - Marqueurs : is_regularized, regularization_target_date, regularization_ca_date (admin choisit l'imputation CA), regularization_reason, regularized_by/role, regularization_post_closure, suffix `-R` dans invoice_number
+  - Audit `_check_regularizations` : alerte si > 3 régul/jour cible
+  - Reports `daily_stats` utilise `regularization_ca_date` pour l'imputation CA
+  - Frontend `RegularizationModal.jsx` : sélecteur date, items, imputation CA, motif, confirmation post-clôture
+  - Badge "Régularisée" dans la liste de factures + bouton CalendarClock (Admin only) pour modifier la date
+  - Fix bug existant : `setActiveTab('commande')` qui ré-tirait à chaque changement de `filterDate` → maintenant `useRef` pour ne le faire qu'au premier login
+  - Itération 87 : 14/14 backend ✓, 11/11 frontend ✓ (après fix)
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
