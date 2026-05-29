@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { CalendarClock, AlertTriangle, Plus, Trash2, Check, Lock } from "lucide-react";
+import { CalendarClock, AlertTriangle, Plus, Minus, Trash2, Check, Lock, Search } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const MAX_BACKDATE_DAYS = 7;
@@ -52,6 +52,8 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
   const [customerName, setCustomerName] = useState("");
   const [tableNumber, setTableNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
 
   // Reset when re-opening
   useEffect(() => {
@@ -63,6 +65,8 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
     }
     setReason("");
     setConfirmPostClosure(false);
+    setProductSearch("");
+    setActiveCategory("all");
     if (!isUpdateMode) {
       setItems([]);
       setPaymentMethod("cash");
@@ -104,6 +108,32 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
     });
     return m;
   }, [items]);
+
+  // Catalogue : catégories et liste filtrée
+  const categories = useMemo(() => {
+    const set = new Set();
+    (products || []).forEach((p) => {
+      const c = p.category || p.department || "Autres";
+      if (c) set.add(c);
+    });
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "fr"))];
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    let arr = products || [];
+    if (activeCategory !== "all") {
+      arr = arr.filter((p) => (p.category || p.department || "Autres") === activeCategory);
+    }
+    const q = productSearch.trim().toLowerCase();
+    if (q) {
+      arr = arr.filter((p) =>
+        (p.name || "").toLowerCase().includes(q)
+        || (p.category || "").toLowerCase().includes(q)
+        || (p.department || "").toLowerCase().includes(q)
+      );
+    }
+    return arr;
+  }, [products, activeCategory, productSearch]);
 
   // Block update-date if current user is not admin (after all hooks)
   if (isUpdateMode && !isAdmin) {
@@ -173,7 +203,7 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="max-w-2xl bg-slate-900 border-slate-700 text-white max-h-[90vh] overflow-y-auto"
+        className="max-w-3xl bg-slate-900 border-slate-700 text-white max-h-[92vh] overflow-y-auto"
         data-testid="regularization-modal"
       >
         <DialogHeader>
@@ -231,44 +261,108 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
           {!isUpdateMode && (
             <div className="space-y-2">
               <Label className="text-xs text-slate-400">Articles du bon</Label>
-              {items.length === 0 && (
-                <p className="text-xs text-slate-500 italic">Cliquez sur un produit ci-dessous pour l'ajouter.</p>
+
+              {/* Items sélectionnés */}
+              {items.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">Aucun article. Cliquez sur un produit ci-dessous pour l'ajouter.</p>
+              ) : (
+                <div className="space-y-1 max-h-32 overflow-y-auto" data-testid="regul-selected-items">
+                  {items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-slate-800/60 rounded px-2 py-1 text-xs">
+                      <span className="flex-1 truncate text-slate-200">{it.name}</span>
+                      <Badge className="bg-slate-700 text-slate-300 text-[9px]">{it.department || it.category || "autres"}</Badge>
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-6 w-6 text-slate-300 hover:bg-slate-700"
+                        onClick={() => updateQty(i, Math.max(1, it.quantity - 1))}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={it.quantity}
+                        onChange={(e) => updateQty(i, e.target.value)}
+                        className="w-14 h-7 text-xs bg-slate-700 border-slate-600 text-white"
+                      />
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-6 w-6 text-slate-300 hover:bg-slate-700"
+                        onClick={() => updateQty(i, it.quantity + 1)}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                      <span className="text-amber-300 font-mono w-24 text-right">{fmtPrice(it.price * it.quantity)} F</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(i)}>
+                        <Trash2 className="w-3 h-3 text-rose-400" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {items.map((it, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-slate-800/50 rounded px-2 py-1 text-xs">
-                    <span className="flex-1 truncate text-slate-200">{it.name}</span>
-                    <Badge className="bg-slate-700 text-slate-300 text-[9px]">{it.department || "autres"}</Badge>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={it.quantity}
-                      onChange={(e) => updateQty(i, e.target.value)}
-                      className="w-14 h-7 text-xs bg-slate-700 border-slate-600 text-white"
-                    />
-                    <span className="text-amber-300 font-mono w-24 text-right">{fmtPrice(it.price * it.quantity)} F</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeItem(i)}>
-                      <Trash2 className="w-3 h-3 text-rose-400" />
+
+              {/* Sélecteur produits enrichi */}
+              <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-2 space-y-2">
+                {/* Search bar */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-slate-500" />
+                  <Input
+                    placeholder="Rechercher un produit…"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="pl-7 h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                    data-testid="regul-product-search"
+                  />
+                </div>
+
+                {/* Tabs catégories */}
+                <div className="flex flex-wrap gap-1">
+                  {categories.map((c) => (
+                    <Button
+                      key={c}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActiveCategory(c)}
+                      className={`h-6 text-[10px] px-2 ${
+                        activeCategory === c
+                          ? "bg-amber-500/30 text-amber-200 border border-amber-500/40"
+                          : "bg-slate-700/40 text-slate-300 hover:bg-slate-700/70"
+                      }`}
+                      data-testid={`regul-cat-${c}`}
+                    >
+                      {c === "all" ? "Tous" : c}
                     </Button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {/* Liste filtrée */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto p-1">
+                  {filteredProducts.length === 0 && (
+                    <p className="col-span-full text-center text-[10px] text-slate-500 italic py-2">
+                      Aucun produit trouvé pour cette recherche.
+                    </p>
+                  )}
+                  {filteredProducts.map((p) => (
+                    <Button
+                      key={p.id}
+                      type="button"
+                      variant="ghost"
+                      onClick={() => addItem(p)}
+                      className="h-auto py-1.5 px-2 bg-slate-900/70 hover:bg-cyan-700/40 text-slate-200 flex flex-col items-start justify-start text-left"
+                      data-testid={`regul-product-${p.id}`}
+                    >
+                      <span className="text-[11px] font-medium leading-tight truncate w-full">{p.name}</span>
+                      <span className="text-[10px] text-amber-300 font-mono mt-0.5">{fmtPrice(p.price)} F</span>
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-slate-500 text-right">
+                  {filteredProducts.length} produit{filteredProducts.length > 1 ? "s" : ""}
+                  {productSearch && ` correspondant à « ${productSearch} »`}
+                </p>
               </div>
-              {/* Quick add (top 20 products) */}
-              <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto p-1 bg-slate-800/30 rounded border border-slate-700/50">
-                {(products || []).slice(0, 40).map((p) => (
-                  <Button
-                    key={p.id}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => addItem(p)}
-                    className="h-7 text-[10px] bg-slate-700/40 hover:bg-cyan-700/50 text-slate-200 px-2"
-                  >
-                    <Plus className="w-2.5 h-2.5 mr-1" />
-                    {p.name} <span className="ml-1 text-amber-300">{fmtPrice(p.price)}</span>
-                  </Button>
-                ))}
-              </div>
+
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <Label className="text-xs text-slate-400 mb-1 block">Mode de paiement</Label>
@@ -305,7 +399,7 @@ const RegularizationModal = ({ open, onClose, mode, currentUser, existingInvoice
               </div>
               <div className="text-right text-sm">
                 <span className="text-slate-400">Total : </span>
-                <span className="text-amber-300 font-bold">{fmtPrice(subtotal)} F</span>
+                <span className="text-amber-300 font-bold text-base" data-testid="regul-total">{fmtPrice(subtotal)} F</span>
               </div>
             </div>
           )}
