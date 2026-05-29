@@ -54,6 +54,7 @@ from routers.audit_engine import router as audit_engine_router
 from routers.journal_ohada import router as journal_ohada_router
 from routers.sync_snapshot import router as sync_snapshot_router
 from routers.sync_queue import router as sync_queue_router
+from routers.regularization import router as regularization_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -169,6 +170,7 @@ api_router.include_router(audit_engine_router)
 api_router.include_router(journal_ohada_router)
 api_router.include_router(sync_snapshot_router)
 api_router.include_router(sync_queue_router)
+api_router.include_router(regularization_router)
 
 # Configure logging
 logging.basicConfig(

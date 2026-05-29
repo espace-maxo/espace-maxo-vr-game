@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
 import OfflineIndicator from "../components/OfflineIndicator";
 import { trySync } from "../lib/offlineSync";
+import RegularizationModal from "../components/RegularizationModal";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
@@ -261,6 +262,10 @@ const CaissePage = () => {
   // Multi-table system
   const [openTables, setOpenTables] = useState([]); // All open tables from DB
   const [activeTableId, setActiveTableId] = useState(null); // Currently active table ID
+  // ── Régularisation rétroactive (Admin + Resp. Op.) ──
+  const [showRegularizationModal, setShowRegularizationModal] = useState(false);
+  const [regularizationMode, setRegularizationMode] = useState("create"); // "create" | "update-date"
+  const [regularizationTargetInvoice, setRegularizationTargetInvoice] = useState(null);
   const [showNewTableModal, setShowNewTableModal] = useState(false);
   const [availableTableNumbers, setAvailableTableNumbers] = useState([]);
   
@@ -5392,6 +5397,23 @@ _Gérante - Espace Maxo_
 
           <TabsContent value="invoices">
             <div className="space-y-4">
+              {/* Régularisation rétroactive (Admin + Resp. Op.) */}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+                <div className="flex items-center justify-end">
+                  <Button
+                    onClick={() => {
+                      setRegularizationMode("create");
+                      setRegularizationTargetInvoice(null);
+                      setShowRegularizationModal(true);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm"
+                    data-testid="open-regularization-create"
+                  >
+                    <CalendarClock className="w-4 h-4 mr-1" />
+                    Régulariser un bon (date passée)
+                  </Button>
+                </div>
+              )}
               {/* Admin: EN ATTENTE section */}
               {currentUser?.role === 'admin' && (invoices.filter(i => i.validation_status === 'pending').length > 0 || expenses.filter(e => e.status === 'pending' || e.status === 'revision_requested').length > 0) && (
                 <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-amber-500/40">
@@ -5511,6 +5533,16 @@ _Gérante - Espace Maxo_
                               ) : (
                                 <Badge className="bg-yellow-500/20 text-yellow-400">⏳ En attente</Badge>
                               )}
+                              {invoice.is_regularized && (
+                                <Badge
+                                  className="bg-amber-500/30 text-amber-300 border border-amber-500/50"
+                                  data-testid={`regul-badge-${invoice.id}`}
+                                  title={`Régularisée — ${invoice.regularization_target_date || ''}\nMotif: ${invoice.regularization_reason || ''}`}
+                                >
+                                  <CalendarClock className="w-3 h-3 mr-1 inline" />
+                                  Régularisée
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-slate-400 text-sm">
                               {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
@@ -5562,6 +5594,22 @@ _Gérante - Espace Maxo_
                             {invoice.validation_status !== 'validated' && currentUser?.role === 'admin' && (
                               <Button variant="ghost" size="sm" onClick={() => validateInvoice(invoice.id)} className="text-green-400 hover:text-green-300" title="Valider">
                                 <CheckCircle className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {currentUser?.role === 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setRegularizationMode("update-date");
+                                  setRegularizationTargetInvoice(invoice);
+                                  setShowRegularizationModal(true);
+                                }}
+                                className="text-amber-300 hover:text-amber-200"
+                                title="Modifier la date du bon (régularisation)"
+                                data-testid={`open-regul-update-${invoice.id}`}
+                              >
+                                <CalendarClock className="w-4 h-4" />
                               </Button>
                             )}
                             {currentUser?.role === 'admin' && (
@@ -8530,6 +8578,17 @@ _Gérante - Espace Maxo_
 
       {/* Share Modal with QR Code */}
       <ShareModal open={showShareModal} onOpenChange={setShowShareModal} />
+
+      {/* Régularisation rétroactive de bons */}
+      <RegularizationModal
+        open={showRegularizationModal}
+        onClose={() => setShowRegularizationModal(false)}
+        mode={regularizationMode}
+        currentUser={currentUser}
+        existingInvoice={regularizationTargetInvoice}
+        products={products}
+        onSuccess={() => { fetchAllData?.(); }}
+      />
     </div>
   );
 };

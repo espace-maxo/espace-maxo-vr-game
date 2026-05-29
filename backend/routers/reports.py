@@ -191,7 +191,9 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
 
         daily_stats = {}
         for inv in invoices:
-            day = inv.get("created_at", "")[:10]
+            # Pour les bons régularisés, utiliser regularization_ca_date si présent
+            # (l'admin a choisi sur quelle date imputer le CA)
+            day = inv.get("regularization_ca_date") or inv.get("created_at", "")[:10]
             if day not in daily_stats:
                 daily_stats[day] = {
                     "revenue": 0, "count": 0,

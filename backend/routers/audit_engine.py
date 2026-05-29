@@ -470,6 +470,74 @@ async def _check_day_closed_too_early(start_iso, end_iso, findings):
         })
 
 
+async def _check_regularizations(start_iso, end_iso, findings):
+    """m) Bons régularisés sur la période — alerte si > 3 par jour cible."""
+    regs = await db.invoices.find({
+        "is_regularized": True,
+        "regularized_at": {"$gte": start_iso, "$lt": end_iso},
+    }, {"_id": 0}).to_list(2000)
+    if not regs:
+        return
+    # Group par regularization_target_date pour détecter excès
+    by_day = {}
+    for r in regs:
+        d = r.get("regularization_target_date") or (r.get("created_at") or "")[:10]
+        by_day.setdefault(d, []).append(r)
+    suspect_days = {d: items for d, items in by_day.items() if len(items) > 3}
+    total_amount = sum(_amt(r, "total") for r in regs)
+    severity = SEV_CRITICAL if suspect_days else SEV_WARNING
+    details = [
+        {
+            "id": r.get("id"),
+            "entity_type": "invoice",
+            "action": "regularize",
+            "action_label": "Régularisation",
+            "actor_name": r.get("regularized_by") or "—",
+            "actor_role": r.get("regularized_by_role") or "—",
+            "action_at": r.get("regularized_at"),
+            "action_at_fmt": format_when(r.get("regularized_at")),
+            "invoice_number": r.get("invoice_number"),
+            "table_number": r.get("table_number"),
+            "regularization_target_date": r.get("regularization_target_date"),
+            "regularization_ca_date": r.get("regularization_ca_date"),
+            "regularization_reason": r.get("regularization_reason"),
+            "regularization_post_closure": r.get("regularization_post_closure"),
+            "payment_method": r.get("payment_method"),
+            "validation_status": r.get("validation_status"),
+            "total": r.get("total"),
+            "subtotal": r.get("subtotal"),
+            "items": (r.get("items") or [])[:50],
+            "items_count": len(r.get("items") or []),
+            "totals_by_department": r.get("totals_by_department"),
+        }
+        for r in regs
+    ]
+    msg_parts = [f"{len(regs)} régularisation(s) · Total {total_amount:.0f} F"]
+    if suspect_days:
+        days_str = ", ".join(f"{d} ({len(it)})" for d, it in suspect_days.items())
+        msg_parts.append(f"⚠️ Jours avec > 3 régularisations : {days_str}")
+    findings.append({
+        "code": "REGULARISATIONS",
+        "severity": severity,
+        "title": f"{len(regs)} bon(s) régularisé(s) sur la période",
+        "detail": " · ".join(msg_parts),
+        "amount": total_amount,
+        "actions": [
+            "Vérifier que chaque régularisation correspond à une vente réelle (preuve/justificatif)",
+            "Si un jour donné a plus de 3 régularisations, demander des précisions",
+        ],
+        "items": [
+            {"id": d["id"], "label": (
+                f"{d['action_label']} · Facture {d.get('invoice_number','?')} · "
+                f"date cible {d.get('regularization_target_date','?')} · "
+                f"{_amt(d,'total'):.0f} F"
+            ), "by": d["actor_name"]}
+            for d in details[:50]
+        ],
+        "details": details[:200],
+    })
+
+
 async def _check_multiple_day_openings(start_iso, end_iso, findings):
     """l) Plusieurs ouvertures/fermetures de journée le même jour."""
     dates = _date_strs(start_iso[:10], (datetime.fromisoformat(end_iso.replace("Z","+00:00"))-timedelta(days=1)).strftime("%Y-%m-%d"))
@@ -535,6 +603,7 @@ async def run_audit(payload: AuditRequest):
         _check_direct_reversement_with_servers_present,
         _check_day_closed_too_early,
         _check_multiple_day_openings,
+        _check_regularizations,
     ]
     for check in checks:
         try:
