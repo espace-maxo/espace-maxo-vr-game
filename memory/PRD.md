@@ -101,6 +101,23 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Itération 85 : 13/13 tests backend ✓ · UI 100% vérifiée
 - **AUDITEUR — Détails complets des factures supprimées/modifiées (27/05/2026)** ✅
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
+  - `audit_engine.py` : 2 contrôles enrichis (FACTURES_SUPPRIMEES_OU_ANNULEES, FACTURES_MODIFIEES) avec `details[]`
+  - Frontend `AuditorPanel.jsx` : composant `FactureCard` expansible avec détails complets
+  - Modal "Détails" enrichi dans `AuditLogsTab.jsx` : sections monétaires + articles + message explicite si snapshot legacy
+- **STATISTIQUES — Date du jour toujours affichée (28/05/2026)** ✅
+  - `reports.py`: `daily_stats` inclut la date du jour même sans facture validée (consultation mois en cours)
+  - Frontend `StatsTab.jsx` : badge vert "AUJOURD'HUI" + fond émeraude + message "aucune facture validée pour l'instant"
+- **MODE HORS-LIGNE — Phase 1 + Phase 2 (29/05/2026)** ✅
+  - Backend : `sync_snapshot.py` (snapshot complet catalogue) + `sync_queue.py` (batch idempotent avec stratégie Admin-gagne)
+  - Endpoints : `GET /api/sync/ping`, `GET /api/sync/snapshot`, `POST /api/sync/queue/process`, `GET /api/sync/queue/status`
+  - Frontend : IndexedDB (`offlineCache.js`), `useOnlineStatus` (ping HTTP 15s), `offlineSync.js` (trySync + processQueue), `OfflineIndicator.jsx` (badge + popover détaillé)
+  - Wiring : `createNewTable` et `createInvoice` dans CaissePage.jsx utilisent `trySync` (fallback queue si offline)
+  - Auto-sync au retour de connexion + snapshot auto toutes les 5 min
+  - Idempotency par `client_id` (UUID v4) — actions stockées dans `sync_queue_processed`
+  - Marqueurs `_offline_origin: true` et `_offline_client_id` sur les docs créés via queue
+  - Itération 86 : 12/12 tests backend ✓ · UI 100% vérifiée
+- **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
+  - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
     - `FACTURES_SUPPRIMEES_OU_ANNULEES` (anciennement filtré aux gérantes) — affiche TOUTES les annulations/suppressions sans filtre, avec auteur et rôle
     - `FACTURES_MODIFIEES` (anciennement uniquement validées) — capte toute modification d'items/prix/total/discount; sévérité critique si la facture était déjà validée
@@ -108,6 +125,7 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Fix bug field-name : `actor_role`/`snapshot` (au lieu de `author_role`/`entity_snapshot` qui n'existaient pas)
 
 ## Backlog (Priorisé)
+- **P0-OFFLINE Phase 3** : Validation factures + reversements + résolution conflits + n° factures pré-alloués par blocs de 50
 - **P1** : Alertes de péremption produits (dashboard Stock)
 - **P2** : Export PDF/Excel du Compte courant (relevé bancaire)
 - **P3** : Intégration Resend pour mot de passe oublié
