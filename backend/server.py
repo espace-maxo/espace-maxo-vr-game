@@ -57,6 +57,7 @@ from routers.sync_queue import router as sync_queue_router
 from routers.regularization import router as regularization_router
 from routers.recoupement import router as recoupement_router
 from routers.cuisine import router as cuisine_router
+from routers.jeux import router as jeux_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -175,6 +176,7 @@ api_router.include_router(sync_queue_router)
 api_router.include_router(regularization_router)
 api_router.include_router(recoupement_router)
 api_router.include_router(cuisine_router)
+api_router.include_router(jeux_router)
 
 # Configure logging
 logging.basicConfig(

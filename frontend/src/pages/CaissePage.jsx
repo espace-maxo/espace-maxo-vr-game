@@ -60,7 +60,9 @@ import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
 import RecoupementPanel from "./caisse/components/RecoupementPanel";
 import KitchenTrackerModal from "./caisse/components/KitchenTrackerModal";
+import JeuxBonsModal from "./caisse/components/JeuxBonsModal";
 import CuisinePage from "./CuisinePage";
+import CoachJeuxPage from "./CoachJeuxPage";
 import useReadyNotifications from "../hooks/useReadyNotifications";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
@@ -387,6 +389,11 @@ const CaissePage = () => {
   const [kitchenUnreadCount, setKitchenUnreadCount] = useState(0);
   const [kitchenPendingCount, setKitchenPendingCount] = useState(0);
   const kitchenLastIdsRef = useRef(new Set());
+
+  // ============== JEUX BONS MODAL (Resp. Op./Admin) ==============
+  const [showJeuxBonsModal, setShowJeuxBonsModal] = useState(false);
+  const [jeuxPendingCount, setJeuxPendingCount] = useState(0);
+  const jeuxLastIdsRef = useRef(new Set());
   
   // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
   const [unreadNotesCount, setUnreadNotesCount] = useState(0);
@@ -1155,6 +1162,36 @@ const CaissePage = () => {
     const id = setInterval(tick, 7000);
     return () => { cancelled = true; clearInterval(id); };
   }, [isAuthenticated, currentUser?.role, showKitchenTracker]);
+
+  // ============== JEUX BONS — Background polling (badge + bip) ==============
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!(currentUser?.role === 'manager' || currentUser?.role === 'admin')) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await axios.get(`${API}/jeux/bons`, {
+          params: { actor_role: currentUser.role, status: 'pending', limit: 100 },
+          timeout: 8000,
+        });
+        if (cancelled) return;
+        const list = r.data?.bons || [];
+        setJeuxPendingCount(list.length);
+        const currIds = new Set(list.map((b) => b.id));
+        const incoming = [...currIds].filter((id) => !jeuxLastIdsRef.current.has(id));
+        if (jeuxLastIdsRef.current.size > 0 && incoming.length > 0 && !showJeuxBonsModal) {
+          try {
+            import('../lib/notificationBeep').then((m) => m.playBeep({ freq: 1100, duration: 0.18, volume: 0.7, count: 2, gap: 0.08 }));
+          } catch {}
+          toast.info(`Nouveau bon de jeu reçu (${incoming.length})`);
+        }
+        jeuxLastIdsRef.current = currIds;
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isAuthenticated, currentUser?.role, showJeuxBonsModal]);
 
   // ============== SERVER DAILY REPORT FUNCTIONS ==============
   
@@ -4886,6 +4923,10 @@ _Gérante - Espace Maxo_
   if (currentUser?.role === "cuisinier") {
     return <CuisinePage currentUser={currentUser} onLogout={() => { setIsAuthenticated(false); setCurrentUser(null); }} />;
   }
+  // Profile coach_jeux → page dédiée
+  if (currentUser?.role === "coach_jeux") {
+    return <CoachJeuxPage currentUser={currentUser} onLogout={() => { setIsAuthenticated(false); setCurrentUser(null); }} />;
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
@@ -5086,6 +5127,24 @@ _Gérante - Espace Maxo_
                   {kitchenUnreadCount === 0 && kitchenPendingCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold">
                       {kitchenPendingCount}
+                    </span>
+                  )}
+                </Button>
+              )}
+
+              {/* JEUX BONS — Resp. Op. & Admin only */}
+              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowJeuxBonsModal(true)}
+                  className="text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 relative"
+                  title="Bons Jeux du Coach"
+                  data-testid="open-jeux-bons-btn"
+                >
+                  <Gamepad2 className="w-5 h-5" />
+                  {jeuxPendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold animate-pulse">
+                      {jeuxPendingCount}
                     </span>
                   )}
                 </Button>
@@ -8692,6 +8751,16 @@ _Gérante - Espace Maxo_
           open={showKitchenTracker}
           onOpenChange={setShowKitchenTracker}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* Jeux Bons Modal — Resp. Op. & Admin */}
+      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+        <JeuxBonsModal
+          open={showJeuxBonsModal}
+          onOpenChange={setShowJeuxBonsModal}
+          currentUser={currentUser}
+          openTables={openTables}
         />
       )}
 
