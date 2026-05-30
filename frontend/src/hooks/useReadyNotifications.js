@@ -7,25 +7,15 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { beepPlateReady } from "../lib/notificationBeep";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_MS = 10000;
 const SINCE_SEC = 30;
 
-// Beep aigu pour différencier d'autres toasts
-const READY_SOUND = "data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAAB/f39/f39/fw==";
-
 export default function useReadyNotifications(currentUser) {
   const [unread, setUnread] = useState(0);
   const seenRef = useRef(new Set());
-  const audioRef = useRef(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(READY_SOUND);
-    }
-  }, []);
 
   useEffect(() => {
     const role = currentUser?.role;
@@ -61,7 +51,7 @@ export default function useReadyNotifications(currentUser) {
         }
         if (newCount > 0) {
           setUnread((u) => u + newCount);
-          try { audioRef.current?.play().catch(() => {}); } catch {}
+          try { beepPlateReady(); } catch {}
         }
       } catch {
         // silent

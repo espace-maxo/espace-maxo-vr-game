@@ -2,8 +2,8 @@
  * DayClosureGuard - Bloque l'accès à "Faire le point" tant que la journée n'est pas fermée.
  *
  * Workflow :
- *  - Affiche la liste des serveurs avec le statut de leur "Point Serveur"
- *  - Quand TOUS les serveurs ont fait leur point → bouton "Fermer la journée" actif
+ *  - Affiche la liste des agents avec le statut de leur "Point Agent"
+ *  - Quand TOUS les agents ont fait leur point → bouton "Fermer la journée" actif
  *  - Une fois fermée : la Gérante voit le statut "Verrouillée" + accès à Faire le point
  *  - Seul l'Admin peut "Rouvrir la journée"
  */
@@ -185,16 +185,16 @@ export default function DayClosureGuard({ currentUser, children }) {
             Journée du <strong className="text-white">{format(new Date(date), "EEEE d MMMM yyyy", { locale: fr })}</strong> — non fermée
           </p>
 
-          {/* Statut des points serveurs */}
+          {/* Statut des points agents */}
           <div className="bg-slate-900/50 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <p className="text-slate-300 text-sm font-semibold">Points des serveurs</p>
+              <p className="text-slate-300 text-sm font-semibold">Points des agents</p>
               <Badge className={serverStatus.all_validated ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}>
                 {serverStatus.validated_count}/{serverStatus.total_servers} validés
               </Badge>
             </div>
             {serverStatus.servers.length === 0 ? (
-              <p className="text-slate-500 text-xs italic">Aucun serveur actif</p>
+              <p className="text-slate-500 text-xs italic">Aucun agent actif</p>
             ) : (
               <div className="space-y-1.5">
                 {serverStatus.servers.map((s) => {
@@ -242,7 +242,7 @@ export default function DayClosureGuard({ currentUser, children }) {
               {!serverStatus.all_validated && (
                 <div className="bg-amber-500/10 border border-amber-500/40 rounded p-2 text-amber-200 text-xs flex items-center gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  La fermeture sera bloquée tant que tous les serveurs n'auront pas validé leur point.
+                  La fermeture sera bloquée tant que tous les agents n'auront pas validé leur point.
                 </div>
               )}
               <div className="flex gap-2 flex-wrap">
@@ -251,14 +251,14 @@ export default function DayClosureGuard({ currentUser, children }) {
                   disabled={busy || !serverStatus.all_validated}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="close-day-btn"
-                  title={!serverStatus.all_validated ? "Tous les serveurs doivent avoir fait leur point" : ""}
+                  title={!serverStatus.all_validated ? "Tous les agents doivent avoir fait leur point" : ""}
                 >
                   <Lock className="w-4 h-4 mr-1" /> Fermer la journée
                 </Button>
                 {isAdmin && !serverStatus.all_validated && (
                   <Button
                     onClick={() => {
-                      if (window.confirm("Forcer la fermeture sans attendre tous les serveurs ?")) {
+                      if (window.confirm("Forcer la fermeture sans attendre tous les agents ?")) {
                         closeDayHandler(true);
                       }
                     }}

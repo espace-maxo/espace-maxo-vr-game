@@ -18,7 +18,7 @@ import { fr } from "date-fns/locale";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
-const POSITIONS = ["Serveur", "Cuisinier", "Caissier", "Plongeur", "Sécurité", "Ménage", "Manager", "Autre"];
+const POSITIONS = ["Agent", "Cuisinier", "Caissier", "Plongeur", "Sécurité", "Ménage", "Manager", "Autre"];
 const MAX_PER_MONTH = 10000;
 const DISCOUNT_RATE = 0.5; // 50%
 

@@ -1433,7 +1433,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                     <p className="text-slate-400 text-xs font-medium mt-3 mb-1.5">🎯 Autres services / animations (statut <span className="text-emerald-400 font-semibold">Fourni</span> par défaut)</p>
                     <div className="flex flex-wrap gap-1">
                       {[
-                        "Serveurs", "Cuisinier", "DJ / Animation",
+                        "Agents", "Cuisinier", "DJ / Animation",
                         "Décoration florale", "Photographe",
                         "Table de billard", "Trampoline", "Château gonflable",
                         "Animation enfants", "Sécurité",

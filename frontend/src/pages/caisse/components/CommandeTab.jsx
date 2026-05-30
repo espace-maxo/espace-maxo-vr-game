@@ -835,7 +835,7 @@ const CommandeTab = ({ ctx }) => {
                               {invoice.customer_name} • <span className="text-amber-400 font-semibold">{formatPrice(invoice.total)} F</span>
                             </p>
                             <p className="text-slate-500 text-xs">
-                              Serveur: {invoice.created_by} • Validé par: {invoice.validated_by}
+                              Agent: {invoice.created_by} • Validé par: {invoice.validated_by}
                             </p>
                           </div>
                           <Button 

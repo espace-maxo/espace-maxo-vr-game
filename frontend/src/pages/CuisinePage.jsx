@@ -22,12 +22,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChefHat, CheckCircle2, Clock, Bell, Camera, Upload, Loader2,
-  RefreshCw, LogOut, Hash, Volume2, VolumeX,
+  RefreshCw, LogOut, Hash, Volume2, VolumeX, History,
 } from "lucide-react";
+import { beepNewOrder } from "../lib/notificationBeep";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_INTERVAL = 5000;
-const NEW_ORDER_SOUND = "data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAAB/f39/f39/fw=="; // tiny click
+const NEW_ORDER_SOUND = null; // remplacé par beepNewOrder() (Web Audio API)
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -40,13 +41,97 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   r.readAsDataURL(file);
 });
 
+const ACTION_META = {
+  item_ready: { label: "Plat prêt", color: "bg-emerald-500/20 text-emerald-300" },
+  all_ready:  { label: "Bon entier prêt", color: "bg-emerald-600/30 text-emerald-200" },
+  scan_bon:   { label: "Scan bon", color: "bg-cyan-500/20 text-cyan-300" },
+};
+
+const CuisineHistoryView = ({ actorName }) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/cuisine/events`, {
+        params: { actor_role: "cuisinier", actor_name: actorName, limit: 200 },
+        timeout: 15000,
+      });
+      setItems(r.data.items || []);
+    } catch {
+      toast.error("Erreur chargement historique");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [actorName]);
+
+  return (
+    <Card className="bg-slate-800/60 border-purple-500/40" data-testid="cuisine-history-view">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <History className="w-5 h-5 text-purple-400" />
+            Mon historique d'aujourd'hui
+          </span>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="text-slate-300 h-7 text-[11px]">
+            {loading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+            Actualiser
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-xs">
+        {items.length === 0 && !loading && (
+          <p className="text-slate-500 italic text-center py-6">
+            Aucune action enregistrée pour l'instant.
+          </p>
+        )}
+        {items.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-700">
+                  <th className="text-left py-1.5 pr-2">Heure</th>
+                  <th className="text-left py-1.5 px-1">Action</th>
+                  <th className="text-left py-1.5 px-1">Table</th>
+                  <th className="text-left py-1.5 px-1">Détail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((ev) => {
+                  const meta = ACTION_META[ev.action] || { label: ev.action, color: "bg-slate-700 text-slate-300" };
+                  return (
+                    <tr key={ev.id} className="border-b border-slate-800">
+                      <td className="py-1.5 pr-2 text-slate-300 font-mono text-[10px]">
+                        {ev.created_at ? format(new Date(ev.created_at), "HH:mm:ss") : ""}
+                      </td>
+                      <td className="px-1"><Badge className={meta.color}>{meta.label}</Badge></td>
+                      <td className="px-1 text-slate-200">{ev.table_number != null ? `T${ev.table_number}` : "—"}</td>
+                      <td className="px-1 text-slate-300">
+                        {ev.action === "item_ready" && <span>{ev.item_name} x{ev.item_quantity || 1}</span>}
+                        {ev.action === "all_ready" && <span className="text-slate-400">{ev.items_count} plat(s)</span>}
+                        {ev.action === "scan_bon" && <span className="text-slate-400">{ev.items_count} plat(s) extrait(s)</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 const CuisinePage = ({ currentUser, onLogout }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("orders");
   const [soundOn, setSoundOn] = useState(true);
   const lastIdsRef = useRef(new Set());
-  const audioRef = useRef(null);
 
   // ── Fetch loop ──
   const fetchOrders = useCallback(async (silent = true) => {
@@ -61,7 +146,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
       const currentIds = new Set(list.map((o) => o.id));
       const newOnes = [...currentIds].filter((id) => !lastIdsRef.current.has(id));
       if (lastIdsRef.current.size > 0 && newOnes.length > 0 && soundOn) {
-        try { audioRef.current?.play().catch(() => {}); } catch {}
+        try { beepNewOrder(); } catch {}
         toast.info(`Nouveau bon reçu — Table ${list.find((o) => o.id === newOnes[0])?.table_number || "?"}`);
       }
       lastIdsRef.current = currentIds;
@@ -140,7 +225,6 @@ const CuisinePage = ({ currentUser, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-amber-950/30 to-slate-900 text-white">
-      <audio ref={audioRef} src={NEW_ORDER_SOUND} preload="auto" />
       <div className="max-w-6xl mx-auto p-3 sm:p-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-3 sm:mb-5">
@@ -197,6 +281,10 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               <Camera className="w-4 h-4 mr-1" />
               Scanner un bon
             </TabsTrigger>
+            <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="cuisine-tab-history">
+              <History className="w-4 h-4 mr-1" />
+              Mon historique
+            </TabsTrigger>
           </TabsList>
 
           {/* COMMANDES */}
@@ -235,7 +323,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                         )}
                       </CardTitle>
                       <p className="text-[10px] text-slate-400">
-                        Serveur: {o.server_name || "—"} · {o.client_name ? `Client: ${o.client_name}` : ""}
+                        Agent: {o.server_name || "—"} · {o.client_name ? `Client: ${o.client_name}` : ""}
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-xs">
@@ -322,6 +410,11 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* HISTORIQUE */}
+          <TabsContent value="history" className="mt-3">
+            <CuisineHistoryView actorName={currentUser?.full_name || currentUser?.username} />
           </TabsContent>
         </Tabs>
       </div>

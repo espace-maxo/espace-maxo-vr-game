@@ -5,7 +5,7 @@
  *  - Ouverture : statut du jour, fonds de caisse optionnel, garde-fou
  *    « jour précédent fermé », bouton OUVRIR (Gérante + Admin).
  *  - Fermeture : reprend le composant existant `DayClosureGuard` qui gère
- *    les points serveurs, le billettage, la réconciliation.
+ *    les points agents, le billettage, la réconciliation.
  *  - Historique : journées passées (date / ouverture / fermeture / écart).
  */
 import React, { useState, useEffect, useCallback } from 'react';

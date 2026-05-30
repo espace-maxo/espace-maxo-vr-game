@@ -142,7 +142,7 @@ const AnalyticsTab = () => {
         </Card>
         <Card className="bg-gradient-to-br from-purple-900/30 to-pink-900/20 border-purple-500/40">
           <CardContent className="p-4">
-            <p className="text-slate-400 text-xs uppercase tracking-wide">Serveurs actifs</p>
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Agents actifs</p>
             <p className="text-2xl font-bold text-purple-400 mt-1">{Object.keys(cur.by_server || {}).length}</p>
             <p className="text-slate-500 text-xs mt-2">Ce mois</p>
           </CardContent>
@@ -183,7 +183,7 @@ const AnalyticsTab = () => {
         <Card className="bg-slate-800/50 border-slate-700" data-testid="analytics-top-servers">
           <CardHeader className="pb-2">
             <CardTitle className="text-slate-200 text-sm flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-400" /> Top serveurs
+              <Users className="w-4 h-4 text-blue-400" /> Top agents
             </CardTitle>
           </CardHeader>
           <CardContent>

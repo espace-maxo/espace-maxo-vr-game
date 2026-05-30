@@ -34,7 +34,7 @@ const LoginView = ({
               data-testid="login-mode-pin"
             >
               <User className="w-4 h-4 mr-2" />
-              Serveur (PIN)
+              Agent (PIN)
             </Button>
             <Button 
               variant={loginMode === "admin" ? "default" : "outline"}

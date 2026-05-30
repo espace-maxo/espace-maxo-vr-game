@@ -160,11 +160,13 @@ async def mark_all_items_ready(table_id: str, actor_role: str = "", actor_name: 
 
 
 @router.get("/cuisine/events")
-async def list_cuisine_events(actor_role: str = "", start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 200):
-    """Historique des actions cuisine (plats prêts, tous prêts). Admin uniquement."""
-    if actor_role != "admin":
-        raise HTTPException(403, "Action réservée à l'administrateur")
+async def list_cuisine_events(actor_role: str = "", actor_name: str = "", start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 200):
+    """Historique des actions cuisine. Admin voit tout, cuisinier voit ses propres actions."""
+    if actor_role not in ("admin", "cuisinier"):
+        raise HTTPException(403, "Action réservée")
     q = {}
+    if actor_role == "cuisinier":
+        q["actor_name"] = actor_name or ""
     if start_date and end_date:
         q["created_at"] = {"$gte": f"{start_date}T00:00:00", "$lte": f"{end_date}T23:59:59.999"}
     items = await db.cuisine_events.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)

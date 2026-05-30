@@ -6,9 +6,9 @@
  *  - server          : voit uniquement ses propres pourboires (read-only)
  *
  * Règles :
- *  - Par défaut attribution = 'pool'. Option 'server' avec sélection d'un serveur.
+ *  - Par défaut attribution = 'pool'. Option 'server' avec sélection d'un agent.
  *  - Modes de paiement : cash, mobile_money, card, other.
- *  - Résumé : total jour + total semaine + classement serveurs (semaine).
+ *  - Résumé : total jour + total semaine + classement agents (semaine).
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
@@ -129,7 +129,7 @@ const TipsTab = ({ currentUser }) => {
   const saveTip = async () => {
     const amt = parseFloat(form.amount) || 0;
     if (amt <= 0) return toast.error("Montant requis");
-    if (form.attribution_type === "server" && !form.server_name) return toast.error("Choisissez un serveur");
+    if (form.attribution_type === "server" && !form.server_name) return toast.error("Choisissez un agent");
     const payload = {
       date: form.date,
       amount: amt,
@@ -214,7 +214,7 @@ const TipsTab = ({ currentUser }) => {
         </Card>
         <Card className="bg-emerald-900/20 border-emerald-500/40">
           <CardContent className="p-3">
-            <div className="text-xs text-emerald-300 flex items-center gap-1"><Wallet className="w-3 h-3" /> Serveurs (semaine)</div>
+            <div className="text-xs text-emerald-300 flex items-center gap-1"><Wallet className="w-3 h-3" /> Agents (semaine)</div>
             <div className="text-lg font-bold text-emerald-200">{formatPrice(serverWeek)} F</div>
           </CardContent>
         </Card>
@@ -225,7 +225,7 @@ const TipsTab = ({ currentUser }) => {
         <Card className="bg-slate-800/40 border-slate-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-slate-200 text-sm flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-amber-400" /> Classement serveurs (semaine)
+              <Trophy className="w-4 h-4 text-amber-400" /> Classement agents (semaine)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -309,7 +309,7 @@ const TipsTab = ({ currentUser }) => {
               <Coins className="w-5 h-5" /> {editing ? "Modifier le pourboire" : "Nouveau pourboire"}
             </DialogTitle>
             <DialogDescription className="text-slate-400 text-xs">
-              Par défaut, le pourboire est versé au pool commun. Activez « Attribuer à un serveur » pour le lier à une personne.
+              Par défaut, le pourboire est versé au pool commun. Activez « Attribuer à un agent » pour le lier à une personne.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -362,19 +362,19 @@ const TipsTab = ({ currentUser }) => {
                   className={form.attribution_type === "server" ? "bg-emerald-600 hover:bg-emerald-700 flex-1" : "border-slate-600 text-slate-300 flex-1"}
                   data-testid="tip-attr-server"
                 >
-                  <Trophy className="w-4 h-4 mr-1" /> Serveur
+                  <Trophy className="w-4 h-4 mr-1" /> Agent
                 </Button>
               </div>
               {form.attribution_type === "server" && (
                 <div>
-                  <Label className="text-slate-300 text-xs">Serveur bénéficiaire</Label>
+                  <Label className="text-slate-300 text-xs">Agent bénéficiaire</Label>
                   <Select value={form.server_name} onValueChange={(v) => setForm({ ...form, server_name: v })}>
                     <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white" data-testid="tip-server-select">
-                      <SelectValue placeholder="Choisir un serveur" />
+                      <SelectValue placeholder="Choisir un agent" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {servers.length === 0 ? (
-                        <SelectItem value="__none" disabled>Aucun serveur disponible</SelectItem>
+                        <SelectItem value="__none" disabled>Aucun agent disponible</SelectItem>
                       ) : servers.map((s) => (
                         <SelectItem key={s} value={s}>{s}</SelectItem>
                       ))}

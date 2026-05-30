@@ -96,7 +96,7 @@ const FactureCard = ({ d }) => {
             )}
             {d.server_name && (
               <div className="bg-slate-800/40 rounded p-1.5">
-                <p className="text-[9px] uppercase text-slate-500">Serveur</p>
+                <p className="text-[9px] uppercase text-slate-500">Agent</p>
                 <p className="text-slate-200">{d.server_name}</p>
               </div>
             )}

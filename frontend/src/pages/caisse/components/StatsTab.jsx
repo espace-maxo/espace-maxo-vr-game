@@ -261,14 +261,14 @@ const StatsTab = ({
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-400" />
-                Recapitulatif par Serveur
+                Recapitulatif par Agent
               </CardTitle>
             </CardHeader>
             <CardContent>
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-2 text-slate-400 text-sm">Serveur</th>
+                    <th className="text-left py-2 text-slate-400 text-sm">Agent</th>
                     <th className="text-center py-2 text-slate-400 text-sm">Factures</th>
                     <th className="text-center py-2 text-slate-400 text-sm">Validees</th>
                     <th className="text-center py-2 text-slate-400 text-sm">En attente</th>

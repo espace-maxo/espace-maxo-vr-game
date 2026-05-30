@@ -15,7 +15,7 @@ const roleLabel = (role) => {
     case 'manager': return 'Responsable des Opérations & Logistique';
     case 'cuisinier': return 'Cuisinier';
     case 'coach_jeux': return 'Coach Jeux';
-    default: return 'Serveur';
+    default: return 'Agent';
   }
 };
 

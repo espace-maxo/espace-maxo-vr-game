@@ -97,11 +97,11 @@ const ActiviteTab = ({ invoices = [], expenses = [], historyInvoices = [], histo
         </Card>
       </div>
 
-      {/* Detail par serveur */}
+      {/* Detail par agent */}
       {Object.keys(byServer).length > 0 && (
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader className="pb-2">
-          <CardTitle className="text-slate-300 flex items-center gap-2"><Users className="w-5 h-5" /> Performance par Serveur</CardTitle>
+          <CardTitle className="text-slate-300 flex items-center gap-2"><Users className="w-5 h-5" /> Performance par Agent</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
@@ -197,7 +197,7 @@ const ActiviteTab = ({ invoices = [], expenses = [], historyInvoices = [], histo
                 <tr className="text-left text-slate-400 border-b border-slate-700">
                   <th className="p-2">Facture</th>
                   <th className="p-2">Client</th>
-                  <th className="p-2">Serveur</th>
+                  <th className="p-2">Agent</th>
                   <th className="p-2">Mode</th>
                   <th className="p-2 text-right">Total</th>
                   <th className="p-2">Heure</th>
@@ -272,7 +272,7 @@ const ActiviteTab = ({ invoices = [], expenses = [], historyInvoices = [], histo
           <Card className="bg-slate-800/50 border-slate-700"><CardContent className="p-0">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-slate-400 border-b border-slate-700">
-                <th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Serveur</th>
+                <th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Agent</th>
                 <th className="p-3 text-right">Total</th><th className="p-3">Mode</th><th className="p-3">Statut</th><th className="p-3">Heure</th>
               </tr></thead>
               <tbody>

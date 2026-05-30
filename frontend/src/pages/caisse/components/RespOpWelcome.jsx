@@ -131,7 +131,7 @@ const RespOpWelcome = ({
               icon={AlertTriangle}
               label="Besoins en attente"
               value={needsCount}
-              sub={needsCount > 0 ? "Demandes des serveurs" : "Aucune demande"}
+              sub={needsCount > 0 ? "Demandes des agents" : "Aucune demande"}
               color="text-rose-300"
               urgent={needsCount > 0}
               onClick={() => onGoTo && onGoTo("needs")}

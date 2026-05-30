@@ -1492,7 +1492,7 @@ const CaissePage = () => {
       setIsSubmittingEndOfService(true);
       const serverName = currentUser?.full_name || currentUser?.username;
       if (!serverName) {
-        toast.error("Impossible d'identifier le serveur connecté.");
+        toast.error("Impossible d'identifier le agent connecté.");
         setIsSubmittingEndOfService(false);
         return;
       }
@@ -3540,7 +3540,7 @@ _Gérante - Espace Maxo_
         duration: 5000,
       });
 
-      // Nettoyer la zone de saisie (la table garde ses items côté serveur)
+      // Nettoyer la zone de saisie (la table garde ses items côté agent)
       selectTable(null);
       clearBill();
       setSelectedClient(null);
@@ -3974,7 +3974,7 @@ _Gérante - Espace Maxo_
         invoice_id: invoice.id,
         invoice_number: invoice.invoice_number,
         reason: reason,
-        requested_by: currentUser?.full_name || currentUser?.username || "Serveur"
+        requested_by: currentUser?.full_name || currentUser?.username || "Agent"
       });
       toast.success("Demande de modification envoyée à la gérante");
       fetchModificationRequests();
@@ -4009,7 +4009,7 @@ _Gérante - Espace Maxo_
     if (!confirm("Autoriser la modification de cette facture ?")) return;
     try {
       await axios.put(`${API}/modification-requests/${requestId}/approve?approved_by=${encodeURIComponent(currentUser?.full_name || 'Manager')}`);
-      toast.success("Modification autorisée - Le serveur peut maintenant modifier la facture");
+      toast.success("Modification autorisée - Le agent peut maintenant modifier la facture");
       fetchAllData();
       fetchModificationRequests();
     } catch (error) {
@@ -4202,7 +4202,7 @@ _Gérante - Espace Maxo_
             <div class="table-time">${orderTime}</div>
           </div>
           <div class="meta-section">
-            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Agent:</strong> ${invoice.created_by || 'N/A'}</span>
             <span><strong>Date:</strong> ${orderDate}</span>
             <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
           </div>
@@ -4316,7 +4316,7 @@ _Gérante - Espace Maxo_
             <div class="table-time">${orderTime}</div>
           </div>
           <div class="meta-section">
-            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Agent:</strong> ${invoice.created_by || 'N/A'}</span>
             <span><strong>Date:</strong> ${orderDate}</span>
             <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
           </div>
@@ -4429,7 +4429,7 @@ _Gérante - Espace Maxo_
             <div class="table-time">${orderTime}</div>
           </div>
           <div class="meta-section">
-            <span><strong>Serveur:</strong> ${invoice.created_by || 'N/A'}</span>
+            <span><strong>Agent:</strong> ${invoice.created_by || 'N/A'}</span>
             <span><strong>Date:</strong> ${orderDate}</span>
             <span><strong>#${invoice.invoice_number.split('-').pop()}</strong></span>
           </div>
@@ -4540,7 +4540,7 @@ _Gérante - Espace Maxo_
           </div>
           
           <div class="server">
-            Serveur: ${invoice.created_by || '-'}
+            Agent: ${invoice.created_by || '-'}
           </div>
           ${invoice.validation_status === 'validated' ? `
           <div class="validation">
@@ -4742,7 +4742,7 @@ _Gérante - Espace Maxo_
                 onClick={() => setLoginMode("pin")}
                 className={loginMode === "pin" ? "flex-1 bg-amber-500 hover:bg-amber-600" : "flex-1 border-slate-600 text-slate-400"}
               >
-                Serveur (PIN)
+                Agent (PIN)
               </Button>
               <Button 
                 variant={loginMode === "admin" ? "default" : "outline"}
@@ -5011,7 +5011,7 @@ _Gérante - Espace Maxo_
                    currentUser?.role === 'manager' ? 'Responsable des Opérations & Logistique' : 
                    currentUser?.role === 'cuisinier' ? 'Cuisinier' :
                    currentUser?.role === 'coach_jeux' ? 'Coach Jeux' :
-                   'Serveur'}
+                   'Agent'}
                 </Badge>
               </div>
 
@@ -5098,7 +5098,7 @@ _Gérante - Espace Maxo_
                             ))}
                           </div>
                           <p className="text-slate-400 text-sm mt-2">
-                            Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                            Agent: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
                           </p>
                         </div>
                         <Button 
@@ -5155,7 +5155,7 @@ _Gérante - Espace Maxo_
                             ))}
                           </div>
                           <p className="text-slate-400 text-sm mt-2">
-                            Serveur: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                            Agent: {invoice.created_by} • {new Date(invoice.created_at).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
                           </p>
                         </div>
                         <Button 
@@ -5357,8 +5357,8 @@ _Gérante - Espace Maxo_
               </TabsTrigger>
             )}
             {currentUser?.role === 'manager' && (
-              <TabsTrigger value="points_serveurs" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
-                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Points Serveurs</span>
+              <TabsTrigger value="points_agents" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
+                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Points Agents</span>
               </TabsTrigger>
             )}
           </TabsList>
@@ -5580,7 +5580,7 @@ _Gérante - Espace Maxo_
                             </div>
                             <p className="text-slate-400 text-sm">
                               {invoice.customer_name} • {format(new Date(invoice.created_at), "HH:mm")}
-                              {invoice.created_by && ` • Serveur: ${invoice.created_by}`}
+                              {invoice.created_by && ` • Agent: ${invoice.created_by}`}
                             </p>
                             {invoice.validated_by && (
                               <p className="text-green-400 text-xs mt-1">
@@ -5761,13 +5761,13 @@ _Gérante - Espace Maxo_
 
           {/* ==================== POINTS DES SERVEURS TAB (MANAGER ONLY) ==================== */}
           {currentUser?.role === 'manager' && (
-          <TabsContent value="points_serveurs">
+          <TabsContent value="points_agents">
             <div className="space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <h2 className="text-xl font-bold text-indigo-300 flex items-center gap-2">
                   <ClipboardList className="w-6 h-6" />
-                  Points des Serveurs
+                  Points des Agents
                   {selectedReports.length > 0 && (
                     <Badge className="bg-red-500/20 text-red-400 ml-2">
                       {selectedReports.length} sélectionné{selectedReports.length > 1 ? 's' : ''}
@@ -5862,7 +5862,7 @@ _Gérante - Espace Maxo_
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="py-12 text-center">
                     <ClipboardList className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">Aucun point de serveur reçu</p>
+                    <p className="text-slate-400">Aucun point de agent reçu</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -6435,7 +6435,7 @@ _Gérante - Espace Maxo_
                   <span className="text-white">{pendingValidationInvoice.customer_name}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Serveur:</span>
+                  <span className="text-slate-400">Agent:</span>
                   <span className="text-white">{pendingValidationInvoice.created_by}</span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -6544,7 +6544,7 @@ _Gérante - Espace Maxo_
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-slate-400">Client:</span> {viewInvoice.customer_name}</div>
                 <div><span className="text-slate-400">Date:</span> {format(new Date(viewInvoice.created_at), "dd/MM/yyyy HH:mm")}</div>
-                <div><span className="text-slate-400">Serveur:</span> {viewInvoice.created_by || '-'}</div>
+                <div><span className="text-slate-400">Agent:</span> {viewInvoice.created_by || '-'}</div>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">Statut:</span>
                   {viewInvoice.validation_status === 'validated' ? (
@@ -6802,7 +6802,7 @@ _Gérante - Espace Maxo_
                 <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
                   <SelectTrigger className="bg-slate-700 border-slate-600"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="server">Serveur</SelectItem>
+                    <SelectItem value="server">Agent</SelectItem>
                     <SelectItem value="cuisinier">Cuisinier</SelectItem>
                     <SelectItem value="coach_jeux">Coach Jeux</SelectItem>
                     <SelectItem value="manager">Responsable des Opérations & Logistique</SelectItem>
@@ -8349,7 +8349,7 @@ _Gérante - Espace Maxo_
                     <div className="flex items-start gap-3">
                       <MessageSquare className="w-5 h-5 text-indigo-400 mt-0.5" />
                       <div>
-                        <p className="text-indigo-400 font-medium text-sm mb-1">Observation du serveur</p>
+                        <p className="text-indigo-400 font-medium text-sm mb-1">Observation du agent</p>
                         <p className="text-white italic">"{viewingServerReport.observation}"</p>
                       </div>
                     </div>
@@ -8481,7 +8481,7 @@ _Gérante - Espace Maxo_
                       <Textarea
                         value={validationComment}
                         onChange={(e) => setValidationComment(e.target.value)}
-                        placeholder="Ajouter un commentaire pour le serveur..."
+                        placeholder="Ajouter un commentaire pour le agent..."
                         className="bg-slate-800 border-slate-600 text-white mt-1"
                         rows={2}
                       />

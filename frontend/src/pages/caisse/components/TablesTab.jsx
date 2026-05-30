@@ -245,7 +245,7 @@ const TablesTab = ({
                 <thead>
                   <tr className="text-left text-slate-400 border-b border-slate-700">
                     <th className="p-2">Table</th>
-                    <th className="p-2">Serveur</th>
+                    <th className="p-2">Agent</th>
                     <th className="p-2">Client</th>
                     <th className="p-2 text-center">Articles</th>
                     <th className="p-2 text-right">Total</th>
@@ -340,7 +340,7 @@ const TablesTab = ({
           <CardContent className="p-8 text-center">
             <LayoutGrid className="w-12 h-12 text-slate-600 mx-auto mb-4" />
             <p className="text-slate-400">Toutes les tables sont libres</p>
-            <p className="text-slate-500 text-sm">Les tables s'afficheront ici dès qu'un serveur créera une commande</p>
+            <p className="text-slate-500 text-sm">Les tables s'afficheront ici dès qu'un agent créera une commande</p>
           </CardContent>
         </Card>
       )}
@@ -364,7 +364,7 @@ const TablesTab = ({
                 <div className="bg-slate-700/30 rounded-lg p-3 text-center">
                   <User className="w-5 h-5 text-blue-400 mx-auto mb-1" />
                   <p className="text-white font-medium">{selectedTable.server_name || 'N/A'}</p>
-                  <p className="text-xs text-slate-400">Serveur</p>
+                  <p className="text-xs text-slate-400">Agent</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-3 text-center">
                   <Clock className={`w-5 h-5 mx-auto mb-1 ${

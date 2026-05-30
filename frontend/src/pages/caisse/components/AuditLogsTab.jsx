@@ -43,7 +43,7 @@ const ACTION_META = {
 const ROLE_META = {
   admin:   { label: "Admin",   color: "bg-purple-500/20 text-purple-300" },
   manager: { label: "Gérante", color: "bg-amber-500/20 text-amber-300" },
-  server:  { label: "Serveur", color: "bg-sky-500/20 text-sky-300" },
+  server:  { label: "Agent", color: "bg-sky-500/20 text-sky-300" },
 };
 
 const FIELD_LABELS = {
@@ -167,7 +167,7 @@ const AuditLogsTab = ({ currentUser }) => {
             Historique des modifications · Factures &amp; Bons
           </CardTitle>
           <p className="text-xs text-slate-400 mt-1">
-            Trace toutes les actions effectuées par la gérante et les serveurs sur les factures
+            Trace toutes les actions effectuées par la gérante et les agents sur les factures
             et bons de commande. Visible uniquement par l'administrateur principal.
           </p>
         </CardHeader>
@@ -228,9 +228,9 @@ const AuditLogsTab = ({ currentUser }) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="non_admin">Gérante &amp; serveurs</SelectItem>
+                <SelectItem value="non_admin">Gérante &amp; agents</SelectItem>
                 <SelectItem value="manager">Gérante seulement</SelectItem>
-                <SelectItem value="server">Serveurs seulement</SelectItem>
+                <SelectItem value="server">Agents seulement</SelectItem>
                 <SelectItem value="all">Tous (incl. admin)</SelectItem>
               </SelectContent>
             </Select>
@@ -481,7 +481,7 @@ const AuditLogsTab = ({ currentUser }) => {
                   )}
                   {selected.snapshot.server_name && (
                     <div className="rounded bg-slate-800 px-3 py-2">
-                      <div className="text-[10px] uppercase text-slate-400">Serveur</div>
+                      <div className="text-[10px] uppercase text-slate-400">Agent</div>
                       <div className="text-slate-200 truncate">{selected.snapshot.server_name}</div>
                     </div>
                   )}
