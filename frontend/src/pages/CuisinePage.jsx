@@ -22,9 +22,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChefHat, CheckCircle2, Clock, Bell, Camera, Upload, Loader2,
-  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing,
+  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText,
 } from "lucide-react";
 import { beepNewOrder, playBeep } from "../lib/notificationBeep";
+import DailyReportPanel from "../components/DailyReportPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_INTERVAL = 5000;
@@ -372,6 +373,10 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               <History className="w-4 h-4 mr-1" />
               Mon historique
             </TabsTrigger>
+            <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white" data-testid="cuisine-tab-report">
+              <FileText className="w-4 h-4 mr-1" />
+              Rapport du jour
+            </TabsTrigger>
           </TabsList>
 
           {/* COMMANDES */}
@@ -591,6 +596,11 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                 ))}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* RAPPORT DU JOUR */}
+          <TabsContent value="report" className="mt-3">
+            <DailyReportPanel currentUser={currentUser} kind="cuisine" />
           </TabsContent>
         </Tabs>
       </div>

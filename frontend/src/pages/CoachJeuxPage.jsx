@@ -23,8 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Gamepad2, Send, History, RefreshCw, Loader2, LogOut, Users,
-  Clock, CheckCircle2, XCircle, Receipt, Hash, Coins, Plus, Trash2,
+  Clock, CheckCircle2, XCircle, Receipt, Hash, Coins, Plus, Trash2, FileText,
 } from "lucide-react";
+import DailyReportPanel from "../components/DailyReportPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -211,6 +212,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                   {history.filter((b) => b.status === "pending").length}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+                         data-testid="coach-tab-report">
+              <FileText className="w-4 h-4 mr-1" />
+              Rapport du jour
             </TabsTrigger>
           </TabsList>
 
@@ -461,6 +467,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                 })}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* RAPPORT DU JOUR */}
+          <TabsContent value="report" className="mt-3">
+            <DailyReportPanel currentUser={currentUser} kind="coach_jeux" />
           </TabsContent>
         </Tabs>
       </div>

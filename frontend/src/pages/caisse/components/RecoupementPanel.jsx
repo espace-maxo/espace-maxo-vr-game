@@ -21,6 +21,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import CuisineHistory from "./CuisineHistory";
+import DailyReportsList from "./DailyReportsList";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
   AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw, FileText, History, Eye,
@@ -757,21 +759,48 @@ const RecoupementPanel = ({ currentUser }) => {
   const refreshHistory = () => setHistoryKey(k => k + 1);
   return (
     <div className="space-y-4" data-testid="recoupement-panel">
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardContent className="p-3 text-xs text-slate-300">
-          <p>
-            <strong className="text-cyan-300">Recoupement IA</strong> — Photographiez le point manuscrit du cuisinier
-            ou le compteur des jeux. L'IA Gemini Vision extrait la liste, vous corrigez si besoin, puis le système compare
-            avec les ventes validées du jour. Les écarts sont enregistrés dans l'audit.
-          </p>
-        </CardContent>
-      </Card>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RecoupementCard kind="cuisine" currentUser={currentUser} onCompared={refreshHistory} />
-        <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
-      </div>
-      <RecoupementHistory refreshKey={historyKey} currentUser={currentUser} />
-      <CuisineHistory currentUser={currentUser} />
+      <Tabs defaultValue="ocr">
+        <TabsList className="bg-slate-800/60 border border-slate-700">
+          <TabsTrigger value="ocr" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white"
+                       data-testid="recoupement-tab-ocr">
+            <Camera className="w-4 h-4 mr-1" /> OCR Photos
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+                       data-testid="recoupement-tab-reports">
+            <FileText className="w-4 h-4 mr-1" /> Rapports
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ocr" className="mt-3 space-y-4">
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="p-3 text-xs text-slate-300">
+              <p>
+                <strong className="text-cyan-300">Recoupement IA</strong> — Photographiez le point manuscrit du cuisinier
+                ou le compteur des jeux. L'IA Gemini Vision extrait la liste, vous corrigez si besoin, puis le système compare
+                avec les ventes validées du jour. Les écarts sont enregistrés dans l'audit.
+              </p>
+            </CardContent>
+          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <RecoupementCard kind="cuisine" currentUser={currentUser} onCompared={refreshHistory} />
+            <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
+          </div>
+          <RecoupementHistory refreshKey={historyKey} currentUser={currentUser} />
+          <CuisineHistory currentUser={currentUser} />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-3 space-y-3">
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="p-3 text-xs text-slate-300">
+              <p>
+                <strong className="text-emerald-300">Rapports du terrain</strong> — Les rapports de fin de journée
+                transmis par le cuisinier et le coach jeux. Comparaison automatique avec les ventes validées du système.
+              </p>
+            </CardContent>
+          </Card>
+          <DailyReportsList currentUser={currentUser} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
