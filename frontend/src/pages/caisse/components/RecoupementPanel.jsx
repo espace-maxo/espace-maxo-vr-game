@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
-  AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw,
+  AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw, FileText,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -149,6 +149,82 @@ const RecoupementCard = ({ kind, currentUser }) => {
     setNotes("");
     setSummary(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const printReport = () => {
+    if (!summary) return;
+    const w = window.open("", "_blank", "width=900,height=1200");
+    if (!w) return toast.error("Bloqueur de popup actif — autorisez les fenêtres pour imprimer");
+    const rows = summary.rows.map((r) => {
+      const statusLabel = {
+        ok: "OK",
+        over_declared: "Sur-déclaré",
+        under_declared: "Sous-déclaré",
+        missing_in_system: "Absent système",
+        missing_in_declaration: "Absent déclaration",
+      }[r.status] || r.status;
+      const color = r.alert ? "#fde2e2" : "#ffffff";
+      const diffColor = r.diff_quantity > 0 ? "#b07a00" : (r.diff_quantity < 0 ? "#a01010" : "#444");
+      return `<tr style="background:${color}">
+        <td>${r.name_declared || r.name_system || ""}${r.name_declared && r.name_system && r.name_declared.toLowerCase() !== r.name_system.toLowerCase() ? ` <span style="color:#888;font-size:9px">(${r.name_system})</span>` : ""}</td>
+        <td style="text-align:right">${fmt(r.quantity_declared)}</td>
+        <td style="text-align:right">${fmt(r.quantity_system)}</td>
+        <td style="text-align:right;color:${diffColor};font-family:monospace">${r.diff_quantity > 0 ? "+" : ""}${fmt(r.diff_quantity)}</td>
+        <td style="text-align:right">${r.diff_pct}%</td>
+        <td style="text-align:right">${fmt(r.system_revenue)} F</td>
+        <td>${statusLabel}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Recoupement ${meta.label} — ${date}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:24px;color:#222}
+  h1{margin:0 0 4px 0;font-size:20px;color:#1a3a52}
+  .meta{font-size:11px;color:#666;margin-bottom:12px}
+  .kpis{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .kpi{background:#f4f6fa;border:1px solid #d3d8e0;border-radius:6px;padding:6px 10px;font-size:11px}
+  .kpi b{display:block;font-size:14px;color:#1a3a52}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+  th,td{border:1px solid #ccd0d8;padding:5px 6px}
+  th{background:#1a3a52;color:#fff;text-align:left;font-weight:bold}
+  .footer{margin-top:14px;font-size:9px;color:#777;border-top:1px solid #ddd;padding-top:6px}
+  @media print { body{margin:10px} }
+</style>
+</head><body>
+  <h1>Recoupement ${meta.label} — ${date}</h1>
+  <div class="meta">Généré le ${new Date().toLocaleString("fr-FR")} par ${currentUser?.full_name || currentUser?.username} (${currentUser?.role})</div>
+  <div class="kpis">
+    <div class="kpi"><b>${fmt(summary.total_declared_qty)}</b>Total déclaré (cuisinier)</div>
+    <div class="kpi"><b>${fmt(summary.total_system_qty)}</b>Total système</div>
+    <div class="kpi"><b>${fmt(summary.total_system_revenue)} F</b>CA système ${meta.label}</div>
+    <div class="kpi" style="background:${summary.alerts_count > 0 ? "#fff3e0" : "#e7f5ec"}"><b>${summary.alerts_count}</b>${summary.alerts_count > 0 ? "alerte(s) écart" : "Aucun écart"}</div>
+  </div>
+  ${notes ? `<div style="background:#f7f7e8;border:1px solid #d8d49c;padding:6px;font-size:11px;margin-bottom:8px"><b>Remarques :</b> ${notes.replace(/</g, "&lt;")}</div>` : ""}
+  <table>
+    <thead>
+      <tr>
+        <th>${meta.label === "Cuisine" ? "Plat" : "Jeu / Machine"}</th>
+        <th style="text-align:right">Déclaré</th>
+        <th style="text-align:right">Système</th>
+        <th style="text-align:right">Écart</th>
+        <th style="text-align:right">%</th>
+        <th style="text-align:right">CA système</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    Document généré par Caisse Pro — Espace Maxo.<br>
+    Méthodologie : comparaison fuzzy nom-à-nom entre la déclaration manuscrite (photo IA) et les ventes validées du système pour la date indiquée.<br>
+    Alerte si écart > 1 unité OU > 10%. Recoupement enregistré dans la base et dans le journal d'audit.
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300)}</script>
+</body></html>`;
+    w.document.write(html);
+    w.document.close();
   };
 
   const accent = meta.accent === "purple"
@@ -281,19 +357,31 @@ const RecoupementCard = ({ kind, currentUser }) => {
         {/* Rapport d'écarts */}
         {summary && (
           <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-2 mt-2" data-testid={`recoup-summary-${kind}`}>
-            <div className="flex items-center gap-2 mb-2 flex-wrap text-xs">
-              <Badge className="bg-slate-700 text-slate-200">Déclaré: {fmt(summary.total_declared_qty)}</Badge>
-              <Badge className="bg-slate-700 text-slate-200">Système: {fmt(summary.total_system_qty)}</Badge>
-              <Badge className="bg-amber-500/30 text-amber-200">CA système: {fmt(summary.total_system_revenue)} F</Badge>
-              {summary.alerts_count > 0 ? (
-                <Badge className="bg-rose-500/30 text-rose-200">
-                  <AlertTriangle className="w-3 h-3 mr-1 inline" /> {summary.alerts_count} alertes
-                </Badge>
-              ) : (
-                <Badge className="bg-emerald-500/30 text-emerald-200">
-                  <CheckCircle2 className="w-3 h-3 mr-1 inline" /> Aucun écart
-                </Badge>
-              )}
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-slate-700 text-slate-200">Déclaré: {fmt(summary.total_declared_qty)}</Badge>
+                <Badge className="bg-slate-700 text-slate-200">Système: {fmt(summary.total_system_qty)}</Badge>
+                <Badge className="bg-amber-500/30 text-amber-200">CA système: {fmt(summary.total_system_revenue)} F</Badge>
+                {summary.alerts_count > 0 ? (
+                  <Badge className="bg-rose-500/30 text-rose-200">
+                    <AlertTriangle className="w-3 h-3 mr-1 inline" /> {summary.alerts_count} alertes
+                  </Badge>
+                ) : (
+                  <Badge className="bg-emerald-500/30 text-emerald-200">
+                    <CheckCircle2 className="w-3 h-3 mr-1 inline" /> Aucun écart
+                  </Badge>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={printReport}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-[11px] h-7"
+                data-testid={`recoup-pdf-${kind}`}
+              >
+                <FileText className="w-3.5 h-3.5 mr-1" />
+                Exporter PDF
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
