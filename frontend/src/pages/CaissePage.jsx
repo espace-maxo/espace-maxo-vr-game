@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,7 @@ import OfflineIndicator from "../components/OfflineIndicator";
 import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
 import RecoupementPanel from "./caisse/components/RecoupementPanel";
+import KitchenTrackerModal from "./caisse/components/KitchenTrackerModal";
 import CuisinePage from "./CuisinePage";
 import useReadyNotifications from "../hooks/useReadyNotifications";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
@@ -380,6 +381,12 @@ const CaissePage = () => {
   
   // ============== SHARE MODAL ==============
   const [showShareModal, setShowShareModal] = useState(false);
+
+  // ============== KITCHEN TRACKER MODAL (Resp. Op./Admin) ==============
+  const [showKitchenTracker, setShowKitchenTracker] = useState(false);
+  const [kitchenUnreadCount, setKitchenUnreadCount] = useState(0);
+  const [kitchenPendingCount, setKitchenPendingCount] = useState(0);
+  const kitchenLastIdsRef = useRef(new Set());
   
   // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
   const [unreadNotesCount, setUnreadNotesCount] = useState(0);
@@ -1113,6 +1120,41 @@ const CaissePage = () => {
       return () => clearInterval(interval);
     }
   }, [isAuthenticated, currentUser?.role]);
+
+  // ============== KITCHEN TRACKER — Background polling (badge + bip) ==============
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!(currentUser?.role === 'manager' || currentUser?.role === 'admin')) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const [oRes, mRes] = await Promise.all([
+          axios.get(`${API}/cuisine/orders`, { params: { actor_role: currentUser.role }, timeout: 8000 }),
+          axios.get(`${API}/cuisine/messages`, { params: { actor_role: currentUser.role, since_minutes: 240 }, timeout: 8000 }),
+        ]);
+        if (cancelled) return;
+        const pending = (oRes.data?.orders || []).filter((o) => !o.all_served).length;
+        const msgs = mRes.data?.messages || [];
+        const unread = mRes.data?.unread || 0;
+        setKitchenPendingCount(pending);
+        setKitchenUnreadCount(unread);
+        // bip on new unread
+        const currIds = new Set(msgs.filter((m) => !m.read_at).map((m) => m.id));
+        const incoming = [...currIds].filter((id) => !kitchenLastIdsRef.current.has(id));
+        if (kitchenLastIdsRef.current.size > 0 && incoming.length > 0 && !showKitchenTracker) {
+          try {
+            import('../lib/notificationBeep').then((m) => m.playBeep({ freq: 1500, duration: 0.15, volume: 0.7, count: 2, gap: 0.08 }));
+          } catch {}
+          const fresh = msgs.find((m) => m.id === incoming[0]);
+          if (fresh) toast.info(`Cuisinier: ${fresh.label}`);
+        }
+        kitchenLastIdsRef.current = currIds;
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 7000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isAuthenticated, currentUser?.role, showKitchenTracker]);
 
   // ============== SERVER DAILY REPORT FUNCTIONS ==============
   
@@ -5025,6 +5067,30 @@ _Gérante - Espace Maxo_
                 onOpenNotif={openNotifAndNavigate}
                 onMarkAllRead={markAllNotifsRead}
               />
+
+              {/* KITCHEN TRACKER — Resp. Op. & Admin only */}
+              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowKitchenTracker(true)}
+                  className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 relative"
+                  title="Suivi Cuisine — Temps réel"
+                  data-testid="open-kitchen-tracker-btn"
+                >
+                  <ChefHat className="w-5 h-5" />
+                  {kitchenUnreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold animate-pulse">
+                      {kitchenUnreadCount}
+                    </span>
+                  )}
+                  {kitchenUnreadCount === 0 && kitchenPendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold">
+                      {kitchenPendingCount}
+                    </span>
+                  )}
+                </Button>
+              )}
+
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
 
@@ -8619,6 +8685,15 @@ _Gérante - Espace Maxo_
 
       {/* Share Modal with QR Code */}
       <ShareModal open={showShareModal} onOpenChange={setShowShareModal} />
+
+      {/* Kitchen Tracker Modal — Resp. Op. & Admin */}
+      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+        <KitchenTrackerModal
+          open={showKitchenTracker}
+          onOpenChange={setShowKitchenTracker}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* Régularisation rétroactive de bons */}
       <RegularizationModal

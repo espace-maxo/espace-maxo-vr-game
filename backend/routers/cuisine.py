@@ -42,9 +42,23 @@ def _is_cuisine_item(it: dict) -> bool:
     return any(d.lower() == dept for d in CUISINE_DEPTS) or dept in {"plat", "plats"}
 
 
+def _item_status(it: dict) -> str:
+    """Retourne le statut d'un item : received | in_progress | ready | served."""
+    if it.get("served_at"):
+        return "served"
+    if it.get("ready_at"):
+        return "ready"
+    if it.get("started_at"):
+        return "in_progress"
+    return "received"
+
+
 @router.get("/cuisine/orders")
 async def list_cuisine_orders(actor_role: str = ""):
-    """Liste les bons de table actifs avec items cuisine. Pour le cuisinier."""
+    """Liste les bons de table actifs avec items cuisine.
+    - cuisinier : voit ses bons (pas les bons déjà servis)
+    - manager/admin : voit tout, y compris bons servis (pour suivi)
+    """
     if actor_role not in ("cuisinier", "admin", "manager"):
         raise HTTPException(403, "Action réservée au cuisinier / admin")
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -59,7 +73,21 @@ async def list_cuisine_orders(actor_role: str = ""):
         # Filter on today only (cuisine vues du jour)
         if (t.get("created_at") or "")[:10] != today_str and (t.get("updated_at") or "")[:10] != today_str:
             continue
-        # Augment items with ready status if present
+        # Augment items with status info
+        items_out = [{
+            "index": idx,
+            "name": it.get("name"),
+            "quantity": it.get("quantity") or 1,
+            "price": it.get("price") or 0,
+            "department": it.get("department") or it.get("category"),
+            "notes": it.get("notes"),
+            "status": _item_status(it),
+            "ready": bool(it.get("ready_at")),
+            "ready_at": it.get("ready_at"),
+            "started_at": it.get("started_at"),
+            "served_at": it.get("served_at"),
+            "served_by": it.get("served_by"),
+        } for idx, it in cui_items]
         out.append({
             "id": t.get("id"),
             "table_number": t.get("table_number"),
@@ -70,18 +98,200 @@ async def list_cuisine_orders(actor_role: str = ""):
             "notes": t.get("notes"),
             "all_ready": bool(t.get("all_ready_at")),
             "all_ready_at": t.get("all_ready_at"),
-            "items": [{
-                "index": idx,
-                "name": it.get("name"),
-                "quantity": it.get("quantity") or 1,
-                "price": it.get("price") or 0,
-                "department": it.get("department") or it.get("category"),
-                "notes": it.get("notes"),
-                "ready": bool(it.get("ready_at")),
-                "ready_at": it.get("ready_at"),
-            } for idx, it in cui_items],
+            "all_served": all(i["status"] == "served" for i in items_out) if items_out else False,
+            "items": items_out,
         })
     return {"total": len(out), "orders": out}
+
+
+# ─────────────────────────────────────────────────────────
+# Transitions de statut supplémentaires
+# ─────────────────────────────────────────────────────────
+
+@router.patch("/cuisine/orders/{table_id}/items/{item_index}/start")
+async def mark_item_in_progress(table_id: str, item_index: int, actor_role: str = "", actor_name: str = ""):
+    """Cuisinier marque un plat 'en préparation'."""
+    if actor_role not in ("cuisinier", "admin"):
+        raise HTTPException(403, "Action réservée au cuisinier")
+    t = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Table introuvable")
+    items = t.get("items") or []
+    if item_index < 0 or item_index >= len(items):
+        raise HTTPException(400, "Index invalide")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not items[item_index].get("started_at"):
+        items[item_index]["started_at"] = now_iso
+        items[item_index]["started_by"] = actor_name or "cuisinier"
+    await db.caisse_tables.update_one({"id": table_id}, {"$set": {"items": items, "updated_at": now_iso}})
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "item_in_progress",
+            "table_id": table_id,
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "item_name": items[item_index].get("name"),
+            "item_quantity": items[item_index].get("quantity") or 1,
+            "actor_name": actor_name or "cuisinier",
+            "actor_role": actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log fail: {e}")
+    return {"success": True, "item": items[item_index]}
+
+
+@router.patch("/cuisine/orders/{table_id}/items/{item_index}/served")
+async def mark_item_served(table_id: str, item_index: int, actor_role: str = "", actor_name: str = ""):
+    """Resp. Op. / Agent confirme que le plat a été apporté au client."""
+    if actor_role not in ("manager", "admin", "server"):
+        raise HTTPException(403, "Action réservée au Resp. Op. / Agent")
+    t = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Table introuvable")
+    items = t.get("items") or []
+    if item_index < 0 or item_index >= len(items):
+        raise HTTPException(400, "Index invalide")
+    if not items[item_index].get("ready_at"):
+        raise HTTPException(400, "Le plat n'est pas encore marqué prêt par la cuisine")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    items[item_index]["served_at"] = now_iso
+    items[item_index]["served_by"] = actor_name or actor_role
+    await db.caisse_tables.update_one({"id": table_id}, {"$set": {"items": items, "updated_at": now_iso}})
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "item_served",
+            "table_id": table_id,
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "item_name": items[item_index].get("name"),
+            "item_quantity": items[item_index].get("quantity") or 1,
+            "actor_name": actor_name or actor_role,
+            "actor_role": actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log fail: {e}")
+    return {"success": True, "item": items[item_index]}
+
+
+# ─────────────────────────────────────────────────────────
+# Messages préenregistrés Resp. Op. ⇄ Cuisinier
+# ─────────────────────────────────────────────────────────
+
+MANAGER_PRESETS = [
+    {"code": "TIME",    "label": "⏱️ Combien de temps encore ?"},
+    {"code": "URGENT",  "label": "🚨 Urgent, client pressé"},
+    {"code": "CONFIRM", "label": "❓ Le plat est-il bien noté ?"},
+    {"code": "REDO",    "label": "🔁 Veuillez refaire (mauvais)"},
+    {"code": "CANCEL",  "label": "✋ Annulez ce plat"},
+]
+
+CUISINIER_PRESETS = [
+    {"code": "OK",     "label": "✅ OK, c'est noté"},
+    {"code": "5MIN",   "label": "⏱️ 5 minutes"},
+    {"code": "10MIN",  "label": "⏱️ 10 minutes"},
+    {"code": "15MIN",  "label": "⏱️ 15 minutes"},
+    {"code": "OUT",    "label": "❌ Rupture de stock"},
+    {"code": "SOON",   "label": "👨‍🍳 Bientôt prêt"},
+]
+
+
+@router.get("/cuisine/messages/presets")
+async def get_message_presets(actor_role: str = ""):
+    """Retourne les formules préenregistrées disponibles pour le rôle."""
+    if actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    return {
+        "manager_to_cuisinier": MANAGER_PRESETS,
+        "cuisinier_to_manager": CUISINIER_PRESETS,
+    }
+
+
+class SendMessageBody(BaseModel):
+    code: str
+    label: str
+    from_role: str
+    from_name: str
+    to_role: str  # "cuisinier" ou "manager"
+    table_id: Optional[str] = None
+    table_number: Optional[int] = None
+    item_name: Optional[str] = None
+
+
+@router.post("/cuisine/messages")
+async def send_kitchen_message(body: SendMessageBody):
+    """Envoie un message préenregistré au cuisinier ou au Resp. Op."""
+    if body.from_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    if body.to_role not in ("cuisinier", "manager"):
+        raise HTTPException(400, "Destinataire invalide")
+    valid_codes = (
+        [p["code"] for p in MANAGER_PRESETS]
+        if body.from_role in ("manager", "admin")
+        else [p["code"] for p in CUISINIER_PRESETS]
+    )
+    if body.code not in valid_codes:
+        raise HTTPException(400, "Code de message invalide")
+    msg = {
+        "id": str(uuid.uuid4()),
+        "code": body.code,
+        "label": body.label,
+        "from_role": body.from_role,
+        "from_name": body.from_name,
+        "to_role": body.to_role,
+        "table_id": body.table_id,
+        "table_number": body.table_number,
+        "item_name": body.item_name,
+        "read_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.cuisine_messages.insert_one(msg)
+    msg.pop("_id", None)
+    return {"success": True, "message": msg}
+
+
+@router.get("/cuisine/messages")
+async def list_kitchen_messages(actor_role: str = "", since_minutes: int = 240, limit: int = 100):
+    """Liste les messages reçus par mon rôle (les 4 dernières heures par défaut)."""
+    if actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    # admin voit les messages destinés au manager (vue Resp. Op.)
+    target = "manager" if actor_role in ("manager", "admin") else "cuisinier"
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=since_minutes)).isoformat()
+    msgs = await db.cuisine_messages.find(
+        {"to_role": target, "created_at": {"$gte": cutoff}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(limit)
+    unread = sum(1 for m in msgs if not m.get("read_at"))
+    return {"total": len(msgs), "unread": unread, "messages": msgs}
+
+
+@router.post("/cuisine/messages/{message_id}/read")
+async def mark_message_read(message_id: str, actor_role: str = ""):
+    if actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    res = await db.cuisine_messages.update_one(
+        {"id": message_id, "read_at": None},
+        {"$set": {"read_at": now_iso}},
+    )
+    return {"success": True, "modified": res.modified_count}
+
+
+@router.post("/cuisine/messages/read-all")
+async def mark_all_messages_read(actor_role: str = ""):
+    if actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    target = "manager" if actor_role in ("manager", "admin") else "cuisinier"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    res = await db.cuisine_messages.update_many(
+        {"to_role": target, "read_at": None},
+        {"$set": {"read_at": now_iso}},
+    )
+    return {"success": True, "modified": res.modified_count}
 
 
 @router.patch("/cuisine/orders/{table_id}/items/{item_index}/ready")
