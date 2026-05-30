@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
-  AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw, FileText,
+  AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw, FileText, History, Eye,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -60,7 +60,90 @@ const KIND_META = {
   },
 };
 
-const RecoupementCard = ({ kind, currentUser }) => {
+/**
+ * Construit et ouvre une fenêtre d'impression PDF pour un recoupement.
+ * Utilisable depuis la vue live ET depuis l'historique.
+ */
+function openRecoupementPdf({ kind, date, summary, notes, actor_name, actor_role }) {
+  const meta = KIND_META[kind] || KIND_META.cuisine;
+  const w = window.open("", "_blank", "width=900,height=1200");
+  if (!w) {
+    toast.error("Bloqueur de popup actif — autorisez les fenêtres pour imprimer");
+    return;
+  }
+  const rows = (summary?.rows || []).map((r) => {
+    const statusLabel = {
+      ok: "OK",
+      over_declared: "Sur-déclaré",
+      under_declared: "Sous-déclaré",
+      missing_in_system: "Absent système",
+      missing_in_declaration: "Absent déclaration",
+    }[r.status] || r.status;
+    const color = r.alert ? "#fde2e2" : "#ffffff";
+    const diffColor = r.diff_quantity > 0 ? "#b07a00" : (r.diff_quantity < 0 ? "#a01010" : "#444");
+    return `<tr style="background:${color}">
+      <td>${r.name_declared || r.name_system || ""}${r.name_declared && r.name_system && r.name_declared.toLowerCase() !== r.name_system.toLowerCase() ? ` <span style="color:#888;font-size:9px">(${r.name_system})</span>` : ""}</td>
+      <td style="text-align:right">${fmt(r.quantity_declared)}</td>
+      <td style="text-align:right">${fmt(r.quantity_system)}</td>
+      <td style="text-align:right;color:${diffColor};font-family:monospace">${r.diff_quantity > 0 ? "+" : ""}${fmt(r.diff_quantity)}</td>
+      <td style="text-align:right">${r.diff_pct}%</td>
+      <td style="text-align:right">${fmt(r.system_revenue)} F</td>
+      <td>${statusLabel}</td>
+    </tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Recoupement ${meta.label} — ${date}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:24px;color:#222}
+  h1{margin:0 0 4px 0;font-size:20px;color:#1a3a52}
+  .meta{font-size:11px;color:#666;margin-bottom:12px}
+  .kpis{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .kpi{background:#f4f6fa;border:1px solid #d3d8e0;border-radius:6px;padding:6px 10px;font-size:11px}
+  .kpi b{display:block;font-size:14px;color:#1a3a52}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+  th,td{border:1px solid #ccd0d8;padding:5px 6px}
+  th{background:#1a3a52;color:#fff;text-align:left;font-weight:bold}
+  .footer{margin-top:14px;font-size:9px;color:#777;border-top:1px solid #ddd;padding-top:6px}
+  @media print { body{margin:10px} }
+</style>
+</head><body>
+  <h1>Recoupement ${meta.label} — ${date}</h1>
+  <div class="meta">Généré le ${new Date().toLocaleString("fr-FR")} par ${actor_name || "?"} (${actor_role || "?"})</div>
+  <div class="kpis">
+    <div class="kpi"><b>${fmt(summary?.total_declared_qty)}</b>Total déclaré (cuisinier)</div>
+    <div class="kpi"><b>${fmt(summary?.total_system_qty)}</b>Total système</div>
+    <div class="kpi"><b>${fmt(summary?.total_system_revenue)} F</b>CA système ${meta.label}</div>
+    <div class="kpi" style="background:${(summary?.alerts_count || 0) > 0 ? "#fff3e0" : "#e7f5ec"}"><b>${summary?.alerts_count || 0}</b>${(summary?.alerts_count || 0) > 0 ? "alerte(s) écart" : "Aucun écart"}</div>
+  </div>
+  ${notes ? `<div style="background:#f7f7e8;border:1px solid #d8d49c;padding:6px;font-size:11px;margin-bottom:8px"><b>Remarques :</b> ${String(notes).replace(/</g, "&lt;")}</div>` : ""}
+  <table>
+    <thead>
+      <tr>
+        <th>${meta.label === "Cuisine" ? "Plat" : "Jeu / Machine"}</th>
+        <th style="text-align:right">Déclaré</th>
+        <th style="text-align:right">Système</th>
+        <th style="text-align:right">Écart</th>
+        <th style="text-align:right">%</th>
+        <th style="text-align:right">CA système</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    Document généré par Caisse Pro — Espace Maxo.<br>
+    Méthodologie : comparaison fuzzy nom-à-nom entre la déclaration manuscrite (photo IA) et les ventes validées du système pour la date indiquée.<br>
+    Alerte si écart > 1 unité OU > 10%. Recoupement enregistré dans la base et dans le journal d'audit.
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300)}</script>
+</body></html>`;
+  w.document.write(html);
+  w.document.close();
+}
+
+const RecoupementCard = ({ kind, currentUser, onCompared }) => {
   const meta = KIND_META[kind];
   const Icon = meta.Icon;
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -131,6 +214,7 @@ const RecoupementCard = ({ kind, currentUser }) => {
       } else {
         toast.success("Recoupement enregistré");
       }
+      onCompared?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur de comparaison");
     } finally {
@@ -153,78 +237,14 @@ const RecoupementCard = ({ kind, currentUser }) => {
 
   const printReport = () => {
     if (!summary) return;
-    const w = window.open("", "_blank", "width=900,height=1200");
-    if (!w) return toast.error("Bloqueur de popup actif — autorisez les fenêtres pour imprimer");
-    const rows = summary.rows.map((r) => {
-      const statusLabel = {
-        ok: "OK",
-        over_declared: "Sur-déclaré",
-        under_declared: "Sous-déclaré",
-        missing_in_system: "Absent système",
-        missing_in_declaration: "Absent déclaration",
-      }[r.status] || r.status;
-      const color = r.alert ? "#fde2e2" : "#ffffff";
-      const diffColor = r.diff_quantity > 0 ? "#b07a00" : (r.diff_quantity < 0 ? "#a01010" : "#444");
-      return `<tr style="background:${color}">
-        <td>${r.name_declared || r.name_system || ""}${r.name_declared && r.name_system && r.name_declared.toLowerCase() !== r.name_system.toLowerCase() ? ` <span style="color:#888;font-size:9px">(${r.name_system})</span>` : ""}</td>
-        <td style="text-align:right">${fmt(r.quantity_declared)}</td>
-        <td style="text-align:right">${fmt(r.quantity_system)}</td>
-        <td style="text-align:right;color:${diffColor};font-family:monospace">${r.diff_quantity > 0 ? "+" : ""}${fmt(r.diff_quantity)}</td>
-        <td style="text-align:right">${r.diff_pct}%</td>
-        <td style="text-align:right">${fmt(r.system_revenue)} F</td>
-        <td>${statusLabel}</td>
-      </tr>`;
-    }).join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8">
-<title>Recoupement ${meta.label} — ${date}</title>
-<style>
-  body{font-family:Arial,sans-serif;margin:24px;color:#222}
-  h1{margin:0 0 4px 0;font-size:20px;color:#1a3a52}
-  .meta{font-size:11px;color:#666;margin-bottom:12px}
-  .kpis{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-  .kpi{background:#f4f6fa;border:1px solid #d3d8e0;border-radius:6px;padding:6px 10px;font-size:11px}
-  .kpi b{display:block;font-size:14px;color:#1a3a52}
-  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
-  th,td{border:1px solid #ccd0d8;padding:5px 6px}
-  th{background:#1a3a52;color:#fff;text-align:left;font-weight:bold}
-  .footer{margin-top:14px;font-size:9px;color:#777;border-top:1px solid #ddd;padding-top:6px}
-  @media print { body{margin:10px} }
-</style>
-</head><body>
-  <h1>Recoupement ${meta.label} — ${date}</h1>
-  <div class="meta">Généré le ${new Date().toLocaleString("fr-FR")} par ${currentUser?.full_name || currentUser?.username} (${currentUser?.role})</div>
-  <div class="kpis">
-    <div class="kpi"><b>${fmt(summary.total_declared_qty)}</b>Total déclaré (cuisinier)</div>
-    <div class="kpi"><b>${fmt(summary.total_system_qty)}</b>Total système</div>
-    <div class="kpi"><b>${fmt(summary.total_system_revenue)} F</b>CA système ${meta.label}</div>
-    <div class="kpi" style="background:${summary.alerts_count > 0 ? "#fff3e0" : "#e7f5ec"}"><b>${summary.alerts_count}</b>${summary.alerts_count > 0 ? "alerte(s) écart" : "Aucun écart"}</div>
-  </div>
-  ${notes ? `<div style="background:#f7f7e8;border:1px solid #d8d49c;padding:6px;font-size:11px;margin-bottom:8px"><b>Remarques :</b> ${notes.replace(/</g, "&lt;")}</div>` : ""}
-  <table>
-    <thead>
-      <tr>
-        <th>${meta.label === "Cuisine" ? "Plat" : "Jeu / Machine"}</th>
-        <th style="text-align:right">Déclaré</th>
-        <th style="text-align:right">Système</th>
-        <th style="text-align:right">Écart</th>
-        <th style="text-align:right">%</th>
-        <th style="text-align:right">CA système</th>
-        <th>Statut</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="footer">
-    Document généré par Caisse Pro — Espace Maxo.<br>
-    Méthodologie : comparaison fuzzy nom-à-nom entre la déclaration manuscrite (photo IA) et les ventes validées du système pour la date indiquée.<br>
-    Alerte si écart > 1 unité OU > 10%. Recoupement enregistré dans la base et dans le journal d'audit.
-  </div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},300)}</script>
-</body></html>`;
-    w.document.write(html);
-    w.document.close();
+    openRecoupementPdf({
+      kind,
+      date,
+      summary,
+      notes,
+      actor_name: currentUser?.full_name || currentUser?.username,
+      actor_role: currentUser?.role,
+    });
   };
 
   const accent = meta.accent === "purple"
@@ -429,7 +449,167 @@ const RecoupementCard = ({ kind, currentUser }) => {
   );
 };
 
+const RecoupementHistory = ({ refreshKey }) => {
+  const [kindFilter, setKindFilter] = useState("all");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (kindFilter !== "all") params.kind = kindFilter;
+      const r = await axios.get(`${API}/recoupement/list`, { params, timeout: 15000 });
+      setItems(r.data.items || []);
+    } catch {
+      toast.error("Erreur chargement historique");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [kindFilter, refreshKey]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const slice = items.slice((page - 1) * pageSize, page * pageSize);
+
+  const reprint = (rec) => {
+    openRecoupementPdf({
+      kind: rec.kind,
+      date: rec.date,
+      summary: rec.summary,
+      notes: rec.notes,
+      actor_name: rec.actor_name,
+      actor_role: rec.actor_role,
+    });
+  };
+
+  return (
+    <Card className="bg-slate-800/40 border-slate-700" data-testid="recoup-history-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-lg text-cyan-300">
+          <History className="w-5 h-5" /> Historique des recoupements
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {["all", "cuisine", "jeux"].map((k) => (
+            <Button
+              key={k}
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setKindFilter(k); setPage(1); }}
+              className={`h-7 text-[11px] px-2 ${
+                kindFilter === k
+                  ? "bg-cyan-600/30 text-cyan-200 border border-cyan-500/40"
+                  : "bg-slate-700/40 text-slate-300 hover:bg-slate-700"
+              }`}
+              data-testid={`recoup-history-filter-${k}`}
+            >
+              {k === "all" ? "Tous" : (k === "cuisine" ? "Cuisine" : "Jeux")}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={load}
+            className="ml-auto h-7 text-[11px] text-slate-300"
+            disabled={loading}
+            data-testid="recoup-history-refresh"
+          >
+            {loading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+            Actualiser
+          </Button>
+        </div>
+
+        {items.length === 0 && !loading && (
+          <p className="text-xs text-slate-500 italic text-center py-6">
+            Aucun recoupement enregistré pour ce filtre.
+          </p>
+        )}
+
+        {slice.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-700">
+                  <th className="text-left py-1.5 pr-2">Date point</th>
+                  <th className="text-left py-1.5 px-1">Type</th>
+                  <th className="text-right py-1.5 px-1">Déclaré</th>
+                  <th className="text-right py-1.5 px-1">Système</th>
+                  <th className="text-right py-1.5 px-1">CA système</th>
+                  <th className="text-right py-1.5 px-1">Alertes</th>
+                  <th className="text-left py-1.5 px-1">Auteur</th>
+                  <th className="text-left py-1.5 px-1">Effectué le</th>
+                  <th className="text-right py-1.5 pl-1">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((rec) => {
+                  const meta = KIND_META[rec.kind] || KIND_META.cuisine;
+                  const Ic = meta.Icon;
+                  const alerts = rec.summary?.alerts_count || 0;
+                  return (
+                    <tr key={rec.id} className={`border-b border-slate-800 hover:bg-slate-700/20 ${alerts > 0 ? "bg-rose-900/10" : ""}`} data-testid={`recoup-history-row-${rec.id}`}>
+                      <td className="py-1.5 pr-2 text-slate-200 font-mono">{rec.date}</td>
+                      <td className="px-1">
+                        <Badge className={meta.accent === "purple" ? "bg-purple-500/20 text-purple-300" : "bg-amber-500/20 text-amber-300"}>
+                          <Ic className="w-3 h-3 mr-1 inline" />{meta.label}
+                        </Badge>
+                      </td>
+                      <td className="text-right text-slate-300 px-1">{fmt(rec.summary?.total_declared_qty)}</td>
+                      <td className="text-right text-slate-300 px-1">{fmt(rec.summary?.total_system_qty)}</td>
+                      <td className="text-right text-amber-300 px-1 font-mono">{fmt(rec.summary?.total_system_revenue)} F</td>
+                      <td className="text-right px-1">
+                        {alerts > 0 ? (
+                          <Badge className="bg-rose-500/30 text-rose-200">{alerts}</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-500/20 text-emerald-300">0</Badge>
+                        )}
+                      </td>
+                      <td className="text-slate-400 px-1 text-[10px]">{rec.actor_name}</td>
+                      <td className="text-slate-400 px-1 text-[10px]">
+                        {rec.created_at ? format(new Date(rec.created_at), "dd/MM HH:mm") : ""}
+                      </td>
+                      <td className="text-right pl-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => reprint(rec)}
+                          className="h-6 text-[10px] text-cyan-300 hover:text-cyan-200"
+                          data-testid={`recoup-history-pdf-${rec.id}`}
+                          title="Réimprimer le rapport"
+                        >
+                          <Eye className="w-3 h-3 mr-0.5" /> PDF
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {items.length > pageSize && (
+          <div className="flex items-center justify-end gap-2 pt-2 text-[10px]">
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="h-6">‹</Button>
+            <span className="text-slate-400">Page {page} / {totalPages}</span>
+            <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="h-6">›</Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 const RecoupementPanel = ({ currentUser }) => {
+  const [historyKey, setHistoryKey] = useState(0);
+  const refreshHistory = () => setHistoryKey(k => k + 1);
   return (
     <div className="space-y-4" data-testid="recoupement-panel">
       <Card className="bg-slate-800/50 border-slate-700">
@@ -442,9 +622,10 @@ const RecoupementPanel = ({ currentUser }) => {
         </CardContent>
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RecoupementCard kind="cuisine" currentUser={currentUser} />
-        <RecoupementCard kind="jeux" currentUser={currentUser} />
+        <RecoupementCard kind="cuisine" currentUser={currentUser} onCompared={refreshHistory} />
+        <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
       </div>
+      <RecoupementHistory refreshKey={historyKey} />
     </div>
   );
 };
