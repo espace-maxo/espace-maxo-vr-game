@@ -42,7 +42,7 @@ const ACTION_META = {
 
 const ROLE_META = {
   admin:   { label: "Admin",   color: "bg-purple-500/20 text-purple-300" },
-  manager: { label: "Responsable Op. & Log", color: "bg-amber-500/20 text-amber-300" },
+  manager: { label: "Resp. Op.", color: "bg-amber-500/20 text-amber-300" },
   server:  { label: "Agent", color: "bg-sky-500/20 text-sky-300" },
 };
 

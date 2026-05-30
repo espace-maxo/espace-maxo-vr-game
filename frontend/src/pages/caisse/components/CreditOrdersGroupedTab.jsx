@@ -20,7 +20,7 @@ const CreditOrdersGroupedTab = ({ currentUser, formatPrice, products }) => {
           <Users className="w-4 h-4 mr-1.5" /> Employés <span className="ml-2 text-[10px] opacity-70">10 000 F/mois</span>
         </TabsTrigger>
         <TabsTrigger value="credit-gerante" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white" data-testid="credit-tab-gerante">
-          <UserCog className="w-4 h-4 mr-1.5" /> Responsable Op. & Log <span className="ml-2 text-[10px] opacity-70">25 000 F/mois</span>
+          <UserCog className="w-4 h-4 mr-1.5" /> Resp. Op. <span className="ml-2 text-[10px] opacity-70">25 000 F/mois</span>
         </TabsTrigger>
       </TabsList>
 

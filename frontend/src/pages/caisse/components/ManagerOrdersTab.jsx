@@ -21,7 +21,7 @@ const MAX_PER_MONTH = 25000;
 const DISCOUNT_RATE = 0.5;
 
 const STATUS_BADGE = {
-  pending_manager: { label: "Auto-confirmation Responsable Op. & Log en attente", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+  pending_manager: { label: "Auto-confirmation Resp. Op. en attente", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
   pending_director: { label: "En attente Directrice", className: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
   authorized: { label: "Autorisé", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
   settled: { label: "Réglé sur salaire", className: "bg-slate-500/20 text-slate-300 border-slate-500/40" },
@@ -316,7 +316,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                         <div className="flex flex-wrap gap-2 mt-1.5">
                           {order.authorizations?.manager && (
                             <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" /> Responsable Op. & Log: {order.authorizations.manager.name}
+                              <ShieldCheck className="w-3 h-3" /> Resp. Op.: {order.authorizations.manager.name}
                             </span>
                           )}
                           {order.authorizations?.director && (
@@ -330,7 +330,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                     <div className="flex items-center gap-1 flex-wrap justify-end">
                       {canManagerAuth && (
                         <Button size="sm" onClick={() => authorize(order, "manager")} className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" data-testid={`mgr-auth-manager-${order.id}`}>
-                          <ShieldCheck className="w-3 h-3 mr-1" /> Auto-confirmer (Responsable Op. & Log)
+                          <ShieldCheck className="w-3 h-3 mr-1" /> Auto-confirmer (Resp. Op.)
                         </Button>
                       )}
                       {canDirectorAuth && (

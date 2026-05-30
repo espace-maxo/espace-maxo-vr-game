@@ -5091,7 +5091,7 @@ _Responsable Op. & Log - Espace Maxo_
                   'bg-slate-500/20 text-slate-400'
                 }>
                   {currentUser?.role === 'admin' ? 'Administrateur' : 
-                   currentUser?.role === 'manager' ? 'Responsable des Opérations & Logistique' : 
+                   currentUser?.role === 'manager' ? 'Resp. Op.' : 
                    currentUser?.role === 'cuisinier' ? 'Cuisinier' :
                    currentUser?.role === 'coach_jeux' ? 'Coach Jeux' :
                    'Agent'}

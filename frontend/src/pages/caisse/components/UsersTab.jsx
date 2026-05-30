@@ -12,7 +12,7 @@ import { UserPlus, Edit2, Trash2 } from 'lucide-react';
 const roleLabel = (role) => {
   switch (role) {
     case 'admin': return 'Admin';
-    case 'manager': return 'Responsable des Opérations & Logistique';
+    case 'manager': return 'Resp. Op.';
     case 'cuisinier': return 'Cuisinier';
     case 'coach_jeux': return 'Coach Jeux';
     default: return 'Agent';
