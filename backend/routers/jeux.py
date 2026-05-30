@@ -60,13 +60,18 @@ async def get_jeux_catalog(actor_role: str = ""):
 # CRUD Bons Jeux
 # ─────────────────────────────────────────────────────────
 
-class JeuxBonCreate(BaseModel):
+class JeuxBonItem(BaseModel):
     jeu_product_id: str
     jeu_name: str
     parties: int = Field(..., gt=0, le=100)
     unit_price: float = Field(..., ge=0)
-    players: str = ""
     duration_minutes: Optional[int] = None
+    notes: Optional[str] = ""
+
+
+class JeuxBonCreate(BaseModel):
+    items: List[JeuxBonItem]
+    players: str = ""
     notes: Optional[str] = ""
     coach_name: str
     coach_role: str
@@ -76,17 +81,32 @@ class JeuxBonCreate(BaseModel):
 async def create_bon(body: JeuxBonCreate):
     if body.coach_role not in ("coach_jeux", "admin"):
         raise HTTPException(403, "Action réservée au coach")
-    total = round(float(body.unit_price) * int(body.parties), 2)
+    if not body.items:
+        raise HTTPException(400, "Au moins une ligne est requise")
     now_iso = datetime.now(timezone.utc).isoformat()
+    items_out = []
+    total = 0.0
+    total_duration = 0
+    for it in body.items:
+        line_total = round(float(it.unit_price) * int(it.parties), 2)
+        total += line_total
+        if it.duration_minutes:
+            total_duration += int(it.duration_minutes)
+        items_out.append({
+            "jeu_product_id": it.jeu_product_id,
+            "jeu_name": it.jeu_name,
+            "parties": int(it.parties),
+            "unit_price": float(it.unit_price),
+            "total": line_total,
+            "duration_minutes": it.duration_minutes,
+            "notes": (it.notes or "").strip(),
+        })
     bon = {
         "id": str(uuid.uuid4()),
-        "jeu_product_id": body.jeu_product_id,
-        "jeu_name": body.jeu_name,
-        "parties": int(body.parties),
-        "unit_price": float(body.unit_price),
-        "total": total,
+        "items": items_out,
+        "total": round(total, 2),
+        "total_duration_minutes": total_duration or None,
         "players": (body.players or "").strip(),
-        "duration_minutes": body.duration_minutes,
         "notes": (body.notes or "").strip(),
         "coach_name": body.coach_name,
         "coach_role": body.coach_role,
@@ -104,6 +124,24 @@ async def create_bon(body: JeuxBonCreate):
     await db.jeux_bons.insert_one(bon)
     bon.pop("_id", None)
     return {"success": True, "bon": bon}
+
+
+def _ensure_items(bon: dict) -> list:
+    """Retourne la liste des items du bon (supporte ancien format mono-jeu)."""
+    if bon.get("items"):
+        return bon["items"]
+    # Legacy fallback : ancien format avec champs top-level
+    if bon.get("jeu_product_id"):
+        return [{
+            "jeu_product_id": bon["jeu_product_id"],
+            "jeu_name": bon.get("jeu_name", ""),
+            "parties": bon.get("parties", 1),
+            "unit_price": bon.get("unit_price", 0),
+            "total": bon.get("total", 0),
+            "duration_minutes": bon.get("duration_minutes"),
+            "notes": "",
+        }]
+    return []
 
 
 @router.get("/jeux/bons")
@@ -153,22 +191,24 @@ async def attach_bon_to_table(bon_id: str, body: AttachBody):
         raise HTTPException(404, "Table introuvable")
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Ajoute les parties comme item à la table
-    new_item = {
-        "id": str(uuid.uuid4()),
-        "product_id": bon["jeu_product_id"],
-        "name": bon["jeu_name"],
-        "quantity": bon["parties"],
-        "price": bon["unit_price"],
-        "total": bon["total"],
-        "department": "jeux",
-        "category": "jeux",
-        "notes": _format_notes_from_bon(bon),
-        "from_jeux_bon": bon_id,
-        "added_at": now_iso,
-        "added_by": body.actor_name,
-    }
-    items = (table.get("items") or []) + [new_item]
+    items_list = _ensure_items(bon)
+    new_items = []
+    for it in items_list:
+        new_items.append({
+            "id": str(uuid.uuid4()),
+            "product_id": it["jeu_product_id"],
+            "name": it["jeu_name"],
+            "quantity": it["parties"],
+            "price": it["unit_price"],
+            "total": it["total"],
+            "department": "jeux",
+            "category": "jeux",
+            "notes": _format_item_notes(it, bon),
+            "from_jeux_bon": bon_id,
+            "added_at": now_iso,
+            "added_by": body.actor_name,
+        })
+    items = (table.get("items") or []) + new_items
     await db.caisse_tables.update_one(
         {"id": body.table_id},
         {"$set": {"items": items, "updated_at": now_iso}},
@@ -184,7 +224,7 @@ async def attach_bon_to_table(bon_id: str, body: AttachBody):
             "processed_at": now_iso,
         }},
     )
-    return {"success": True, "table_number": table.get("table_number")}
+    return {"success": True, "table_number": table.get("table_number"), "items_added": len(new_items)}
 
 
 class StandaloneBody(BaseModel):
@@ -212,27 +252,33 @@ async def make_standalone_invoice(bon_id: str, body: StandaloneBody):
     invoice_number = f"EM-{date_prefix}-{str(count + 1).zfill(4)}"
     now_iso = today.isoformat()
 
-    item = {
-        "id": str(uuid.uuid4()),
-        "product_id": bon["jeu_product_id"],
-        "name": bon["jeu_name"],
-        "quantity": bon["parties"],
-        "price": bon["unit_price"],
-        "total": bon["total"],
-        "department": "jeux",
-        "category": "jeux",
-        "notes": _format_notes_from_bon(bon),
-        "from_jeux_bon": bon_id,
-    }
+    items_list = _ensure_items(bon)
+    inv_items = []
+    subtotal = 0.0
+    for it in items_list:
+        line_total = float(it.get("total") or 0)
+        subtotal += line_total
+        inv_items.append({
+            "id": str(uuid.uuid4()),
+            "product_id": it["jeu_product_id"],
+            "name": it["jeu_name"],
+            "quantity": it["parties"],
+            "price": it["unit_price"],
+            "total": line_total,
+            "department": "jeux",
+            "category": "jeux",
+            "notes": _format_item_notes(it, bon),
+            "from_jeux_bon": bon_id,
+        })
     invoice = {
         "id": str(uuid.uuid4()),
         "invoice_number": invoice_number,
         "customer_name": (body.customer_name or "Client de passage").strip() or "Client de passage",
         "customer_phone": body.customer_phone or "",
-        "items": [item],
-        "subtotal": bon["total"],
+        "items": inv_items,
+        "subtotal": round(subtotal, 2),
         "discount": 0,
-        "total": bon["total"],
+        "total": round(subtotal, 2),
         "payment_method": body.payment_method,
         "validation_status": "pending",
         "created_by": body.actor_name,
@@ -254,7 +300,7 @@ async def make_standalone_invoice(bon_id: str, body: StandaloneBody):
             "processed_at": now_iso,
         }},
     )
-    return {"success": True, "invoice_number": invoice_number, "invoice_id": invoice["id"]}
+    return {"success": True, "invoice_number": invoice_number, "invoice_id": invoice["id"], "items_count": len(inv_items)}
 
 
 class RejectBody(BaseModel):
@@ -288,12 +334,15 @@ async def reject_bon(bon_id: str, body: RejectBody):
     return {"success": True}
 
 
-def _format_notes_from_bon(bon: dict) -> str:
+def _format_item_notes(item: dict, bon: dict) -> str:
+    """Note enrichie d'un item-jeu pour l'affichage table/facture."""
     parts = []
     if bon.get("players"):
         parts.append(f"Joueurs: {bon['players']}")
-    if bon.get("duration_minutes"):
-        parts.append(f"Durée: {bon['duration_minutes']} min")
+    if item.get("duration_minutes"):
+        parts.append(f"Durée: {item['duration_minutes']} min")
+    if item.get("notes"):
+        parts.append(item["notes"])
     if bon.get("notes"):
         parts.append(bon["notes"])
     parts.append(f"Coach: {bon.get('coach_name','?')}")

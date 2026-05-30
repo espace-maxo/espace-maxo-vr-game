@@ -1,0 +1,93 @@
+{
+  "summary": "Coach Jeux Multi-Items feature testing complete - All backend APIs (11/11) and frontend flows working correctly",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "JeuxBonsModal", "issues": ["Minor: Missing aria-describedby for DialogContent (accessibility warning in console)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_jeux_multi_items_iter90.py",
+    "/app/test_reports/pytest/jeux_multi_items_iter90_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_jeux_multi_items_iter90.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all flows verified)"
+  },
+  "test_credentials": {
+    "coach_jeux": "username: coach / PIN: 9876",
+    "admin": "password: Caisse2026"
+  },
+  "seed_data_creation": "Test bons created with TEST_MULTI_ prefix for cleanup identification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Coach Jeux Multi-Items feature fully implemented and tested. Backend supports items[] array in POST /api/jeux/bons. Frontend CoachJeuxPage has cart with add/remove lines, total calculation, duration sum. JeuxBonsModal shows multi-line bons with purple left border. Attach and Standalone actions work with all items. Legacy bons (jeu_product_id top-level) still compatible via _ensure_items helper.",
+  "tests_executed": {
+    "backend": {
+      "multi_items_create_tests": [
+        "test_create_multi_items_bon_success - PASSED (2 items, total=9000F, duration=75min)",
+        "test_create_bon_empty_items_returns_400 - PASSED",
+        "test_create_bon_zero_parties_returns_422 - PASSED (Pydantic validation)",
+        "test_create_bon_server_role_returns_403 - PASSED",
+        "test_create_bon_single_item_success - PASSED"
+      ],
+      "multi_items_list_tests": [
+        "test_list_bons_returns_items_array - PASSED"
+      ],
+      "multi_items_attach_tests": [
+        "test_attach_multi_items_adds_all_to_table - PASSED (items_added verified)"
+      ],
+      "multi_items_standalone_tests": [
+        "test_standalone_creates_invoice_with_all_items - PASSED (items_count verified)"
+      ],
+      "legacy_compatibility_tests": [
+        "test_legacy_bons_still_listable - PASSED",
+        "test_existing_multi_items_bon_processable - PASSED"
+      ],
+      "reject_tests": [
+        "test_reject_multi_items_bon_success - PASSED"
+      ]
+    },
+    "frontend": {
+      "coach_page_multi_items": [
+        "Nouveau bon tab with 'Ajouter une ligne au bon' form - PASSED",
+        "Jeu dropdown with catalog products - PASSED",
+        "Nb parties input - PASSED",
+        "Prix unitaire auto-fill from catalog - PASSED",
+        "Durée (min) optional input - PASSED",
+        "Note de cette ligne input - PASSED",
+        "coach-add-line button adds line to cart - PASSED",
+        "Cart shows 'Lignes du bon (N)' with total - PASSED",
+        "cart-line-0, cart-line-1 display with badges (x{parties}, {total} F, {duration} min) - PASSED",
+        "cart-total shows cumulative sum (e.g., 9 000 F) - PASSED",
+        "cart-remove-0 removes line - PASSED",
+        "coach-submit-bon disabled when cart empty - PASSED",
+        "coach-submit-bon enabled when cart has items - PASSED",
+        "Submit with 2 lines shows toast 'Bon transmis au Responsable (2 lignes)' - PASSED",
+        "Cart reset after submit - PASSED"
+      ],
+      "coach_history_multi_items": [
+        "Mes bons tab shows 'Bon · N lignes' badge - PASSED",
+        "Each line shows jeu_name + parties + total + duration - PASSED",
+        "Status badges (En attente, Refusé) - PASSED"
+      ],
+      "admin_jeux_modal_multi_items": [
+        "JeuxBonsModal shows pending bons with items list - PASSED",
+        "Purple left border on items list - PASSED",
+        "Badge 'Bon · N lignes' + total + duration - PASSED",
+        "Rattacher, Facturer direct, Refuser buttons - PASSED",
+        "Récemment traités shows summary 'JeuA xN, JeuB xM' - PASSED"
+      ]
+    }
+  }
+}

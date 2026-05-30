@@ -158,28 +158,43 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
                 {pendingBons.map((b) => {
                   const isProcessing = processingId === b.id;
                   const isRejecting = rejectMode[b.id]?.open;
+                  // Compat: anciens bons mono-jeu
+                  const items = b.items && b.items.length
+                    ? b.items
+                    : (b.jeu_product_id ? [{ jeu_name: b.jeu_name, parties: b.parties, total: b.total, duration_minutes: b.duration_minutes }] : []);
+                  const totalDuration = items.reduce((s, it) => s + (Number(it.duration_minutes) || 0), 0);
                   return (
                     <Card key={b.id}
                           className="bg-slate-800/60 border-amber-500/40"
                           data-testid={`pending-bon-${b.id}`}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Gamepad2 className="w-4 h-4 text-purple-400" />
-                              <span className="font-semibold text-sm">{b.jeu_name}</span>
-                              <Badge className="bg-slate-700 text-slate-200 text-[10px]">x{b.parties}</Badge>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                              <Receipt className="w-4 h-4 text-amber-400" />
+                              <span className="font-semibold text-sm">Bon · {items.length} ligne{items.length > 1 ? "s" : ""}</span>
                               <Badge className="bg-emerald-700/50 text-emerald-100 text-[10px]">
-                                {b.total.toLocaleString("fr-FR")} F
+                                {(b.total || 0).toLocaleString("fr-FR")} F
                               </Badge>
-                              {b.duration_minutes ? (
-                                <Badge className="bg-blue-700/50 text-blue-100 text-[10px]">
-                                  {b.duration_minutes} min
-                                </Badge>
-                              ) : null}
+                              {totalDuration > 0 && (
+                                <Badge className="bg-blue-700/50 text-blue-100 text-[10px]">{totalDuration} min</Badge>
+                              )}
+                            </div>
+                            {/* Liste des lignes */}
+                            <div className="space-y-0.5 pl-1 border-l-2 border-purple-500/40 ml-1">
+                              {items.map((it, idx) => (
+                                <div key={idx} className="text-[11px] text-slate-300 flex items-center gap-1.5 flex-wrap pl-2">
+                                  <Gamepad2 className="w-3 h-3 text-purple-400" />
+                                  <span className="font-medium">{it.jeu_name}</span>
+                                  <Badge className="bg-slate-700 text-slate-200 text-[9px]">x{it.parties}</Badge>
+                                  <span className="text-slate-400">{(it.total || 0).toLocaleString("fr-FR")} F</span>
+                                  {it.duration_minutes ? <span className="text-slate-500">· {it.duration_minutes} min</span> : null}
+                                  {it.notes && <span className="text-slate-500 italic truncate">· {it.notes}</span>}
+                                </div>
+                              ))}
                             </div>
                             {b.players && (
-                              <p className="text-[11px] text-slate-300 mt-1">
+                              <p className="text-[11px] text-slate-300 mt-1.5">
                                 <Users className="w-3 h-3 inline mr-1" /> {b.players}
                               </p>
                             )}
@@ -292,14 +307,18 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
                   Récemment traités
                 </h3>
                 <div className="space-y-1.5">
-                  {processedBons.slice(0, 30).map((b) => (
+                  {processedBons.slice(0, 30).map((b) => {
+                    const lines = b.items && b.items.length
+                      ? b.items
+                      : (b.jeu_product_id ? [{ jeu_name: b.jeu_name, parties: b.parties }] : []);
+                    const summary = lines.map((it) => `${it.jeu_name} x${it.parties}`).join(", ");
+                    return (
                     <div key={b.id}
                          className="bg-slate-800/40 border border-slate-700 rounded p-2 text-xs flex items-center justify-between gap-2"
                          data-testid={`processed-bon-${b.id}`}>
                       <div className="min-w-0 flex-1">
-                        <span className="font-medium text-slate-200">{b.jeu_name}</span>
-                        <span className="text-slate-400"> · x{b.parties} · {b.total.toLocaleString("fr-FR")} F</span>
-                        <span className="text-slate-500 ml-2">par {b.coach_name}</span>
+                        <span className="font-medium text-slate-200 truncate block">{summary || "—"}</span>
+                        <span className="text-slate-400 text-[10px]">{(b.total || 0).toLocaleString("fr-FR")} F · par {b.coach_name}</span>
                       </div>
                       <div className="text-[10px] text-right shrink-0">
                         {b.status === "attached" && (
@@ -315,7 +334,8 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
