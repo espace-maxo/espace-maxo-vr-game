@@ -150,8 +150,8 @@ async def _ocr_extract(image_base64: str, system_prompt: str, user_prompt: str) 
 @router.post("/recoupement/extract-cuisine")
 async def extract_cuisine(body: ExtractBody):
     """Extrait la liste des plats déclarés par le cuisinier depuis une photo."""
-    if body.actor_role not in ("admin", "manager"):
-        raise HTTPException(403, "Action réservée à l'admin et à la Resp. Op.")
+    if body.actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
     sys_prompt = (
         "Tu es un assistant qui lit le point manuscrit d'un cuisinier dans un restaurant. "
         "L'écriture peut être en français, parfois rapide ou abrégée. "
@@ -175,8 +175,8 @@ async def extract_cuisine(body: ExtractBody):
 @router.post("/recoupement/extract-jeux")
 async def extract_jeux(body: ExtractBody):
     """Extrait le compteur de parties par jeu/machine depuis une photo."""
-    if body.actor_role not in ("admin", "manager"):
-        raise HTTPException(403, "Action réservée à l'admin et à la Resp. Op.")
+    if body.actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
     sys_prompt = (
         "Tu lis un tableau ou cahier manuscrit qui liste le nombre de parties jouées "
         "par machine/jeu dans un restaurant-bar (ex: PS5, Babyfoot, Billard, VR). "
@@ -334,8 +334,8 @@ async def _save_and_audit(kind: str, date_str: str, summary: dict, body: Compare
 
 @router.post("/recoupement/compare-cuisine")
 async def compare_cuisine(body: CompareBody):
-    if body.actor_role not in ("admin", "manager"):
-        raise HTTPException(403, "Action réservée")
+    if body.actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
     system = await _system_sales_by_item(body.date, CUISINE_DEPTS)
     summary = _build_compare_rows(body.declared, system)
     # CA total cuisine (système) — pas de CA "déclaré" car le cuisinier ne saisit pas de prix
@@ -346,8 +346,8 @@ async def compare_cuisine(body: CompareBody):
 
 @router.post("/recoupement/compare-jeux")
 async def compare_jeux(body: CompareBody):
-    if body.actor_role not in ("admin", "manager"):
-        raise HTTPException(403, "Action réservée")
+    if body.actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
     system = await _system_sales_by_item(body.date, JEUX_DEPTS)
     summary = _build_compare_rows(body.declared, system)
     breached = summary["alerts_count"] >= 3

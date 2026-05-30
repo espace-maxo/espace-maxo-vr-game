@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -5309,6 +5309,12 @@ _Gérante - Espace Maxo_
                 <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Audit</span>
               </TabsTrigger>
             )}
+            {/* 14.6 RECOUPEMENT IA — Cuisine & Jeux (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="recoupement" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-recoupement">
+                <Sparkles className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Recoupement IA</span>
+              </TabsTrigger>
+            )}
             {/* 15. COMPTE COURANT (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="current-accounts" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-current-accounts">
@@ -5718,11 +5724,14 @@ _Gérante - Espace Maxo_
           {/* ==================== AUDIT LOGS TAB (Admin only) ==================== */}
           {currentUser?.role === 'admin' && (
             <TabsContent value="audit">
-              <div className="space-y-4">
-                <AuditLogsTab currentUser={currentUser} />
-                {/* Recoupement IA cuisine + jeux */}
-                <RecoupementPanel currentUser={currentUser} />
-              </div>
+              <AuditLogsTab currentUser={currentUser} />
+            </TabsContent>
+          )}
+
+          {/* ==================== RECOUPEMENT IA TAB (ADMIN ONLY) ==================== */}
+          {currentUser?.role === 'admin' && (
+            <TabsContent value="recoupement">
+              <RecoupementPanel currentUser={currentUser} />
             </TabsContent>
           )}
 
