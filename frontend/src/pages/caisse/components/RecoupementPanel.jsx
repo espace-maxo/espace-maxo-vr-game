@@ -92,6 +92,21 @@ function openRecoupementPdf({ kind, date, summary, notes, actor_name, actor_role
     </tr>`;
   }).join("");
 
+  const fe = summary?.financial_evaluation;
+  const feBlock = (fe && fe.status !== "not_declared") ? `
+    <div style="background:${fe.alert ? "#fde2e2" : (fe.status === "ok" ? "#e2f5e9" : "#fff3e0")};border:1px solid ${fe.alert ? "#e57373" : (fe.status === "ok" ? "#9bdbab" : "#e8c275")};border-radius:6px;padding:8px;margin:10px 0;font-size:11px">
+      <b style="display:block;margin-bottom:4px;color:#1a3a52">Évaluation financière</b>
+      <table style="width:100%;border:none">
+        <tr style="border:none">
+          <td style="border:none;padding:2px 4px"><b>CA déclaré :</b> ${fmt(fe.declared_total)} F</td>
+          <td style="border:none;padding:2px 4px"><b>CA système :</b> ${fmt(fe.system_total)} F</td>
+          <td style="border:none;padding:2px 4px"><b>Écart :</b> <span style="color:${fe.diff > 0 ? "#b07a00" : (fe.diff < 0 ? "#a01010" : "#197d3a")};font-family:monospace">${fe.diff > 0 ? "+" : ""}${fmt(fe.diff)} F (${fe.diff_pct}%)</span></td>
+        </tr>
+      </table>
+      <div style="margin-top:4px;font-style:italic;color:#444">${fe.message}</div>
+    </div>
+  ` : "";
+
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
 <title>Recoupement ${meta.label} — ${date}</title>
@@ -118,6 +133,7 @@ function openRecoupementPdf({ kind, date, summary, notes, actor_name, actor_role
     <div class="kpi" style="background:${(summary?.alerts_count || 0) > 0 ? "#fff3e0" : "#e7f5ec"}"><b>${summary?.alerts_count || 0}</b>${(summary?.alerts_count || 0) > 0 ? "alerte(s) écart" : "Aucun écart"}</div>
   </div>
   ${notes ? `<div style="background:#f7f7e8;border:1px solid #d8d49c;padding:6px;font-size:11px;margin-bottom:8px"><b>Remarques :</b> ${String(notes).replace(/</g, "&lt;")}</div>` : ""}
+  ${feBlock}
   <table>
     <thead>
       <tr>
@@ -152,6 +168,7 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
   const [extracting, setExtracting] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [items, setItems] = useState([]);
+  const [declaredTotalRevenue, setDeclaredTotalRevenue] = useState("");
   const [notes, setNotes] = useState("");
   const [summary, setSummary] = useState(null);
   const fileRef = useRef(null);
@@ -189,7 +206,12 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
       }));
       setItems(arr);
       if (r.data.notes) setNotes(r.data.notes);
-      toast.success(`${arr.length} ${meta.item_plural} extraits. Corrigez si besoin avant de comparer.`);
+      if (r.data.declared_total_revenue != null) {
+        setDeclaredTotalRevenue(String(r.data.declared_total_revenue));
+        toast.success(`${arr.length} ${meta.item_plural} + recette ${fmt(r.data.declared_total_revenue)} F extraits.`);
+      } else {
+        toast.success(`${arr.length} ${meta.item_plural} extraits. Saisissez la recette déclarée si applicable.`);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur d'extraction IA");
     } finally {
@@ -204,6 +226,7 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
       const r = await axios.post(`${API}${meta.compare_url}`, {
         date,
         declared: items.filter((it) => (it.name || "").trim()),
+        declared_total_revenue: declaredTotalRevenue !== "" ? Number(declaredTotalRevenue) : null,
         notes,
         actor_name: currentUser?.full_name || currentUser?.username,
         actor_role: currentUser?.role,
@@ -230,6 +253,7 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
     setImagePreview(null);
     setImageBase64(null);
     setItems([]);
+    setDeclaredTotalRevenue("");
     setNotes("");
     setSummary(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -352,9 +376,29 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
           </div>
         )}
 
-        {/* Notes */}
+        {/* Notes + Recette déclarée */}
         {items.length > 0 && (
           <>
+            <div>
+              <Label className="text-xs text-slate-300 mb-1 block flex items-center gap-1">
+                <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                Recette totale déclarée (F CFA) — optionnel
+              </Label>
+              <Input
+                type="number"
+                step="100"
+                min={0}
+                value={declaredTotalRevenue}
+                onChange={(e) => setDeclaredTotalRevenue(e.target.value)}
+                placeholder="Ex: 45000 (vide = pas de comparaison financière)"
+                className="bg-slate-800 border-slate-700 text-white text-xs h-8"
+                data-testid={`recoup-declared-revenue-${kind}`}
+              />
+              <p className="text-[9px] text-slate-500 mt-0.5">
+                Saisissez le total écrit en bas du cahier (ou laissez vide si non présent).
+                Sera comparé au CA système {meta.label.toLowerCase()} du jour.
+              </p>
+            </div>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -403,6 +447,64 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
                 Exporter PDF
               </Button>
             </div>
+
+            {/* Évaluation financière (CA déclaré vs système) */}
+            {summary.financial_evaluation && (
+              (() => {
+                const fe = summary.financial_evaluation;
+                const isOk = fe.status === "ok";
+                const isAlert = fe.alert;
+                const colorWrap = fe.status === "not_declared"
+                  ? "bg-slate-800/40 border-slate-700"
+                  : isAlert
+                    ? "bg-rose-900/25 border-rose-500/50"
+                    : isOk
+                      ? "bg-emerald-900/25 border-emerald-500/50"
+                      : "bg-amber-900/25 border-amber-500/50";
+                return (
+                  <div className={`rounded-lg border ${colorWrap} p-2.5 mb-2`} data-testid={`recoup-fineval-${kind}`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <FileText className="w-4 h-4 text-cyan-300" />
+                      <span className="text-xs font-bold text-cyan-200">Évaluation financière</span>
+                    </div>
+                    {fe.status === "not_declared" ? (
+                      <p className="text-[11px] text-slate-400 italic">
+                        Aucune recette déclarée. Pour comparer, saisissez le total écrit sur le cahier.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        <div className="bg-slate-800/60 rounded p-1.5">
+                          <p className="text-[9px] uppercase text-slate-400">CA déclaré</p>
+                          <p className="text-slate-100 font-bold font-mono">{fmt(fe.declared_total)} F</p>
+                        </div>
+                        <div className="bg-slate-800/60 rounded p-1.5">
+                          <p className="text-[9px] uppercase text-slate-400">CA système</p>
+                          <p className="text-amber-300 font-bold font-mono">{fmt(fe.system_total)} F</p>
+                        </div>
+                        <div className="bg-slate-800/60 rounded p-1.5">
+                          <p className="text-[9px] uppercase text-slate-400">Écart</p>
+                          <p className={`font-bold font-mono ${fe.diff > 0 ? "text-amber-300" : (fe.diff < 0 ? "text-rose-300" : "text-emerald-300")}`}>
+                            {fe.diff > 0 ? "+" : ""}{fmt(fe.diff)} F
+                          </p>
+                        </div>
+                        <div className="bg-slate-800/60 rounded p-1.5">
+                          <p className="text-[9px] uppercase text-slate-400">% écart</p>
+                          <p className={`font-bold font-mono ${isAlert ? "text-rose-300" : "text-slate-200"}`}>
+                            {fe.diff_pct}%
+                          </p>
+                        </div>
+                        <div className="col-span-2 sm:col-span-4 text-[11px] pt-1">
+                          {isOk && <span className="text-emerald-300 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {fe.message}</span>}
+                          {!isOk && isAlert && <span className="text-rose-300 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {fe.message}</span>}
+                          {!isOk && !isAlert && <span className="text-amber-300">{fe.message}</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
                 <thead>

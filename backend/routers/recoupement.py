@@ -67,6 +67,7 @@ class CompareItem(BaseModel):
 class CompareBody(BaseModel):
     date: str  # YYYY-MM-DD
     declared: List[CompareItem]  # liste corrigée par l'humain
+    declared_total_revenue: Optional[float] = None  # CA total déclaré (manuel ou IA)
     notes: Optional[str] = ""
     actor_name: str
     actor_role: str
@@ -156,8 +157,13 @@ async def extract_cuisine(body: ExtractBody):
         "Tu es un assistant qui lit le point manuscrit d'un cuisinier dans un restaurant. "
         "L'écriture peut être en français, parfois rapide ou abrégée. "
         "Tu dois extraire la liste des plats et leur quantité (entier ou décimal). "
+        "Repère aussi un éventuel TOTAL DE RECETTE/CA déclaré (souvent en bas de la page, "
+        "noté 'Total', 'CA', 'Recette', 'Montant' suivi d'un nombre + 'F' ou 'FCFA'). "
         "Réponds STRICTEMENT au format JSON suivant, sans aucun texte autour : "
-        '{"items": [{"name": "Nom du plat", "quantity": 3}, ...], "notes": "remarques éventuelles"}'
+        '{"items": [{"name": "Nom du plat", "quantity": 3}, ...], '
+        '"declared_total_revenue": 45000, '
+        '"notes": "remarques éventuelles"}. '
+        "Si aucun total de recette n'est lisible, mets declared_total_revenue à null."
     )
     user_prompt = (
         "Lis cette photo du cahier de la cuisine et extrais chaque plat avec sa quantité. "
@@ -167,6 +173,7 @@ async def extract_cuisine(body: ExtractBody):
     data = await _ocr_extract(body.image_base64, sys_prompt, user_prompt)
     return {
         "items": data.get("items") or [],
+        "declared_total_revenue": data.get("declared_total_revenue"),
         "notes": data.get("notes") or "",
         "raw": data.get("raw"),
     }
@@ -181,7 +188,10 @@ async def extract_jeux(body: ExtractBody):
         "Tu lis un tableau ou cahier manuscrit qui liste le nombre de parties jouées "
         "par machine/jeu dans un restaurant-bar (ex: PS5, Babyfoot, Billard, VR). "
         "Tu dois extraire un objet JSON STRICTEMENT au format : "
-        '{"items": [{"name": "PS5", "quantity": 12}, {"name": "Babyfoot", "quantity": 8}, ...], "notes": "..."}'
+        '{"items": [{"name": "PS5", "quantity": 12}, {"name": "Babyfoot", "quantity": 8}, ...], '
+        '"declared_total_revenue": 35000, '
+        '"notes": "..."}. '
+        "Repère aussi un TOTAL RECETTE/CA en bas de page si présent. Si absent mets null."
     )
     user_prompt = (
         "Lis cette photo et extrais chaque machine/jeu avec le nombre de parties. "
@@ -190,6 +200,7 @@ async def extract_jeux(body: ExtractBody):
     data = await _ocr_extract(body.image_base64, sys_prompt, user_prompt)
     return {
         "items": data.get("items") or [],
+        "declared_total_revenue": data.get("declared_total_revenue"),
         "notes": data.get("notes") or "",
         "raw": data.get("raw"),
     }
@@ -227,8 +238,8 @@ async def _system_sales_by_item(date_str: str, dept_filter: set) -> dict:
     return by_item
 
 
-def _build_compare_rows(declared: List[CompareItem], system_by_item: dict) -> dict:
-    """Construit le tableau comparatif + agrégats."""
+def _build_compare_rows(declared: List[CompareItem], system_by_item: dict, declared_total_revenue: Optional[float] = None) -> dict:
+    """Construit le tableau comparatif + agrégats + évaluation financière."""
     candidates = [{"name": k, **v} for k, v in system_by_item.items()]
     used_keys = set()
     rows = []
@@ -289,6 +300,43 @@ def _build_compare_rows(declared: List[CompareItem], system_by_item: dict) -> di
         "total_system_qty": total_system_qty,
         "total_system_revenue": total_system_revenue,
         "alerts_count": sum(1 for r in rows if r["alert"]),
+        "financial_evaluation": _build_financial_eval(declared_total_revenue, total_system_revenue),
+    }
+
+
+def _build_financial_eval(declared_total: Optional[float], system_total: float) -> dict:
+    """Compare CA déclaré (cuisinier/jeux) vs CA système. Renvoie diff, pct, statut, alerte."""
+    if declared_total is None:
+        return {
+            "declared_total": None,
+            "system_total": system_total,
+            "diff": None,
+            "diff_pct": None,
+            "status": "not_declared",
+            "alert": False,
+            "message": "Aucun total déclaré (rien à comparer)",
+        }
+    declared_total = float(declared_total)
+    diff = declared_total - system_total
+    pct = (abs(diff) / system_total) if system_total > 0 else (1.0 if diff != 0 else 0)
+    alert = pct > TOTAL_DIFF_PCT
+    if abs(diff) < 1:
+        status = "ok"
+        msg = "Recette déclarée et recette système parfaitement alignées"
+    elif diff > 0:
+        status = "over_declared"
+        msg = f"Recette déclarée SUPÉRIEURE au système de {diff:.0f} F ({pct*100:.1f}%)"
+    else:
+        status = "under_declared"
+        msg = f"Recette déclarée INFÉRIEURE au système de {abs(diff):.0f} F ({pct*100:.1f}%) — possible vente non encaissée"
+    return {
+        "declared_total": declared_total,
+        "system_total": system_total,
+        "diff": diff,
+        "diff_pct": round(pct * 100, 1),
+        "status": status,
+        "alert": alert,
+        "message": msg,
     }
 
 
@@ -298,6 +346,7 @@ async def _save_and_audit(kind: str, date_str: str, summary: dict, body: Compare
         "kind": kind,  # "cuisine" | "jeux"
         "date": date_str,
         "declared": [d.model_dump() for d in body.declared],
+        "declared_total_revenue": body.declared_total_revenue,
         "summary": summary,
         "notes": body.notes,
         "actor_name": body.actor_name,
@@ -337,9 +386,8 @@ async def compare_cuisine(body: CompareBody):
     if body.actor_role != "admin":
         raise HTTPException(403, "Action réservée à l'administrateur")
     system = await _system_sales_by_item(body.date, CUISINE_DEPTS)
-    summary = _build_compare_rows(body.declared, system)
-    # CA total cuisine (système) — pas de CA "déclaré" car le cuisinier ne saisit pas de prix
-    breached = summary["alerts_count"] >= 3  # > 2 alertes → critical
+    summary = _build_compare_rows(body.declared, system, body.declared_total_revenue)
+    breached = summary["alerts_count"] >= 3 or (summary.get("financial_evaluation") or {}).get("alert", False)
     rec = await _save_and_audit("cuisine", body.date, summary, body, breached)
     return {"ok": True, "recoupement": rec, "summary": summary, "audit_critical": breached}
 
@@ -349,8 +397,8 @@ async def compare_jeux(body: CompareBody):
     if body.actor_role != "admin":
         raise HTTPException(403, "Action réservée à l'administrateur")
     system = await _system_sales_by_item(body.date, JEUX_DEPTS)
-    summary = _build_compare_rows(body.declared, system)
-    breached = summary["alerts_count"] >= 3
+    summary = _build_compare_rows(body.declared, system, body.declared_total_revenue)
+    breached = summary["alerts_count"] >= 3 or (summary.get("financial_evaluation") or {}).get("alert", False)
     rec = await _save_and_audit("jeux", body.date, summary, body, breached)
     return {"ok": True, "recoupement": rec, "summary": summary, "audit_critical": breached}
 
