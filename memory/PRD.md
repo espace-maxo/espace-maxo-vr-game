@@ -132,6 +132,18 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Fix bug field-name : `actor_role`/`snapshot` (au lieu de `author_role`/`entity_snapshot` qui n'existaient pas)
 - **SUIVI CUISINE TEMPS RÉEL + MESSAGERIE PRÉENREGISTRÉE (30/05/2026)** ✅
   - Backend `cuisine.py` : extension des statuts d'item à 4 états (`received` → `in_progress` → `ready` → `served`) via `started_at` et `served_at`
+  - Nouveaux endpoints transitions + collection `cuisine_messages` (presets, send, read, read-all)
+  - Frontend `KitchenTrackerModal.jsx` (modal Resp. Op.) + onglet Messages dans `CuisinePage.jsx` + bip Web Audio API
+  - Itération 88 : 21/21 backend ✓ · 100% UI ✓
+- **PROFIL COACH JEUX + WORKFLOW BONS JEUX (30/05/2026)** ✅
+  - Nouveau profil `coach_jeux` cloisonné → page dédiée `CoachJeuxPage.jsx`
+  - Backend `routers/jeux.py` : GET /catalog (dept=jeux), POST /bons (création), GET /bons (liste filtrée par rôle), POST /bons/{id}/attach (rattache à table), POST /bons/{id}/standalone (facture autonome pending), POST /bons/{id}/reject (avec motif obligatoire)
+  - Collection MongoDB `jeux_bons` : statuts `pending → attached | invoiced | rejected`
+  - Workflow coach : sélection jeu (catalogue) + parties + joueurs (libre) + prix modifiable + durée optionnelle + notes → transmission verrouillée + historique avec statuts
+  - Workflow Resp. Op./Admin : modal `JeuxBonsModal.jsx` ouvert depuis bouton Gamepad violet dans le header (badge rouge si pending), 3 actions par bon (Rattacher table / Facturer direct / Refuser avec motif), liste "Récemment traités"
+  - Polling background 8s côté CaissePage avec bip Web Audio API à réception d'un nouveau bon
+  - User test : `coach` / PIN `9876`
+  - Itération 89 : 24/24 backend ✓ · 100% UI ✓
   - Nouveaux endpoints transitions : `PATCH /api/cuisine/orders/{table_id}/items/{idx}/start` (cuisinier) et `PATCH /api/cuisine/orders/{table_id}/items/{idx}/served` (manager, requiert `ready_at`)
   - Nouvelle collection `cuisine_messages` + endpoints : `GET /messages/presets`, `POST /messages`, `GET /messages`, `POST /messages/{id}/read`, `POST /messages/read-all`
   - Formules préenregistrées fixes : 5 pour manager→cuisinier (TIME, URGENT, CONFIRM, REDO, CANCEL) · 6 pour cuisinier→manager (OK, 5MIN, 10MIN, 15MIN, OUT, SOON)
