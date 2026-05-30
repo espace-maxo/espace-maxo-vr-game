@@ -97,13 +97,28 @@ async def mark_item_ready(table_id: str, item_index: int, actor_role: str = "", 
     now_iso = datetime.now(timezone.utc).isoformat()
     items[item_index]["ready_at"] = now_iso
     items[item_index]["ready_by"] = actor_name or "cuisinier"
-    # Si tous les items cuisine sont prêts, marquer le bon entier
     cui_indexes = [i for i, it in enumerate(items) if _is_cuisine_item(it)]
     all_ready = all(items[i].get("ready_at") for i in cui_indexes)
     patch = {"items": items, "updated_at": now_iso}
     if all_ready and cui_indexes:
         patch["all_ready_at"] = now_iso
     await db.caisse_tables.update_one({"id": table_id}, {"$set": patch})
+    # Historique
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "item_ready",
+            "table_id": table_id,
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "item_name": items[item_index].get("name"),
+            "item_quantity": items[item_index].get("quantity") or 1,
+            "actor_name": actor_name or "cuisinier",
+            "actor_role": actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log fail: {e}")
     return {"success": True, "all_ready": all_ready, "item": items[item_index]}
 
 
@@ -116,15 +131,69 @@ async def mark_all_items_ready(table_id: str, actor_role: str = "", actor_name: 
         raise HTTPException(404, "Table introuvable")
     items = t.get("items") or []
     now_iso = datetime.now(timezone.utc).isoformat()
+    marked_names = []
     for i, it in enumerate(items):
         if _is_cuisine_item(it) and not it.get("ready_at"):
             items[i]["ready_at"] = now_iso
             items[i]["ready_by"] = actor_name or "cuisinier"
+            marked_names.append(it.get("name"))
     await db.caisse_tables.update_one(
         {"id": table_id},
         {"$set": {"items": items, "all_ready_at": now_iso, "updated_at": now_iso}}
     )
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "all_ready",
+            "table_id": table_id,
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "items_names": marked_names,
+            "items_count": len(marked_names),
+            "actor_name": actor_name or "cuisinier",
+            "actor_role": actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log fail: {e}")
     return {"success": True, "all_ready_at": now_iso}
+
+
+@router.get("/cuisine/events")
+async def list_cuisine_events(actor_role: str = "", start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 200):
+    """Historique des actions cuisine (plats prêts, tous prêts). Admin uniquement."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    q = {}
+    if start_date and end_date:
+        q["created_at"] = {"$gte": f"{start_date}T00:00:00", "$lte": f"{end_date}T23:59:59.999"}
+    items = await db.cuisine_events.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return {"total": len(items), "items": items}
+
+
+@router.delete("/cuisine/events/{event_id}")
+async def delete_cuisine_event(event_id: str, actor_role: str = "", actor_name: str = ""):
+    """Supprime une entrée d'historique cuisine. Admin uniquement."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    existing = await db.cuisine_events.find_one({"id": event_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Événement introuvable")
+    await db.cuisine_events.delete_one({"id": event_id})
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "cuisine_event",
+            "entity_id": event_id,
+            "action": "delete",
+            "actor_name": actor_name or "—",
+            "actor_role": "admin",
+            "snapshot": existing,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"audit log delete cuisine event fail: {e}")
+    return {"success": True}
 
 
 class ScanBonBody(BaseModel):
@@ -186,7 +255,20 @@ async def scan_bon(body: ScanBonBody):
     }
     await db.recoupements.insert_one(rec)
     rec.pop("_id", None)
-    rec.pop("image_base64", None)  # ne pas renvoyer le base64 en clair
+    rec.pop("image_base64", None)
+    # Historique
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "scan_bon",
+            "recoupement_id": rec["id"],
+            "items_count": len(items),
+            "actor_name": body.actor_name,
+            "actor_role": body.actor_role,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log scan: {e}")
     return {"success": True, "recoupement_id": rec["id"], "items_extracted": len(items), "items": items}
 
 

@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import CuisineHistory from "./CuisineHistory";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
   AlertTriangle, CheckCircle2, ChefHat, Gamepad2, RefreshCw, FileText, History, Eye,
@@ -770,6 +771,7 @@ const RecoupementPanel = ({ currentUser }) => {
         <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
       </div>
       <RecoupementHistory refreshKey={historyKey} currentUser={currentUser} />
+      <CuisineHistory currentUser={currentUser} />
     </div>
   );
 };
