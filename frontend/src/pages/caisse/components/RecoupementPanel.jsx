@@ -311,25 +311,36 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
             data-testid={`recoup-upload-${kind}`}
           >
             <Upload className="w-4 h-4 mr-1" />
-            Choisir une photo
+            Photo (optionnelle)
           </Button>
           {imageBase64 && (
-            <>
-              <Button
-                type="button"
-                onClick={extract}
-                disabled={extracting}
-                className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs"
-                data-testid={`recoup-extract-${kind}`}
-              >
-                {extracting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Camera className="w-4 h-4 mr-1" />}
-                Extraire avec l'IA
-              </Button>
-              <Button type="button" variant="ghost" onClick={reset} className="text-slate-300 text-xs">
-                <RefreshCw className="w-3 h-3 mr-1" />
-                Recommencer
-              </Button>
-            </>
+            <Button
+              type="button"
+              onClick={extract}
+              disabled={extracting}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs"
+              data-testid={`recoup-extract-${kind}`}
+            >
+              {extracting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Camera className="w-4 h-4 mr-1" />}
+              Extraire avec l'IA
+            </Button>
+          )}
+          {items.length === 0 && (
+            <Button
+              type="button"
+              onClick={addRow}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              data-testid={`recoup-manual-start-${kind}`}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Saisie manuelle
+            </Button>
+          )}
+          {(imageBase64 || items.length > 0) && (
+            <Button type="button" variant="ghost" onClick={reset} className="text-slate-300 text-xs">
+              <RefreshCw className="w-3 h-3 mr-1" />
+              Recommencer
+            </Button>
           )}
         </div>
 
