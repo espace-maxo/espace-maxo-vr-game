@@ -135,31 +135,31 @@ const KitchenTrackerModal = ({ open, onOpenChange, currentUser }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] bg-slate-900 border-amber-500/40 text-white p-0 overflow-hidden">
-        <DialogHeader className="p-4 border-b border-slate-700 bg-gradient-to-r from-amber-900/50 to-slate-800">
-          <DialogTitle className="flex items-center justify-between text-base">
-            <span className="flex items-center gap-2">
-              <ChefHat className="w-5 h-5 text-amber-400" />
-              Suivi Cuisine — Temps réel
-              <Badge className="bg-amber-500/30 text-amber-100 ml-2">
-                {pendingOrders.length} bon(s) en cours
+      <DialogContent className="max-w-6xl w-[98vw] sm:w-auto max-h-[95vh] sm:max-h-[90vh] bg-slate-900 border-amber-500/40 text-white p-0 overflow-hidden">
+        <DialogHeader className="p-2 sm:p-4 border-b border-slate-700 bg-gradient-to-r from-amber-900/50 to-slate-800">
+          <DialogTitle className="flex items-center justify-between gap-2 text-sm sm:text-base">
+            <span className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+              <ChefHat className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+              <span className="truncate">Suivi Cuisine</span>
+              <Badge className="bg-amber-500/30 text-amber-100 text-[10px] sm:text-xs">
+                {pendingOrders.length} bon(s)
               </Badge>
               {unreadCount > 0 && (
-                <Badge className="bg-rose-500 text-white animate-pulse">
-                  {unreadCount} message{unreadCount > 1 ? "s" : ""}
+                <Badge className="bg-rose-500 text-white animate-pulse text-[10px] sm:text-xs">
+                  {unreadCount} msg
                 </Badge>
               )}
             </span>
             <Button variant="ghost" size="sm" onClick={() => fetchAll(false)} disabled={loading}
-                    className="text-slate-300 h-8" data-testid="kitchen-tracker-refresh">
+                    className="text-slate-300 h-7 w-7 sm:h-8 sm:w-8 p-0 shrink-0" data-testid="kitchen-tracker-refresh">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 p-3 overflow-hidden" style={{ height: "calc(90vh - 70px)" }}>
-          {/* LEFT — Orders (2/3 width) */}
-          <ScrollArea className="lg:col-span-2 h-full pr-2">
+        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-2 sm:gap-3 p-2 sm:p-3 overflow-hidden" style={{ height: "calc(95vh - 60px)" }}>
+          {/* LEFT — Orders */}
+          <ScrollArea className="lg:col-span-2 flex-1 min-h-0 pr-1 sm:pr-2">
             <div className="space-y-3">
               {orders.length === 0 && !loading && (
                 <Card className="bg-slate-800/40 border-slate-700">
@@ -228,8 +228,8 @@ const KitchenTrackerModal = ({ open, onOpenChange, currentUser }) => {
             </div>
           </ScrollArea>
 
-          {/* RIGHT — Messages (1/3 width) */}
-          <div className="flex flex-col h-full bg-slate-800/40 rounded border border-slate-700 overflow-hidden">
+          {/* RIGHT — Messages (1/3 width on desktop, max-h on mobile) */}
+          <div className="flex flex-col bg-slate-800/40 rounded border border-slate-700 overflow-hidden max-h-[40vh] lg:max-h-none lg:h-full shrink-0 lg:shrink">
             {/* Cible */}
             <div className="p-2 border-b border-slate-700 bg-slate-900/60 text-[11px]">
               <div className="text-slate-400">Cible du message :</div>

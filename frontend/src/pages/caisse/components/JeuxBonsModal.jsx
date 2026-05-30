@@ -123,24 +123,24 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] bg-slate-900 border-purple-500/40 text-white p-0 overflow-hidden">
-        <DialogHeader className="p-4 border-b border-slate-700 bg-gradient-to-r from-purple-900/50 to-slate-800">
-          <DialogTitle className="flex items-center justify-between text-base">
-            <span className="flex items-center gap-2">
-              <Gamepad2 className="w-5 h-5 text-purple-400" />
-              Bons Jeux — Transmis par le Coach
-              <Badge className="bg-amber-500/30 text-amber-100 ml-2">
+      <DialogContent className="max-w-5xl w-[98vw] sm:w-auto max-h-[95vh] sm:max-h-[90vh] bg-slate-900 border-purple-500/40 text-white p-0 overflow-hidden">
+        <DialogHeader className="p-2 sm:p-4 border-b border-slate-700 bg-gradient-to-r from-purple-900/50 to-slate-800">
+          <DialogTitle className="flex items-center justify-between gap-2 text-sm sm:text-base">
+            <span className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+              <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 shrink-0" />
+              <span className="truncate">Bons Jeux</span>
+              <Badge className="bg-amber-500/30 text-amber-100 text-[10px] sm:text-xs">
                 {pendingBons.length} en attente
               </Badge>
             </span>
             <Button variant="ghost" size="sm" onClick={() => fetchBons(false)} disabled={loading}
-                    className="text-slate-300 h-8" data-testid="jeux-bons-refresh">
+                    className="text-slate-300 h-7 w-7 sm:h-8 sm:w-8 p-0 shrink-0" data-testid="jeux-bons-refresh">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="h-[calc(90vh-70px)] p-3">
+        <ScrollArea className="h-[calc(95vh-60px)] sm:h-[calc(90vh-70px)] p-2 sm:p-3">
           <div className="space-y-3">
             {/* PENDING */}
             <div>
