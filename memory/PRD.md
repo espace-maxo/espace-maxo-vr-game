@@ -130,6 +130,16 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
     - `FACTURES_MODIFIEES` (anciennement uniquement validées) — capte toute modification d'items/prix/total/discount; sévérité critique si la facture était déjà validée
   - Frontend `AuditorPanel.jsx` : nouveau composant `FactureCard` expansible avec n° facture, table, serveur, client, mode de paiement, dates, articles détaillés (qté/PU/total/département), ventilation par département, before/after du total si modifié
   - Fix bug field-name : `actor_role`/`snapshot` (au lieu de `author_role`/`entity_snapshot` qui n'existaient pas)
+- **SUIVI CUISINE TEMPS RÉEL + MESSAGERIE PRÉENREGISTRÉE (30/05/2026)** ✅
+  - Backend `cuisine.py` : extension des statuts d'item à 4 états (`received` → `in_progress` → `ready` → `served`) via `started_at` et `served_at`
+  - Nouveaux endpoints transitions : `PATCH /api/cuisine/orders/{table_id}/items/{idx}/start` (cuisinier) et `PATCH /api/cuisine/orders/{table_id}/items/{idx}/served` (manager, requiert `ready_at`)
+  - Nouvelle collection `cuisine_messages` + endpoints : `GET /messages/presets`, `POST /messages`, `GET /messages`, `POST /messages/{id}/read`, `POST /messages/read-all`
+  - Formules préenregistrées fixes : 5 pour manager→cuisinier (TIME, URGENT, CONFIRM, REDO, CANCEL) · 6 pour cuisinier→manager (OK, 5MIN, 10MIN, 15MIN, OUT, SOON)
+  - Validation stricte : un cuisinier ne peut envoyer qu'un code de la liste cuisinier_to_manager (et inversement)
+  - Frontend `KitchenTrackerModal.jsx` : modal Resp. Op./Admin ouvert depuis bouton ChefHat dans le header, polling 5s, badge unread + badge bons en cours, ciblage facultatif (table/plat), bouton "Servi" par item
+  - Frontend `CuisinePage.jsx` : nouvel onglet "Messages" avec inbox + 6 boutons réponse, bouton "Démarrer" par plat (statut in_progress), bip Web Audio API à chaque message reçu
+  - Polling background côté CaissePage (7s) pour badge rouge + bip même modal fermé
+  - Itération 88 : 21/21 backend ✓ · 100% UI ✓
 
 ## Backlog (Priorisé)
 - **P0-OFFLINE Phase 3** : Validation factures + reversements + résolution conflits + n° factures pré-alloués par blocs de 50
