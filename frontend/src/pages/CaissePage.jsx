@@ -58,6 +58,7 @@ import JournalTab from "./caisse/components/JournalTab";
 import OfflineIndicator from "../components/OfflineIndicator";
 import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
+import RecoupementPanel from "./caisse/components/RecoupementPanel";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
@@ -5717,7 +5718,11 @@ _Gérante - Espace Maxo_
           {/* ==================== AUDIT LOGS TAB (Admin only) ==================== */}
           {currentUser?.role === 'admin' && (
             <TabsContent value="audit">
-              <AuditLogsTab currentUser={currentUser} />
+              <div className="space-y-4">
+                <AuditLogsTab currentUser={currentUser} />
+                {/* Recoupement IA cuisine + jeux */}
+                <RecoupementPanel currentUser={currentUser} />
+              </div>
             </TabsContent>
           )}
 

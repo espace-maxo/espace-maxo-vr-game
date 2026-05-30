@@ -112,15 +112,17 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Frontend : OfflineIndicator + IndexedDB + auto-sync au retour
   - Itération 86 : 12/12 backend ✓
 - **RÉGULARISATION DE BONS À DATE PASSÉE (29/05/2026)** ✅
-  - Backend `regularization.py` : POST /create-invoice (Admin + Resp. Op.), PATCH /update-invoice-date/{id} (Admin only), GET /list
-  - Plage max 7 jours en arrière, motif obligatoire, validation post-clôture explicite si journée fermée
-  - Marqueurs : is_regularized, regularization_target_date, regularization_ca_date (admin choisit l'imputation CA), regularization_reason, regularized_by/role, regularization_post_closure, suffix `-R` dans invoice_number
-  - Audit `_check_regularizations` : alerte si > 3 régul/jour cible
-  - Reports `daily_stats` utilise `regularization_ca_date` pour l'imputation CA
-  - Frontend `RegularizationModal.jsx` : sélecteur date, items, imputation CA, motif, confirmation post-clôture
-  - Badge "Régularisée" dans la liste de factures + bouton CalendarClock (Admin only) pour modifier la date
-  - Fix bug existant : `setActiveTab('commande')` qui ré-tirait à chaque changement de `filterDate` → maintenant `useRef` pour ne le faire qu'au premier login
-  - Itération 87 : 14/14 backend ✓, 11/11 frontend ✓ (après fix)
+  - Création rétroactive (max 7 jours) + modif date (admin) + audit + alerte >3/jour
+  - Sélecteur d'articles enrichi : recherche + onglets catégories + grille (style prise de commande)
+  - Itération 87 : 14/14 backend ✓, 11/11 frontend ✓
+- **RECOUPEMENT IA CUISINE & JEUX (30/05/2026)** ✅
+  - Backend `recoupement.py` : POST /extract-cuisine + /extract-jeux (OCR Gemini 3.1 Pro Vision), POST /compare-cuisine + /compare-jeux, GET /list
+  - Workflow : Photo → OCR IA → Tableau éditable (correction humaine) → Comparaison auto vs ventes système → Rapport d'écarts + entrée audit
+  - Seuils : alerte si écart > 1 unité OU > 10% par item ; audit critical si ≥ 3 alertes
+  - Matching fuzzy de noms (normalisation + tokens overlap)
+  - Frontend `RecoupementPanel.jsx` : intégré sous l'onglet Audit, deux cartes (Cuisine ambre + Jeux violet), upload PNG/JPEG/WEBP, prévisualisation, tableau d'items éditable, rapport coloré (vert OK / rouge alerte / orange absent système)
+  - Statuts détectés : ok, over_declared, under_declared, missing_in_system, missing_in_declaration
+  - Intégration : Emergent LLM Key (EMERGENT_LLM_KEY) avec emergentintegrations, modèle `gemini-3.1-pro-preview`
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
