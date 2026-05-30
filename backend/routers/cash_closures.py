@@ -180,7 +180,7 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
         pass
 
     # Expected physical cash in the drawer = theoretical cash from invoices
-    #   + pending Gérante advances (surplus she hasn't been reimbursed for yet)
+    #   + pending Responsable Op. & Log advances (surplus she hasn't been reimbursed for yet)
     #   - cash reimbursements she took today (already out of the drawer)
     expected_cash_in_drawer = (
         per_method["cash"]["amount"]
@@ -255,7 +255,7 @@ async def _compute_live_snapshot(date_iso: str) -> dict:
 
 class CashClosureCreate(BaseModel):
     date: Optional[str] = None  # YYYY-MM-DD, default = today
-    declared_cash: Optional[float] = 0.0  # cash physically counted by Gérante
+    declared_cash: Optional[float] = 0.0  # cash physically counted by Responsable Op. & Log
     notes: Optional[str] = None
     closed_by: Optional[str] = "Administrateur"
 
@@ -294,7 +294,7 @@ async def create_cash_closure(payload: CashClosureCreate):
 
         snap = await _compute_live_snapshot(day)
         declared = float(payload.declared_cash or 0)
-        # Expected cash = theoretical cash + pending Gérante advances - her reimbursements today
+        # Expected cash = theoretical cash + pending Responsable Op. & Log advances - her reimbursements today
         expected_cash = snap.get("expected_cash_in_drawer", snap["per_method"]["cash"]["amount"])
         gap_cash = declared - expected_cash
 

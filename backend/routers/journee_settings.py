@@ -1,12 +1,12 @@
 """
 Journée Settings Router — Gestion du mot de passe « Journée » dédié.
 
-Ce mot de passe est saisi par la Gérante (rôle != 'admin') à chaque
+Ce mot de passe est saisi par la Responsable Op. & Log (rôle != 'admin') à chaque
 ouverture / fermeture de journée. L'Admin n'a PAS besoin de le saisir.
 
 Le mot de passe est créé/modifié par l'Admin uniquement, via le sous-onglet
 « Paramètres » du tab Journée. Si aucun mot de passe n'est défini, la
-Gérante est BLOQUÉE pour ouvrir ou fermer la journée.
+Responsable Op. & Log est BLOQUÉE pour ouvrir ou fermer la journée.
 
 Collection MongoDB :
 - app_settings : doc unique avec key="journee_password" et :
@@ -113,7 +113,7 @@ async def set_password(payload: SetPasswordPayload):
 
 @router.post("/journee-settings/verify-password")
 async def verify_password_endpoint(payload: VerifyPasswordPayload):
-    """Vérification synchrone pour la Gérante (UX : valider avant d'envoyer
+    """Vérification synchrone pour la Responsable Op. & Log (UX : valider avant d'envoyer
     l'action open/close)."""
     ok = await verify_password(payload.password)
     return {"valid": ok}
@@ -121,6 +121,6 @@ async def verify_password_endpoint(payload: VerifyPasswordPayload):
 
 @router.delete("/journee-settings/password")
 async def delete_password():
-    """Admin only — supprimer le mot de passe (re-bloque la Gérante)."""
+    """Admin only — supprimer le mot de passe (re-bloque la Responsable Op. & Log)."""
     r = await db.app_settings.delete_one({"key": _SETTING_KEY})
     return {"success": True, "deleted": r.deleted_count > 0}

@@ -303,7 +303,7 @@ const CaissePage = () => {
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
   const [filterValidation, setFilterValidation] = useState("all"); // all, pending, validated
 
-  // Force la Gérante à n'avoir que la date du jour (pas d'historique factures)
+  // Force la Responsable Op. & Log à n'avoir que la date du jour (pas d'historique factures)
   useEffect(() => {
     if (currentUser && currentUser.role !== 'admin') {
       const today = format(new Date(), "yyyy-MM-dd");
@@ -1338,7 +1338,7 @@ const CaissePage = () => {
             // Override par item ; null = utilise la valeur globale to_stock
             passer_en_stock: (it.passer_en_stock === null || it.passer_en_stock === undefined) ? null : !!it.passer_en_stock,
           })),
-          requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+          requested_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
           funded_by_account_id: expenseForm.funded_by_account_id || null,
           funded_by_account_name: expenseForm.funded_by_account_name || null,
           funded_affects_ca: expenseForm.funded_affects_ca,
@@ -1375,7 +1375,7 @@ const CaissePage = () => {
       await axios.post(`${API}/expenses`, {
         ...expenseForm,
         amount: totalAmount,
-        requested_by: currentUser?.full_name || currentUser?.username || "Gérante"
+        requested_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log"
       });
       
       toast.success("Demande d'achat créée !");
@@ -1481,7 +1481,7 @@ const CaissePage = () => {
     }
     try {
       await axios.put(`${API}/expenses/${revisingExpense.id}`, payload);
-      toast.success(directApprove ? "Demande approuvée après modification" : "Demande renvoyée à la gérante pour révision");
+      toast.success(directApprove ? "Demande approuvée après modification" : "Demande renvoyée à la responsable op. & log pour révision");
       setShowReviseModal(false);
       setRevisingExpense(null);
       fetchExpenses();
@@ -1583,7 +1583,7 @@ const CaissePage = () => {
         observation: endOfServiceObservation
       });
       
-      toast.success("Votre point journalier a été envoyé à la gérante !");
+      toast.success("Votre point journalier a été envoyé à la responsable op. & log !");
       setShowEndOfServiceModal(false);
       setEndOfServiceObservation("");
     } catch (error) {
@@ -1644,7 +1644,7 @@ const CaissePage = () => {
       await axios.put(`${API}/server-end-of-service-reports/${reportId}/validate`, {
         action,
         comment,
-        validated_by: currentUser?.full_name || "Gérante"
+        validated_by: currentUser?.full_name || "Responsable Op. & Log"
       });
       
       const messages = {
@@ -1842,7 +1842,7 @@ const CaissePage = () => {
           amount: groupTotal,
           supplier: supplierName || null,
           planned_date: shoppingListDate,
-          requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+          requested_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
           is_group: true,
           group_id: groupId,
           items: items.map((it) => ({
@@ -2019,7 +2019,7 @@ const CaissePage = () => {
           <div class="signatures">
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">Signature Gérante</div>
+              <div class="signature-label">Signature Responsable Op. & Log</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
@@ -2222,7 +2222,7 @@ const CaissePage = () => {
           <div class="footer">
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">Gérante</div>
+              <div class="signature-label">Responsable Op. & Log</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
@@ -2402,7 +2402,7 @@ const CaissePage = () => {
           <div class="signatures">
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">Gérante</div>
+              <div class="signature-label">Responsable Op. & Log</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
@@ -3007,7 +3007,7 @@ const CaissePage = () => {
           <div class="footer">
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">Gérante</div>
+              <div class="signature-label">Responsable Op. & Log</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
@@ -3426,7 +3426,7 @@ const CaissePage = () => {
 ${deptSummary}
 
 *Signé par:* ${signature || 'Mères AHOUANDJINOU'}
-_Gérante - Espace Maxo_
+_Responsable Op. & Log - Espace Maxo_
 
 ---
 📄 Le rapport PDF complet est disponible sur demande.`;
@@ -3747,7 +3747,7 @@ _Gérante - Espace Maxo_
         } catch {}
       }
       
-      toast.success("✓ Bon enregistré · en attente de validation par la gérante", {
+      toast.success("✓ Bon enregistré · en attente de validation par la responsable op. & log", {
         duration: 4000
       });
       
@@ -4055,7 +4055,7 @@ _Gérante - Espace Maxo_
         reason: reason,
         requested_by: currentUser?.full_name || currentUser?.username || "Agent"
       });
-      toast.success("Demande de modification envoyée à la gérante");
+      toast.success("Demande de modification envoyée à la responsable op. & log");
       fetchModificationRequests();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Erreur lors de l'envoi de la demande");
@@ -4896,7 +4896,7 @@ _Gérante - Espace Maxo_
                 Si vous avez oublié votre code PIN ou votre identifiant, veuillez contacter :
               </p>
               <div className="bg-slate-900/50 p-4 rounded-lg space-y-2">
-                <p className="text-white font-medium">L'Administrateur ou la Gérante</p>
+                <p className="text-white font-medium">L'Administrateur ou la Responsable Op. & Log</p>
                 <p className="text-amber-400 flex items-center gap-2">
                   <Smartphone className="w-4 h-4" />
                   +229 01 4147 0000
@@ -5047,7 +5047,7 @@ _Gérante - Espace Maxo_
                 </div>
               )}
 
-              {/* Revision Notifications for Manager (Achats à réviser) — désactivé : la Gérante n'a plus accès à Achats (24/05/2026) */}
+              {/* Revision Notifications for Manager (Achats à réviser) — désactivé : la Responsable Op. & Log n'a plus accès à Achats (24/05/2026) */}
               {false && currentUser?.role === 'manager' && revisionExpensesCount > 0 && (
                 <Button 
                   variant="ghost" 
@@ -5174,7 +5174,7 @@ _Gérante - Espace Maxo_
         </div>
       </header>
 
-      {/* ===== Cross-role floating banner (Admin ↔ Gérante) — extracted component ===== */}
+      {/* ===== Cross-role floating banner (Admin ↔ Responsable Op. & Log) — extracted component ===== */}
       <CrossRoleBanner
         crossRole={effectiveCrossRole}
         role={currentUser?.role}
@@ -5300,7 +5300,7 @@ _Gérante - Espace Maxo_
         ) : (
         /* ==================== NORMAL TABS VIEW ==================== */
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Welcome banner Resp. Op. (Gérante) — affiché en haut de toutes les pages (24/05/2026) */}
+          {/* Welcome banner Resp. Op. (Responsable Op. & Log) — affiché en haut de toutes les pages (24/05/2026) */}
           {currentUser?.role === 'manager' && (
             <RespOpWelcome
               currentUser={currentUser}
@@ -5319,7 +5319,7 @@ _Gérante - Espace Maxo_
             />
           )}
           <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start text-xs sm:text-sm">
-            {/* 0. JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Gérante, en PREMIER */}
+            {/* 0. JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Responsable Op. & Log, en PREMIER */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="journee" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-journee">
                 <Sunrise className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Journée</span>
@@ -5403,7 +5403,7 @@ _Gérante - Espace Maxo_
                 <NotifBadge count={effectiveCounts.financial_points} color="red" testid="badge-stats" />
               </TabsTrigger>
             )}
-            {/* 8.5 POINT DE LA CAISSE (Admin + Gérante) — remplace Analytics */}
+            {/* 8.5 POINT DE LA CAISSE (Admin + Responsable Op. & Log) — remplace Analytics */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="point_caisse" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-caisse">
                 <Receipt className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Point de la Caisse</span>
@@ -5621,7 +5621,7 @@ _Gérante - Espace Maxo_
               {/* Filter bar */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4 flex-wrap">
-                  {/* Date picker — Admin only (la Gérante ne voit que les factures du jour) */}
+                  {/* Date picker — Admin only (la Responsable Op. & Log ne voit que les factures du jour) */}
                   {currentUser?.role === 'admin' && (
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-slate-400" />
@@ -6474,7 +6474,7 @@ _Gérante - Espace Maxo_
             />
           </TabsContent>
 
-          {/* ==================== POINT DE LA CAISSE TAB (Admin + Gérante) — remplace Analytics ==================== */}
+          {/* ==================== POINT DE LA CAISSE TAB (Admin + Responsable Op. & Log) — remplace Analytics ==================== */}
           {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
           <TabsContent value="point_caisse">
             <PointCaisseTab currentUser={currentUser} />
@@ -6707,7 +6707,7 @@ _Gérante - Espace Maxo_
                   </>
                 ) : (
                   <div className="col-span-2 text-center py-2">
-                    <p className="text-slate-500 text-sm">Contactez la gérante pour imprimer</p>
+                    <p className="text-slate-500 text-sm">Contactez la responsable op. & log pour imprimer</p>
                   </div>
                 )}
               </div>
@@ -8036,7 +8036,7 @@ _Gérante - Espace Maxo_
               Modifier avant renvoi — {revisingExpense?.description || ""}
             </DialogTitle>
             <DialogDescription className="text-slate-400 text-xs">
-              Ajustez les articles, quantités, prix et le fournisseur. La gérante pourra revoir et resoumettre.
+              Ajustez les articles, quantités, prix et le fournisseur. La responsable op. & log pourra revoir et resoumettre.
             </DialogDescription>
           </DialogHeader>
           {revisingExpense && (
@@ -8118,7 +8118,7 @@ _Gérante - Espace Maxo_
               </Card>
 
               <div>
-                <Label className="text-slate-300 text-sm">Note à la gérante</Label>
+                <Label className="text-slate-300 text-sm">Note à la responsable op. & log</Label>
                 <Textarea value={reviseNote} onChange={(e) => setReviseNote(e.target.value)}
                   placeholder="Ex : j'ai ajusté les quantités, merci de vérifier..."
                   className="bg-slate-700/50 border-slate-600 text-white"
@@ -8133,7 +8133,7 @@ _Gérante - Espace Maxo_
               <div className="flex gap-2 justify-end pt-2 flex-wrap">
                 <Button variant="outline" onClick={() => setShowReviseModal(false)} className="border-slate-600 text-slate-300">Annuler</Button>
                 <Button onClick={() => submitRevision(false)} className="bg-amber-600 hover:bg-amber-700" data-testid="submit-revision-btn">
-                  <Edit2 className="w-4 h-4 mr-2" /> Renvoyer à la gérante
+                  <Edit2 className="w-4 h-4 mr-2" /> Renvoyer à la responsable op. & log
                 </Button>
                 <Button onClick={() => submitRevision(true)} className="bg-green-600 hover:bg-green-700" data-testid="submit-revise-approve-btn">
                   <CheckCircle className="w-4 h-4 mr-2" /> Approuver directement
@@ -8269,7 +8269,7 @@ _Gérante - Espace Maxo_
                 className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 min-h-[100px]"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Cette observation sera envoyée à la gérante avec votre point journalier
+                Cette observation sera envoyée à la responsable op. & log avec votre point journalier
               </p>
             </div>
           </div>

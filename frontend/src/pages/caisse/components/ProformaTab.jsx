@@ -367,7 +367,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
     }
   };
 
-  // Demande de suppression par la gérante
+  // Demande de suppression par la responsable op. & log
   const requestDeleteProforma = async (proforma) => {
     if (!confirm(`Demander l'autorisation de supprimer la proforma ${proforma.proforma_number} ?`)) return;
     
@@ -377,7 +377,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
         proforma_number: proforma.proforma_number,
         client_name: proforma.client_name,
         total: proforma.total,
-        requested_by: currentUser?.full_name || "Gérante"
+        requested_by: currentUser?.full_name || "Responsable Op. & Log"
       });
       toast.success("Demande de suppression envoyée à l'administrateur");
       fetchDeleteRequests();
@@ -954,7 +954,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
             ` : '<div></div>'}
             <div class="signature-section">
               <p class="signature-name">AHOUANDJINOU Mères</p>
-              <p class="signature-title">La Gérante</p>
+              <p class="signature-title">La Responsable Op. & Log</p>
             </div>
           </div>
         </div>
@@ -1175,7 +1175,7 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
                               <ArrowRight className="w-4 h-4" />
                             </Button>
                           )}
-                          {/* Admin peut supprimer directement, Gérante doit demander l'autorisation */}
+                          {/* Admin peut supprimer directement, Responsable Op. & Log doit demander l'autorisation */}
                           {currentUser?.role === 'admin' ? (
                             <Button size="icon" variant="ghost" onClick={() => deleteProforma(proforma.id)} className="w-8 h-8 text-red-400 hover:text-red-300" title="Supprimer">
                               <Trash2 className="w-4 h-4" />

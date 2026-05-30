@@ -538,7 +538,7 @@ const CumulPanel = ({ formatPrice }) => {
           </Card>
         </div>
         <div className="bg-slate-800/40 rounded p-3 border border-slate-700 text-xs text-slate-400">
-          <p>💡 <strong className="text-slate-200">Fonds Propres</strong> : avance personnelle (gérante / admin) — à rembourser depuis la caisse, apparaît dans le Point journalier le jour du remboursement.</p>
+          <p>💡 <strong className="text-slate-200">Fonds Propres</strong> : avance personnelle (responsable op. & log / admin) — à rembourser depuis la caisse, apparaît dans le Point journalier le jour du remboursement.</p>
           <p className="mt-1">💡 <strong className="text-slate-200">Caisse Restau</strong> : payé directement depuis les recettes de la caisse — déjà reflété dans le CA.</p>
         </div>
       </CardContent>

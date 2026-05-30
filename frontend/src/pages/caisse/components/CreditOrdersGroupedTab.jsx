@@ -7,9 +7,9 @@ import ManagerOrdersTab from './ManagerOrdersTab';
 /**
  * Onglet groupé "Bons à crédit" :
  *  - Employés : plafond 10 000 F/mois
- *  - Gérante  : plafond 25 000 F/mois
+ *  - Responsable Op. & Log  : plafond 25 000 F/mois
  *
- * Les deux partagent la mécanique : remise 50%, double autorisation séquentielle (Gérante → D.G.),
+ * Les deux partagent la mécanique : remise 50%, double autorisation séquentielle (Responsable Op. & Log → D.G.),
  * stock déduit après les 2 autorisations, clôture mensuelle qui retient sur salaires.
  */
 const CreditOrdersGroupedTab = ({ currentUser, formatPrice, products }) => {
@@ -20,7 +20,7 @@ const CreditOrdersGroupedTab = ({ currentUser, formatPrice, products }) => {
           <Users className="w-4 h-4 mr-1.5" /> Employés <span className="ml-2 text-[10px] opacity-70">10 000 F/mois</span>
         </TabsTrigger>
         <TabsTrigger value="credit-gerante" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white" data-testid="credit-tab-gerante">
-          <UserCog className="w-4 h-4 mr-1.5" /> Gérante <span className="ml-2 text-[10px] opacity-70">25 000 F/mois</span>
+          <UserCog className="w-4 h-4 mr-1.5" /> Responsable Op. & Log <span className="ml-2 text-[10px] opacity-70">25 000 F/mois</span>
         </TabsTrigger>
       </TabsList>
 

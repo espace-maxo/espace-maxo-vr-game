@@ -2,7 +2,7 @@
 Simulateur de devis Locations.
 
 Workflow :
-- La Gérante compose une simulation avec :
+- La Responsable Op. & Log compose une simulation avec :
   - articles libres (libellé + coût unitaire + quantité)
   - articles depuis le catalogue Stock (cost = prix d'achat du produit)
   - articles depuis le catalogue produits Caisse (cost = prix d'achat)

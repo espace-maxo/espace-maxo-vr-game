@@ -105,7 +105,7 @@ const ReceiptScanModal = ({ open, onClose, onCreated, currentUser, target = "exp
         auto_create_expense: true,
         receipt_type: receiptType,
         target: target,
-        requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        requested_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
         requested_by_role: currentUser?.role || "manager",
       }, { timeout: 120000 });
 

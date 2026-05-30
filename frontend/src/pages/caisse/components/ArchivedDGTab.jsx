@@ -15,7 +15,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
  *
  * Liste les commandes de Mme la Directrice Générale qui :
  *  - étaient en statut "non_regle"
- *  - au moment où la gérante a signé un point financier couvrant leur date.
+ *  - au moment où la responsable op. & log a signé un point financier couvrant leur date.
  *
  * Elles sont automatiquement archivées de la vue principale "Mme la D.G."
  * et apparaissent ici pour suivi/relance par l'administrateur.
@@ -98,7 +98,7 @@ const ArchivedDGTab = ({ formatPrice }) => {
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-200 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
         <span>
-          Ces commandes étaient impayées au moment où la gérante a signé un point financier les couvrant.
+          Ces commandes étaient impayées au moment où la responsable op. & log a signé un point financier les couvrant.
           Elles sont retirées de l'onglet "Mme la Directrice Générale" pour ne pas polluer la vue opérationnelle.
           Vous pouvez les renvoyer en actif via le bouton <strong>« Remettre en actif »</strong> pour relancer le règlement.
         </span>

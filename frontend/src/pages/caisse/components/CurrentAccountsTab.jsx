@@ -64,7 +64,7 @@ const CurrentAccountsTab = () => {
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
-  // ============ GÉRANTE ADVANCES (read-only view, actions in Point Caisse) ============
+  // ============ RESPONSABLE OP. & LOG ADVANCES (read-only view, actions in Point Caisse) ============
   const [geranteAdvances, setGeranteAdvances] = useState([]);
   const [geranteFilter, setGeranteFilter] = useState("pending"); // pending | reimbursed | all
   const [geranteExpanded, setGeranteExpanded] = useState(false);
@@ -339,7 +339,7 @@ const CurrentAccountsTab = () => {
         </div>
       </div>
 
-      {/* ============ DETTE CAISSE → GÉRANTE (avances Gérante pour monnaie) ============ */}
+      {/* ============ DETTE CAISSE → RESPONSABLE OP. & LOG (avances Responsable Op. & Log pour monnaie) ============ */}
       <Card
         className={`border ${geranteStats.pending_total > 0 ? "bg-gradient-to-br from-purple-900/30 to-fuchsia-900/10 border-purple-500/50" : "bg-slate-900/40 border-slate-700"}`}
         data-testid="gerante-debt-card"
@@ -352,7 +352,7 @@ const CurrentAccountsTab = () => {
               </div>
               <div>
                 <h3 className="text-base font-bold text-purple-200 flex items-center gap-2">
-                  Dette caisse → Gérante
+                  Dette caisse → Responsable Op. & Log
                   {geranteStats.pending_total > 0 && (
                     <Badge className="bg-purple-500/30 text-purple-100">
                       {formatPrice(geranteStats.pending_total)} F dû
@@ -360,7 +360,7 @@ const CurrentAccountsTab = () => {
                   )}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Avances personnelles de la Gérante pour rendre la monnaie aux clients
+                  Avances personnelles de la Responsable Op. & Log pour rendre la monnaie aux clients
                 </p>
               </div>
             </div>

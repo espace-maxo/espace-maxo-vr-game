@@ -2,7 +2,7 @@
  * OhadaJournal — Brouillard comptable selon le plan OHADA.
  *
  * Sources mappées en écritures (D/C) :
- *   - Factures validées, Achats finalisés, Reversements, Avances Gérante,
+ *   - Factures validées, Achats finalisés, Reversements, Avances Responsable Op. & Log,
  *     Fonds Propres, Ouvertures de journée
  *
  * Deux vues au choix :

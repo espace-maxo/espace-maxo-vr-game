@@ -3,7 +3,7 @@
  *
  * Trois sous-onglets :
  *  - Ouverture : statut du jour, fonds de caisse optionnel, garde-fou
- *    « jour précédent fermé », bouton OUVRIR (Gérante + Admin).
+ *    « jour précédent fermé », bouton OUVRIR (Responsable Op. & Log + Admin).
  *  - Fermeture : reprend le composant existant `DayClosureGuard` qui gère
  *    les points agents, le billettage, la réconciliation.
  *  - Historique : journées passées (date / ouverture / fermeture / écart).
@@ -102,7 +102,7 @@ const JourneeTab = ({ currentUser }) => {
 
   const handleDeletePassword = async () => {
     if (!isAdmin) return;
-    if (!window.confirm("Supprimer le mot de passe Journée ? La Gérante ne pourra plus ouvrir/fermer tant qu'un nouveau ne sera pas créé.")) return;
+    if (!window.confirm("Supprimer le mot de passe Journée ? La Responsable Op. & Log ne pourra plus ouvrir/fermer tant qu'un nouveau ne sera pas créé.")) return;
     try {
       await axios.delete(`${API}/journee-settings/password`);
       toast.success("Mot de passe supprimé");
@@ -113,9 +113,9 @@ const JourneeTab = ({ currentUser }) => {
   };
 
   // ------------------ OUVERTURE ------------------
-  // Pour la Gérante : on ouvre la modale de saisie du mot de passe d'abord.
+  // Pour la Responsable Op. & Log : on ouvre la modale de saisie du mot de passe d'abord.
   const requestOpen = () => {
-    if (!canOpen) { toast.error("Réservé à la Gérante ou à l'Admin"); return; }
+    if (!canOpen) { toast.error("Réservé à la Responsable Op. & Log ou à l'Admin"); return; }
     if (isAdmin) return handleOpen(false, null); // Admin bypasses pw
     // Non-admin : modale pw
     if (!pwStatus?.is_set) {
@@ -129,10 +129,10 @@ const JourneeTab = ({ currentUser }) => {
   };
 
   const handleOpen = async (force = false, password = null) => {
-    if (!canOpen) { toast.error("Réservé à la Gérante ou à l'Admin"); return; }
+    if (!canOpen) { toast.error("Réservé à la Responsable Op. & Log ou à l'Admin"); return; }
     try {
       const payload = {
-        opened_by: currentUser?.full_name || currentUser?.username || 'Gérante',
+        opened_by: currentUser?.full_name || currentUser?.username || 'Responsable Op. & Log',
         opened_by_role: currentUser?.role || '',
         initial_cash: Number(initialCash || 0),
         notes,
@@ -292,7 +292,7 @@ const JourneeTab = ({ currentUser }) => {
                     <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-3 flex items-center gap-2">
                       <ShieldAlert className="w-5 h-5 text-amber-400" />
                       <p className="text-slate-400 text-sm">
-                        Seul·e la <strong>Gérante</strong> ou un·e <strong>Administrateur·rice</strong> peut ouvrir la journée.
+                        Seul·e la <strong>Responsable Op. & Log</strong> ou un·e <strong>Administrateur·rice</strong> peut ouvrir la journée.
                       </p>
                     </div>
                   ) : (
@@ -389,8 +389,8 @@ const JourneeTab = ({ currentUser }) => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-sm text-slate-300">
-                <p>Ce mot de passe est demandé à la <strong className="text-white">Gérante</strong> chaque fois qu'elle ouvre ou ferme la journée. L'<strong className="text-white">Administrateur</strong> n'a pas à le saisir.</p>
-                <p className="text-slate-400 text-xs mt-2">Si le mot de passe est supprimé, la Gérante sera <strong className="text-rose-300">bloquée</strong> jusqu'à ce qu'un nouveau soit créé.</p>
+                <p>Ce mot de passe est demandé à la <strong className="text-white">Responsable Op. & Log</strong> chaque fois qu'elle ouvre ou ferme la journée. L'<strong className="text-white">Administrateur</strong> n'a pas à le saisir.</p>
+                <p className="text-slate-400 text-xs mt-2">Si le mot de passe est supprimé, la Responsable Op. & Log sera <strong className="text-rose-300">bloquée</strong> jusqu'à ce qu'un nouveau soit créé.</p>
               </div>
 
               {pwStatus?.is_set && (
@@ -466,7 +466,7 @@ const JourneeTab = ({ currentUser }) => {
         )}
       </Tabs>
 
-      {/* ============== MODAL : SAISIE MOT DE PASSE (Gérante) ============== */}
+      {/* ============== MODAL : SAISIE MOT DE PASSE (Responsable Op. & Log) ============== */}
       {pwModalOpen && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setPwModalOpen(false)}>
           <Card className="bg-slate-900 border-amber-500/40 w-full max-w-md" onClick={(e) => e.stopPropagation()} data-testid="journee-pw-modal">

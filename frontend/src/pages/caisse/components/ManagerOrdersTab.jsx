@@ -21,7 +21,7 @@ const MAX_PER_MONTH = 25000;
 const DISCOUNT_RATE = 0.5;
 
 const STATUS_BADGE = {
-  pending_manager: { label: "Auto-confirmation Gérante en attente", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+  pending_manager: { label: "Auto-confirmation Responsable Op. & Log en attente", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
   pending_director: { label: "En attente Directrice", className: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
   authorized: { label: "Autorisé", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
   settled: { label: "Réglé sur salaire", className: "bg-slate-500/20 text-slate-300 border-slate-500/40" },
@@ -33,7 +33,7 @@ const monthKey = (d = new Date()) => format(d, "yyyy-MM");
 const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
-  const defaultManagerName = currentUser?.full_name || currentUser?.name || currentUser?.username || "Gérante";
+  const defaultManagerName = currentUser?.full_name || currentUser?.name || currentUser?.username || "Responsable Op. & Log";
 
   const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({});
@@ -127,24 +127,24 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   const willExceedCap = projectedUsed > MAX_PER_MONTH + 0.01;
 
   const handleSubmit = async () => {
-    if (!employeeName.trim()) { toast.error("Nom de la gérante requis"); return; }
+    if (!employeeName.trim()) { toast.error("Nom de la responsable op. & log requis"); return; }
     if (selectedItems.length === 0) { toast.error("Au moins un article requis"); return; }
     if (willExceedCap) { toast.error(`Plafond mensuel dépassé (max ${formatPrice(MAX_PER_MONTH)} F/mois)`); return; }
     setLoading(true);
     try {
       const payload = {
         employee_name: employeeName.trim(),
-        employee_position: "Gérante",
+        employee_position: "Responsable Op. & Log",
         items: selectedItems,
         notes,
-        created_by: currentUser?.full_name || currentUser?.name || currentUser?.username || "Gérante",
+        created_by: currentUser?.full_name || currentUser?.name || currentUser?.username || "Responsable Op. & Log",
       };
       if (editingOrder) {
         await axios.put(`${API}/manager-orders/${editingOrder.id}`, payload);
         toast.success("Commande modifiée");
       } else {
         await axios.post(`${API}/manager-orders`, payload);
-        toast.success("Commande gérante enregistrée — auto-confirmation requise");
+        toast.success("Commande responsable op. & log enregistrée — auto-confirmation requise");
       }
       setShowModal(false);
       resetForm();
@@ -155,8 +155,8 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const authorize = async (order, role) => {
-    const label = role === "manager" ? "Gérante (auto-confirmation)" : "Directrice Générale";
-    if (!window.confirm(`Autoriser cette commande gérante en tant que ${label} ?\n\nMontant à retenir : ${formatPrice(order.total)} F`)) return;
+    const label = role === "manager" ? "Responsable Op. & Log (auto-confirmation)" : "Directrice Générale";
+    if (!window.confirm(`Autoriser cette commande responsable op. & log en tant que ${label} ?\n\nMontant à retenir : ${formatPrice(order.total)} F`)) return;
     try {
       await axios.put(`${API}/manager-orders/${order.id}/authorize`, {
         by_role: role,
@@ -168,7 +168,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const cancelOrder = async (order) => {
-    if (!window.confirm(`Annuler cette commande gérante (${formatPrice(order.total)} F) ?`)) return;
+    if (!window.confirm(`Annuler cette commande responsable op. & log (${formatPrice(order.total)} F) ?`)) return;
     try {
       await axios.delete(`${API}/manager-orders/${order.id}`);
       toast.success("Commande annulée");
@@ -220,7 +220,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-violet-300 flex items-center gap-2">
             <UserCog className="w-6 h-6" />
-            Bons GÉRANTE
+            Bons RESPONSABLE OP. & LOG
           </h2>
           <Badge className="bg-violet-500/30 text-violet-200">Crédit salaire · 25 000 F/mois</Badge>
         </div>
@@ -282,7 +282,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
         <Card className="bg-slate-800/40 border-slate-700">
           <CardContent className="p-8 text-center text-slate-400">
             <UserCog className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-            <p>Aucune commande gérante pour {filterMonth}</p>
+            <p>Aucune commande responsable op. & log pour {filterMonth}</p>
           </CardContent>
         </Card>
       ) : (
@@ -316,7 +316,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                         <div className="flex flex-wrap gap-2 mt-1.5">
                           {order.authorizations?.manager && (
                             <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" /> Gérante: {order.authorizations.manager.name}
+                              <ShieldCheck className="w-3 h-3" /> Responsable Op. & Log: {order.authorizations.manager.name}
                             </span>
                           )}
                           {order.authorizations?.director && (
@@ -330,7 +330,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                     <div className="flex items-center gap-1 flex-wrap justify-end">
                       {canManagerAuth && (
                         <Button size="sm" onClick={() => authorize(order, "manager")} className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" data-testid={`mgr-auth-manager-${order.id}`}>
-                          <ShieldCheck className="w-3 h-3 mr-1" /> Auto-confirmer (Gérante)
+                          <ShieldCheck className="w-3 h-3 mr-1" /> Auto-confirmer (Responsable Op. & Log)
                         </Button>
                       )}
                       {canDirectorAuth && (
@@ -363,7 +363,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
           <DialogHeader>
             <DialogTitle className="text-violet-300 flex items-center gap-2">
               <UserCog className="w-5 h-5" />
-              {editingOrder ? "Modifier la commande gérante" : "Nouvelle commande GÉRANTE"}
+              {editingOrder ? "Modifier la commande responsable op. & log" : "Nouvelle commande RESPONSABLE OP. & LOG"}
             </DialogTitle>
           </DialogHeader>
 
@@ -371,15 +371,15 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
             <div className="bg-violet-900/15 border border-violet-500/30 rounded-lg p-3 space-y-3">
               <p className="text-violet-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" />
-                Identité de la gérante (obligatoire)
+                Identité de la responsable op. & log (obligatoire)
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-slate-300 text-xs mb-1 block">Nom de la gérante *</Label>
+                  <Label className="text-slate-300 text-xs mb-1 block">Nom de la responsable op. & log *</Label>
                   <Input
                     value={employeeName}
                     onChange={(e) => setEmployeeName(e.target.value)}
-                    placeholder="Nom de la gérante en exercice"
+                    placeholder="Nom de la responsable op. & log en exercice"
                     className="bg-slate-800 border-slate-700 text-white"
                     data-testid="mgr-input-name"
                   />
@@ -387,7 +387,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                 <div>
                   <Label className="text-slate-300 text-xs mb-1 block">Poste</Label>
                   <Input
-                    value="Gérante"
+                    value="Responsable Op. & Log"
                     disabled
                     className="bg-slate-800/60 border-slate-700 text-slate-300"
                   />
@@ -489,7 +489,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-purple-300 flex items-center gap-2">
-              <Lock className="w-5 h-5" /> Clôture mensuelle — Bons GÉRANTE
+              <Lock className="w-5 h-5" /> Clôture mensuelle — Bons RESPONSABLE OP. & LOG
             </DialogTitle>
           </DialogHeader>
           {closurePreview && (

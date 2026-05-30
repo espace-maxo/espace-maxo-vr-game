@@ -273,7 +273,7 @@ async def extract_receipt(payload: ScanPayload):
                         "real_supplier": supplier,  # pré-remplit le fournisseur
                         "real_total": None,
                         "created_at": now_iso,
-                        "created_by": (payload.requested_by or "Gérante"),
+                        "created_by": (payload.requested_by or "Responsable Op. & Log"),
                         "scan_supplier": supplier,
                     })
                 if docs:
@@ -301,7 +301,7 @@ async def extract_receipt(payload: ScanPayload):
                         for it in items
                     ],
                     "status": "pending",
-                    "requested_by": payload.requested_by or "Gérante",
+                    "requested_by": payload.requested_by or "Responsable Op. & Log",
                     "requested_by_role": payload.requested_by_role or "manager",
                     "created_at": now,
                     "updated_at": now,

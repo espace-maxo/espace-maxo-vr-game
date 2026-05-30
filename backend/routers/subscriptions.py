@@ -169,7 +169,7 @@ async def create_subscription(data: SubscriptionCreate):
             "payment_count": 0,
             "last_payment_date": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "created_by": "Gérante"
+            "created_by": "Responsable Op. & Log"
         }
         
         await db.subscriptions.insert_one(subscription)

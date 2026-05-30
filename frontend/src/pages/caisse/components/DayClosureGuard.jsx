@@ -4,7 +4,7 @@
  * Workflow :
  *  - Affiche la liste des agents avec le statut de leur "Point Agent"
  *  - Quand TOUS les agents ont fait leur point → bouton "Fermer la journée" actif
- *  - Une fois fermée : la Gérante voit le statut "Verrouillée" + accès à Faire le point
+ *  - Une fois fermée : la Responsable Op. & Log voit le statut "Verrouillée" + accès à Faire le point
  *  - Seul l'Admin peut "Rouvrir la journée"
  */
 import { useState, useEffect, useCallback } from "react";
@@ -72,7 +72,7 @@ export default function DayClosureGuard({ currentUser, children }) {
     setBusy(true);
     try {
       const payload = {
-        closed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        closed_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
         closed_by_role: currentUser?.role || "",
         force,
       };
@@ -236,7 +236,7 @@ export default function DayClosureGuard({ currentUser, children }) {
             )}
           </div>
 
-          {/* Actions de fermeture (Gérante / Admin) */}
+          {/* Actions de fermeture (Responsable Op. & Log / Admin) */}
           {(isManager || isAdmin) && (
             <div className="space-y-2">
               {!serverStatus.all_validated && (

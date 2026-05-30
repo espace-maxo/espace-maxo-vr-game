@@ -73,7 +73,7 @@ async def _admin_counts() -> dict:
         "notes": await _latest_date("instructions", {"sender_role": {"$ne": "admin"}}),
     }
 
-    # Cross-role banner (Gérante → Admin): aggregate items produced by the manager
+    # Cross-role banner (Responsable Op. & Log → Admin): aggregate items produced by the manager
     cross = {
         "needs": {"count": needs_pending, "latest": latest["needs"]},
         "expenses": {"count": expenses_pending_only, "latest": await _latest_date("expenses", {"status": "pending"})},
@@ -97,7 +97,7 @@ async def _admin_counts() -> dict:
         "latest_by_category": latest,
         "cross_role": {
             "source_role": "manager",
-            "source_label": "la Gérante",
+            "source_label": "la Responsable Op. & Log",
             "items": cross,
         },
     }
@@ -122,7 +122,7 @@ async def _manager_counts(user_name: Optional[str] = None) -> dict:
         "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
         "notes": await _latest_date("instructions", {"sender_role": "admin"}),
     }
-    # Cross-role banner (Admin → Gérante): items produced by the admin for the manager
+    # Cross-role banner (Admin → Responsable Op. & Log): items produced by the admin for the manager
     cross = {
         "expenses": {"count": expenses_revision, "latest": latest["expenses"]},
         "purchase_orders": {"count": po_sent, "latest": latest["purchase_orders"]},

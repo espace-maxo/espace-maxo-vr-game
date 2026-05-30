@@ -759,7 +759,7 @@ const CommandeTab = ({ ctx }) => {
                               ENVOYER LA COMMANDE
                             </Button>
                             <p className="text-slate-500 text-xs text-center mt-2">
-                              La commande sera envoyée à la gérante pour validation
+                              La commande sera envoyée à la responsable op. & log pour validation
                             </p>
                           </div>
                         </div>

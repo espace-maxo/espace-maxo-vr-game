@@ -179,7 +179,7 @@ const BillPanel = ({
                   <FileText className="w-5 h-5 mr-2" />
                   CRÉER FACTURE
                 </Button>
-                <p className="text-slate-500 text-xs text-center mt-2">La facture sera envoyée à la gérante pour validation</p>
+                <p className="text-slate-500 text-xs text-center mt-2">La facture sera envoyée à la responsable op. & log pour validation</p>
               </div>
             </div>
           </>

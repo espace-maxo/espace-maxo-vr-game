@@ -4932,7 +4932,7 @@ async def generate_rapport_pdf(date: str = Query(...), signature: str = Query(""
         elements.append(Spacer(1, 5*mm))
         
         sig_data = [
-            ['La Gérante:', '', "L'Administrateur:", ''],
+            ['La Responsable Op. & Log:', '', "L'Administrateur:", ''],
             ['', '', '', ''],
             [signature if signature else '____________________', '', '____________________', ''],
             ['Mères AHOUANDJINOU', '', 'Marcel HOUNHANOU', '']
@@ -5663,9 +5663,9 @@ async def delete_monsieur_purchase(purchase_id: str):
 # EMPLOYEE ORDERS (Bons EMPLOYÉS — repas employés à crédit sur salaire)
 # ============================================================================
 # Workflow :
-#   1. Gérante saisit la commande employé (nom + poste obligatoires)
-#   2. Status = "pending_manager" — Gérante doit autoriser en 1er
-#   3. Gérante autorise → status = "pending_director" — Directrice (admin) doit autoriser
+#   1. Responsable Op. & Log saisit la commande employé (nom + poste obligatoires)
+#   2. Status = "pending_manager" — Responsable Op. & Log doit autoriser en 1er
+#   3. Responsable Op. & Log autorise → status = "pending_director" — Directrice (admin) doit autoriser
 #   4. Directrice autorise → status = "authorized" → STOCK décrémenté
 #   5. Fin de mois → bouton "Clôturer le mois" → toutes les commandes "authorized"
 #      du mois passent en "settled" (déduites du salaire). Génère un PDF récap.
@@ -5805,7 +5805,7 @@ async def create_employee_order(
             "discount_amount": discount_amount,
             "total": total_after_discount,  # montant qui sera retenu sur le salaire
             "month_period": month_key,
-            "status": "pending_manager",  # Gérante doit autoriser en 1er
+            "status": "pending_manager",  # Responsable Op. & Log doit autoriser en 1er
             "authorizations": {"manager": None, "director": None},
             "stock_deducted": False,
             "notes": notes or "",
@@ -5910,12 +5910,12 @@ async def authorize_employee_order(
 
         if role == "manager":
             if current_status != "pending_manager":
-                raise HTTPException(status_code=409, detail="Autorisation Gérante déjà donnée ou commande à un autre stade")
+                raise HTTPException(status_code=409, detail="Autorisation Responsable Op. & Log déjà donnée ou commande à un autre stade")
             auths["manager"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "pending_director"
         else:  # director
             if current_status != "pending_director":
-                raise HTTPException(status_code=409, detail="La Gérante doit autoriser AVANT la Directrice Générale")
+                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit autoriser AVANT la Directrice Générale")
             auths["director"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "authorized"
 
@@ -6145,7 +6145,7 @@ async def get_employee_closure_pdf(month: str):
 
 
 # ============================================================================
-# MANAGER ORDERS (Bons GÉRANTE — repas gérante à crédit sur salaire)
+# MANAGER ORDERS (Bons RESPONSABLE OP. & LOG — repas responsable op. & log à crédit sur salaire)
 # ============================================================================
 # Même workflow que les bons EMPLOYÉS, plafond mensuel = 25 000 F (après remise 50%).
 # Collection MongoDB : `manager_orders`. Endpoints sous /api/manager-orders.
@@ -6211,14 +6211,14 @@ async def get_manager_cap_status(employee_name: str, month: Optional[str] = None
 @api_router.post("/manager-orders")
 async def create_manager_order(
     employee_name: str = Body(...),
-    employee_position: str = Body("Gérante"),
+    employee_position: str = Body("Responsable Op. & Log"),
     items: list = Body(...),
     notes: str = Body(""),
     created_by: str = Body(...),
 ):
     try:
         if not employee_name or not employee_name.strip():
-            raise HTTPException(status_code=400, detail="Le nom de la gérante est obligatoire")
+            raise HTTPException(status_code=400, detail="Le nom de la responsable op. & log est obligatoire")
         if not items or len(items) == 0:
             raise HTTPException(status_code=400, detail="Au moins un article est requis")
 
@@ -6247,7 +6247,7 @@ async def create_manager_order(
         order = {
             "id": order_id,
             "employee_name": employee_name.strip(),
-            "employee_position": (employee_position or "Gérante").strip(),
+            "employee_position": (employee_position or "Responsable Op. & Log").strip(),
             "items": items,
             "subtotal": round(subtotal, 2),
             "discount_rate": int(MANAGER_DISCOUNT_RATE * 100),
@@ -6331,7 +6331,7 @@ async def authorize_manager_order(
     by_role: str = Body(...),
     signer_name: str = Body(...),
 ):
-    """Sequential authorization. Manager (Gérante self-confirms) FIRST, then Director.
+    """Sequential authorization. Manager (Responsable Op. & Log self-confirms) FIRST, then Director.
     Stock is deducted only when the second authorization (director) is given."""
     try:
         order = await db.manager_orders.find_one({"id": order_id})
@@ -6347,12 +6347,12 @@ async def authorize_manager_order(
         auths = order.get("authorizations") or {"manager": None, "director": None}
         if role == "manager":
             if current_status != "pending_manager":
-                raise HTTPException(status_code=409, detail="Auto-confirmation Gérante déjà donnée ou commande à un autre stade")
+                raise HTTPException(status_code=409, detail="Auto-confirmation Responsable Op. & Log déjà donnée ou commande à un autre stade")
             auths["manager"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "pending_director"
         else:
             if current_status != "pending_director":
-                raise HTTPException(status_code=409, detail="La Gérante doit confirmer AVANT la Directrice Générale")
+                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit confirmer AVANT la Directrice Générale")
             auths["director"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "authorized"
         update = {"authorizations": auths, "status": new_status, "updated_at": now_iso}
@@ -6385,7 +6385,7 @@ async def authorize_manager_order(
                         "previous_quantity": old_qty, "new_quantity": new_qty,
                         "unit": sp.get("unit", ""), "unit_price": sp.get("purchase_price", 0),
                         "total_value": qty * sp.get("purchase_price", 0),
-                        "reason": f"Bon GÉRANTE {order.get('employee_name')} - #{order_id[:8]} (autorisé)",
+                        "reason": f"Bon RESPONSABLE OP. & LOG {order.get('employee_name')} - #{order_id[:8]} (autorisé)",
                         "user_name": signer_name.strip(),
                         "manager_order_id": order_id,
                         "created_at": now_iso,
@@ -6496,7 +6496,7 @@ async def get_manager_closure_pdf(month: str):
                 rows_html += f"""<tr><td>{o.get('created_at', '')[:10]}</td><td>{items_str}</td><td class="num">{o.get('subtotal', 0):,.0f} F</td><td class="num">{o.get('total', 0):,.0f} F</td></tr>"""
             rows_html += f"""<tr class="emp-total"><td colspan="3"><strong>Total {emp_name}</strong></td><td class="num"><strong>{emp_total:,.0f} F</strong></td></tr>"""
         html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-        <title>Clôture GÉRANTE - {month}</title>
+        <title>Clôture RESPONSABLE OP. & LOG - {month}</title>
         <style>
             body {{ font-family: Arial, sans-serif; padding: 30px; color: #222; }}
             h1 {{ color: #7c3aed; border-bottom: 2px solid #7c3aed; padding-bottom: 8px; }}
@@ -6510,14 +6510,14 @@ async def get_manager_closure_pdf(month: str):
             .grand {{ margin-top: 20px; padding: 12px; background: #7c3aed; color: white; border-radius: 6px; font-size: 18px; text-align: right; }}
             .footer {{ margin-top: 30px; font-size: 12px; color: #777; border-top: 1px dashed #ccc; padding-top: 10px; }}
         </style></head><body>
-            <h1>Clôture mensuelle — Bons GÉRANTE</h1>
+            <h1>Clôture mensuelle — Bons RESPONSABLE OP. & LOG</h1>
             <p class="meta">Mois : <strong>{month}</strong> · Plafond mensuel : 25 000 F · Généré le {datetime.now(timezone.utc).strftime('%d/%m/%Y à %H:%M')}</p>
             <table>
                 <thead><tr><th>Date</th><th>Articles</th><th class="num">Sous-total</th><th class="num">À retenir (-50%)</th></tr></thead>
                 <tbody>{rows_html or '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px">Aucune commande clôturée pour ce mois</td></tr>'}</tbody>
             </table>
             <div class="grand">Total à retenir sur le salaire : <strong>{grand_total:,.0f} F</strong></div>
-            <p class="footer">Ce document récapitule les bons GÉRANTE clôturés. Espace Maxo.</p>
+            <p class="footer">Ce document récapitule les bons RESPONSABLE OP. & LOG clôturés. Espace Maxo.</p>
         </body></html>"""
         return HTMLResponse(content=html)
     except HTTPException:
@@ -6826,7 +6826,7 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         
         # ============== LOCATIONS (RENTALS) INCOME ==============
         # Inclut TOUS les statuts utiles (pending/confirmed/completed) pour que
-        # toute demande de location renseignée par la gérante soit visible dans
+        # toute demande de location renseignée par la responsable op. & log soit visible dans
         # le rapport. Les statuts annulés (cancelled) sont exclus.
         locations_window = await db.location_reservations.find({
             "status": {"$nin": ["cancelled", "annule", "annulee"]},

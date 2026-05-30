@@ -125,7 +125,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   }, [isAdmin]);
 
   // Validation préalable du "Faire le point" pour la période courante.
-  // Sans cette validation, la Gérante ne peut PAS éditer le Reversement.
+  // Sans cette validation, la Responsable Op. & Log ne peut PAS éditer le Reversement.
   const [pointValidation, setPointValidation] = useState(null);
   const [pointValidationLoading, setPointValidationLoading] = useState(true);
   const fetchPointValidation = useCallback(async () => {
@@ -181,7 +181,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
         setBillettage(target.billettage || {});
       } else {
         // === Pas de point existant : on tente le pré-remplissage automatique
-        // à partir des ventes validées du jour/semaine. La Gérante peut éditer librement.
+        // à partir des ventes validées du jour/semaine. La Responsable Op. & Log peut éditer librement.
         setCurrentPoint(null);
         try {
           const autoRes = await axios.get(`${API}/reversements/auto-fill`, {
@@ -749,7 +749,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
     </Card>
   );
 
-  // ===== BLOCAGE : Gérante doit valider "Faire le point" avant Reversement =====
+  // ===== BLOCAGE : Responsable Op. & Log doit valider "Faire le point" avant Reversement =====
   // Ne s'applique PAS à l'Admin (bypass), et seulement si aucun reversement n'a encore été créé.
   // BYPASS aussi si AUCUN serveur n'a fait de vente sur la période (Resp. Op. peut alors faire un
   // "reversement direct" sans passer par "Faire le point").
@@ -1193,7 +1193,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
       <div className="flex flex-wrap gap-3 justify-end">
         {isAdmin && currentPoint && <Button data-testid="fp-delete-btn" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deletePoint} disabled={loading}><X className="w-4 h-4 mr-1" /> Supprimer</Button>}
         {canEdit && !isSigned && <Button data-testid="fp-save-btn" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={savePoint} disabled={loading}><Save className="w-4 h-4 mr-1" /> {currentPoint ? "Mettre a jour" : "Enregistrer"}</Button>}
-        {canEdit && !isSigned && <Button data-testid="fp-sign-btn" className={cashMatches ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"} onClick={handleSignClick} disabled={loading || (computedTotal <= 0)}><ShieldCheck className="w-4 h-4 mr-1" /> {cashMatches ? "Signer (Gérante)" : "Compléter le billetage"}</Button>}
+        {canEdit && !isSigned && <Button data-testid="fp-sign-btn" className={cashMatches ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"} onClick={handleSignClick} disabled={loading || (computedTotal <= 0)}><ShieldCheck className="w-4 h-4 mr-1" /> {cashMatches ? "Signer (Responsable Op. & Log)" : "Compléter le billetage"}</Button>}
       </div>
 
       {!currentPoint && (<Card className="bg-slate-800/30 border-slate-700"><CardContent className="p-6 text-center"><AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" /><p className="text-slate-400">Aucun reversement pour cette periode.</p>{canEdit && <p className="text-slate-500 text-sm mt-1">Saisissez les montants et enregistrez.</p>}</CardContent></Card>)}

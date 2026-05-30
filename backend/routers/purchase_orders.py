@@ -6,7 +6,7 @@ Workflow :
      → PO status = 'draft'
   2. Admin envoie le BC (imprime/transmet) → status = 'sent'
   3. À la livraison :
-     - Admin/gérante saisit les quantités reçues vs commandées.
+     - Admin/responsable op. & log saisit les quantités reçues vs commandées.
      - Si toutes livrées → status = 'received' (+ BL émis).
      - Sinon → status = 'partially_received', livraisons successives possibles.
      - Un mouvement stock 'entree' est créé pour chaque article reçu (match sur

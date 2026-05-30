@@ -431,7 +431,7 @@ async def update_expense(expense_id: str, update: ExpenseUpdate):
             # === SUIVI COURSES (auto-import dans shopping_list_items) ===
             # Lors de l'approbation par l'admin, on crée automatiquement les
             # entrées dans la liste de courses (Restaurant) pour que la
-            # Gérante puisse cocher au fur et à mesure des achats.
+            # Responsable Op. & Log puisse cocher au fur et à mesure des achats.
             try:
                 _src = update_data.get("items") if update_data.get("items") is not None else expense.get("items") or []
                 _items_for_courses = []

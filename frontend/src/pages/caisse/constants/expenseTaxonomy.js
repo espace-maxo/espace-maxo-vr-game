@@ -8,7 +8,7 @@
  * - DESTINATIONS         : où va la dépense (Cuisine, Bar, Salle, Jeux VR, Jardin, Administratif)
  *
  * - PREDEFINED_PAYMENTS  : libellés prédéfinis (typologie restauration + jeux VR)
- *   organisés en groupes pour faciliter le choix par la gérante.
+ *   organisés en groupes pour faciliter le choix par la responsable op. & log.
  */
 
 export const EXPENSE_TYPES = [

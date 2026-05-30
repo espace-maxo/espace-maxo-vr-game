@@ -42,7 +42,7 @@ const ACTION_META = {
 
 const ROLE_META = {
   admin:   { label: "Admin",   color: "bg-purple-500/20 text-purple-300" },
-  manager: { label: "Gérante", color: "bg-amber-500/20 text-amber-300" },
+  manager: { label: "Responsable Op. & Log", color: "bg-amber-500/20 text-amber-300" },
   server:  { label: "Agent", color: "bg-sky-500/20 text-sky-300" },
 };
 
@@ -167,7 +167,7 @@ const AuditLogsTab = ({ currentUser }) => {
             Historique des modifications · Factures &amp; Bons
           </CardTitle>
           <p className="text-xs text-slate-400 mt-1">
-            Trace toutes les actions effectuées par la gérante et les agents sur les factures
+            Trace toutes les actions effectuées par la responsable op. & log et les agents sur les factures
             et bons de commande. Visible uniquement par l'administrateur principal.
           </p>
         </CardHeader>
@@ -228,8 +228,8 @@ const AuditLogsTab = ({ currentUser }) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="non_admin">Gérante &amp; agents</SelectItem>
-                <SelectItem value="manager">Gérante seulement</SelectItem>
+                <SelectItem value="non_admin">Responsable Op. & Log &amp; agents</SelectItem>
+                <SelectItem value="manager">Responsable Op. & Log seulement</SelectItem>
                 <SelectItem value="server">Agents seulement</SelectItem>
                 <SelectItem value="all">Tous (incl. admin)</SelectItem>
               </SelectContent>

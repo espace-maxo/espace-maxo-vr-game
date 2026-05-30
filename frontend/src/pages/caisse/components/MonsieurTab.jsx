@@ -126,7 +126,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
       items: selectedItems,
       total: total,
       notes: notes,
-      created_by: currentUser?.name || "Gérante"
+      created_by: currentUser?.name || "Responsable Op. & Log"
     };
 
     try {
@@ -176,7 +176,7 @@ const MonsieurTab = ({ currentUser, formatPrice, products = [] }) => {
     try {
       await axios.put(`${API}/monsieur-orders/${pendingPayment.id}`, {
         status: "regle",
-        paid_by: currentUser?.name || "Gérante",
+        paid_by: currentUser?.name || "Responsable Op. & Log",
         payment_method: paymentMethod,
       });
       toast.success(`Réglée (${labelForMethod(paymentMethod)}) · ajoutée aux Factures du jour comme « Mme la Directrice Générale »`);

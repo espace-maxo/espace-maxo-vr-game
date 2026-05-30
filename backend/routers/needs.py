@@ -1,9 +1,9 @@
 """
-Needs Router — Liste de besoins (gérante / admin).
+Needs Router — Liste de besoins (responsable op. & log / admin).
 
 Périmètre :
   - Liste de TOUS les besoins (salle, salle_jeux, jardin, cuisine, toilettes, autres).
-  - Gérante crée un besoin (prix optionnel, multi-items), Admin approuve et
+  - Responsable Op. & Log crée un besoin (prix optionnel, multi-items), Admin approuve et
     peut convertir automatiquement en demande d'achats (dépense pending).
   - Endpoint /needs/analysis réutilise la logique de forecasts pour :
     doublons (14j, demandes + achats stock), intra-doublons, stock matches,
@@ -234,7 +234,7 @@ async def cancel_need(need_id: str, body: dict = Body(default={})):
 async def convert_need_to_expense(need_id: str, body: dict = Body(default={})):
     """Admin: convertit un besoin en demande d'achats (expense pending) et marque le besoin 'traite'.
 
-    Le body peut contenir: category (défaut "autres"), overrides unit_price/amount si gérante n'a pas renseigné.
+    Le body peut contenir: category (défaut "autres"), overrides unit_price/amount si responsable op. & log n'a pas renseigné.
     """
     try:
         need = await db.needs.find_one({"id": need_id}, {"_id": 0})

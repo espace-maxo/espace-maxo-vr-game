@@ -3,7 +3,7 @@
  *   Fournisseurs (CRUD) + Bons de commande (workflow draft → sent → received → paid).
  *
  * Côté admin : accès complet.
- * Côté gérante : consultation + ouverture du modal de réception (BL) quand un BC est 'sent' ou 'partially_received'.
+ * Côté responsable op. & log : consultation + ouverture du modal de réception (BL) quand un BC est 'sent' ou 'partially_received'.
  */
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";

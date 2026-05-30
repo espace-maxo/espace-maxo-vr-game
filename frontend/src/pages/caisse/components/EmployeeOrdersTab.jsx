@@ -23,7 +23,7 @@ const MAX_PER_MONTH = 10000;
 const DISCOUNT_RATE = 0.5; // 50%
 
 const STATUS_BADGE = {
-  pending_manager: { label: "En attente Gérante", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+  pending_manager: { label: "En attente Responsable Op. & Log", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
   pending_director: { label: "En attente Directrice", className: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
   authorized: { label: "Autorisé", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
   settled: { label: "Réglé sur salaire", className: "bg-slate-500/20 text-slate-300 border-slate-500/40" },
@@ -169,14 +169,14 @@ const EmployeeOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
         employee_position: resolvedPosition,
         items: selectedItems,
         notes,
-        created_by: currentUser?.full_name || currentUser?.name || currentUser?.username || "Gérante",
+        created_by: currentUser?.full_name || currentUser?.name || currentUser?.username || "Responsable Op. & Log",
       };
       if (editingOrder) {
         await axios.put(`${API}/employee-orders/${editingOrder.id}`, payload);
         toast.success("Commande modifiée");
       } else {
         await axios.post(`${API}/employee-orders`, payload);
-        toast.success("Commande employé enregistrée — en attente d'autorisation Gérante");
+        toast.success("Commande employé enregistrée — en attente d'autorisation Responsable Op. & Log");
       }
       setShowModal(false);
       resetForm();
@@ -189,7 +189,7 @@ const EmployeeOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const authorize = async (order, role) => {
-    const label = role === "manager" ? "Gérante" : "Directrice Générale";
+    const label = role === "manager" ? "Responsable Op. & Log" : "Directrice Générale";
     if (!window.confirm(`Autoriser la commande de ${order.employee_name} en tant que ${label} ?\n\nMontant à retenir : ${formatPrice(order.total)} F`)) return;
     try {
       await axios.put(`${API}/employee-orders/${order.id}/authorize`, {
@@ -364,7 +364,7 @@ const EmployeeOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                         <div className="flex flex-wrap gap-2 mt-1.5">
                           {order.authorizations?.manager && (
                             <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" /> Gérante: {order.authorizations.manager.name}
+                              <ShieldCheck className="w-3 h-3" /> Responsable Op. & Log: {order.authorizations.manager.name}
                             </span>
                           )}
                           {order.authorizations?.director && (
@@ -378,7 +378,7 @@ const EmployeeOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
                     <div className="flex items-center gap-1 flex-wrap justify-end">
                       {canManagerAuth && (
                         <Button size="sm" onClick={() => authorize(order, "manager")} className="bg-amber-600 hover:bg-amber-700 h-7 text-xs" data-testid={`emp-auth-manager-${order.id}`}>
-                          <ShieldCheck className="w-3 h-3 mr-1" /> Autoriser (Gérante)
+                          <ShieldCheck className="w-3 h-3 mr-1" /> Autoriser (Responsable Op. & Log)
                         </Button>
                       )}
                       {canDirectorAuth && (

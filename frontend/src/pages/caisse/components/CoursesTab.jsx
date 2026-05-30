@@ -127,7 +127,7 @@ const CoursesTab = ({ currentUser }) => {
     if (!markModalItem) return;
     try {
       await axios.post(`${API}/shopping-list/${markModalItem.id}/done`, {
-        done_by: currentUser?.full_name || currentUser?.username || 'Gérante',
+        done_by: currentUser?.full_name || currentUser?.username || 'Responsable Op. & Log',
         real_unit_price: Number(markRealPrice) || 0,
         real_supplier: markSupplier,
         payment_mode: markPaymentMode,

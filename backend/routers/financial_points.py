@@ -310,7 +310,7 @@ async def admin_validate_financial_point(point_id: str, data: dict = Body(defaul
             raise HTTPException(status_code=404, detail="Point financier non trouvé")
 
         if not point.get("signed"):
-            raise HTTPException(status_code=400, detail="Ce point doit d'abord être signé par la gérante")
+            raise HTTPException(status_code=400, detail="Ce point doit d'abord être signé par la responsable op. & log")
 
         if point.get("admin_validated"):
             raise HTTPException(status_code=400, detail="Ce point est déjà validé par l'administrateur")
@@ -856,7 +856,7 @@ async def generate_combined_pdf(date: str, period_type: str = "daily", end_date:
 
 
 # ============================================================================
-# POINT VALIDATIONS — Gérante must validate "Faire le point" before Reversement
+# POINT VALIDATIONS — Responsable Op. & Log must validate "Faire le point" before Reversement
 # ============================================================================
 
 class PointValidationCreate(BaseModel):
@@ -972,7 +972,7 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
     """Compute the expected reversement per category × payment method for the period.
 
     Returns a payload usable by the frontend to pre-fill the reversement form
-    while still allowing the Gérante to edit each value.
+    while still allowing the Responsable Op. & Log to edit each value.
     """
     try:
         # Period bounds
@@ -1044,7 +1044,7 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
             seen.add(lid)
             amt = loc.get("rental_amount", 0) or 0
             # Pour les locations, on n'a pas de payment_method enregistré explicitement.
-            # Convention : on met tout en cash par défaut. La Gérante pourra reventiler.
+            # Convention : on met tout en cash par défaut. La Responsable Op. & Log pourra reventiler.
             pm = _norm_payment_method(loc.get("payment_method"))
             result["locations"][pm] += amt
             result["locations"]["total"] += amt

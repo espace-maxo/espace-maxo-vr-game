@@ -402,7 +402,7 @@ const ForecastsTab = () => {
           <div className="space-y-3">
             <div>
               <Label>Libellé *</Label>
-              <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Ex: Loyer décembre, Salaire gérante..." data-testid="forecast-label" />
+              <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Ex: Loyer décembre, Salaire responsable op. & log..." data-testid="forecast-label" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

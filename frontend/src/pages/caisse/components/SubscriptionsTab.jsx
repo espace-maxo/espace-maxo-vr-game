@@ -1,6 +1,6 @@
 /**
  * SubscriptionsTab - Gestion des Abonnements et Factures Récurrentes
- * Pour la Gérante et l'Admin
+ * Pour la Responsable Op. & Log et l'Admin
  */
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';

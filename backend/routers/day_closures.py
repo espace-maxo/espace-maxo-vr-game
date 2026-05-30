@@ -4,7 +4,7 @@ Day Closures Router — Fermeture de la journée AVANT "Faire le point".
 Workflow :
 1. Chaque serveur fait son point : POST /api/server-points {date, server_id, server_name}
    → enregistre que ce serveur a validé son service du jour
-2. La Gérante (ou Admin) ferme la journée : POST /api/day-closures/{date}/close
+2. La Responsable Op. & Log (ou Admin) ferme la journée : POST /api/day-closures/{date}/close
    → bloquée si un serveur (rôle 'server' actif) n'a pas validé son point
 3. Une fois fermée, la journée est en lecture seule (statut = closed)
 4. Seul l'Admin peut rouvrir la journée : POST /api/day-closures/{date}/reopen
@@ -179,7 +179,7 @@ async def create_server_point(data: ServerPointCreate):
 
 @router.delete("/server-points/{point_id}")
 async def delete_server_point(point_id: str, is_admin: bool = False):
-    """Annule un point serveur (admin uniquement, ou la Gérante si la journée n'est pas fermée)."""
+    """Annule un point serveur (admin uniquement, ou la Responsable Op. & Log si la journée n'est pas fermée)."""
     try:
         if not is_admin:
             point = await db.server_points.find_one({"id": point_id}, {"_id": 0})
@@ -282,7 +282,7 @@ async def close_day(date: str, data: DayClosureClose):
             logger.warning(f"day_openings update on close failed: {_e}")
 
         # === AUTO-CRÉATION des 4 reversements (Bar / Menu / Jeux / Locations) ===
-        # Pré-rempli à partir des ventes du jour. La Gérante pourra ajuster
+        # Pré-rempli à partir des ventes du jour. La Responsable Op. & Log pourra ajuster
         # chaque montant avec un motif obligatoire (traçabilité).
         auto_created = []
         try:

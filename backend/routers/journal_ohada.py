@@ -6,8 +6,8 @@ Endpoint principal : GET /api/journal/ohada?start_date=YYYY-MM-DD&end_date=YYYY-
 Sources mappées en écritures comptables :
   - Factures validées        → 571 Caisse (D) / 707 Ventes (C)
   - Achats finalisés         → 6xx Charges (D) / 571 Caisse OU 467 Comptes courants (C)
-  - Reversements gérante     → 571 Caisse Admin (D) / 467 Gérante (C)
-  - Avances Gérante          → 467 Gérante (D) / 571 Caisse (C)
+  - Reversements responsable op. & log     → 571 Caisse Admin (D) / 467 Responsable Op. & Log (C)
+  - Avances Responsable Op. & Log          → 467 Responsable Op. & Log (D) / 571 Caisse (C)
   - Fonds Propres            → 6xx Charges (D) / 467 Fonds Propres (C)
   - Remb. Fonds Propres      → 467 Fonds Propres (D) / 571 Caisse (C)
   - Ouverture journée + fond → 571 Caisse (D) / 581 Caisse en transit (C)
@@ -34,7 +34,7 @@ OHADA = {
     "571_CAISSE":          {"num": "571", "label": "Caisse"},
     "521_BANQUES":         {"num": "521", "label": "Banques"},
     "411_CLIENTS":         {"num": "411", "label": "Clients"},
-    "467_GERANTE":         {"num": "467", "label": "Compte courant Gérante"},
+    "467_GERANTE":         {"num": "467", "label": "Compte courant Responsable Op. & Log"},
     "467_FONDS_PROPRES":   {"num": "467", "label": "Fonds propres exploitant"},
     "70_VENTES":           {"num": "70",  "label": "Ventes (chiffre d'affaires)"},
     "707_MARCHANDISES":    {"num": "707", "label": "Ventes marchandises (Bar)"},
@@ -146,7 +146,7 @@ async def _collect_entries(start_iso: str, end_iso: str) -> List[dict]:
             author=exp.get("paid_by") or exp.get("requested_by") or "",
         ))
 
-    # 3) Reversements (financial_points) → D Caisse Admin / C 467 Gérante
+    # 3) Reversements (financial_points) → D Caisse Admin / C 467 Responsable Op. & Log
     revs = await db.financial_points.find({
         "created_at": {"$gte": start_iso, "$lt": end_iso},
     }, {"_id": 0}).to_list(5000)
@@ -164,7 +164,7 @@ async def _collect_entries(start_iso: str, end_iso: str) -> List[dict]:
             author=r.get("created_by") or "",
         ))
 
-    # 4) Avances Gérante (gerante_advances)
+    # 4) Avances Responsable Op. & Log (gerante_advances)
     try:
         advances = await db.gerante_advances.find({
             "created_at": {"$gte": start_iso, "$lt": end_iso},
@@ -172,7 +172,7 @@ async def _collect_entries(start_iso: str, end_iso: str) -> List[dict]:
         for a in advances:
             entries.append(_make_entry(
                 date_iso=a.get("created_at"),
-                libelle=f"Avance Gérante · {a.get('purpose','')}",
+                libelle=f"Avance Responsable Op. & Log · {a.get('purpose','')}",
                 account_debit=OHADA["467_GERANTE"],
                 account_credit=OHADA["571_CAISSE"],
                 amount=float(a.get("amount") or 0),
@@ -183,7 +183,7 @@ async def _collect_entries(start_iso: str, end_iso: str) -> List[dict]:
             if a.get("reimbursed_at") and _within(a.get("reimbursed_at"), start_iso, end_iso):
                 entries.append(_make_entry(
                     date_iso=a.get("reimbursed_at"),
-                    libelle=f"Remboursement avance Gérante · {a.get('purpose','')}",
+                    libelle=f"Remboursement avance Responsable Op. & Log · {a.get('purpose','')}",
                     account_debit=OHADA["571_CAISSE"],
                     account_credit=OHADA["467_GERANTE"],
                     amount=float(a.get("amount") or 0),

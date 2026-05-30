@@ -92,7 +92,7 @@ const HebdoReport = ({
         date: from,
         end_date: from === to ? "" : to,
         period_type: from === to ? "daily" : "weekly",
-        validated_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        validated_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
       });
       toast.success("Point validé — passage au Reversement");
       await refreshValidationState();

@@ -255,7 +255,7 @@ const InstructionsTab = ({ currentUser, formatPrice, onNotesRead }) => {
               <SelectItem value="notes">Notes</SelectItem>
               <SelectItem value="tasks">Listes de tâches</SelectItem>
               <SelectItem value="from_admin">De l'Admin</SelectItem>
-              <SelectItem value="from_manager">De la Gérante</SelectItem>
+              <SelectItem value="from_manager">De la Responsable Op. & Log</SelectItem>
             </SelectContent>
           </Select>
           
@@ -363,7 +363,7 @@ const InstructionsTab = ({ currentUser, formatPrice, onNotesRead }) => {
                       <div className="flex items-center gap-3 text-xs text-slate-500">
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3" />
-                          {instruction.sender_name} ({instruction.sender_role === "admin" ? "Admin" : "Gérante"})
+                          {instruction.sender_name} ({instruction.sender_role === "admin" ? "Admin" : "Responsable Op. & Log"})
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />

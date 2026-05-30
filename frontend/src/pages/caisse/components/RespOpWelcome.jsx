@@ -1,5 +1,5 @@
 /**
- * RespOpWelcome — Bandeau d'accueil personnalisé pour la Resp. Op. (Gérante).
+ * RespOpWelcome — Bandeau d'accueil personnalisé pour la Resp. Op. (Responsable Op. & Log).
  * Affiche :
  *   - Salutation contextuelle (Bonjour / Bonsoir) + nom + rôle
  *   - 5 KPI cliquables : Journée, Tables ouvertes, Bons à valider, Besoins, Pourboires

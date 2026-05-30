@@ -11,7 +11,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
  * Mini dashboard "Crédits sur salaires du mois" — visible UNIQUEMENT pour l'admin.
  * Agrège en temps réel :
  *  - Bons EMPLOYÉS (pending + authorized, montant total)
- *  - Bons GÉRANTE  (pending + authorized, montant total)
+ *  - Bons RESPONSABLE OP. & LOG  (pending + authorized, montant total)
  *  - Total prévisionnel à retenir sur les paies (autorisés uniquement)
  */
 const SalaryCreditsBanner = ({ formatPrice }) => {
@@ -86,11 +86,11 @@ const SalaryCreditsBanner = ({ formatPrice }) => {
               </div>
             </div>
 
-            {/* GÉRANTE */}
+            {/* RESPONSABLE OP. & LOG */}
             <div className="flex items-center gap-2 bg-violet-900/20 border border-violet-500/30 rounded-md px-3 py-1.5" data-testid="banner-gerante">
               <UserCog className="w-4 h-4 text-violet-300" />
               <div className="text-right">
-                <p className="text-violet-300 text-[10px] font-bold uppercase tracking-wider">Gérante</p>
+                <p className="text-violet-300 text-[10px] font-bold uppercase tracking-wider">Responsable Op. & Log</p>
                 <p className="text-violet-200 font-bold text-sm leading-tight">{formatPrice(mgr.authorized_total)} F</p>
                 {mgr.pending_total > 0 && (
                   <p className="text-amber-400 text-[10px]">+ {formatPrice(mgr.pending_total)} F en attente</p>

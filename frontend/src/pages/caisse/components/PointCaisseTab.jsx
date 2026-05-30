@@ -68,7 +68,7 @@ const PointCaisseTab = ({ currentUser }) => {
   const [view, setView] = useState("live"); // live | history
   const [expandedId, setExpandedId] = useState(null);
 
-  // ============ Avances Gérante ============
+  // ============ Avances Responsable Op. & Log ============
   const [advances, setAdvances] = useState([]);
   const [advanceForm, setAdvanceForm] = useState({ amount: "", reason: "" });
   const [showAdvanceForm, setShowAdvanceForm] = useState(false);
@@ -94,7 +94,7 @@ const PointCaisseTab = ({ currentUser }) => {
       await axios.post(`${API}/gerante-advances`, {
         amount,
         reason: advanceForm.reason || "",
-        created_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        created_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
       });
       toast.success(`Avance de ${fmt(amount)} F enregistrée`);
       setAdvanceForm({ amount: "", reason: "" });
@@ -108,10 +108,10 @@ const PointCaisseTab = ({ currentUser }) => {
   };
 
   const reimburseAdvance = async (id, amount) => {
-    if (!confirm(`Rembourser ${fmt(amount)} F à la Gérante depuis la caisse ?\n\nCela retire cette somme du surplus espèces attendu.`)) return;
+    if (!confirm(`Rembourser ${fmt(amount)} F à la Responsable Op. & Log depuis la caisse ?\n\nCela retire cette somme du surplus espèces attendu.`)) return;
     try {
       await axios.post(`${API}/gerante-advances/${id}/reimburse`, {
-        reimbursed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        reimbursed_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
       });
       toast.success("Avance remboursée");
       await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
@@ -126,7 +126,7 @@ const PointCaisseTab = ({ currentUser }) => {
     if (!confirm(`Rembourser TOUTES les avances en attente (${advances.length} × total ${fmt(totalPending)} F) ?`)) return;
     try {
       const r = await axios.post(`${API}/gerante-advances/reimburse-all`, {
-        reimbursed_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        reimbursed_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
       });
       toast.success(`${r.data.count} avance(s) remboursée(s) · ${fmt(r.data.total_amount)} F`);
       await Promise.all([fetchAdvances(), fetchSnapshot(date)]);
@@ -380,13 +380,13 @@ const PointCaisseTab = ({ currentUser }) => {
                 </CardContent>
               </Card>
 
-              {/* ============ AVANCES GÉRANTE ============ */}
+              {/* ============ AVANCES RESPONSABLE OP. & LOG ============ */}
               <Card className="bg-gradient-to-br from-purple-900/20 to-fuchsia-900/10 border-purple-500/40" data-testid="gerante-advances-section">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <CardTitle className="text-purple-200 flex items-center gap-2 text-base">
                       <HandCoins className="w-5 h-5" />
-                      Avances de la Gérante (monnaie sur fonds personnels)
+                      Avances de la Responsable Op. & Log (monnaie sur fonds personnels)
                       {pendingAdvancesTotal > 0 && (
                         <Badge className="bg-purple-500/30 text-purple-100 ml-1">
                           {fmt(pendingAdvancesTotal)} F en attente
@@ -416,7 +416,7 @@ const PointCaisseTab = ({ currentUser }) => {
                     </div>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Quand la caisse n'a pas de monnaie à rendre, la Gérante peut avancer ses propres fonds. Elle se fait rembourser plus tard depuis la caisse.
+                    Quand la caisse n'a pas de monnaie à rendre, la Responsable Op. & Log peut avancer ses propres fonds. Elle se fait rembourser plus tard depuis la caisse.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -534,7 +534,7 @@ const PointCaisseTab = ({ currentUser }) => {
                         <p className="text-[11px] text-slate-500 mt-1">
                           = {fmt(s.per_method.cash.amount)} F encaissés
                           {s.gerante_pending_total > 0 && (
-                            <> + {fmt(s.gerante_pending_total)} F avance(s) Gérante en attente</>
+                            <> + {fmt(s.gerante_pending_total)} F avance(s) Responsable Op. & Log en attente</>
                           )}
                           {s.gerante_reimbursed_today_total > 0 && (
                             <> − {fmt(s.gerante_reimbursed_today_total)} F remboursement(s) du jour</>

@@ -1,6 +1,6 @@
 /**
  * NeedsTab — Liste de besoins (tous espaces).
- * Gérante : crée, édite, supprime ses besoins (brouillon).
+ * Responsable Op. & Log : crée, édite, supprime ses besoins (brouillon).
  * Admin : voit tout, peut annuler, ou convertir en demande d'achats.
  * Réutilise l'analyse intelligente (doublons, stock, trésorerie) via /needs/analysis.
  */
@@ -63,7 +63,7 @@ const NeedsTab = ({ currentUser }) => {
 
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
-  const requesterName = currentUser?.name || currentUser?.username || "Gérante";
+  const requesterName = currentUser?.name || currentUser?.username || "Responsable Op. & Log";
 
   const fetchNeeds = useCallback(async () => {
     setLoading(true);

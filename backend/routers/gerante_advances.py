@@ -1,12 +1,12 @@
 """
-Gerante Cash Advances Router — Avances personnelles de la Gérante pour rendre la monnaie.
+Gerante Cash Advances Router — Avances personnelles de la Responsable Op. & Log pour rendre la monnaie.
 
 Cas d'usage :
 - Un client doit recevoir 2 000 F de monnaie
 - La caisse n'a pas de petites coupures
-- La Gérante donne 2 000 F de sa poche au client
+- La Responsable Op. & Log donne 2 000 F de sa poche au client
 - Le client a quand même payé la totalité en caisse → surplus physique
-- Plus tard, la Gérante prend 2 000 F dans la caisse pour se rembourser
+- Plus tard, la Responsable Op. & Log prend 2 000 F dans la caisse pour se rembourser
 
 Endpoints :
 - POST   /api/gerante-advances               → créer une avance
@@ -14,7 +14,7 @@ Endpoints :
 - GET    /api/gerante-advances/summary       → totaux (pending + remboursées du jour)
 - POST   /api/gerante-advances/{id}/reimburse → marquer remboursée
 - POST   /api/gerante-advances/reimburse-all → tout rembourser (pending → reimbursed)
-- DELETE /api/gerante-advances/{id}          → supprimer (admin / gérante)
+- DELETE /api/gerante-advances/{id}          → supprimer (admin / responsable op. & log)
 """
 from fastapi import APIRouter, HTTPException, Query, Body
 from pydantic import BaseModel, Field
@@ -38,13 +38,13 @@ def set_db(database):
 class AdvanceCreate(BaseModel):
     amount: float = Field(..., gt=0, description="Montant avancé en F")
     reason: str = Field("", description="Motif : ex. 'Monnaie client facture #0012'")
-    created_by: Optional[str] = "Gérante"
+    created_by: Optional[str] = "Responsable Op. & Log"
     invoice_id: Optional[str] = None
     invoice_number: Optional[str] = None
 
 
 class ReimburseRequest(BaseModel):
-    reimbursed_by: Optional[str] = "Gérante"
+    reimbursed_by: Optional[str] = "Responsable Op. & Log"
     notes: Optional[str] = None
 
 
@@ -52,7 +52,7 @@ class ReimburseRequest(BaseModel):
 
 @router.post("/gerante-advances")
 async def create_advance(payload: AdvanceCreate):
-    """Enregistre une avance de la Gérante (fonds personnels pour rendre la monnaie)."""
+    """Enregistre une avance de la Responsable Op. & Log (fonds personnels pour rendre la monnaie)."""
     try:
         now = datetime.now(timezone.utc)
         doc = {
@@ -62,7 +62,7 @@ async def create_advance(payload: AdvanceCreate):
             "reason": (payload.reason or "").strip(),
             "invoice_id": payload.invoice_id,
             "invoice_number": payload.invoice_number,
-            "created_by": payload.created_by or "Gérante",
+            "created_by": payload.created_by or "Responsable Op. & Log",
             "status": "pending",
             "created_at": now.isoformat(),
             "reimbursed_at": None,
@@ -142,7 +142,7 @@ async def advances_summary(date: Optional[str] = Query(None)):
 
 @router.post("/gerante-advances/{advance_id}/reimburse")
 async def reimburse_advance(advance_id: str, payload: ReimburseRequest = Body(default=None)):
-    """Marque une avance comme remboursée (la Gérante a pris l'argent de la caisse)."""
+    """Marque une avance comme remboursée (la Responsable Op. & Log a pris l'argent de la caisse)."""
     try:
         payload = payload or ReimburseRequest()
         existing = await db.gerante_advances.find_one({"id": advance_id}, {"_id": 0})
@@ -156,7 +156,7 @@ async def reimburse_advance(advance_id: str, payload: ReimburseRequest = Body(de
             {"$set": {
                 "status": "reimbursed",
                 "reimbursed_at": now,
-                "reimbursed_by": payload.reimbursed_by or "Gérante",
+                "reimbursed_by": payload.reimbursed_by or "Responsable Op. & Log",
                 "notes": payload.notes,
             }},
         )
@@ -171,7 +171,7 @@ async def reimburse_advance(advance_id: str, payload: ReimburseRequest = Body(de
 
 @router.post("/gerante-advances/reimburse-all")
 async def reimburse_all(
-    reimbursed_by: str = Body("Gérante", embed=True),
+    reimbursed_by: str = Body("Responsable Op. & Log", embed=True),
     date: Optional[str] = Body(None, embed=True),
 ):
     """Rembourse toutes les avances pending (optionnellement limitées à une date)."""
@@ -190,7 +190,7 @@ async def reimburse_all(
             {"$set": {
                 "status": "reimbursed",
                 "reimbursed_at": now,
-                "reimbursed_by": reimbursed_by or "Gérante",
+                "reimbursed_by": reimbursed_by or "Responsable Op. & Log",
             }},
         )
         return {"success": True, "count": len(ids), "total_amount": total}

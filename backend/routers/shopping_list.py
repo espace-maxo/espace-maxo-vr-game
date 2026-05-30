@@ -9,7 +9,7 @@ Chaque item peut être :
   - autonome (scope="restaurant", sans expense_id) — ajout libre.
 
 Workflow :
-  1. La Gérante consulte la liste des items "à acheter" (filtre status=pending).
+  1. La Responsable Op. & Log consulte la liste des items "à acheter" (filtre status=pending).
   2. Quand elle achète un article, elle coche → saisit le vrai prix payé +
      fournisseur réel (optionnels).
   3. On enregistre done_by + done_at + real_unit_price + real_supplier.

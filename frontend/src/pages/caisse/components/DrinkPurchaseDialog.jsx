@@ -197,7 +197,7 @@ export default function DrinkPurchaseDialog({ open, onClose, currentUser, onCrea
           unit_price: parseFloat(l.unit_price || 0),
         })),
         supplier: supplier,
-        requested_by: currentUser?.full_name || currentUser?.username || "Gérante",
+        requested_by: currentUser?.full_name || currentUser?.username || "Responsable Op. & Log",
         notes: notes,
       });
       if (res.data?.success) {

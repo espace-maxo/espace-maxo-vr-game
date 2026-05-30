@@ -198,7 +198,7 @@ async def create_invoice(
         if not opening or opening.get("status") != "open":
             raise HTTPException(
                 status_code=423,  # 423 Locked
-                detail="La journée n'est pas ouverte. La Gérante doit ouvrir la journée avant toute saisie de vente."
+                detail="La journée n'est pas ouverte. La Responsable Op. & Log doit ouvrir la journée avant toute saisie de vente."
             )
 
         today = datetime.now(timezone.utc).strftime("%Y%m%d")

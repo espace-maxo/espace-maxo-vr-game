@@ -264,7 +264,7 @@ const BonsTab = ({
                               Bon-Client
                             </Button>
                             {/* Suppression directe : Admin only (24/05/2026)
-                                La Gérante doit demander l'autorisation via "Demander annulation". */}
+                                La Responsable Op. & Log doit demander l'autorisation via "Demander annulation". */}
                             {isAdmin ? (
                               <Button size="sm" variant="ghost" onClick={() => deleteInvoice(invoice.id)} className="text-red-400 hover:text-red-300" title="Supprimer">
                                 <Trash2 className="w-4 h-4" />
@@ -308,7 +308,7 @@ const BonsTab = ({
         </TabsContent>
       )}
 
-      {/* Bons à crédit (groupé : Employés + Gérante) */}
+      {/* Bons à crédit (groupé : Employés + Responsable Op. & Log) */}
       {canManage && (
         <TabsContent value="bons-credit">
           <CreditOrdersGroupedTab

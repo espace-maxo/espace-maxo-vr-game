@@ -135,7 +135,7 @@ const PointsHistoryTab = ({ currentUser }) => {
 
   const unlockPoint = async (p) => {
     if (!isAdmin) return;
-    if (!window.confirm(`Renvoyer ce reversement pour modification ?\n\nLa Gérante pourra à nouveau le modifier avant re-signature.`)) return;
+    if (!window.confirm(`Renvoyer ce reversement pour modification ?\n\nLa Responsable Op. & Log pourra à nouveau le modifier avant re-signature.`)) return;
     try {
       await axios.post(`${API}/financial-points/${p.id}/unlock`, {
         admin_name: currentUser?.full_name || currentUser?.username || "Admin",

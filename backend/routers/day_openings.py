@@ -2,7 +2,7 @@
 Day Openings Router — Ouverture officielle de la journée AVANT toute vente.
 
 Workflow :
-1. Gérante OU Admin ouvre la journée : POST /api/day-openings/{date}/open
+1. Responsable Op. & Log OU Admin ouvre la journée : POST /api/day-openings/{date}/open
    → bloqué si la journée précédente (avec activité) n'est PAS fermée.
    → fonds de caisse initial optionnel.
 2. Tant qu'aucune ouverture n'existe pour aujourd'hui, la création de

@@ -181,7 +181,7 @@ const AchatsTab = ({ ctx }) => {
   // Helpers : qu'est-ce qu'une dépense "terminée" ?
   //  - status === 'completed' : achat normal réglé.
   //  - category === 'paiement' && is_paid === true : prestation marquée payée.
-  // Ces deux cas doivent disparaître du profil de la Gérante (déjà réglés/payés)
+  // Ces deux cas doivent disparaître du profil de la Responsable Op. & Log (déjà réglés/payés)
   // et apparaître dans l'onglet "Achats terminés" côté Admin.
   const isFinished = (e) =>
     e.status === 'completed' ||
@@ -201,11 +201,11 @@ const AchatsTab = ({ ctx }) => {
       return author.includes('admin') || author.includes('administrateur');
     }
     if (authorFilter === 'manager') {
-      return author.includes('manager') || author.includes('gérante') || author.includes('gerante');
+      return author.includes('manager') || author.includes('responsable op. & log') || author.includes('gerante');
     }
     if (authorFilter === 'other') {
       return !author.includes('admin') && !author.includes('administrateur')
-          && !author.includes('manager') && !author.includes('gérante') && !author.includes('gerante');
+          && !author.includes('manager') && !author.includes('responsable op. & log') && !author.includes('gerante');
     }
     // Specific named filter (e.g., a precise full_name)
     return expense.requested_by === authorFilter;
@@ -268,7 +268,7 @@ const AchatsTab = ({ ctx }) => {
       (expense.is_group ? `(${editedItems.filter(it => !it.struck).length} articles)` : "");
     const warn = hasStruck
       ? "\n\n⚠ Vous avez coché des lignes à rayer — elles seront prises en compte. Pour modifier davantage, utilisez plutôt 'Première validation'."
-      : "\n\nLa liste est envoyée à la gérante telle quelle.";
+      : "\n\nLa liste est envoyée à la responsable op. & log telle quelle.";
     if (!window.confirm(baseMsg + warn)) return;
 
     const adminAmountInput = document.getElementById(`admin-amount-${expense.id}`);
@@ -291,7 +291,7 @@ const AchatsTab = ({ ctx }) => {
   };
 
   const handleSendToManager = (expense) => {
-    if (!window.confirm(`Envoyer cette liste corrigée à la gérante pour achat ?\n\n${expense.description}`)) return;
+    if (!window.confirm(`Envoyer cette liste corrigée à la responsable op. & log pour achat ?\n\n${expense.description}`)) return;
     const editedItems = getEditedItems(expense);
     const payload = { status: "approved", approved_by: "Administrateur" };
     if (expense.is_group && editedItems.length > 0) {
@@ -553,7 +553,7 @@ const AchatsTab = ({ ctx }) => {
                   {[
                     { value: 'all',     label: 'Tous',     color: 'bg-slate-600' },
                     { value: 'admin',   label: 'Admin',    color: 'bg-amber-600' },
-                    { value: 'manager', label: 'Gérante',  color: 'bg-purple-600' },
+                    { value: 'manager', label: 'Responsable Op. & Log',  color: 'bg-purple-600' },
                     { value: 'other',   label: 'Autres',   color: 'bg-blue-600' },
                   ].map(opt => (
                     <button
@@ -609,7 +609,7 @@ const AchatsTab = ({ ctx }) => {
               {/* === KPI Cards aérées (regroupement par état) === */}
               {expenses.length > 0 && (() => {
                 const isAdmin = currentUser?.role === 'admin';
-                // La Gérante ne voit pas les achats "terminés" (completed OU prestations payées) :
+                // La Responsable Op. & Log ne voit pas les achats "terminés" (completed OU prestations payées) :
                 // ils ne la concernent plus une fois la dépense réglée par l'admin / la prestation payée.
                 const visibleExpenses = isAdmin ? expenses : expenses.filter(e => !isFinished(e));
                 const sumBy = (statuses) => visibleExpenses
@@ -618,7 +618,7 @@ const AchatsTab = ({ ctx }) => {
                 const cntBy = (statuses) => visibleExpenses.filter(e => statuses.includes(e.status)).length;
                 const aTraiterAmount = sumBy(['pending', 'admin_review', 'revision_requested']);
                 const aTraiterCount = cntBy(['pending', 'admin_review', 'revision_requested']);
-                // Pour la Gérante : seulement "approved" non encore payées (prestations).
+                // Pour la Responsable Op. & Log : seulement "approved" non encore payées (prestations).
                 // Pour l'admin : approved + completed.
                 const validesStatuses = isAdmin ? ['approved', 'completed'] : ['approved'];
                 const validesAmount = sumBy(validesStatuses);
@@ -971,7 +971,7 @@ const AchatsTab = ({ ctx }) => {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-orange-400 flex items-center gap-2">
                       <Edit2 className="w-5 h-5" />
-                      MODIFIÉS — EN COURS DE RÉVISION CHEZ LA GÉRANTE
+                      MODIFIÉS — EN COURS DE RÉVISION CHEZ LA RESPONSABLE OP. & LOG
                       <Badge className="bg-orange-500/30 text-orange-300 ml-2">
                         {expenses.filter(e => e.status === 'revision_requested').length}
                       </Badge>
@@ -979,7 +979,7 @@ const AchatsTab = ({ ctx }) => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <p className="text-xs text-slate-400">
-                      Ces demandes ont été modifiées par vous et renvoyées à la gérante. Vous pouvez les approuver directement ou demander une nouvelle révision.
+                      Ces demandes ont été modifiées par vous et renvoyées à la responsable op. & log. Vous pouvez les approuver directement ou demander une nouvelle révision.
                     </p>
                     {expenses.filter(e => e.status === 'revision_requested').map(expense => (
                       <div key={expense.id} className="bg-orange-900/20 rounded-lg p-3 border border-orange-500/30">
@@ -1249,7 +1249,7 @@ const AchatsTab = ({ ctx }) => {
                               <span className="text-slate-400">F</span>
                             </div>
                             <Input
-                              placeholder="Note pour la gérante (optionnel)"
+                              placeholder="Note pour la responsable op. & log (optionnel)"
                               className="flex-1 min-w-[200px] bg-slate-700/50 border-slate-600 text-white text-sm"
                               id={`admin-note-${expense.id}`}
                             />
@@ -1260,7 +1260,7 @@ const AchatsTab = ({ ctx }) => {
                               onClick={() => handleAdminFirstValidation(expense)}
                               className="bg-amber-600 hover:bg-amber-700"
                               data-testid={`first-validate-btn-${expense.id}`}
-                              title="Sauvegarde dans votre profil — vous pourrez encore modifier avant l'envoi à la gérante"
+                              title="Sauvegarde dans votre profil — vous pourrez encore modifier avant l'envoi à la responsable op. & log"
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Première validation
@@ -1270,7 +1270,7 @@ const AchatsTab = ({ ctx }) => {
                               onClick={() => handleApproveDirectly(expense)}
                               className="bg-green-600 hover:bg-green-700"
                               data-testid={`direct-approve-btn-${expense.id}`}
-                              title="Valider directement sans modification — la liste est envoyée à la gérante telle quelle"
+                              title="Valider directement sans modification — la liste est envoyée à la responsable op. & log telle quelle"
                             >
                               <Truck className="w-4 h-4 mr-1" />
                               Valider sans modifier
@@ -1342,7 +1342,7 @@ const AchatsTab = ({ ctx }) => {
                       const managerAmount = expense.original_amount || expense.amount;
                       const correctedItems = isAdmin ? getEditedItems(expense) : (expense.items || []);
                       const correctedAmount = correctedItems.reduce((s, it) => s + (it.struck ? 0 : (it.amount || 0)), 0);
-                      // Default view: admin sees their corrections, gérante sees the original
+                      // Default view: admin sees their corrections, responsable op. & log sees the original
                       const viewMode = getReviewViewMode(expense.id, isAdmin ? 'corrected' : 'original');
                       const showOriginal = viewMode === 'original';
                       const hasOriginalSnapshot = !!expense.original_items;
@@ -1556,7 +1556,7 @@ const AchatsTab = ({ ctx }) => {
                                  data-testid={`review-readonly-list-${expense.id}`}>
                               <p className={`text-xs mb-2 italic ${showOriginal ? 'text-slate-400' : 'text-amber-200'}`}>
                                 {showOriginal
-                                  ? "Liste d'origine (telle que soumise par la gérante)"
+                                  ? "Liste d'origine (telle que soumise par la responsable op. & log)"
                                   : "Liste corrigée par l'admin (en cours de validation)"}
                                   :
                               </p>
@@ -1635,7 +1635,7 @@ const AchatsTab = ({ ctx }) => {
                                 data-testid={`admin-review-send-${expense.id}`}
                               >
                                 <Truck className="w-4 h-4 mr-1" />
-                                Envoyer à la gérante
+                                Envoyer à la responsable op. & log
                               </Button>
                               <Button
                                 size="sm"
@@ -1660,7 +1660,7 @@ const AchatsTab = ({ ctx }) => {
 
               {/* Approved expenses (ready for purchase) */}
               {achatsSubView === 'valides' && (() => {
-                // La Gérante ne voit plus les prestations déjà payées (elles vont dans Terminés admin).
+                // La Responsable Op. & Log ne voit plus les prestations déjà payées (elles vont dans Terminés admin).
                 const approvedVisible = expenses.filter(e =>
                   e.status === 'approved' && (isAdminUser || !(e.category === 'paiement' && e.is_paid === true))
                 );

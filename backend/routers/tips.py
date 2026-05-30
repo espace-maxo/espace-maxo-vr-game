@@ -3,7 +3,7 @@ Tips Router — Gestion des pourboires (Caisse Pro).
 
 Par défaut : pool commun. Option : attribution à un serveur spécifique.
 Modes de paiement : cash, mobile_money, card, other.
-Lecture : admin & gérante voient tout ; serveur voit uniquement ses propres pourboires.
+Lecture : admin & responsable op. & log voient tout ; serveur voit uniquement ses propres pourboires.
 
 Collection: `tips`
 Schema: { id, date (YYYY-MM-DD), amount, payment_method, attribution_type ('pool'|'server'),
