@@ -59,6 +59,8 @@ import OfflineIndicator from "../components/OfflineIndicator";
 import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
 import RecoupementPanel from "./caisse/components/RecoupementPanel";
+import CuisinePage from "./CuisinePage";
+import useReadyNotifications from "../hooks/useReadyNotifications";
 import AuditLogsTab from "./caisse/components/AuditLogsTab";
 import NeedsTab from "./caisse/components/NeedsTab";
 import PurchaseOrdersTab from "./caisse/components/PurchaseOrdersTab";
@@ -263,6 +265,8 @@ const CaissePage = () => {
   // Multi-table system
   const [openTables, setOpenTables] = useState([]); // All open tables from DB
   const [activeTableId, setActiveTableId] = useState(null); // Currently active table ID
+  // ── Notifications "Plats prêts" depuis la cuisine ──
+  const readyNotif = useReadyNotifications(currentUser);
   // ── Régularisation rétroactive (Admin + Resp. Op.) ──
   const [showRegularizationModal, setShowRegularizationModal] = useState(false);
   const [regularizationMode, setRegularizationMode] = useState("create"); // "create" | "update-date"
@@ -4836,6 +4840,10 @@ _Gérante - Espace Maxo_
   }
 
   // ============== MAIN RENDER ==============
+  // Profile cuisinier → page dédiée
+  if (currentUser?.role === "cuisinier") {
+    return <CuisinePage currentUser={currentUser} onLogout={() => { setIsAuthenticated(false); setCurrentUser(null); }} />;
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
@@ -4852,6 +4860,20 @@ _Gérante - Espace Maxo_
               </div>
               {/* Real-time sync + offline indicator (Phase 1) */}
               <OfflineIndicator />
+              {/* Plats prêts depuis la cuisine */}
+              {readyNotif.unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={readyNotif.clear}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-[11px] font-bold animate-pulse"
+                  title="Plats prêts par la cuisine — cliquer pour effacer"
+                  data-testid="ready-notif-badge"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Plats prêts</span>
+                  <span className="bg-emerald-500 text-slate-900 text-[9px] px-1 rounded">{readyNotif.unreadCount}</span>
+                </button>
+              )}
             </div>
             
             <div className="flex items-center gap-4">

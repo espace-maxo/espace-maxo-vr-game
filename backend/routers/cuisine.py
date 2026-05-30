@@ -1,0 +1,223 @@
+"""
+Cuisine — Endpoints dédiés au profil "cuisinier".
+
+Permissions strictes :
+  - Le cuisinier peut LIRE les bons de table du jour pour ses départements
+  - Marquer un item d'un bon comme "prêt" (ready_at)
+  - Marquer tout un bon comme "prêt" / "envoyé"
+  - Scanner un bon papier (photo IA OCR → enregistrement dans recoupements)
+  - PAS d'accès aux factures, caisse, stocks, statistiques
+
+Endpoints :
+  - GET    /api/cuisine/orders                   : bons cuisine du jour
+  - PATCH  /api/cuisine/orders/{table_id}/items/{item_index}/ready
+  - PATCH  /api/cuisine/orders/{table_id}/ready  : marquer tout le bon prêt
+  - POST   /api/cuisine/scan-bon                 : enregistre une photo de bon (kind=cuisine)
+  - GET    /api/cuisine/ready-notifications      : pour la salle, items récents passés "prêt"
+"""
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+import os
+import uuid
+import logging
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from motor.motor_asyncio import AsyncIOMotorClient
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["cuisine"])
+
+mongo_url = os.environ.get("MONGO_URL")
+db_name = os.environ.get("DB_NAME")
+db_client = AsyncIOMotorClient(mongo_url)
+db = db_client[db_name]
+
+# Départements considérés "cuisine"
+CUISINE_DEPTS = {"cuisine", "salle_jardin", "plats", "Plats", "Grillades", "Entrées", "Desserts", "Sauces", "Riz", "Féculents"}
+
+
+def _is_cuisine_item(it: dict) -> bool:
+    dept = (it.get("department") or it.get("category") or "").lower()
+    return any(d.lower() == dept for d in CUISINE_DEPTS) or dept in {"plat", "plats"}
+
+
+@router.get("/cuisine/orders")
+async def list_cuisine_orders(actor_role: str = ""):
+    """Liste les bons de table actifs avec items cuisine. Pour le cuisinier."""
+    if actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée au cuisinier / admin")
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Tables actives (non encore facturées)
+    tables = await db.caisse_tables.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    out = []
+    for t in tables:
+        items = t.get("items") or []
+        cui_items = [(idx, it) for idx, it in enumerate(items) if _is_cuisine_item(it)]
+        if not cui_items:
+            continue
+        # Filter on today only (cuisine vues du jour)
+        if (t.get("created_at") or "")[:10] != today_str and (t.get("updated_at") or "")[:10] != today_str:
+            continue
+        # Augment items with ready status if present
+        out.append({
+            "id": t.get("id"),
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "client_name": t.get("client_name"),
+            "created_at": t.get("created_at"),
+            "updated_at": t.get("updated_at"),
+            "notes": t.get("notes"),
+            "all_ready": bool(t.get("all_ready_at")),
+            "all_ready_at": t.get("all_ready_at"),
+            "items": [{
+                "index": idx,
+                "name": it.get("name"),
+                "quantity": it.get("quantity") or 1,
+                "price": it.get("price") or 0,
+                "department": it.get("department") or it.get("category"),
+                "notes": it.get("notes"),
+                "ready": bool(it.get("ready_at")),
+                "ready_at": it.get("ready_at"),
+            } for idx, it in cui_items],
+        })
+    return {"total": len(out), "orders": out}
+
+
+@router.patch("/cuisine/orders/{table_id}/items/{item_index}/ready")
+async def mark_item_ready(table_id: str, item_index: int, actor_role: str = "", actor_name: str = ""):
+    if actor_role not in ("cuisinier", "admin"):
+        raise HTTPException(403, "Action réservée au cuisinier")
+    t = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Table introuvable")
+    items = t.get("items") or []
+    if item_index < 0 or item_index >= len(items):
+        raise HTTPException(400, "Index invalide")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    items[item_index]["ready_at"] = now_iso
+    items[item_index]["ready_by"] = actor_name or "cuisinier"
+    # Si tous les items cuisine sont prêts, marquer le bon entier
+    cui_indexes = [i for i, it in enumerate(items) if _is_cuisine_item(it)]
+    all_ready = all(items[i].get("ready_at") for i in cui_indexes)
+    patch = {"items": items, "updated_at": now_iso}
+    if all_ready and cui_indexes:
+        patch["all_ready_at"] = now_iso
+    await db.caisse_tables.update_one({"id": table_id}, {"$set": patch})
+    return {"success": True, "all_ready": all_ready, "item": items[item_index]}
+
+
+@router.patch("/cuisine/orders/{table_id}/ready")
+async def mark_all_items_ready(table_id: str, actor_role: str = "", actor_name: str = ""):
+    if actor_role not in ("cuisinier", "admin"):
+        raise HTTPException(403, "Action réservée au cuisinier")
+    t = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Table introuvable")
+    items = t.get("items") or []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for i, it in enumerate(items):
+        if _is_cuisine_item(it) and not it.get("ready_at"):
+            items[i]["ready_at"] = now_iso
+            items[i]["ready_by"] = actor_name or "cuisinier"
+    await db.caisse_tables.update_one(
+        {"id": table_id},
+        {"$set": {"items": items, "all_ready_at": now_iso, "updated_at": now_iso}}
+    )
+    return {"success": True, "all_ready_at": now_iso}
+
+
+class ScanBonBody(BaseModel):
+    image_base64: str
+    mime_type: Optional[str] = "image/jpeg"
+    actor_name: str
+    actor_role: str
+    date: Optional[str] = None  # YYYY-MM-DD, défaut aujourd'hui
+
+
+@router.post("/cuisine/scan-bon")
+async def scan_bon(body: ScanBonBody):
+    """Le cuisinier scanne un bon papier. La photo est archivée dans `recoupements`
+    avec kind="cuisine_scan" pour qu'à tout moment l'admin puisse y revenir.
+    On lance aussi l'OCR pour extraire les items (best effort)."""
+    if body.actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    date_str = body.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Best-effort OCR (réutilise l'IA de recoupement)
+    items = []
+    notes = ""
+    try:
+        from routers.recoupement import _ocr_extract  # type: ignore
+        sys_prompt = (
+            "Tu lis un bon papier de cuisine d'un restaurant. "
+            "Extrais la liste des plats et leur quantité. "
+            "Réponds en JSON STRICT: {\"items\":[{\"name\":\"...\",\"quantity\":1}], \"notes\":\"...\"}"
+        )
+        user_prompt = "Photo d'un bon de cuisine. Extrais les plats et quantités."
+        data = await _ocr_extract(body.image_base64, sys_prompt, user_prompt)
+        items = data.get("items") or []
+        notes = data.get("notes") or ""
+    except Exception as e:
+        logger.warning(f"OCR scan-bon failed: {e}")
+        notes = "OCR indisponible — bon archivé sans extraction"
+
+    rec = {
+        "id": str(uuid.uuid4()),
+        "kind": "cuisine_scan",
+        "date": date_str,
+        "declared": items,
+        "declared_total_revenue": None,
+        "image_base64": body.image_base64,  # archive de la photo
+        "mime_type": body.mime_type,
+        "summary": {
+            "rows": [],
+            "total_declared_qty": sum(float(it.get("quantity") or 0) for it in items),
+            "total_system_qty": 0,
+            "total_system_revenue": 0,
+            "alerts_count": 0,
+            "financial_evaluation": None,
+        },
+        "notes": notes,
+        "actor_name": body.actor_name,
+        "actor_role": body.actor_role,
+        "scanned_only": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.recoupements.insert_one(rec)
+    rec.pop("_id", None)
+    rec.pop("image_base64", None)  # ne pas renvoyer le base64 en clair
+    return {"success": True, "recoupement_id": rec["id"], "items_extracted": len(items), "items": items}
+
+
+@router.get("/cuisine/ready-notifications")
+async def ready_notifications(actor_role: str = "", since_seconds: int = 60):
+    """Pour la salle/admin : items passés "prêt" récemment.
+    Renvoie les events récents (par défaut < 60s)."""
+    if actor_role not in ("server", "manager", "admin", "cuisinier"):
+        raise HTTPException(403, "Action réservée")
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=since_seconds)
+    cutoff_iso = cutoff_dt.isoformat()
+    tables = await db.caisse_tables.find({
+        "$or": [
+            {"items.ready_at": {"$gte": cutoff_iso}},
+            {"all_ready_at": {"$gte": cutoff_iso}},
+        ]
+    }, {"_id": 0}).to_list(200)
+    out = []
+    for t in tables:
+        ready_items = [it for it in (t.get("items") or []) if it.get("ready_at") and it["ready_at"] >= cutoff_iso]
+        if not ready_items and not (t.get("all_ready_at") and t["all_ready_at"] >= cutoff_iso):
+            continue
+        out.append({
+            "table_id": t.get("id"),
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "all_ready": bool(t.get("all_ready_at") and t["all_ready_at"] >= cutoff_iso),
+            "ready_items": [{
+                "name": it.get("name"),
+                "quantity": it.get("quantity") or 1,
+                "ready_at": it.get("ready_at"),
+            } for it in ready_items],
+        })
+    return {"total": len(out), "notifications": out}
