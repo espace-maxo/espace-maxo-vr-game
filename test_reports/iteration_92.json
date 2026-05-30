@@ -1,0 +1,104 @@
+{
+  "summary": "Hourly Billing Feature (Iteration 92) - Backend 10/10 tests passed, Frontend all flows verified. Toggle buttons, hourly/parties fields, cart display, history badges, and admin modal all working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_jeux_hourly_billing_iter92.py",
+    "/app/test_reports/pytest/jeux_hourly_billing_iter92_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_jeux_hourly_billing_iter92.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all flows verified)"
+  },
+  "test_credentials": {
+    "coach_jeux": "PIN: 9876",
+    "admin": "password: Caisse2026"
+  },
+  "seed_data_creation": "Test bons created with TEST_HOURLY_ prefix for cleanup identification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Hourly billing feature fully implemented and tested. Backend: JeuxBonItem model extended with billing_mode ('parties' default, 'hourly'), hours, hourly_rate fields. POST /api/jeux/bons saves these fields correctly. GET /api/jeux/bons returns billing_mode/hours/hourly_rate in items. Frontend: CoachJeuxPage has toggle buttons 'Par parties' (toggle-mode-parties) and 'Forfait horaire' (toggle-mode-hourly). Hourly mode shows hours input (default 1), hourly_rate input (default 12000), and real-time forfait total calculation. Cart displays 'Forfait Xh' badge with hourly rate for hourly items, 'xN' badge for parties items. History tab shows correct badges. Admin JeuxBonsModal displays 'Forfait Xh @ Y F/h' for hourly items.",
+  "tests_executed": {
+    "backend": {
+      "hourly_create_tests": [
+        "test_create_hourly_bon_success - PASSED (billing_mode='hourly', hours=2, hourly_rate=12000, total=24000)",
+        "test_create_parties_bon_no_hourly_fields - PASSED (billing_mode='parties', hours=null, hourly_rate=null)",
+        "test_create_mixed_bon_hourly_and_parties - PASSED (2 items: hourly 24000F + parties 4000F = 28000F)",
+        "test_create_hourly_bon_default_billing_mode - PASSED (default billing_mode='parties' when not specified)"
+      ],
+      "list_tests": [
+        "test_list_bons_returns_hourly_fields - PASSED (billing_mode/hours/hourly_rate in items)"
+      ],
+      "attach_tests": [
+        "test_attach_hourly_item_generates_forfait_notes - PASSED (notes contain coach info)"
+      ],
+      "standalone_tests": [
+        "test_standalone_hourly_creates_invoice_with_notes - PASSED (invoice created with notes)"
+      ],
+      "existing_bon_tests": [
+        "test_existing_hourly_bon_structure - PASSED (verified bon 6e2ad35d with 2 items, total 28500F)"
+      ],
+      "edge_case_tests": [
+        "test_hourly_with_half_hours - PASSED (1.5h @ 12000F/h = 18000F)",
+        "test_hourly_with_custom_rate - PASSED (2h @ 15000F/h = 30000F)"
+      ]
+    },
+    "frontend": {
+      "coach_jeux_page": [
+        "Login with PIN 9876 - PASSED",
+        "Toggle 'Par parties' (toggle-mode-parties) visible - PASSED",
+        "Toggle 'Forfait horaire' (toggle-mode-hourly) visible - PASSED",
+        "Hourly mode: hours input (coach-input-hours) default=1 - PASSED",
+        "Hourly mode: hourly_rate input (coach-input-hourly-rate) default=12000 - PASSED",
+        "Hourly mode: forfait total (line-forfait-total) real-time calculation - PASSED",
+        "Parties mode: parties input (coach-input-parties) visible - PASSED",
+        "Parties mode: price input (coach-input-price) visible - PASSED",
+        "Parties mode: duration input (coach-input-duration) visible - PASSED",
+        "Add hourly line to cart - PASSED",
+        "Add parties line to cart - PASSED",
+        "Cart total calculation (hourly + parties) - PASSED (27000F = 24000F + 3000F)",
+        "Cart line 0 shows 'Forfait 2h' badge with '12 000 F/h' rate - PASSED",
+        "Cart line 1 shows 'x2' badge - PASSED",
+        "Submit bon with mixed items - PASSED",
+        "History tab shows 'Forfait Xh' badges for hourly items - PASSED"
+      ],
+      "admin_jeux_bons_modal": [
+        "Login as Admin - PASSED",
+        "Open Jeux Bons modal - PASSED",
+        "Pending bons display 'Forfait Xh' badges - PASSED (21 badges found)",
+        "Hourly rate display '@ Y F/h' - PASSED (22 rate displays found)",
+        "Mixed bons show both hourly and parties badges - PASSED"
+      ]
+    }
+  },
+  "feature_verification": {
+    "backend_hourly_billing": {
+      "billing_mode_field": "PASSED - 'parties' (default) or 'hourly'",
+      "hours_field": "PASSED - float, null for parties mode",
+      "hourly_rate_field": "PASSED - float, null for parties mode",
+      "total_calculation": "PASSED - parties * unit_price (hourly stores total in unit_price)",
+      "mixed_items_total": "PASSED - sum of all line totals"
+    },
+    "frontend_hourly_billing": {
+      "toggle_buttons": "PASSED - 'Par parties' and 'Forfait horaire'",
+      "hourly_mode_fields": "PASSED - hours (default 1), hourly_rate (default 12000)",
+      "forfait_total_display": "PASSED - real-time calculation",
+      "cart_hourly_badge": "PASSED - 'Forfait Xh' with rate",
+      "cart_parties_badge": "PASSED - 'xN'",
+      "history_hourly_badge": "PASSED - 'Forfait Xh'",
+      "admin_modal_hourly_badge": "PASSED - 'Forfait Xh @ Y F/h'"
+    }
+  }
+}

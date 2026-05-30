@@ -67,6 +67,9 @@ class JeuxBonItem(BaseModel):
     unit_price: float = Field(..., ge=0)
     duration_minutes: Optional[int] = None
     notes: Optional[str] = ""
+    billing_mode: Optional[str] = "parties"  # "parties" | "hourly"
+    hours: Optional[float] = None  # Si billing_mode='hourly'
+    hourly_rate: Optional[float] = None  # Si billing_mode='hourly'
 
 
 class JeuxBonCreate(BaseModel):
@@ -100,6 +103,9 @@ async def create_bon(body: JeuxBonCreate):
             "total": line_total,
             "duration_minutes": it.duration_minutes,
             "notes": (it.notes or "").strip(),
+            "billing_mode": it.billing_mode or "parties",
+            "hours": float(it.hours) if it.hours is not None else None,
+            "hourly_rate": float(it.hourly_rate) if it.hourly_rate is not None else None,
         })
     bon = {
         "id": str(uuid.uuid4()),

@@ -28,6 +28,7 @@ import {
 import DailyReportPanel from "../components/DailyReportPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const DEFAULT_HOURLY_RATE = 12000;  // 12 000 F / heure (forfait global)
 
 const STATUS_META = {
   pending:  { label: "En attente",       color: "bg-amber-500/30 text-amber-200 border-amber-500/40",   icon: Clock },
@@ -49,9 +50,12 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
   const [bonNotes, setBonNotes] = useState("");
 
   // --- Form add line ---
+  const [billingMode, setBillingMode] = useState("parties"); // "parties" | "hourly"
   const [lineJeu, setLineJeu] = useState("");
   const [lineParties, setLineParties] = useState(1);
   const [linePrice, setLinePrice] = useState(0);
+  const [lineHours, setLineHours] = useState(1);
+  const [lineHourlyRate, setLineHourlyRate] = useState(DEFAULT_HOURLY_RATE);
   const [lineDuration, setLineDuration] = useState("");
   const [lineNotes, setLineNotes] = useState("");
 
@@ -103,12 +107,40 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
     setLineJeu("");
     setLineParties(1);
     setLinePrice(0);
+    setLineHours(1);
+    setLineHourlyRate(DEFAULT_HOURLY_RATE);
     setLineDuration("");
     setLineNotes("");
+    setBillingMode("parties");
   };
 
   const addLineToCart = () => {
     if (!selectedProduct) return toast.error("Sélectionnez un jeu");
+
+    if (billingMode === "hourly") {
+      const h = Number(lineHours) || 0;
+      const rate = Number(lineHourlyRate) || 0;
+      if (h <= 0) return toast.error("Nombre d'heures invalide");
+      if (rate < 0) return toast.error("Tarif horaire invalide");
+      const lineTotal = Math.round(h * rate);
+      // Stockage: parties=1 (placeholder), unit_price=lineTotal (pour total)
+      setCart((c) => [...c, {
+        jeu_product_id: selectedProduct.id,
+        jeu_name: selectedProduct.name,
+        parties: 1,
+        unit_price: lineTotal,
+        duration_minutes: Math.round(h * 60),
+        notes: lineNotes.trim(),
+        billing_mode: "hourly",
+        hours: h,
+        hourly_rate: rate,
+      }]);
+      resetLineForm();
+      toast.success(`Forfait ajouté : ${selectedProduct.name} · ${h}h`);
+      return;
+    }
+
+    // Mode parties
     const p = Number(lineParties) || 0;
     if (p < 1) return toast.error("Nombre de parties invalide");
     if (Number(linePrice) < 0) return toast.error("Prix invalide");
@@ -119,6 +151,7 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
       unit_price: Number(linePrice),
       duration_minutes: lineDuration ? Number(lineDuration) : null,
       notes: lineNotes.trim(),
+      billing_mode: "parties",
     }]);
     resetLineForm();
     toast.success(`Ligne ajoutée : ${selectedProduct.name} x${p}`);
@@ -231,6 +264,22 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
+                {/* Toggle billing mode */}
+                <div className="grid grid-cols-2 gap-1 bg-slate-900/60 rounded p-1">
+                  <button type="button"
+                          onClick={() => setBillingMode("parties")}
+                          className={`text-[11px] py-1.5 rounded transition ${billingMode === "parties" ? "bg-purple-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"}`}
+                          data-testid="toggle-mode-parties">
+                    Par parties
+                  </button>
+                  <button type="button"
+                          onClick={() => setBillingMode("hourly")}
+                          className={`text-[11px] py-1.5 rounded transition ${billingMode === "hourly" ? "bg-amber-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"}`}
+                          data-testid="toggle-mode-hourly">
+                    Forfait horaire
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <Label className="text-[11px] text-slate-300">Jeu *</Label>
@@ -250,30 +299,62 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="text-[11px] text-slate-300">Nb parties *</Label>
-                    <Input type="number" min={1} value={lineParties}
-                           onChange={(e) => setLineParties(e.target.value)}
-                           className="bg-slate-900 border-slate-700 h-9 text-sm"
-                           data-testid="coach-input-parties" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-slate-300 flex items-center gap-1">
-                      <Coins className="w-3 h-3" /> Prix unitaire
-                    </Label>
-                    <Input type="number" min={0} step="50" value={linePrice}
-                           onChange={(e) => setLinePrice(e.target.value)}
-                           className="bg-slate-900 border-slate-700 h-9 text-sm"
-                           data-testid="coach-input-price" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-slate-300">Durée (min)</Label>
-                    <Input type="number" min={0} value={lineDuration}
-                           onChange={(e) => setLineDuration(e.target.value)}
-                           placeholder="Optionnel"
-                           className="bg-slate-900 border-slate-700 h-9 text-sm"
-                           data-testid="coach-input-duration" />
-                  </div>
+
+                  {billingMode === "parties" ? (
+                    <>
+                      <div>
+                        <Label className="text-[11px] text-slate-300">Nb parties *</Label>
+                        <Input type="number" min={1} value={lineParties}
+                               onChange={(e) => setLineParties(e.target.value)}
+                               className="bg-slate-900 border-slate-700 h-9 text-sm"
+                               data-testid="coach-input-parties" />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-slate-300 flex items-center gap-1">
+                          <Coins className="w-3 h-3" /> Prix unitaire
+                        </Label>
+                        <Input type="number" min={0} step="50" value={linePrice}
+                               onChange={(e) => setLinePrice(e.target.value)}
+                               className="bg-slate-900 border-slate-700 h-9 text-sm"
+                               data-testid="coach-input-price" />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-slate-300">Durée (min)</Label>
+                        <Input type="number" min={0} value={lineDuration}
+                               onChange={(e) => setLineDuration(e.target.value)}
+                               placeholder="Optionnel"
+                               className="bg-slate-900 border-slate-700 h-9 text-sm"
+                               data-testid="coach-input-duration" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Label className="text-[11px] text-amber-300">Nb d'heures *</Label>
+                        <Input type="number" min={0.5} step="0.5" value={lineHours}
+                               onChange={(e) => setLineHours(e.target.value)}
+                               className="bg-slate-900 border-amber-500/40 h-9 text-sm"
+                               data-testid="coach-input-hours" />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-amber-300 flex items-center gap-1">
+                          <Coins className="w-3 h-3" /> Tarif horaire (F/h)
+                        </Label>
+                        <Input type="number" min={0} step="500" value={lineHourlyRate}
+                               onChange={(e) => setLineHourlyRate(e.target.value)}
+                               className="bg-slate-900 border-amber-500/40 h-9 text-sm"
+                               data-testid="coach-input-hourly-rate" />
+                      </div>
+                      <div className="flex items-end">
+                        <div className="w-full bg-amber-900/30 border border-amber-500/40 rounded p-2 text-center">
+                          <div className="text-[10px] text-amber-300">Total forfait</div>
+                          <div className="text-base font-bold text-amber-200" data-testid="line-forfait-total">
+                            {(Math.round((Number(lineHours) || 0) * (Number(lineHourlyRate) || 0))).toLocaleString("fr-FR")} F
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div>
                   <Label className="text-[11px] text-slate-300">Note de cette ligne (optionnelle)</Label>
@@ -283,7 +364,7 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                          data-testid="coach-input-line-notes" />
                 </div>
                 <Button onClick={addLineToCart} disabled={!selectedProduct}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white h-9 text-sm"
+                        className={`w-full text-white h-9 text-sm ${billingMode === "hourly" ? "bg-amber-600 hover:bg-amber-700" : "bg-purple-600 hover:bg-purple-700"}`}
                         data-testid="coach-add-line">
                   <Plus className="w-4 h-4 mr-1" /> Ajouter cette ligne au bon
                 </Button>
@@ -305,19 +386,29 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1.5">
-                  {cart.map((l, idx) => (
+                  {cart.map((l, idx) => {
+                    const isHourly = l.billing_mode === "hourly";
+                    const lineTotal = (l.unit_price || 0) * (l.parties || 1);
+                    return (
                     <div key={idx}
                          className="flex items-center gap-2 bg-slate-900/50 rounded p-2 text-xs"
                          data-testid={`cart-line-${idx}`}>
-                      <Gamepad2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <Gamepad2 className={`w-3.5 h-3.5 ${isHourly ? "text-amber-400" : "text-purple-400"} shrink-0`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-medium text-slate-100 truncate">{l.jeu_name}</span>
-                          <Badge className="bg-slate-700 text-slate-200 text-[10px]">x{l.parties}</Badge>
+                          {isHourly ? (
+                            <>
+                              <Badge className="bg-amber-700/50 text-amber-100 text-[10px]">Forfait {l.hours}h</Badge>
+                              <Badge className="bg-slate-700 text-slate-200 text-[10px]">{Number(l.hourly_rate || 0).toLocaleString("fr-FR")} F/h</Badge>
+                            </>
+                          ) : (
+                            <Badge className="bg-slate-700 text-slate-200 text-[10px]">x{l.parties}</Badge>
+                          )}
                           <Badge className="bg-emerald-700/50 text-emerald-100 text-[10px]">
-                            {(l.unit_price * l.parties).toLocaleString("fr-FR")} F
+                            {lineTotal.toLocaleString("fr-FR")} F
                           </Badge>
-                          {l.duration_minutes && (
+                          {!isHourly && l.duration_minutes && (
                             <Badge className="bg-blue-700/50 text-blue-100 text-[10px]">{l.duration_minutes} min</Badge>
                           )}
                         </div>
@@ -329,7 +420,8 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
             )}
@@ -428,15 +520,22 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
                           </div>
                           {/* Lignes */}
                           <div className="space-y-0.5 ml-1">
-                            {items.map((it, idx) => (
-                              <div key={idx} className="text-[11px] text-slate-300 flex items-center gap-1.5">
-                                <Gamepad2 className="w-3 h-3 text-purple-400" />
+                            {items.map((it, idx) => {
+                              const isH = it.billing_mode === "hourly";
+                              return (
+                              <div key={idx} className="text-[11px] text-slate-300 flex items-center gap-1.5 flex-wrap">
+                                <Gamepad2 className={`w-3 h-3 ${isH ? "text-amber-400" : "text-purple-400"}`} />
                                 <span>{it.jeu_name}</span>
-                                <Badge className="bg-slate-700 text-slate-200 text-[9px]">x{it.parties}</Badge>
+                                {isH ? (
+                                  <Badge className="bg-amber-700/50 text-amber-100 text-[9px]">Forfait {it.hours}h</Badge>
+                                ) : (
+                                  <Badge className="bg-slate-700 text-slate-200 text-[9px]">x{it.parties}</Badge>
+                                )}
                                 <span className="text-slate-400">{(it.total || 0).toLocaleString("fr-FR")} F</span>
-                                {it.duration_minutes && <span className="text-slate-500">· {it.duration_minutes} min</span>}
+                                {!isH && it.duration_minutes && <span className="text-slate-500">· {it.duration_minutes} min</span>}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                           {b.players && (
                             <p className="text-[11px] text-slate-300 mt-1">

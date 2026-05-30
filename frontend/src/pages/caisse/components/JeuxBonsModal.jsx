@@ -182,16 +182,26 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
                             </div>
                             {/* Liste des lignes */}
                             <div className="space-y-0.5 pl-1 border-l-2 border-purple-500/40 ml-1">
-                              {items.map((it, idx) => (
+                              {items.map((it, idx) => {
+                                const isH = it.billing_mode === "hourly";
+                                return (
                                 <div key={idx} className="text-[11px] text-slate-300 flex items-center gap-1.5 flex-wrap pl-2">
-                                  <Gamepad2 className="w-3 h-3 text-purple-400" />
+                                  <Gamepad2 className={`w-3 h-3 ${isH ? "text-amber-400" : "text-purple-400"}`} />
                                   <span className="font-medium">{it.jeu_name}</span>
-                                  <Badge className="bg-slate-700 text-slate-200 text-[9px]">x{it.parties}</Badge>
+                                  {isH ? (
+                                    <>
+                                      <Badge className="bg-amber-700/50 text-amber-100 text-[9px]">Forfait {it.hours}h</Badge>
+                                      <span className="text-slate-500 text-[10px]">@ {Number(it.hourly_rate || 0).toLocaleString("fr-FR")} F/h</span>
+                                    </>
+                                  ) : (
+                                    <Badge className="bg-slate-700 text-slate-200 text-[9px]">x{it.parties}</Badge>
+                                  )}
                                   <span className="text-slate-400">{(it.total || 0).toLocaleString("fr-FR")} F</span>
-                                  {it.duration_minutes ? <span className="text-slate-500">· {it.duration_minutes} min</span> : null}
+                                  {!isH && it.duration_minutes ? <span className="text-slate-500">· {it.duration_minutes} min</span> : null}
                                   {it.notes && <span className="text-slate-500 italic truncate">· {it.notes}</span>}
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                             {b.players && (
                               <p className="text-[11px] text-slate-300 mt-1.5">
