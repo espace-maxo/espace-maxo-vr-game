@@ -1,0 +1,128 @@
+{
+  "summary": "Coach Players Tracking (Iteration 94) - Backend 20/20 tests passed, Frontend all flows verified. New coach_players collection with full CRUD + transmit workflow. Admin/Manager can see ALL tables in JeuxBonsModal.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_coach_players_iter94.py",
+    "/app/test_reports/pytest/coach_players_iter94_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_coach_players_iter94.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all flows verified)"
+  },
+  "test_credentials": {
+    "coach_jeux": "PIN: 9876",
+    "admin": "username: Admin / password: Caisse2026"
+  },
+  "seed_data_creation": "Test data created with TEST_ITER94_ prefix for cleanup identification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Coach Players feature fully implemented. Backend: POST /api/coach/players (create player), GET /api/coach/players (list with actor_role filter), POST /api/coach/players/{id}/consume (add consumption - parties/hourly modes), DELETE /api/coach/players/{id}/consume/{idx} (remove consumption), DELETE /api/coach/players/{id} (delete player), POST /api/coach/players/transmit (transmit to jeux_bons with [PlayerName] prefix in notes). GET /api/caisse/tables now accepts actor_role=admin/manager to return ALL tables. Frontend: CoachJeuxPage has 'Joueurs' tab (data-testid='coach-tab-players') with PlayersTrackerTab component. Add player form (data-testid='new-player-name', 'add-player-btn'), player cards with checkboxes (data-testid='player-select-{id}'), add-conso buttons (data-testid='add-conso-btn-{id}'), consumption form with parties/hourly toggle, submit-conso buttons (data-testid='submit-conso-{id}'). Selection banner shows total and 'Transmettre' button (data-testid='transmit-selected'). JeuxBonsModal shows ALL tables in dropdown for admin/manager.",
+  "tests_executed": {
+    "backend": {
+      "coach_players_create": [
+        "test_create_player_success - PASSED (200, status=open, items=[], total=0)",
+        "test_create_player_empty_name_400 - PASSED (400)",
+        "test_create_player_server_role_403 - PASSED (403)"
+      ],
+      "coach_players_get": [
+        "test_list_players_coach_jeux - PASSED (200, filtered by coach_name)",
+        "test_list_players_forbidden_role - PASSED (403 for server role)"
+      ],
+      "coach_players_consume": [
+        "test_consume_parties_mode - PASSED (3 parties x 2000 = 6000 new_total)",
+        "test_consume_hourly_mode - PASSED (2h x 12000 = 24000 new_total)",
+        "test_consume_parties_invalid_400 - PASSED (parties=0 returns 400)",
+        "test_consume_hours_invalid_400 - PASSED (hours=0 returns 400)",
+        "test_consume_on_transmitted_player_400 - PASSED (400 for transmitted player)"
+      ],
+      "coach_players_remove_consumption": [
+        "test_remove_consumption_success - PASSED (recalculates new_total)"
+      ],
+      "coach_players_delete": [
+        "test_delete_player_success - PASSED (200)"
+      ],
+      "coach_players_transmit": [
+        "test_transmit_single_player - PASSED (creates jeux_bons, returns bon_id)",
+        "test_transmit_multiple_players - PASSED (merges into 1 bon)",
+        "test_transmit_empty_player_ids_400 - PASSED (400)",
+        "test_transmit_nonexistent_player_404 - PASSED (404)"
+      ],
+      "caisse_tables_actor_role": [
+        "test_tables_admin_sees_all - PASSED (returns ALL tables)",
+        "test_tables_manager_sees_all - PASSED (returns ALL tables)",
+        "test_tables_server_id_filter - PASSED (backward compat)"
+      ],
+      "cleanup": [
+        "test_cleanup_test_players - PASSED"
+      ]
+    },
+    "frontend": {
+      "coach_jeux_players_tab": [
+        "Login as Coach Jeux (PIN 9876) - PASSED",
+        "Navigate to Joueurs tab (data-testid='coach-tab-players') - PASSED",
+        "Add player form visible (new-player-name, add-player-btn) - PASSED",
+        "Add player 'TestPlayer_UI' - PASSED (toast 'Joueur TestPlayer_UI ajouté')",
+        "Player card visible with 0 F total - PASSED",
+        "Add-conso button visible (data-testid='add-conso-btn-{id}') - PASSED",
+        "Consumption form opens with parties/hourly toggle - PASSED",
+        "Select game from dropdown (VR 360°) - PASSED",
+        "Submit consumption - PASSED (toast 'Conso ajoutée')",
+        "Player total updates to 4000 F - PASSED",
+        "Select multiple players (checkboxes) - PASSED",
+        "Selection banner shows '3 joueur(s) sélectionné(s) · 4 000 F' - PASSED",
+        "Transmit button visible (data-testid='transmit-selected') - PASSED"
+      ],
+      "admin_jeux_bons_modal": [
+        "Login as Admin - PASSED",
+        "Open JeuxBonsModal (gamepad icon in header) - PASSED",
+        "Pending bons displayed with details - PASSED",
+        "Table dropdown shows 'Choisir parmi 5 table(s)...' - PASSED",
+        "Dropdown lists ALL tables (Table 1, 5, 94, 97, 99) - PASSED",
+        "Rattacher, Facturer direct, Refuser buttons visible - PASSED"
+      ]
+    }
+  },
+  "feature_verification": {
+    "backend_coach_players": {
+      "create_player": "PASSED - coach_jeux/admin only, status=open, items=[], total=0",
+      "list_players": "PASSED - filtered by actor_name for coach_jeux, all for admin",
+      "add_consumption_parties": "PASSED - parties x unit_price = line_total, cumulative new_total",
+      "add_consumption_hourly": "PASSED - hours x hourly_rate = line_total, cumulative new_total",
+      "remove_consumption": "PASSED - recalculates new_total",
+      "delete_player": "PASSED - removes open player",
+      "transmit_players": "PASSED - creates jeux_bons with [PlayerName] prefix in notes"
+    },
+    "backend_caisse_tables": {
+      "admin_sees_all": "PASSED - actor_role=admin ignores server_id filter",
+      "manager_sees_all": "PASSED - actor_role=manager ignores server_id filter",
+      "server_filter": "PASSED - backward compat with server_id param"
+    },
+    "frontend_players_tracker": {
+      "joueurs_tab": "PASSED - visible in CoachJeuxPage tabs",
+      "add_player_form": "PASSED - name input + optional table number",
+      "player_cards": "PASSED - shows name, total, checkbox, delete button",
+      "add_consumption": "PASSED - parties/hourly toggle, game select, submit",
+      "selection_banner": "PASSED - emerald sticky banner with count and total",
+      "transmit_selected": "PASSED - creates bon and clears selection"
+    },
+    "frontend_jeux_bons_modal": {
+      "all_tables_dropdown": "PASSED - admin/manager sees ALL tables"
+    }
+  },
+  "mongodb_security": {
+    "_id_excluded": "PASSED - no _id exposed in any response"
+  }
+}

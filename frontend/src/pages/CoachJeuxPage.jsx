@@ -26,6 +26,7 @@ import {
   Clock, CheckCircle2, XCircle, Receipt, Hash, Coins, Plus, Trash2, FileText,
 } from "lucide-react";
 import DailyReportPanel from "../components/DailyReportPanel";
+import PlayersTrackerTab from "./coach/PlayersTrackerTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const DEFAULT_HOURLY_RATE = 12000;  // 12 000 F / heure (forfait global)
@@ -235,6 +236,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
               {cart.length > 0 && (
                 <Badge className="ml-2 bg-amber-500 text-white text-[10px]">{cart.length}</Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="players" className="data-[state=active]:bg-fuchsia-600 data-[state=active]:text-white"
+                         data-testid="coach-tab-players">
+              <Users className="w-4 h-4 mr-1" />
+              Joueurs
             </TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                          data-testid="coach-tab-history">
@@ -571,6 +577,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
           {/* RAPPORT DU JOUR */}
           <TabsContent value="report" className="mt-3">
             <DailyReportPanel currentUser={currentUser} kind="coach_jeux" />
+          </TabsContent>
+
+          {/* JOUEURS — Suivi consommation par joueur */}
+          <TabsContent value="players" className="mt-3">
+            <PlayersTrackerTab currentUser={currentUser} catalog={catalog} />
           </TabsContent>
         </Tabs>
       </div>

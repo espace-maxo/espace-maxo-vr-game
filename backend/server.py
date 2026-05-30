@@ -59,6 +59,7 @@ from routers.recoupement import router as recoupement_router
 from routers.cuisine import router as cuisine_router
 from routers.jeux import router as jeux_router
 from routers.daily_reports import router as daily_reports_router
+from routers.coach_sessions import router as coach_sessions_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -179,6 +180,7 @@ api_router.include_router(recoupement_router)
 api_router.include_router(cuisine_router)
 api_router.include_router(jeux_router)
 api_router.include_router(daily_reports_router)
+api_router.include_router(coach_sessions_router)
 
 # Configure logging
 logging.basicConfig(
@@ -4144,14 +4146,16 @@ async def get_tables_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/caisse/tables")
-async def get_caisse_tables(server_id: Optional[str] = None):
-    """Get all open tables/drafts for a server"""
+async def get_caisse_tables(server_id: Optional[str] = None, actor_role: Optional[str] = None):
+    """Get tables. Si actor_role admin/manager : toutes les tables (ignore server_id filter)."""
     try:
         query = {}
-        if server_id:
+        if actor_role in ("admin", "manager"):
+            pass  # No filter - all tables
+        elif server_id:
             query["server_id"] = server_id
         
-        tables = await db.caisse_tables.find(query, {"_id": 0}).sort("table_number", 1).to_list(100)
+        tables = await db.caisse_tables.find(query, {"_id": 0}).sort("table_number", 1).to_list(200)
         return {"tables": tables}
     except Exception as e:
         logger.error(f"Error fetching tables: {e}")

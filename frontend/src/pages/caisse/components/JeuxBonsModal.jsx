@@ -27,8 +27,9 @@ import {
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_MS = 8000;
 
-const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => {
+const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables: openTablesProp = [] }) => {
   const [bons, setBons] = useState([]);
+  const [allOpenTables, setAllOpenTables] = useState([]);
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState(null);
   const [selectedTable, setSelectedTable] = useState({}); // bonId -> tableId
@@ -41,11 +42,18 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
   const fetchBons = useCallback(async (silent = true) => {
     if (!silent) setLoading(true);
     try {
-      const r = await axios.get(`${API}/jeux/bons`, {
-        params: { actor_role: actorRole, actor_name: actorName, limit: 200 },
-        timeout: 10000,
-      });
+      const [r, t] = await Promise.all([
+        axios.get(`${API}/jeux/bons`, {
+          params: { actor_role: actorRole, actor_name: actorName, limit: 200 },
+          timeout: 10000,
+        }),
+        axios.get(`${API}/caisse/tables`, {
+          params: { actor_role: actorRole },
+          timeout: 10000,
+        }),
+      ]);
       setBons(r.data.bons || []);
+      setAllOpenTables(t.data.tables || []);
     } catch (e) {
       if (!silent) toast.error("Erreur chargement bons");
     } finally {
@@ -228,13 +236,13 @@ const JeuxBonsModal = ({ open, onOpenChange, currentUser, openTables = [] }) => 
                               >
                                 <SelectTrigger className="h-8 text-[11px] bg-slate-900 border-slate-700"
                                                data-testid={`select-table-${b.id}`}>
-                                  <SelectValue placeholder="Choisir une table…" />
+                                  <SelectValue placeholder={`Choisir parmi ${allOpenTables.length} table(s)…`} />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-slate-700">
-                                  {openTables.length === 0 && (
+                                  {allOpenTables.length === 0 && (
                                     <SelectItem value="__empty" disabled>Aucune table ouverte</SelectItem>
                                   )}
-                                  {openTables.map((t) => (
+                                  {allOpenTables.map((t) => (
                                     <SelectItem key={t.id} value={t.id}>
                                       Table {t.table_number} {t.server_name ? `— ${t.server_name}` : ""}
                                     </SelectItem>
