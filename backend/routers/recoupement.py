@@ -364,3 +364,34 @@ async def list_recoupements(kind: Optional[str] = None, start_date: Optional[str
         q["date"] = {"$gte": start_date, "$lte": end_date}
     items = await db.recoupements.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return {"total": len(items), "items": items}
+
+
+@router.delete("/recoupement/{rec_id}")
+async def delete_recoupement(rec_id: str, actor_name: str = "", actor_role: str = ""):
+    """Supprime un recoupement (Admin only). Garde une trace audit."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    existing = await db.recoupements.find_one({"id": rec_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Recoupement introuvable")
+    await db.recoupements.delete_one({"id": rec_id})
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": f"recoupement_{existing.get('kind')}",
+            "entity_id": rec_id,
+            "action": "delete",
+            "actor_name": actor_name or "—",
+            "actor_role": "admin",
+            "snapshot": {
+                "kind": existing.get("kind"),
+                "date": existing.get("date"),
+                "alerts_count": (existing.get("summary") or {}).get("alerts_count"),
+                "total_system_revenue": (existing.get("summary") or {}).get("total_system_revenue"),
+                "actor_at_creation": existing.get("actor_name"),
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"audit log delete recoupement failed: {e}")
+    return {"success": True}

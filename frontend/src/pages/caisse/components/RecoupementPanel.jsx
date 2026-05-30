@@ -449,7 +449,7 @@ const RecoupementCard = ({ kind, currentUser, onCompared }) => {
   );
 };
 
-const RecoupementHistory = ({ refreshKey }) => {
+const RecoupementHistory = ({ refreshKey, currentUser }) => {
   const [kindFilter, setKindFilter] = useState("all");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -484,6 +484,25 @@ const RecoupementHistory = ({ refreshKey }) => {
       actor_name: rec.actor_name,
       actor_role: rec.actor_role,
     });
+  };
+
+  const removeRec = async (rec) => {
+    if (!window.confirm(`Supprimer ce recoupement ${rec.kind === "cuisine" ? "Cuisine" : "Jeux"} du ${rec.date} ?\n\nCette action est tracée dans l'audit.`)) {
+      return;
+    }
+    try {
+      await axios.delete(`${API}/recoupement/${rec.id}`, {
+        params: {
+          actor_name: currentUser?.full_name || currentUser?.username || "admin",
+          actor_role: "admin",
+        },
+        timeout: 15000,
+      });
+      toast.success("Recoupement supprimé");
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la suppression");
+    }
   };
 
   return (
@@ -576,16 +595,28 @@ const RecoupementHistory = ({ refreshKey }) => {
                         {rec.created_at ? format(new Date(rec.created_at), "dd/MM HH:mm") : ""}
                       </td>
                       <td className="text-right pl-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => reprint(rec)}
-                          className="h-6 text-[10px] text-cyan-300 hover:text-cyan-200"
-                          data-testid={`recoup-history-pdf-${rec.id}`}
-                          title="Réimprimer le rapport"
-                        >
-                          <Eye className="w-3 h-3 mr-0.5" /> PDF
-                        </Button>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => reprint(rec)}
+                            className="h-6 text-[10px] text-cyan-300 hover:text-cyan-200 px-1.5"
+                            data-testid={`recoup-history-pdf-${rec.id}`}
+                            title="Réimprimer le rapport"
+                          >
+                            <Eye className="w-3 h-3 mr-0.5" /> PDF
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRec(rec)}
+                            className="h-6 w-7 text-rose-400 hover:text-rose-300 hover:bg-rose-900/30 px-0"
+                            data-testid={`recoup-history-delete-${rec.id}`}
+                            title="Supprimer ce recoupement"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -625,7 +656,7 @@ const RecoupementPanel = ({ currentUser }) => {
         <RecoupementCard kind="cuisine" currentUser={currentUser} onCompared={refreshHistory} />
         <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
       </div>
-      <RecoupementHistory refreshKey={historyKey} />
+      <RecoupementHistory refreshKey={historyKey} currentUser={currentUser} />
     </div>
   );
 };
