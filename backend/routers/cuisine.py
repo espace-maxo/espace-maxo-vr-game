@@ -294,6 +294,27 @@ async def mark_all_messages_read(actor_role: str = ""):
     return {"success": True, "modified": res.modified_count}
 
 
+@router.delete("/cuisine/messages/{message_id}")
+async def delete_cuisine_message(message_id: str, actor_role: str = ""):
+    """Admin uniquement : suppression d'un message."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'admin")
+    existing = await db.cuisine_messages.find_one({"id": message_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Message introuvable")
+    await db.cuisine_messages.delete_one({"id": message_id})
+    return {"success": True}
+
+
+@router.get("/cuisine/messages/all")
+async def list_all_messages(actor_role: str = "", limit: int = 200):
+    """Admin uniquement : liste tous les messages (entrants et sortants)."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'admin")
+    msgs = await db.cuisine_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return {"total": len(msgs), "messages": msgs}
+
+
 @router.patch("/cuisine/orders/{table_id}/items/{item_index}/ready")
 async def mark_item_ready(table_id: str, item_index: int, actor_role: str = "", actor_name: str = ""):
     if actor_role not in ("cuisinier", "admin"):

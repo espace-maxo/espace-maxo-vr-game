@@ -383,3 +383,15 @@ async def get_report_with_comparison(report_id: str, actor_role: str = ""):
     declared = (rep.get("auto_summary") or {}).get("items") or []
     comparison = await _build_comparison(rep["date"], rep["kind"], declared)
     return {"report": rep, "comparison": comparison}
+
+
+@router.delete("/daily-reports/{report_id}")
+async def delete_report(report_id: str, actor_role: str = ""):
+    """Admin uniquement : suppression d'un rapport (transmis ou brouillon)."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'admin")
+    existing = await db.daily_reports.find_one({"id": report_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Rapport introuvable")
+    await db.daily_reports.delete_one({"id": report_id})
+    return {"success": True}

@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import CuisineHistory from "./CuisineHistory";
 import DailyReportsList from "./DailyReportsList";
+import CuisineMessagesAdminList from "./CuisineMessagesAdminList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
@@ -795,10 +796,12 @@ const RecoupementPanel = ({ currentUser }) => {
               <p>
                 <strong className="text-emerald-300">Rapports du terrain</strong> — Les rapports de fin de journée
                 transmis par le cuisinier et le coach jeux. Comparaison automatique avec les ventes validées du système.
+                Vous pouvez aussi supprimer les messages et événements cuisinier ci-dessous.
               </p>
             </CardContent>
           </Card>
           <DailyReportsList currentUser={currentUser} />
+          <CuisineMessagesAdminList currentUser={currentUser} />
         </TabsContent>
       </Tabs>
     </div>

@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   FileText, RefreshCw, Loader2, ChefHat, Gamepad2, Lock, CheckCircle2,
-  AlertTriangle, Eye, XCircle, TrendingUp, TrendingDown, Equal,
+  AlertTriangle, Eye, XCircle, TrendingUp, TrendingDown, Equal, Trash2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -75,6 +75,18 @@ const DailyReportsList = ({ currentUser }) => {
       toast.error("Erreur chargement comparaison");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const deleteReport = async (e, rep) => {
+    e.stopPropagation();
+    if (!window.confirm(`Supprimer le rapport ${rep.kind === "cuisine" ? "cuisinier" : "coach"} ${rep.actor_name} du ${rep.date} ?`)) return;
+    try {
+      await axios.delete(`${API}/daily-reports/${rep.id}`, { params: { actor_role: actorRole } });
+      toast.success("Rapport supprimé");
+      fetchReports();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
     }
   };
 
@@ -161,6 +173,13 @@ const DailyReportsList = ({ currentUser }) => {
                 </div>
                 <Button size="sm" variant="ghost" className="text-cyan-300 h-7 text-[10px] shrink-0">
                   <Eye className="w-3 h-3 mr-1" /> Voir
+                </Button>
+                <Button size="sm" variant="ghost"
+                        onClick={(e) => deleteReport(e, r)}
+                        className="text-rose-400 hover:text-rose-300 h-7 w-7 p-0 shrink-0"
+                        data-testid={`daily-report-delete-${r.id}`}
+                        title="Supprimer (admin)">
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
             </div>
