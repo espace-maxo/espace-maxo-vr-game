@@ -123,6 +123,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Frontend `RecoupementPanel.jsx` : intégré sous l'onglet Audit, deux cartes (Cuisine ambre + Jeux violet), upload PNG/JPEG/WEBP, prévisualisation, tableau d'items éditable, rapport coloré (vert OK / rouge alerte / orange absent système)
   - Statuts détectés : ok, over_declared, under_declared, missing_in_system, missing_in_declaration
   - Intégration : Emergent LLM Key (EMERGENT_LLM_KEY) avec emergentintegrations, modèle `gemini-3.1-pro-preview`
+- **WORKFLOW TABLES → BONS → FACTURES "BON CLIENT" (Lot 1) (31/05/2026)** ✅
+  - Refonte conforme : les commandes prises transitent de TABLES (saisie agent) → BONS (commande envoyée en cuisine/bar/jeux, facture en `pending`) → FACTURES (au clic "Imprimer le bon client" → `validated` avec mention BON CLIENT sur le ticket)
+  - Backend `invoices.py` : génération auto `bon_number=BON-YYYYMMDD-NNNN` à la création si table_number présent · validation pending→validated préserve `bon_number` · audit complet (create + update)
+  - **Fix HIGH** : ajout du paramètre `validated_only=true` sur GET /api/invoices pour permettre à l'onglet Factures d'afficher uniquement les factures validées (workflow strict)
+  - Frontend `CaissePage.jsx` : `createNewTable` clear de l'état local avant l'appel API (évite l'auto-save 500ms d'écrire les items précédents sur la nouvelle table) · bouton "Vider" rouge visible dans le panneau commande (`CommandeTab.jsx`) · template d'impression conditionnel : "BON CLIENT" si `invoice.bon_number` présent, sinon "BON DE COMMANDE"
+  - Itération 95 : 16/16 tests backend ✓ (création table vierge, génération bon_number, transition pending→validated, préservation bon_number, audit logs, 2ᵉ table aussi vierge)
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis

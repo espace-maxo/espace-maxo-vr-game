@@ -1,11 +1,10 @@
 # Test Credentials
 
 ## Caisse Pro (https://<preview>/caisse)
-- **Admin** : username `Admin` / password `Caisse2026`
-- **Gérante** : username `Mères AHOUANDJINOU` / PIN `2468`
-- **Cuisinier** : username `cuisinier` / PIN `1357` (créé pour tests)
-- **Coach Jeux** : username `coach` / PIN `9876` (créé pour tests)
-- **Coach Jeux** : username `coach` / PIN `9876` (créé pour tests)
+- **Admin** : username `Admin` / password `Caisse2026` (login Admin tab)
+- **Resp. Op. & Log (ex-Gérante)** : `Mères AHOUANDJINOU` / PIN `2468`
+- **Cuisinier** : `cuisinier` / PIN `1357`
+- **Coach Jeux** : `coach` / PIN `9876`
 
 ## Stock (https://<preview>/stock)
 - **Admin** : username `admin` / password `Admin2026`

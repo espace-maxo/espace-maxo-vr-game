@@ -262,15 +262,27 @@ async def get_invoices(
     created_by: str = Query(None),
     date_from: str = Query(None),
     date_to: str = Query(None),
+    validated_only: bool = Query(False, description="If true, return only validated invoices (BON CLIENT). Used by Factures tab."),
 ):
     """Get invoices, optionally filtered by date and user.
     Respects assigned_week: excludes invoices transferred to another week.
+
+    - validated_only=true → ne retourne QUE les factures validées (workflow strict
+      BONS vs FACTURES : l'onglet 'Factures' ne doit afficher que les factures émises).
     """
     try:
+        # Filtre global applicable à toutes les branches
+        status_filter = {"validation_status": "validated"} if validated_only else None
+
         if role == "server" and created_by:
             base_query = {}
             if date:
                 base_query["created_at"] = {"$regex": f"^{date}"}
+
+            if validated_only:
+                validated_query = {**base_query, "validation_status": "validated"}
+                validated_invoices = await db.invoices.find(validated_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+                return {"invoices": validated_invoices}
 
             pending_query = {**base_query, "created_by": created_by, "validation_status": {"$ne": "validated"}}
             pending_invoices = await db.invoices.find(pending_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -281,25 +293,32 @@ async def get_invoices(
             return {"invoices": validated_invoices + pending_invoices}
 
         if date_from and date_to:
-            invoices = await db.invoices.find({
-                "created_at": {"$gte": date_from, "$lte": date_to + "T23:59:59Z"}
-            }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            query = {"created_at": {"$gte": date_from, "$lte": date_to + "T23:59:59Z"}}
+            if status_filter:
+                query.update(status_filter)
+            invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
         elif date:
-            invoices_by_date = await db.invoices.find({
+            base_by_date = {
                 "created_at": {"$regex": f"^{date}"},
                 "$or": [
                     {"assigned_week": {"$exists": False}},
                     {"assigned_week": None},
                     {"assigned_week": ""}
                 ]
-            }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            }
+            if status_filter:
+                base_by_date.update(status_filter)
+            invoices_by_date = await db.invoices.find(base_by_date, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
             d = datetime.fromisoformat(date)
             week_monday = (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
-            invoices_assigned_here = await db.invoices.find({
+            assigned_q = {
                 "assigned_week": week_monday,
                 "created_at": {"$not": {"$regex": f"^{date}"}}
-            }, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            }
+            if status_filter:
+                assigned_q.update(status_filter)
+            invoices_assigned_here = await db.invoices.find(assigned_q, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
             seen = set()
             invoices = []
@@ -308,7 +327,8 @@ async def get_invoices(
                     seen.add(inv.get("id"))
                     invoices.append(inv)
         else:
-            invoices = await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+            query = status_filter or {}
+            invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
         return {"invoices": invoices}
     except Exception as e:
