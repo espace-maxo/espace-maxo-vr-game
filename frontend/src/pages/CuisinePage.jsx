@@ -309,20 +309,23 @@ const CuisinePage = ({ currentUser, onLogout }) => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-amber-950/30 to-slate-900 text-white">
       <div className="max-w-6xl mx-auto p-3 sm:p-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-3 sm:mb-5">
-          <div className="flex items-center gap-2">
-            <ChefHat className="w-7 h-7 text-amber-400" />
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold">Cuisine — {currentUser?.full_name || currentUser?.username}</h1>
-              <p className="text-[10px] text-slate-400">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
+        <div className="flex items-center justify-between mb-3 sm:mb-5 gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <ChefHat className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold truncate">
+                <span className="sm:hidden">{currentUser?.full_name || currentUser?.username}</span>
+                <span className="hidden sm:inline">Cuisine — {currentUser?.full_name || currentUser?.username}</span>
+              </h1>
+              <p className="text-[10px] text-slate-400 truncate">{format(new Date(), "EEE d MMM yyyy", { locale: fr })}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 shrink-0">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSoundOn((s) => !s)}
-              className="text-slate-300 h-8"
+              className="text-slate-300 h-8 w-8 p-0"
               title={soundOn ? "Couper le son" : "Activer le son"}
               data-testid="cuisine-sound-toggle"
             >
@@ -333,7 +336,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               size="sm"
               onClick={() => fetchOrders(false)}
               disabled={loading}
-              className="text-slate-300 h-8"
+              className="text-slate-300 h-8 w-8 p-0"
               data-testid="cuisine-refresh"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -342,7 +345,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               variant="ghost"
               size="sm"
               onClick={onLogout}
-              className="text-rose-400 hover:text-rose-300 h-8"
+              className="text-rose-400 hover:text-rose-300 h-8 w-8 p-0"
               data-testid="cuisine-logout"
             >
               <LogOut className="w-4 h-4" />
@@ -351,38 +354,42 @@ const CuisinePage = ({ currentUser, onLogout }) => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-slate-800/60 border border-slate-700">
-            <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white" data-testid="cuisine-tab-orders">
-              <Clock className="w-4 h-4 mr-1" />
-              Commandes
-              {pendingCount > 0 && (
-                <Badge className="ml-2 bg-rose-500 text-white text-[10px]">{pendingCount}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white" data-testid="cuisine-tab-scan">
-              <Camera className="w-4 h-4 mr-1" />
-              Scanner un bon
-            </TabsTrigger>
-            <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative" data-testid="cuisine-tab-messages">
-              <MessageSquare className="w-4 h-4 mr-1" />
-              Messages
-              {unreadMsgs > 0 && (
-                <Badge className="ml-2 bg-rose-500 text-white text-[10px] animate-pulse">{unreadMsgs}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white" data-testid="cuisine-tab-history">
-              <History className="w-4 h-4 mr-1" />
-              Mon historique
-            </TabsTrigger>
-            <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white" data-testid="cuisine-tab-report">
-              <FileText className="w-4 h-4 mr-1" />
-              Rapport du jour
-            </TabsTrigger>
-            <TabsTrigger value="needs" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white" data-testid="cuisine-tab-needs">
-              <Package className="w-4 h-4 mr-1" />
-              Besoin cuisine
-            </TabsTrigger>
-          </TabsList>
+          {/* Onglets : scroll horizontal sur mobile, icônes seules + badge.
+              Texte affiché à partir de sm: pour ne pas déborder sur petit écran */}
+          <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
+            <TabsList className="bg-slate-800/60 border border-slate-700 inline-flex w-auto sm:flex">
+              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-orders" title="Commandes">
+                <Clock className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Commandes</span>
+                {pendingCount > 0 && (
+                  <Badge className="ml-1 sm:ml-2 bg-rose-500 text-white text-[10px]">{pendingCount}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-scan" title="Scanner un bon">
+                <Camera className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Scanner</span>
+              </TabsTrigger>
+              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-2 sm:px-3" data-testid="cuisine-tab-messages" title="Messages">
+                <MessageSquare className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Messages</span>
+                {unreadMsgs > 0 && (
+                  <Badge className="ml-1 sm:ml-2 bg-rose-500 text-white text-[10px] animate-pulse">{unreadMsgs}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-history" title="Mon historique">
+                <History className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Historique</span>
+              </TabsTrigger>
+              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-report" title="Rapport du jour">
+                <FileText className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Rapport</span>
+              </TabsTrigger>
+              <TabsTrigger value="needs" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-needs" title="Besoin cuisine">
+                <Package className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Besoin</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* COMMANDES */}
           <TabsContent value="orders" className="mt-3 space-y-3">
