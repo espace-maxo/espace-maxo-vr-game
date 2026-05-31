@@ -63,6 +63,7 @@ const CommandeTab = ({ ctx }) => {
     PAYMENT_METHODS,
     closeTable,
     tableCoachPlayers,
+    transmitCoachPlayersOnTable,
   } = ctx;
   return (
     <>
@@ -727,8 +728,21 @@ const CommandeTab = ({ ctx }) => {
                                 </div>
                               ))}
                             </div>
+                            {/* Bouton 1-clic : transmet + ajoute à la commande */}
+                            {transmitCoachPlayersOnTable && tableCoachPlayers.grand_total > 0 && (
+                              <Button
+                                onClick={transmitCoachPlayersOnTable}
+                                size="sm"
+                                className="w-full mt-2 h-8 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white text-xs font-semibold"
+                                data-testid="transmit-coach-players-now-btn"
+                              >
+                                ⚡ Facturer maintenant ({formatPrice(tableCoachPlayers.grand_total)} F)
+                              </Button>
+                            )}
                             <p className="text-[10px] text-purple-400/70 italic mt-1.5">
-                              Ces montants seront ajoutés au bon lors de la transmission du Coach
+                              {transmitCoachPlayersOnTable
+                                ? "Clic = ajoute les articles à la commande + marque les joueurs transmis"
+                                : "Ces montants seront ajoutés au bon lors de la transmission du Coach"}
                             </p>
                           </div>
                         )}

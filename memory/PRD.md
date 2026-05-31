@@ -175,6 +175,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Quand l'agent / Resp. Op. ouvre une table dans CaissePage, un panneau violet apparaît juste avant le récap des totaux : "🎮 X joueurs Coach sur cette table" avec liste détaillée (nom, nb parties, forfait h, montant) + total cumulé en bandeau
   - Mise à jour temps réel : polling 10s. Permet à la Resp. Op. d'avoir la vue 360° avant impression du BON CLIENT
   - Nouveau endpoint `GET /api/coach/players/by-table/{table_number}` (sans auth — endpoint léger) retourne `{table_number, players, count, grand_total}`
+  - **Bouton "⚡ Facturer maintenant" en 1 clic (31/05/2026 — Lot 2)** :
+    - Nouveau endpoint backend `POST /api/coach/players/transmit-to-table` (rôles admin/manager/server)
+    - Combine en 1 appel : 1) transmet TOUS les joueurs ouverts sur la table 2) crée un bon (status="attached") 3) ajoute directement les items jeux à la table active dans `caisse_tables.items` (department="jeux", from_jeux_bon référencé)
+    - Frontend : `transmitCoachPlayersOnTable` ajouté dans CaissePage et passé via ctx au CommandeTab. Bouton apparaît dans le panel violet uniquement si `grand_total > 0`. Après transmission, rafraîchit automatiquement table active + panneau coach
+    - Test E2E : 4 joueurs sur T99 (14 000 F) → 1 clic → 3 items ajoutés à la table, joueurs marqués transmitted, total préservé ✓
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis

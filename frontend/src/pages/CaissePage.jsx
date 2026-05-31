@@ -758,6 +758,40 @@ const CaissePage = () => {
     return () => clearInterval(t);
   }, [fetchTableCoachPlayers, activeTable?.table_number]);
 
+  // One-click : transmet tous les joueurs Coach de la table active et ajoute leurs
+  // articles directement à la commande en cours. Évite à l'agent de passer par le Coach.
+  const transmitCoachPlayersOnTable = useCallback(async () => {
+    if (!activeTableId || !activeTable?.table_number) {
+      toast.error("Aucune table active");
+      return;
+    }
+    if (!tableCoachPlayers.count) {
+      toast.info("Aucun joueur Coach à transmettre");
+      return;
+    }
+    if (!window.confirm(
+      `Facturer maintenant ${tableCoachPlayers.count} joueur(s) Coach sur la table ${activeTable.table_number} ?\n\n` +
+      `Total à ajouter : ${tableCoachPlayers.grand_total.toLocaleString("fr-FR")} F\n\n` +
+      `Les articles jeux seront ajoutés à la commande en cours et les joueurs marqués comme transmis.`
+    )) return;
+    try {
+      const r = await axios.post(`${API}/coach/players/transmit-to-table`, {
+        table_id: activeTableId,
+        actor_name: currentUser?.full_name || currentUser?.username || "Caisse",
+        actor_role: currentUser?.role || "server",
+      });
+      toast.success(
+        `${r.data.transmitted_players} joueur(s) facturé(s) · ${r.data.items_added} article(s) ajouté(s)`,
+        { description: `Total : ${r.data.total.toLocaleString("fr-FR")} F` }
+      );
+      // Rafraîchir tout l'écran : table active + panneau coach + commande
+      fetchTableCoachPlayers();
+      await fetchAllData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la transmission");
+    }
+  }, [activeTableId, activeTable?.table_number, tableCoachPlayers, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ============== DATA FETCHING ==============
   const fetchAllData = async () => {
     try {
@@ -5602,7 +5636,7 @@ _Responsable Op. & Log - Espace Maxo_
               currentUser,
               cancellationRequests, modificationRequests,
               activeTable, activeTableId,
-              tableCoachPlayers, fetchTableCoachPlayers,
+              tableCoachPlayers, fetchTableCoachPlayers, transmitCoachPlayersOnTable,
               activeDepartment, setActiveDepartment,
               currentBill,
               customItem, setCustomItem,

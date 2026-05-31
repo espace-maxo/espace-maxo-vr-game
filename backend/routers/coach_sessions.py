@@ -317,3 +317,139 @@ async def transmit_players(body: TransmitBody):
     )
     bon.pop("_id", None)
     return {"success": True, "bon_id": bon["id"], "transmitted_count": len(players), "total": total}
+
+
+class TransmitAndAttachBody(BaseModel):
+    table_id: str
+    actor_name: str
+    actor_role: str  # admin | manager | server (les agents peuvent aussi facturer un bon)
+    bon_notes: Optional[str] = ""
+
+
+@router.post("/coach/players/transmit-to-table")
+async def transmit_players_to_table(body: TransmitAndAttachBody):
+    """One-click depuis la CaissePage : transmet TOUS les joueurs ouverts rattachés
+    à la table puis attache directement le bon à cette table (équivalent
+    transmit + attach en un seul appel).
+
+    Cas d'usage : l'agent / Resp. Op. voit le panneau violet "🎮 X joueurs sur cette
+    table" et clique "Facturer maintenant". Les articles jeux sont ajoutés à la
+    commande en cours sans passer par le menu Coach.
+    """
+    if body.actor_role not in ("admin", "manager", "server"):
+        raise HTTPException(403, "Action réservée")
+
+    table = await db.caisse_tables.find_one({"id": body.table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(404, "Table introuvable")
+    table_number = table.get("table_number")
+    if table_number is None:
+        raise HTTPException(400, "Table sans numéro")
+
+    # Récupère tous les joueurs ouverts sur cette table
+    players = await db.coach_players.find(
+        {"table_number": int(table_number), "status": "open"}, {"_id": 0}
+    ).to_list(50)
+    if not players:
+        raise HTTPException(404, f"Aucun joueur ouvert sur la table {table_number}")
+
+    # Construit les items du bon (réutilise la logique de transmit_players)
+    bon_items = []
+    player_names = []
+    for p in players:
+        pname = p.get("player_name", "")
+        player_names.append(pname)
+        for it in p.get("items") or []:
+            note = it.get("notes", "")
+            note_with = f"[{pname}]" + (f" {note}" if note else "")
+            bon_items.append({
+                "jeu_product_id": it.get("jeu_product_id"),
+                "jeu_name": it.get("jeu_name"),
+                "parties": int(it.get("parties") or 1),
+                "unit_price": float(it.get("unit_price") or 0),
+                "duration_minutes": it.get("duration_minutes"),
+                "notes": note_with,
+                "billing_mode": it.get("billing_mode") or "parties",
+                "hours": it.get("hours"),
+                "hourly_rate": it.get("hourly_rate"),
+            })
+    if not bon_items:
+        raise HTTPException(400, "Aucune consommation à transmettre")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    total = round(sum(
+        (float(it.get("hours") or 0) * float(it.get("hourly_rate") or 0))
+        if it.get("billing_mode") == "hourly"
+        else (float(it.get("unit_price") or 0) * int(it.get("parties") or 1))
+        for it in bon_items
+    ), 2)
+    total_duration = sum(int(it.get("duration_minutes") or 0) for it in bon_items) or None
+
+    bon_id = str(uuid.uuid4())
+    bon = {
+        "id": bon_id,
+        "items": [
+            {**it, "total": round(
+                (float(it["hours"] or 0) * float(it["hourly_rate"] or 0))
+                if it.get("billing_mode") == "hourly"
+                else (float(it["unit_price"]) * int(it["parties"])), 2
+            )}
+            for it in bon_items
+        ],
+        "total": total,
+        "total_duration_minutes": total_duration,
+        "players": ", ".join(player_names),
+        "notes": (body.bon_notes or "").strip(),
+        "coach_name": "(transmis depuis Caisse)",
+        "coach_role": "coach_jeux",
+        # Bon directement attaché à la table : status = attached
+        "status": "attached",
+        "table_id": body.table_id,
+        "table_number": table_number,
+        "invoice_id": None,
+        "invoice_number": None,
+        "rejection_reason": None,
+        "processed_by": body.actor_name,
+        "processed_by_role": body.actor_role,
+        "processed_at": now_iso,
+        "created_at": now_iso,
+    }
+    await db.jeux_bons.insert_one(bon)
+
+    # Marque les joueurs comme transmis
+    await db.coach_players.update_many(
+        {"id": {"$in": [p["id"] for p in players]}},
+        {"$set": {"status": "transmitted", "transmitted_at": now_iso, "bon_id": bon_id, "updated_at": now_iso}},
+    )
+
+    # Ajoute les items à la table active
+    new_items = []
+    for it in bon["items"]:
+        new_items.append({
+            "id": str(uuid.uuid4()),
+            "product_id": it.get("jeu_product_id"),
+            "name": it.get("jeu_name"),
+            "quantity": int(it.get("parties") or 1),
+            "price": float(it.get("unit_price") or 0),
+            "total": float(it.get("total") or 0),
+            "department": "jeux",
+            "category": "jeux",
+            "notes": it.get("notes", ""),
+            "from_jeux_bon": bon_id,
+            "added_at": now_iso,
+            "added_by": body.actor_name,
+        })
+    items = (table.get("items") or []) + new_items
+    await db.caisse_tables.update_one(
+        {"id": body.table_id},
+        {"$set": {"items": items, "updated_at": now_iso}},
+    )
+
+    return {
+        "success": True,
+        "bon_id": bon_id,
+        "transmitted_players": len(players),
+        "items_added": len(new_items),
+        "total": total,
+        "table_number": table_number,
+    }
