@@ -4307,15 +4307,32 @@ async def delete_caisse_table(
     actor_name: Optional[str] = Query(None),
     actor_role: Optional[str] = Query(None),
     reason: Optional[str] = Query(None),
+    force: bool = Query(False),
 ):
-    """Delete a table/draft (when converted to invoice or cancelled)"""
+    """Delete a table/draft (when converted to invoice or cancelled).
+    Empêche la suppression si un item cuisine a déjà été démarré (started_at)
+    sauf si force=true (admin override avec confirmation explicite).
+    """
     try:
         existing = await db.caisse_tables.find_one({"id": table_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Table non trouvée")
+        # Protection : bon avec items démarrés en cuisine
+        started_items = [
+            it for it in (existing.get("items") or [])
+            if it.get("started_at") and not it.get("ready_at") and not it.get("served_at")
+        ]
+        if started_items and not force:
+            names = ", ".join((it.get("name") or "?") for it in started_items[:5])
+            raise HTTPException(
+                status_code=409,
+                detail=f"Suppression bloquée : {len(started_items)} plat(s) en cours de préparation en cuisine ({names}). Utilisez force=true (admin) pour forcer.",
+            )
         result = await db.caisse_tables.delete_one({"id": table_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Table non trouvée")
         # Only log explicit cancellations (manual close from UI)
-        if existing and (reason or "").lower() == "cancelled":
+        if (reason or "").lower() == "cancelled":
             try:
                 from routers.invoices import _log_audit as _log_audit_fn
                 await _log_audit_fn(
@@ -4327,7 +4344,7 @@ async def delete_caisse_table(
                 )
             except Exception as _audit_err:
                 logger.error(f"table audit failed: {_audit_err}")
-        return {"success": True}
+        return {"success": True, "started_items_warned": len(started_items)}
     except HTTPException:
         raise
     except Exception as e:

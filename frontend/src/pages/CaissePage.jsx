@@ -672,9 +672,11 @@ const CaissePage = () => {
     }
   };
 
-  const closeTable = async (tableId) => {
+  const closeTable = async (tableId, options = {}) => {
+    const { force = false } = options;
     try {
-      await axios.delete(`${API}/caisse/tables/${tableId}?${actorQs()}&reason=cancelled`);
+      const forceParam = force ? "&force=true" : "";
+      await axios.delete(`${API}/caisse/tables/${tableId}?${actorQs()}&reason=cancelled${forceParam}`);
       
       // If closing active table, switch to another or clear
       if (tableId === activeTableId) {
@@ -688,7 +690,20 @@ const CaissePage = () => {
       
       await fetchOpenTables();
     } catch (error) {
-      console.error("Error closing table:", error);
+      // 409 : plat(s) en cours de préparation en cuisine
+      if (error?.response?.status === 409 && !force) {
+        const detail = error.response.data?.detail || "Plats en préparation";
+        if (currentUser?.role === "admin") {
+          if (window.confirm(`${detail}\n\nForcer la suppression quand même (admin) ?`)) {
+            return closeTable(tableId, { force: true });
+          }
+        } else {
+          toast.error(detail);
+        }
+      } else {
+        console.error("Error closing table:", error);
+        toast.error(error?.response?.data?.detail || "Erreur fermeture table");
+      }
     }
   };
 
