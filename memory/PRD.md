@@ -129,6 +129,16 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - **Fix HIGH** : ajout du paramètre `validated_only=true` sur GET /api/invoices pour permettre à l'onglet Factures d'afficher uniquement les factures validées (workflow strict)
   - Frontend `CaissePage.jsx` : `createNewTable` clear de l'état local avant l'appel API (évite l'auto-save 500ms d'écrire les items précédents sur la nouvelle table) · bouton "Vider" rouge visible dans le panneau commande (`CommandeTab.jsx`) · template d'impression conditionnel : "BON CLIENT" si `invoice.bon_number` présent, sinon "BON DE COMMANDE"
   - Itération 95 : 16/16 tests backend ✓ (création table vierge, génération bon_number, transition pending→validated, préservation bon_number, audit logs, 2ᵉ table aussi vierge)
+- **TICKET BON CLIENT — QR CODE & AVIS PUBLIC (31/05/2026)** ✅
+  - Nouveau router `routers/public_ticket.py` (4 endpoints publics, pas d'auth) :
+    - `GET /api/public/ticket/{id}` : lecture publique d'un ticket VALIDÉ uniquement (404 sur pending/inexistant)
+    - `POST /api/public/ticket/{id}/review` : dépôt d'avis (1-5 étoiles + commentaire + nom/tél optionnels), 1 seul par ticket (409 sinon)
+    - `GET /api/public/reviews` : liste paginée pour modération (Admin) avec filtres `only_unread`, `min_rating`, `max_rating` + KPI (total, unread, average_rating)
+    - `POST /api/public/reviews/{id}/read` : marque un avis comme lu
+  - Nouvelle collection MongoDB `customer_reviews` : `{id, invoice_id, bon_number, rating(1-5), comment, customer_name, customer_phone, created_at, is_read}`
+  - Frontend `PublicTicketPage.jsx` (route `/ticket/:id`) : page mobile-first avec récap du ticket (articles, totaux, n° BON CLIENT) + formulaire avis (rating étoiles animées + nom + tél + commentaire 1000 chars), états : formulaire / "Avis déjà déposé" (affiche le rating + comment précédents) / "Merci pour votre retour"
+  - `CaissePage.jsx` `printTicket` : génère un QR Code via la lib `qrcode` (220px) injecté en bas du ticket BON CLIENT (uniquement si `invoice.bon_number` présent), label "Scannez pour donner votre avis" + URL textuelle en fallback
+  - Itération 96 : 17/17 tests backend ✓ (tous les codes erreurs validés : 404 pending, 409 duplicate, 422 rating invalide, 400 ticket pending, filtres reviews) — non-régression Lot 1 (bon_number + validated_only) confirmée
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
