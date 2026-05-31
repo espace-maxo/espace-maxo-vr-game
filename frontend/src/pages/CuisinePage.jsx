@@ -354,39 +354,58 @@ const CuisinePage = ({ currentUser, onLogout }) => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Onglets : scroll horizontal sur mobile, icônes seules + badge.
-              Texte affiché à partir de sm: pour ne pas déborder sur petit écran */}
+          {/* Onglets : scroll horizontal sur mobile, icône + label minuscule en colonne.
+              Sur ≥sm: layout horizontal classique avec libellé long */}
           <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
-            <TabsList className="bg-slate-800/60 border border-slate-700 inline-flex w-auto sm:flex">
-              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-orders" title="Commandes">
-                <Clock className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Commandes</span>
-                {pendingCount > 0 && (
-                  <Badge className="ml-1 sm:ml-2 bg-rose-500 text-white text-[10px]">{pendingCount}</Badge>
-                )}
+            <TabsList className="bg-slate-800/60 border border-slate-700 inline-flex w-auto sm:flex h-auto p-1">
+              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-orders" title="Commandes">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {pendingCount > 0 && (
+                    <Badge className="bg-rose-500 text-white text-[9px] px-1 py-0 h-3.5">{pendingCount}</Badge>
+                  )}
+                </span>
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Cmd</span>
+                  <span className="hidden sm:inline">Commandes</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-scan" title="Scanner un bon">
-                <Camera className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Scanner</span>
+              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-scan" title="Scanner un bon">
+                <Camera className="w-4 h-4" />
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Scan</span>
+                  <span className="hidden sm:inline">Scanner</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-2 sm:px-3" data-testid="cuisine-tab-messages" title="Messages">
-                <MessageSquare className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Messages</span>
-                {unreadMsgs > 0 && (
-                  <Badge className="ml-1 sm:ml-2 bg-rose-500 text-white text-[10px] animate-pulse">{unreadMsgs}</Badge>
-                )}
+              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-messages" title="Messages">
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="w-4 h-4" />
+                  {unreadMsgs > 0 && (
+                    <Badge className="bg-rose-500 text-white text-[9px] px-1 py-0 h-3.5 animate-pulse">{unreadMsgs}</Badge>
+                  )}
+                </span>
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Msg</span>
+                  <span className="hidden sm:inline">Messages</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-history" title="Mon historique">
-                <History className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Historique</span>
+              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-history" title="Mon historique">
+                <History className="w-4 h-4" />
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Hist</span>
+                  <span className="hidden sm:inline">Historique</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-report" title="Rapport du jour">
-                <FileText className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Rapport</span>
+              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-report" title="Rapport du jour">
+                <FileText className="w-4 h-4" />
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Rap</span>
+                  <span className="hidden sm:inline">Rapport</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="needs" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="cuisine-tab-needs" title="Besoin cuisine">
-                <Package className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Besoin</span>
+              <TabsTrigger value="needs" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-needs" title="Besoin cuisine">
+                <Package className="w-4 h-4" />
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">Besoin</span>
               </TabsTrigger>
             </TabsList>
           </div>
