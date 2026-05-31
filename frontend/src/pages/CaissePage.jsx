@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
+import QRCode from "qrcode";
 
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
@@ -4564,7 +4565,7 @@ _Responsable Op. & Log - Espace Maxo_
   };
 
   // ============== TICKET THERMIQUE (80mm) ==============
-  const printTicket = (invoice) => {
+  const printTicket = async (invoice) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     const itemsHtml = (invoice.items || []).map(item => `
       <tr>
@@ -4573,6 +4574,23 @@ _Responsable Op. & Log - Espace Maxo_
         <td style="padding: 2px 0; text-align: right; font-size: 11px;">${formatPrice(item.price * item.quantity)}</td>
       </tr>
     `).join('');
+
+    // QR code "Mon ticket" (avis client) — uniquement pour les BON CLIENT validés
+    // pointant vers la page publique /ticket/:id
+    let qrDataUrl = "";
+    let publicUrl = "";
+    if (invoice.bon_number && invoice.id) {
+      try {
+        publicUrl = `${window.location.origin}/ticket/${invoice.id}`;
+        qrDataUrl = await QRCode.toDataURL(publicUrl, {
+          width: 220,
+          margin: 1,
+          errorCorrectionLevel: "M",
+        });
+      } catch (e) {
+        console.warn("QR generation failed", e);
+      }
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -4657,6 +4675,13 @@ _Responsable Op. & Log - Espace Maxo_
           `}
           
           <div class="footer">
+            ${qrDataUrl ? `
+              <div style="margin: 10px auto 8px; padding: 8px 4px; border: 1px dashed #000; border-radius: 4px;">
+                <p style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">Scannez pour donner votre avis</p>
+                <img src="${qrDataUrl}" alt="QR Code" style="width: 110px; height: 110px; display: block; margin: 0 auto;" />
+                <p style="font-size: 8px; color: #555; margin-top: 4px; word-break: break-all;">${publicUrl}</p>
+              </div>
+            ` : ''}
             <p>Merci de votre visite !</p>
             <p>À bientôt</p>
           </div>
