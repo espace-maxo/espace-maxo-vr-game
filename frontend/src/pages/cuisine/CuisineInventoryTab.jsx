@@ -18,10 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Boxes, Plus, Pencil, Trash2, AlertTriangle, Search, RefreshCw, Loader2, History,
+  Boxes, Plus, Pencil, Trash2, AlertTriangle, Search, RefreshCw, Loader2, History, ChevronDown,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const UNIT_OPTIONS = [
+  "portion", "pièce", "kg", "g", "L", "cl", "ml", "boîte", "sachet", "bouteille", "carton", "paquet", "bidon",
+];
 
 const CuisineInventoryTab = ({ currentUser }) => {
   const owner = currentUser?.full_name || currentUser?.username || "Cuisinier";
@@ -36,6 +40,17 @@ const CuisineInventoryTab = ({ currentUser }) => {
   const [editThreshold, setEditThreshold] = useState("");
   const [historyOpen, setHistoryOpen] = useState(null);
 
+  // Catalogue exhaustif des produits (pour autocomplétion 3+ lettres)
+  const [catalog, setCatalog] = useState([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/cuisine/products`);
+      setCatalog(r.data.products || []);
+    } catch {}
+  }, []);
+
   const fetchInventory = useCallback(async () => {
     setLoading(true);
     try {
@@ -49,15 +64,32 @@ const CuisineInventoryTab = ({ currentUser }) => {
 
   useEffect(() => {
     fetchInventory();
+    fetchCatalog();
     const t = setInterval(fetchInventory, 15000);
     return () => clearInterval(t);
-  }, [fetchInventory]);
+  }, [fetchInventory, fetchCatalog]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return items;
     const q = search.toLowerCase();
     return items.filter((it) => (it.product_name || "").toLowerCase().includes(q));
   }, [items, search]);
+
+  // Suggestions catalogue : actif à partir de 3 lettres, max 8 résultats,
+  // exclut les produits déjà présents dans l'inventaire perso
+  const suggestions = useMemo(() => {
+    const q = (form.product_name || "").trim().toLowerCase();
+    if (q.length < 3) return [];
+    const ownedNames = new Set(items.map((i) => (i.product_name || "").toLowerCase()));
+    return catalog
+      .filter((p) => p.name.toLowerCase().includes(q) && !ownedNames.has(p.name.toLowerCase()))
+      .slice(0, 8);
+  }, [catalog, form.product_name, items]);
+
+  const pickSuggestion = (p) => {
+    setForm({ ...form, product_name: p.name, unit: p.unit || form.unit });
+    setShowSuggest(false);
+  };
 
   const addItem = async () => {
     const name = form.product_name.trim();
@@ -157,26 +189,67 @@ const CuisineInventoryTab = ({ currentUser }) => {
 
           {showAdd && (
             <div className="bg-slate-900/60 border border-cyan-500/30 rounded p-2 space-y-2" data-testid="inventory-add-form">
-              <Input
-                value={form.product_name}
-                onChange={(e) => setForm({ ...form, product_name: e.target.value })}
-                placeholder="Nom du produit (ex: Cheddar, Pain burger…)"
-                className="bg-slate-900 border-slate-700 h-9 text-sm"
-                data-testid="inventory-name-input"
-              />
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="relative">
                 <Input
+                  value={form.product_name}
+                  onChange={(e) => { setForm({ ...form, product_name: e.target.value }); setShowSuggest(true); }}
+                  onFocus={() => setShowSuggest(true)}
+                  onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+                  placeholder="Tapez 3 lettres pour rechercher un produit…"
+                  className="bg-slate-900 border-slate-700 h-9 text-sm pr-7"
+                  data-testid="inventory-name-input"
+                />
+                {form.product_name.trim().length >= 3 && (
+                  <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2" />
+                )}
+                {/* Dropdown suggestions */}
+                {showSuggest && suggestions.length > 0 && (
+                  <div
+                    className="absolute z-20 mt-1 left-0 right-0 bg-slate-800 border border-cyan-500/40 rounded shadow-lg max-h-[240px] overflow-y-auto"
+                    data-testid="inventory-suggestions"
+                  >
+                    {suggestions.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); pickSuggestion(p); }}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-white text-sm hover:bg-cyan-600/30 border-b border-slate-700 last:border-b-0"
+                        data-testid={`suggest-${p.id}`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">({p.unit})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Indicateur < 3 lettres */}
+                {form.product_name.trim().length > 0 && form.product_name.trim().length < 3 && (
+                  <p className="text-[10px] text-amber-400 mt-1 italic">
+                    Tapez au moins 3 lettres pour voir les suggestions…
+                  </p>
+                )}
+                {showSuggest && form.product_name.trim().length >= 3 && suggestions.length === 0 && (
+                  <p className="text-[10px] text-slate-400 mt-1 italic">
+                    Aucun produit trouvé — vous pouvez tout de même ajouter ce nom personnalisé.
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <select
                   value={form.unit}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                  placeholder="Unité"
-                  className="bg-slate-900 border-slate-700 h-9 text-sm"
-                  data-testid="inventory-unit-input"
-                />
+                  className="bg-slate-900 border border-slate-700 rounded h-9 text-sm text-white px-2"
+                  data-testid="inventory-unit-select"
+                >
+                  {UNIT_OPTIONS.map((u) => (
+                    <option key={u} value={u} className="bg-slate-800">{u}</option>
+                  ))}
+                </select>
                 <Input
                   type="number" min="0" step="0.01"
                   value={form.quantity}
                   onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
-                  placeholder="Qté actuelle"
+                  placeholder="Qté"
                   className="bg-slate-900 border-slate-700 h-9 text-sm"
                   data-testid="inventory-qty-input"
                 />
@@ -184,7 +257,7 @@ const CuisineInventoryTab = ({ currentUser }) => {
                   type="number" min="0" step="0.01"
                   value={form.low_threshold}
                   onChange={(e) => setForm({ ...form, low_threshold: Number(e.target.value) })}
-                  placeholder="Seuil alerte"
+                  placeholder="Seuil"
                   className="bg-slate-900 border-slate-700 h-9 text-sm"
                   data-testid="inventory-threshold-input"
                 />

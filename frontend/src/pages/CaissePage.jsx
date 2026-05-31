@@ -758,6 +758,46 @@ const CaissePage = () => {
     return () => clearInterval(t);
   }, [fetchTableCoachPlayers, activeTable?.table_number]);
 
+  // Notifications "Besoin cuisine" : compteur pour badge sur l'onglet Recoupement
+  // (qui contient le CuisineNeedsAdminList) — polling 30s
+  const [cuisineNeedsPending, setCuisineNeedsPending] = useState({ pending: 0, urgent: 0 });
+  const lastNeedsCountRef = useRef(null);
+  const fetchCuisineNeedsCount = useCallback(async () => {
+    if (currentUser?.role !== "admin" && currentUser?.role !== "manager") return;
+    try {
+      const r = await axios.get(`${API}/cuisine/needs`, { params: { status: "pending", limit: 1 } });
+      const pending = r.data.pending_count || 0;
+      const urgent = r.data.urgent_pending_count || 0;
+      // Notification différentielle : on alerte uniquement si le compteur augmente
+      // (évite de spammer l'admin à chaque polling).
+      if (lastNeedsCountRef.current !== null && pending > lastNeedsCountRef.current) {
+        const delta = pending - lastNeedsCountRef.current;
+        toast.info(`🍳 ${delta} nouveau${delta > 1 ? "x" : ""} besoin${delta > 1 ? "s" : ""} cuisine`, {
+          description: urgent > 0 ? `⚠ ${urgent} marqué(s) urgent` : "Consultez l'onglet Recoupement IA",
+          duration: 6000,
+        });
+        // Son de notification (réutilise la fonction d'alerte existante si dispo)
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.connect(g); g.connect(audioCtx.destination);
+          o.frequency.value = urgent > 0 ? 880 : 660;
+          g.gain.value = 0.15;
+          o.start(); setTimeout(() => { o.stop(); audioCtx.close(); }, 250);
+        } catch {}
+      }
+      lastNeedsCountRef.current = pending;
+      setCuisineNeedsPending({ pending, urgent });
+    } catch {}
+  }, [currentUser?.role]);
+
+  useEffect(() => {
+    fetchCuisineNeedsCount();
+    const t = setInterval(fetchCuisineNeedsCount, 30000);
+    return () => clearInterval(t);
+  }, [fetchCuisineNeedsCount]);
+
   // One-click : transmet tous les joueurs Coach de la table active et ajoute leurs
   // articles directement à la commande en cours. Évite à l'agent de passer par le Coach.
   const transmitCoachPlayersOnTable = useCallback(async () => {
@@ -5570,8 +5610,17 @@ _Responsable Op. & Log - Espace Maxo_
             )}
             {/* 14.6 RECOUPEMENT IA — Cuisine & Jeux (Admin only) */}
             {currentUser?.role === 'admin' && (
-              <TabsTrigger value="recoupement" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-recoupement">
+              <TabsTrigger value="recoupement" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 relative" data-testid="tab-recoupement">
                 <Sparkles className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Recoupement IA</span>
+                {cuisineNeedsPending.pending > 0 && (
+                  <Badge
+                    className={`absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold ${cuisineNeedsPending.urgent > 0 ? "bg-rose-500 animate-pulse" : "bg-amber-500"} text-white border-2 border-slate-900`}
+                    data-testid="admin-cuisine-needs-badge"
+                    title={`${cuisineNeedsPending.pending} besoin(s) cuisine en attente${cuisineNeedsPending.urgent > 0 ? ` dont ${cuisineNeedsPending.urgent} urgent(s)` : ""}`}
+                  >
+                    {cuisineNeedsPending.pending}
+                  </Badge>
+                )}
               </TabsTrigger>
             )}
             {/* 15. COMPTE COURANT (Admin only) */}
