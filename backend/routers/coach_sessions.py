@@ -189,6 +189,34 @@ async def delete_player(player_id: str, actor_role: str = ""):
     return {"success": True}
 
 
+class UpdatePlayerBody(BaseModel):
+    table_number: Optional[int] = None
+    actor_role: str = ""
+
+
+@router.patch("/coach/players/{player_id}")
+async def update_player(player_id: str, body: UpdatePlayerBody):
+    """Met à jour les méta-données d'un joueur (actuellement uniquement table_number).
+
+    Permet au Coach de rattacher / changer la table d'un joueur en cours après création.
+    """
+    if body.actor_role not in ("coach_jeux", "admin"):
+        raise HTTPException(403, "Action réservée")
+    p = await db.coach_players.find_one({"id": player_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Joueur introuvable")
+    if p.get("status") != "open":
+        raise HTTPException(400, "Joueur déjà transmis — modification impossible")
+
+    update = {}
+    # Permet de fixer une table ou de la retirer (table_number=null)
+    update["table_number"] = body.table_number if body.table_number is not None else None
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.coach_players.update_one({"id": player_id}, {"$set": update})
+    updated = await db.coach_players.find_one({"id": player_id}, {"_id": 0})
+    return {"success": True, "player": updated}
+
+
 class TransmitBody(BaseModel):
     player_ids: List[str]
     actor_name: str

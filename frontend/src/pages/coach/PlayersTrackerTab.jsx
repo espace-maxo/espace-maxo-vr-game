@@ -33,6 +33,7 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
   const actorName = currentUser?.full_name || currentUser?.username || "Coach";
 
   const [players, setPlayers] = useState([]);
+  const [openTables, setOpenTables] = useState([]); // Tables ouvertes en salle
   const [loading, setLoading] = useState(false);
   const [newName, setNewName] = useState("");
   const [newTable, setNewTable] = useState("");
@@ -56,7 +57,29 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
     }
   }, [actorRole, actorName]);
 
-  useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
+  // Liste des tables ouvertes (toutes serveurs confondus) pour permettre au coach
+  // de rattacher un joueur à la table où il consomme déjà des plats/boissons.
+  const fetchOpenTables = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/caisse/tables`);
+      const tables = (r.data.tables || []).filter(
+        (t) => t.status !== "ready_to_invoice" && t.status !== "invoiced"
+      );
+      // Tri par numéro de table ascendant
+      tables.sort((a, b) => (a.table_number || 0) - (b.table_number || 0));
+      setOpenTables(tables);
+    } catch {
+      // silencieux : si endpoint indispo, le coach peut toujours saisir le n° manuellement
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPlayers();
+    fetchOpenTables();
+    // Rafraîchit la liste des tables toutes les 15s pour suivre les ouvertures en salle
+    const t = setInterval(fetchOpenTables, 15000);
+    return () => clearInterval(t);
+  }, [fetchPlayers, fetchOpenTables]);
 
   const addPlayer = async () => {
     const name = newName.trim();
@@ -78,6 +101,36 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
     if (!window.confirm(`Supprimer "${p.player_name}" et toutes ses parties ?`)) return;
     try {
       await axios.delete(`${API}/coach/players/${p.id}`, { params: { actor_role: actorRole } });
+      fetchPlayers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  // Rattache / change / retire la table d'un joueur existant
+  const changePlayerTable = async (p) => {
+    const current = p.table_number != null ? String(p.table_number) : "";
+    const tablesLabel = openTables.length
+      ? openTables.map((t) => `T${t.table_number}`).join(", ")
+      : "(aucune table ouverte actuellement)";
+    const prompt = window.prompt(
+      `Changer la table de "${p.player_name}".\n\n` +
+      `Tables ouvertes : ${tablesLabel}\n\n` +
+      `Saisir le n° de table (vide = retirer le rattachement) :`,
+      current
+    );
+    if (prompt === null) return;
+    const raw = prompt.trim();
+    const tableNumber = raw === "" ? null : Number(raw);
+    if (raw !== "" && (!Number.isFinite(tableNumber) || tableNumber < 0)) {
+      return toast.error("N° de table invalide");
+    }
+    try {
+      await axios.patch(`${API}/coach/players/${p.id}`, {
+        table_number: tableNumber,
+        actor_role: actorRole,
+      });
+      toast.success(tableNumber == null ? "Table retirée" : `Joueur rattaché à T${tableNumber}`);
       fetchPlayers();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur");
@@ -178,6 +231,11 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
           <CardTitle className="text-sm flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-purple-400" />
             Ajouter un joueur à suivre
+            {openTables.length > 0 && (
+              <Badge className="bg-blue-500/20 text-blue-200 text-[10px] ml-auto">
+                {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte{openTables.length > 1 ? "s" : ""} en salle
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -185,9 +243,74 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
                  placeholder="Nom du joueur"
                  className="bg-slate-900 border-slate-700 h-9 text-sm sm:col-span-2"
                  data-testid="new-player-name" />
-          <Input type="number" value={newTable} onChange={(e) => setNewTable(e.target.value)}
-                 placeholder="N° table (optionnel)"
-                 className="bg-slate-900 border-slate-700 h-9 text-sm" />
+          <Select
+            value={newTable || "none"}
+            onValueChange={(v) => setNewTable(v === "none" ? "" : v)}
+          >
+            <SelectTrigger
+              className="bg-slate-900 border-slate-700 h-9 text-sm"
+              data-testid="new-player-table-select"
+            >
+              <SelectValue placeholder="Table de la salle (optionnel)" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 max-h-[280px]">
+              <SelectItem value="none" className="text-slate-400 italic">
+                Aucune table (joueur seul)
+              </SelectItem>
+              {openTables.map((t) => {
+                const itemsCount = (t.items || []).length;
+                const total = (t.items || []).reduce(
+                  (s, it) => s + Number(it.price || 0) * Number(it.quantity || 0),
+                  0
+                );
+                return (
+                  <SelectItem
+                    key={t.id}
+                    value={String(t.table_number)}
+                    className="text-white text-sm"
+                    data-testid={`option-table-${t.table_number}`}
+                  >
+                    <div className="flex items-center justify-between gap-3 w-full">
+                      <span className="flex items-center gap-1.5">
+                        <Hash className="w-3 h-3 text-blue-400" />
+                        <span className="font-semibold">T{t.table_number}</span>
+                        <span className="text-slate-400 text-xs">· {t.server_name || "serveur"}</span>
+                      </span>
+                      <span className="text-emerald-300 text-xs">
+                        {itemsCount} art. · {total.toLocaleString("fr-FR")} F
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+              {openTables.length === 0 && (
+                <div className="text-slate-400 text-xs px-2 py-3 italic text-center">
+                  Aucune table ouverte en salle pour le moment.
+                </div>
+              )}
+            </SelectContent>
+          </Select>
+          {/* Option pour saisir un n° libre si la table n'apparaît pas (mode dégradé) */}
+          <div className="sm:col-span-3 flex items-center gap-2 text-[11px] text-slate-400">
+            <span>Ou saisir un n° libre :</span>
+            <Input
+              type="number"
+              value={newTable && !openTables.some((t) => String(t.table_number) === String(newTable)) ? newTable : ""}
+              onChange={(e) => setNewTable(e.target.value)}
+              placeholder="N° table"
+              className="bg-slate-900 border-slate-700 h-7 text-xs w-24"
+              data-testid="new-player-table-manual"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={fetchOpenTables}
+              className="text-slate-300 h-7 px-2"
+              title="Rafraîchir la liste des tables"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
           <Button onClick={addPlayer} disabled={!newName.trim()}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white h-9 text-sm sm:col-span-3"
                   data-testid="add-player-btn">
@@ -269,8 +392,30 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
                          data-testid={`player-select-${p.id}`} />
                   <Users className="w-4 h-4 text-purple-400 shrink-0" />
                   <span className="truncate">{p.player_name}</span>
-                  {p.table_number != null && (
-                    <Badge className="bg-blue-500/30 text-blue-200 text-[10px]"><Hash className="w-2.5 h-2.5 mr-0.5" />T{p.table_number}</Badge>
+                  {p.table_number != null ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); changePlayerTable(p); }}
+                      className="inline-flex"
+                      title="Cliquer pour changer la table"
+                      data-testid={`player-table-${p.id}`}
+                    >
+                      <Badge className="bg-blue-500/30 hover:bg-blue-500/50 text-blue-200 text-[10px] cursor-pointer">
+                        <Hash className="w-2.5 h-2.5 mr-0.5" />T{p.table_number}
+                      </Badge>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); changePlayerTable(p); }}
+                      className="inline-flex"
+                      title="Rattacher à une table de la salle"
+                      data-testid={`player-attach-table-${p.id}`}
+                    >
+                      <Badge className="bg-slate-700/60 hover:bg-blue-500/40 text-slate-300 hover:text-blue-200 text-[10px] cursor-pointer border border-dashed border-slate-500">
+                        <Plus className="w-2.5 h-2.5 mr-0.5" />Table
+                      </Badge>
+                    </button>
                   )}
                   <Badge className="bg-emerald-700/50 text-emerald-100 text-[11px]">
                     {(p.total || 0).toLocaleString("fr-FR")} F

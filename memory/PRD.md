@@ -157,6 +157,16 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
     - Modes : `dry_run` (preview), `only_unmatched` (saute les plats déjà liés), `batch_size`, `max_dishes`
     - Test E2E : Salade Niçoise → 12 ingrédients précis (Laitue, Tomate, Concombre, Oignon, Poivron, Thon, Oeufs, Haricots verts, Huile, Vinaigre, Sel, Poivre) avec quantités réalistes ✓
     - Économise des heures de saisie pour les ~80 plats restants sans fiche
+- **COACH JEUX — Accès aux tables de la salle dans le menu JOUEURS (31/05/2026)** ✅
+  - Le Coach peut désormais voir et choisir parmi la liste des tables actuellement ouvertes en salle pour rattacher un joueur. Plus besoin de mémoriser/demander le n° de table à l'agent
+  - Frontend `PlayersTrackerTab.jsx` :
+    - Nouveau `fetchOpenTables` (polling 15s) qui appelle `GET /api/caisse/tables` et filtre celles `status != ready_to_invoice/invoiced`
+    - Le champ "N° table" devient un dropdown listant chaque table ouverte avec : n° table + nom serveur + nb articles + total. Option "Aucune table (joueur seul)" + champ libre de secours pour n° spécial
+    - Badge "Table" cliquable sur chaque carte joueur (rattacher si vide, changer si déjà attaché)
+    - Badge "X tables ouvertes en salle" en haut à droite de la carte d'ajout
+  - Backend `coach_sessions.py` : nouveau `PATCH /api/coach/players/{id}` (rôle coach_jeux ou admin) permettant de modifier le `table_number` d'un joueur en cours
+  - Tests E2E backend : PATCH attach T5 ✓ · PATCH detach (null) ✓ · 403 pour rôle non autorisé ✓
+  - Vérif visuelle : dropdown affiche bien les 4 tables ouvertes (T1, T5, T94, T99) avec leur résumé
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
