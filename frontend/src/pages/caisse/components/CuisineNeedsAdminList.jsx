@@ -154,9 +154,6 @@ const CuisineNeedsAdminList = ({ currentUser }) => {
                         <span className="text-amber-300">•</span>
                         <span className="flex-1">{it.product_name}</span>
                         <span className="font-mono text-amber-200 font-bold">{it.quantity} {it.unit}</span>
-                        {it.observed_stock != null && (
-                          <span className="text-[10px] text-slate-500">(stock vu: {it.observed_stock})</span>
-                        )}
                       </p>
                     ))}
                   </div>

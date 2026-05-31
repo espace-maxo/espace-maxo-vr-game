@@ -86,7 +86,6 @@ const CuisineNeedsTab = ({ currentUser }) => {
       product_name: p.name,
       unit: p.unit,
       quantity: q,
-      observed_stock: p.quantity,
       note: lineNote.trim(),
     }]);
     setSelProductId(""); setQty(""); setLineNote("");
@@ -123,7 +122,7 @@ const CuisineNeedsTab = ({ currentUser }) => {
             <ChefHat className="w-4 h-4 text-amber-400" />
             Besoin en cuisine — produits à transmettre à l'Admin
             <Badge className="bg-amber-500/20 text-amber-200 text-[10px] ml-auto">
-              {products.length} produit{products.length > 1 ? "s" : ""} en zone cuisine
+              {products.length} produit{products.length > 1 ? "s" : ""} au catalogue
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -136,19 +135,14 @@ const CuisineNeedsTab = ({ currentUser }) => {
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
                   <SelectItem value="none" className="text-slate-500 italic">— Sélectionner —</SelectItem>
-                  {products.map((p) => {
-                    const isLow = p.statut === "faible" || p.statut === "rupture";
-                    return (
-                      <SelectItem key={p.id} value={p.id} className="text-white text-sm" data-testid={`need-product-${p.id}`}>
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="flex-1 truncate">{p.name}</span>
-                          <Badge className={`text-[9px] ${isLow ? "bg-rose-500/30 text-rose-200" : "bg-slate-700 text-slate-300"}`}>
-                            stock {p.quantity ?? 0} {p.unit}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id} className="text-white text-sm" data-testid={`need-product-${p.id}`}>
+                      <span className="flex items-center justify-between gap-2 w-full">
+                        <span className="truncate">{p.name}</span>
+                        {p.unit && <span className="text-[10px] text-slate-400 ml-2">({p.unit})</span>}
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -197,9 +191,6 @@ const CuisineNeedsTab = ({ currentUser }) => {
                       <span className="text-amber-200 ml-2 font-mono">{c.quantity} {c.unit}</span>
                     </p>
                     {c.note && <p className="text-[11px] text-slate-400 italic truncate">{c.note}</p>}
-                    {c.observed_stock != null && (
-                      <p className="text-[10px] text-slate-500">Stock actuel : {c.observed_stock} {c.unit}</p>
-                    )}
                   </div>
                   <Button
                     variant="ghost" size="sm"

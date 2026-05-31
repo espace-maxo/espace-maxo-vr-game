@@ -22,11 +22,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChefHat, CheckCircle2, Clock, Bell, Camera, Upload, Loader2,
-  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText, Package,
+  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText, Package, Boxes,
 } from "lucide-react";
 import { beepNewOrder, playBeep } from "../lib/notificationBeep";
 import DailyReportPanel from "../components/DailyReportPanel";
 import CuisineNeedsTab from "./cuisine/CuisineNeedsTab";
+import CuisineInventoryTab from "./cuisine/CuisineInventoryTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_INTERVAL = 5000;
@@ -407,6 +408,13 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                 <Package className="w-4 h-4" />
                 <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">Besoin</span>
               </TabsTrigger>
+              <TabsTrigger value="inventory" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-inventory" title="Mon stock">
+                <Boxes className="w-4 h-4" />
+                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
+                  <span className="sm:hidden">Stock</span>
+                  <span className="hidden sm:inline">Mon stock</span>
+                </span>
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -637,6 +645,11 @@ const CuisinePage = ({ currentUser, onLogout }) => {
           {/* BESOIN EN CUISINE */}
           <TabsContent value="needs" className="mt-3">
             <CuisineNeedsTab currentUser={currentUser} />
+          </TabsContent>
+
+          {/* MON STOCK CUISINE — isolé du stock admin */}
+          <TabsContent value="inventory" className="mt-3">
+            <CuisineInventoryTab currentUser={currentUser} />
           </TabsContent>
         </Tabs>
       </div>

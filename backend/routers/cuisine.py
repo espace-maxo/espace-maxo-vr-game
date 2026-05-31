@@ -573,10 +573,11 @@ class NeedCreate(BaseModel):
 
 @router.get("/cuisine/products")
 async def list_cuisine_products(search: str = ""):
-    """Liste exhaustive des produits cuisine (zone='cuisine', is_active=True).
+    """Catalogue minimal pour la saisie 'Besoin cuisine' du cuisinier.
 
-    Utilisé par le formulaire 'Besoin en cuisine' du cuisinier.
-    Retourne {id, name, unit, quantity (stock actuel), category, stock_min, statut}.
+    IMPORTANT : ne retourne PAS la quantité ni le statut du stock administratif.
+    Le cuisinier doit gérer son propre inventaire via `/cuisine/inventory`.
+    Cette route sert uniquement à proposer un dropdown de NOMS de produits.
     """
     # Par défaut, on inclut tous les produits actifs hors magasin (zone null/cuisine/None).
     # Le magasin est exclu car c'est l'inventaire général, pas le périmètre du cuisinier.
@@ -586,9 +587,136 @@ async def list_cuisine_products(search: str = ""):
         q["name"] = {"$regex": _re.escape(search), "$options": "i"}
     products = await db.stock_products.find(
         q,
-        {"_id": 0, "id": 1, "name": 1, "unit": 1, "quantity": 1, "category_id": 1, "stock_min": 1, "statut": 1}
+        {"_id": 0, "id": 1, "name": 1, "unit": 1}  # SANS quantity ni statut
     ).sort("name", 1).to_list(2000)
     return {"total": len(products), "products": products}
+
+
+# ==================== STOCK PERSONNEL DU CUISINIER ====================
+# Le cuisinier renseigne et voit son propre inventaire (séparé du stock admin).
+# Collection : cuisine_inventory
+#   { id, product_name, unit, quantity, low_threshold, owner, notes,
+#     created_at, updated_at, last_observed_at, history: [{at, qty, by, action}] }
+
+class InventoryItemBody(BaseModel):
+    product_name: str
+    unit: str = ""
+    quantity: float = 0
+    low_threshold: float = 0
+    notes: str = ""
+    owner: str = ""
+
+
+@router.get("/cuisine/inventory")
+async def list_inventory(owner: str = "", search: str = ""):
+    """Inventaire perso du cuisinier (séparé du stock admin)."""
+    q: dict = {}
+    if owner:
+        q["owner"] = owner
+    if search:
+        import re as _re
+        q["product_name"] = {"$regex": _re.escape(search), "$options": "i"}
+    items = await db.cuisine_inventory.find(q, {"_id": 0}).sort("product_name", 1).to_list(1000)
+    # Statistiques rapides
+    low_count = sum(1 for it in items if (it.get("low_threshold") or 0) > 0 and (it.get("quantity") or 0) <= (it.get("low_threshold") or 0))
+    return {
+        "total": len(items),
+        "items": items,
+        "low_count": low_count,
+    }
+
+
+@router.post("/cuisine/inventory")
+async def create_inventory_item(body: InventoryItemBody):
+    """Crée une ligne d'inventaire perso. Idempotent par (owner, product_name)."""
+    name = (body.product_name or "").strip()
+    if not name:
+        raise HTTPException(400, "Nom du produit requis")
+    owner = (body.owner or "Cuisinier").strip()
+    existing = await db.cuisine_inventory.find_one({
+        "owner": owner,
+        "product_name": {"$regex": f"^{name}$", "$options": "i"}
+    })
+    if existing:
+        raise HTTPException(409, f"'{name}' existe déjà dans votre inventaire")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    item = {
+        "id": str(uuid.uuid4()),
+        "owner": owner,
+        "product_name": name,
+        "unit": (body.unit or "").strip(),
+        "quantity": float(body.quantity),
+        "low_threshold": float(body.low_threshold),
+        "notes": (body.notes or "").strip(),
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "last_observed_at": now_iso,
+        "history": [{
+            "at": now_iso,
+            "qty": float(body.quantity),
+            "by": owner,
+            "action": "init",
+        }],
+    }
+    await db.cuisine_inventory.insert_one(item)
+    item.pop("_id", None)
+    return {"success": True, "item": item}
+
+
+class InventoryUpdateBody(BaseModel):
+    quantity: Optional[float] = None
+    low_threshold: Optional[float] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+    by: str = "Cuisinier"
+    action: str = "update"  # update | consume | refill
+
+
+@router.patch("/cuisine/inventory/{item_id}")
+async def update_inventory_item(item_id: str, body: InventoryUpdateBody):
+    """Met à jour une ligne d'inventaire. La quantité crée une entrée dans l'historique."""
+    item = await db.cuisine_inventory.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(404, "Produit introuvable")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update: dict = {"updated_at": now_iso}
+    push_history = None
+    if body.quantity is not None:
+        update["quantity"] = float(body.quantity)
+        update["last_observed_at"] = now_iso
+        push_history = {
+            "at": now_iso,
+            "qty": float(body.quantity),
+            "previous_qty": float(item.get("quantity") or 0),
+            "by": (body.by or "Cuisinier").strip() or "Cuisinier",
+            "action": body.action or "update",
+        }
+    if body.low_threshold is not None:
+        update["low_threshold"] = float(body.low_threshold)
+    if body.unit is not None:
+        update["unit"] = (body.unit or "").strip()
+    if body.notes is not None:
+        update["notes"] = (body.notes or "").strip()
+
+    ops: dict = {"$set": update}
+    if push_history:
+        # Garde max 50 entrées d'historique
+        ops["$push"] = {"history": {"$each": [push_history], "$slice": -50}}
+    await db.cuisine_inventory.update_one({"id": item_id}, ops)
+    updated = await db.cuisine_inventory.find_one({"id": item_id}, {"_id": 0})
+    return {"success": True, "item": updated}
+
+
+@router.delete("/cuisine/inventory/{item_id}")
+async def delete_inventory_item(item_id: str, owner: str = ""):
+    """Suppression d'un produit de l'inventaire perso."""
+    q = {"id": item_id}
+    if owner:
+        q["owner"] = owner
+    r = await db.cuisine_inventory.delete_one(q)
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Produit introuvable")
+    return {"success": True}
 
 
 @router.post("/cuisine/needs")
