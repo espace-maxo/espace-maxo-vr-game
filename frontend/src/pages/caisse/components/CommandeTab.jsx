@@ -598,8 +598,18 @@ const CommandeTab = ({ ctx }) => {
                           {activeTable ? `Table ${activeTable.table_number}` : 'Facture'}
                         </CardTitle>
                         {currentBill.length > 0 && (
-                          <Button variant="ghost" size="sm" onClick={clearBill} className="text-red-400 hover:text-red-300">
-                            <Trash2 className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm("Vider toute la commande de cette table ?")) clearBill();
+                            }}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 text-xs gap-1"
+                            data-testid="clear-bill-btn-commande"
+                            title="Vider la commande"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Vider
                           </Button>
                         )}
                       </div>

@@ -600,6 +600,14 @@ const CaissePage = () => {
 
   const createNewTable = async (tableNumber) => {
     if (!currentUser) return;
+    // Clear immédiat de l'état local pour garantir que la nouvelle table soit vierge
+    // (évite que l'auto-save 500ms écrive les items de la table précédente sur la nouvelle)
+    setActiveTableId(null);
+    setCurrentBill([]);
+    setSelectedClient(null);
+    setPaymentMethod("cash");
+    setDiscount(0);
+    setNotes("");
     try {
       const payload = {
         id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `t_${Date.now()}`,
@@ -4605,12 +4613,14 @@ _Responsable Op. & Log - Espace Maxo_
             <p>Tél: +229 01 4147 0000</p>
           </div>
           
-          <div class="doc-title">BON DE COMMANDE</div>
+          <div class="doc-title">${invoice.bon_number ? 'BON CLIENT' : 'BON DE COMMANDE'}</div>
           
           <div class="info">
-            <div><span>N°:</span><span><b>${invoice.invoice_number}</b></span></div>
+            ${invoice.bon_number ? `<div><span>Bon Client:</span><span><b style="color: #d97706; font-size: 14px;">${invoice.bon_number}</b></span></div>` : ''}
+            <div><span>N° Facture:</span><span><b>${invoice.invoice_number}</b></span></div>
             <div><span>Date:</span><span>${format(new Date(invoice.created_at), "dd/MM/yy HH:mm")}</span></div>
             <div><span>Client:</span><span>${invoice.customer_name}</span></div>
+            ${invoice.table_number != null ? `<div><span>Table:</span><span><b>${invoice.table_number}</b></span></div>` : ''}
           </div>
           
           <table>

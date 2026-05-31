@@ -190,6 +190,11 @@ const BonsTab = ({
                       <div className="flex-1 cursor-pointer min-w-0" onClick={() => setViewInvoice(invoice)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-white font-bold text-lg">{invoice.invoice_number}</span>
+                          {invoice.bon_number && (
+                            <Badge className="bg-orange-500/30 text-orange-300 border border-orange-500/40 text-xs font-bold">
+                              {invoice.bon_number}
+                            </Badge>
+                          )}
                           {invoice.table_number && (
                             <Badge className="bg-amber-500/30 text-amber-300">Table {invoice.table_number}</Badge>
                           )}

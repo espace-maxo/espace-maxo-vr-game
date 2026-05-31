@@ -161,6 +161,7 @@ class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     invoice_number: str = ""
+    bon_number: str = ""  # Numéro de bon client (BON-YYYYMMDD-NNNN) si issue d'une table
     customer_name: str = "Client"
     customer_phone: str = ""
     items: List[Dict] = []
@@ -207,8 +208,17 @@ async def create_invoice(
         })
         invoice_number = f"EM-{today}-{count + 1:04d}"
 
+        # Génération auto du numéro de bon client si la facture est issue d'une table
+        bon_number = ""
+        if invoice_data.table_number is not None:
+            bon_count = await db.invoices.count_documents({
+                "bon_number": {"$regex": f"^BON-{today}-"}
+            })
+            bon_number = f"BON-{today}-{bon_count + 1:04d}"
+
         invoice = Invoice(
             invoice_number=invoice_number,
+            bon_number=bon_number,
             customer_name=invoice_data.customer_name,
             customer_phone=invoice_data.customer_phone,
             items=invoice_data.items,
