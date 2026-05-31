@@ -21,6 +21,7 @@ from typing import Optional, List
 import os
 import uuid
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -100,6 +101,156 @@ async def players_on_table(table_number: int):
     ).sort("created_at", 1).to_list(50)
     grand_total = sum(float(p.get("total") or 0) for p in players)
     return {"table_number": int(table_number), "players": players, "count": len(players), "grand_total": grand_total}
+
+
+@router.get("/coach/timeline")
+async def coach_timeline(
+    coach_name: str = "",
+    actor_role: str = "",
+    date: Optional[str] = None,
+):
+    """Reconstruit la timeline horodatée de la séance du Coach pour une date donnée.
+
+    Agrège tous les évènements pour donner un journal visuel :
+      - player_added : joueur créé (heure + nom + table optionnelle)
+      - consume : item consommé (+1 partie, +1h forfait) avec montant
+      - transmitted : joueur transmis (bon créé) avec total
+      - bon_attached : bon transmis directement à une table (Caisse one-click)
+      - bon_processed : bon attaché/standalone/rejeté côté Resp. Op.
+
+    Tous les évènements sont triés par horodatage (ASC).
+    """
+    if actor_role not in ("coach_jeux", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Filtre jour : tout évènement dont created_at ou added_at commence par YYYY-MM-DD
+    date_regex = f"^{re.escape(date)}"
+
+    # Filtre par coach (admin/manager voient tout)
+    coach_filter = {} if actor_role != "coach_jeux" else {"coach_name": coach_name}
+
+    events: List[dict] = []
+    total_day = 0.0
+    transmitted_total = 0.0
+
+    # 1) Joueurs créés ce jour
+    players_today = await db.coach_players.find(
+        {**coach_filter, "created_at": {"$regex": date_regex}},
+        {"_id": 0}
+    ).to_list(500)
+
+    # 2) Joueurs transmis ce jour mais créés avant (au cas où la séance commence avant minuit)
+    transmitted_today = await db.coach_players.find(
+        {**coach_filter, "transmitted_at": {"$regex": date_regex}, "created_at": {"$not": {"$regex": date_regex}}},
+        {"_id": 0}
+    ).to_list(500)
+
+    all_players = players_today + transmitted_today
+
+    for p in all_players:
+        pname = p.get("player_name", "?")
+        if p.get("created_at", "").startswith(date):
+            events.append({
+                "type": "player_added",
+                "at": p["created_at"],
+                "player_id": p["id"],
+                "player_name": pname,
+                "table_number": p.get("table_number"),
+                "label": f"Joueur {pname} ajouté"
+                         + (f" → T{p['table_number']}" if p.get("table_number") else ""),
+                "icon": "user-plus",
+                "color": "purple",
+            })
+        for it in (p.get("items") or []):
+            added_at = it.get("added_at", "")
+            if added_at.startswith(date):
+                total_day += float(it.get("total") or 0)
+                if it.get("billing_mode") == "hourly":
+                    detail = f"+{it.get('hours', 0):g}h forfait {it.get('jeu_name', '')}"
+                else:
+                    detail = f"+{it.get('parties', 0)} partie(s) {it.get('jeu_name', '')}"
+                events.append({
+                    "type": "consume",
+                    "at": added_at,
+                    "player_id": p["id"],
+                    "player_name": pname,
+                    "jeu_name": it.get("jeu_name"),
+                    "billing_mode": it.get("billing_mode") or "parties",
+                    "amount": float(it.get("total") or 0),
+                    "label": f"{pname} · {detail}",
+                    "icon": "plus-circle",
+                    "color": "emerald",
+                })
+        if (p.get("transmitted_at") or "").startswith(date):
+            t = float(p.get("total") or 0)
+            transmitted_total += t
+            events.append({
+                "type": "transmitted",
+                "at": p["transmitted_at"],
+                "player_id": p["id"],
+                "player_name": pname,
+                "amount": t,
+                "bon_id": p.get("bon_id"),
+                "label": f"{pname} transmis · {t:,.0f} F".replace(",", " "),
+                "icon": "send",
+                "color": "blue",
+            })
+
+    # 3) Bons traités ce jour (statut attached/standalone/rejected)
+    bons_today = await db.jeux_bons.find(
+        {"processed_at": {"$regex": date_regex}},
+        {"_id": 0}
+    ).to_list(500)
+    for b in bons_today:
+        # Filtre coach
+        if actor_role == "coach_jeux" and b.get("coach_name") != coach_name and b.get("coach_name") != "(transmis depuis Caisse)":
+            continue
+        status = b.get("status")
+        if status == "attached":
+            label = f"Bon attaché à T{b.get('table_number','?')} · {float(b.get('total') or 0):,.0f} F".replace(",", " ")
+            icon, color = "link", "amber"
+        elif status == "standalone":
+            label = f"Facture standalone créée · {float(b.get('total') or 0):,.0f} F".replace(",", " ")
+            icon, color = "receipt", "amber"
+        elif status == "rejected":
+            label = f"Bon rejeté · motif : {b.get('rejection_reason') or 'n/a'}"
+            icon, color = "x-circle", "rose"
+        else:
+            continue
+        events.append({
+            "type": f"bon_{status}",
+            "at": b.get("processed_at"),
+            "bon_id": b.get("id"),
+            "table_number": b.get("table_number"),
+            "amount": float(b.get("total") or 0),
+            "label": label,
+            "icon": icon,
+            "color": color,
+        })
+
+    # Tri ASC
+    events.sort(key=lambda e: e.get("at") or "")
+
+    # Stats récap
+    consumed_count = sum(1 for e in events if e["type"] == "consume")
+    players_count = sum(1 for e in events if e["type"] == "player_added")
+    transmitted_count = sum(1 for e in events if e["type"] == "transmitted")
+
+    return {
+        "date": date,
+        "coach_name": coach_name if actor_role == "coach_jeux" else "(tous)",
+        "events": events,
+        "stats": {
+            "total_day": round(total_day, 2),  # somme des montants des items consommés du jour
+            "transmitted_total": round(transmitted_total, 2),  # déjà transmis (= soumis pour facturation)
+            "open_amount": round(max(0.0, total_day - transmitted_total), 2),  # encore en cours
+            "players_count": players_count,
+            "consumed_count": consumed_count,
+            "transmitted_count": transmitted_count,
+            "events_count": len(events),
+        },
+    }
 
 
 class ConsumeBody(BaseModel):

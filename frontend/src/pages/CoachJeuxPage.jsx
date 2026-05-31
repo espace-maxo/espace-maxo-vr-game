@@ -23,10 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Gamepad2, Send, History, RefreshCw, Loader2, LogOut, Users,
-  Clock, CheckCircle2, XCircle, Receipt, Hash, Coins, Plus, Trash2, FileText,
+  Clock, CheckCircle2, XCircle, Receipt, Hash, Coins, Plus, Trash2, FileText, Activity,
 } from "lucide-react";
 import DailyReportPanel from "../components/DailyReportPanel";
 import PlayersTrackerTab from "./coach/PlayersTrackerTab";
+import JournalTab from "./coach/JournalTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const DEFAULT_HOURLY_RATE = 12000;  // 12 000 F / heure (forfait global)
@@ -234,6 +235,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
               <Users className="w-4 h-4 mr-1" />
               Joueurs
             </TabsTrigger>
+            <TabsTrigger value="journal" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                         data-testid="coach-tab-journal">
+              <Activity className="w-4 h-4 mr-1" />
+              Journal
+            </TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                          data-testid="coach-tab-history">
               <History className="w-4 h-4 mr-1" />
@@ -351,6 +357,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
           {/* JOUEURS — Suivi consommation par joueur */}
           <TabsContent value="players" className="mt-3">
             <PlayersTrackerTab currentUser={currentUser} catalog={catalog} />
+          </TabsContent>
+
+          {/* JOURNAL — Timeline horodatée de la séance */}
+          <TabsContent value="journal" className="mt-3">
+            <JournalTab currentUser={currentUser} />
           </TabsContent>
         </Tabs>
       </div>

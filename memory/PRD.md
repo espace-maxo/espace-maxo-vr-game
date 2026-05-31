@@ -180,6 +180,15 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
     - Combine en 1 appel : 1) transmet TOUS les joueurs ouverts sur la table 2) crée un bon (status="attached") 3) ajoute directement les items jeux à la table active dans `caisse_tables.items` (department="jeux", from_jeux_bon référencé)
     - Frontend : `transmitCoachPlayersOnTable` ajouté dans CaissePage et passé via ctx au CommandeTab. Bouton apparaît dans le panel violet uniquement si `grand_total > 0`. Après transmission, rafraîchit automatiquement table active + panneau coach
     - Test E2E : 4 joueurs sur T99 (14 000 F) → 1 clic → 3 items ajoutés à la table, joueurs marqués transmitted, total préservé ✓
+- **COACH JEUX — Onglet "Journal" timeline horodatée (31/05/2026)** ✅
+  - Nouvel onglet entre Joueurs et Mes bons, dédié à la justification de séance
+  - Backend `GET /api/coach/timeline?coach_name&actor_role&date` agrège 5 types d'évènements horodatés :
+    - `player_added` (joueur créé) · `consume` (+partie/+forfait h) · `transmitted` (joueur envoyé) · `bon_attached` (bon rattaché à table) · `bon_standalone` / `bon_rejected`
+    - Stats calculées : `total_day`, `transmitted_total`, `open_amount`, `players_count`, `consumed_count`, `transmitted_count`, `events_count`
+    - Filtre par coach pour les coach_jeux, vue globale pour admin/manager
+  - Frontend `JournalTab.jsx` : bandeau stats (4 colonnes Total/Transmis/Ouvert/Activité) + timeline visuelle avec icônes colorées par type, heures, badges table, montants à droite
+  - Refresh auto 30s pendant la séance — pratique pour justifier l'activité en fin de journée
+  - Suppression définitive du menu "Nouveau bon" (workflow Joueurs+Journal devient le standard)
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
