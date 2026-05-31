@@ -2751,6 +2751,132 @@ async def delete_recipe(recipe_id: str):
         raise HTTPException(404, "Fiche technique non trouvee")
     return {"success": True}
 
+
+# ==================== SEED BURGER RECIPES ====================
+# Endpoint utilitaire : crée le produit Cheddar (si manquant) + crée les 5 fiches
+# techniques burger (MeetBurger, CheeseBurger, Double Cheese Burger, KingBurger,
+# Burger Maxo) avec une composition par défaut, et lie chaque caisse_product à sa
+# fiche via stock_recipe_id. Idempotent : peut être relancé sans effet de bord.
+_BURGER_RECIPES_DEFAULT = [
+    ("MeetBurger", [("Pain burger", 1), ("Steak hache", 1), ("Frites surgelees", 1), ("Mayonnaise", 0.05), ("Ketchup", 0.05)]),
+    ("CheeseBurger", [("Pain burger", 1), ("Steak hache", 1), ("Cheddar", 1), ("Frites surgelees", 1), ("Mayonnaise", 0.05), ("Ketchup", 0.05)]),
+    ("Double Cheese Burger", [("Pain burger", 1), ("Steak hache", 2), ("Cheddar", 2), ("Frites surgelees", 1), ("Mayonnaise", 0.05), ("Ketchup", 0.05)]),
+    ("KingBurger", [("Pain burger", 1), ("Steak hache", 2), ("Cheddar", 1), ("Bacon", 1), ("Frites surgelees", 1), ("Mayonnaise", 0.05), ("Ketchup", 0.05)]),
+    ("Burger Maxo", [("Pain burger", 1), ("Steak hache", 1), ("Cheddar", 1), ("Bacon", 1), ("Frites surgelees", 1), ("Mayonnaise", 0.05), ("Ketchup", 0.05), ("Moutarde", 0.05)]),
+]
+
+
+@router.post("/recipes/seed-burgers")
+async def seed_burger_recipes(cheddar_initial_qty: float = 14, cheddar_price: float = 500):
+    """Crée le Cheddar (s'il manque) + 5 fiches techniques burger + liaisons caisse↔recettes.
+
+    Utilisable une seule fois en prod après mise en place des correctifs.
+    Idempotent : peut être relancé, les fiches existantes seront mises à jour.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # 1. Cheddar
+    cheddar = await db.stock_products.find_one({"name": {"$regex": "^Cheddar$", "$options": "i"}})
+    cheddar_created = False
+    if not cheddar:
+        cheddar = {
+            "id": str(uuid.uuid4()),
+            "name": "Cheddar",
+            "code": "CHEDDAR",
+            "category_id": "",
+            "unit": "portion",
+            "quantity": float(cheddar_initial_qty),
+            "stock_min": 5,
+            "purchase_price": float(cheddar_price),
+            "sale_price": 0,
+            "valeur_stock": float(cheddar_initial_qty) * float(cheddar_price),
+            "valeur_stock_vente": 0,
+            "supplier_id": "",
+            "storage_location": "",
+            "storage_zone": "cuisine",
+            "is_active": True,
+            "photo_url": "",
+            "date_achat": "",
+            "date_peremption": "",
+            "observation": "Créé automatiquement par /recipes/seed-burgers",
+            "statut": "normal",
+            "pending_destock_quantity": 0,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        await db.stock_products.insert_one(cheddar)
+        cheddar.pop("_id", None)
+        cheddar_created = True
+
+    # 2. Lookup table by lowercased name
+    all_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(5000)
+    by_name = {p["name"].lower(): p for p in all_products}
+
+    created = []
+    updated = []
+    linked = []
+    missing_caisse = []
+    missing_ingredients = []
+
+    for burger_name, ings in _BURGER_RECIPES_DEFAULT:
+        cp = await db.caisse_products.find_one({"name": burger_name})
+        if not cp:
+            missing_caisse.append(burger_name)
+            continue
+
+        ings_resolved = []
+        for ing_name, qty in ings:
+            prod = by_name.get(ing_name.lower())
+            if not prod:
+                missing_ingredients.append({"burger": burger_name, "ingredient": ing_name})
+                continue
+            ings_resolved.append({
+                "product_id": prod["id"],
+                "product_name": prod["name"],
+                "quantity": qty,
+                "unit": prod.get("unit", ""),
+            })
+
+        existing = await db.stock_recipes.find_one({
+            "caisse_product_name": {"$regex": f"^{re.escape(burger_name)}$", "$options": "i"}
+        })
+        recipe_doc = {
+            "name": burger_name,
+            "caisse_product_name": burger_name,
+            "selling_price": cp.get("price", 0),
+            "ingredients": ings_resolved,
+            "notes": "Fiche générée par /recipes/seed-burgers — composition par défaut, à ajuster si besoin.",
+            "updated_at": now_iso,
+        }
+        if existing:
+            await db.stock_recipes.update_one({"id": existing["id"]}, {"$set": recipe_doc})
+            recipe_id = existing["id"]
+            updated.append(burger_name)
+        else:
+            recipe_id = str(uuid.uuid4())
+            recipe_doc.update({"id": recipe_id, "created_at": now_iso})
+            await db.stock_recipes.insert_one(recipe_doc)
+            created.append(burger_name)
+
+        # Link caisse product
+        await db.caisse_products.update_one(
+            {"id": cp["id"]},
+            {"$set": {"stock_recipe_id": recipe_id, "updated_at": now_iso}}
+        )
+        linked.append(burger_name)
+
+    return {
+        "success": True,
+        "cheddar_created": cheddar_created,
+        "cheddar_id": cheddar.get("id"),
+        "recipes_created": created,
+        "recipes_updated": updated,
+        "caisse_products_linked": linked,
+        "missing_caisse_products": missing_caisse,
+        "missing_ingredients": missing_ingredients,
+        "next_step": "Appelez maintenant POST /api/invoices/resync-destockage?date=YYYY-MM-DD&force=true pour retraiter les ventes du jour.",
+    }
+
 @router.post("/recipes/seed-demo")
 async def seed_demo_recipes():
     """Seed demo recipes for Poulet braise"""

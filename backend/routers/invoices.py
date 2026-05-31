@@ -914,13 +914,16 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
 
 
 @router.post("/invoices/resync-destockage")
-async def resync_destockage(date: Optional[str] = None, all_past: bool = False):
+async def resync_destockage(date: Optional[str] = None, all_past: bool = False, force: bool = False):
     """Re-apply stock destocking for validated invoices.
 
     - By default: processes all validated invoices of the given day (or today).
     - `all_past=true`: processes ALL validated invoices regardless of date (still idempotent).
+    - `force=true`: deletes existing movements linked to each invoice and re-applies
+      destocking from scratch. Use this AFTER creating/updating recipes to retro-apply
+      the new stock deductions on invoices that were previously marked "non lié au stock".
 
-    Idempotent: skips invoices that already have at least one linked stock_movement.
+    Idempotent (unless force=true): skips invoices that already have at least one linked stock_movement.
     """
     from datetime import datetime as _dt, timezone as _tz
 
@@ -938,18 +941,29 @@ async def resync_destockage(date: Optional[str] = None, all_past: bool = False):
     skipped = 0
     errors = 0
     error_details = []
+    movements_deleted = 0
     for inv in invoices:
         inv_id = inv.get("id")
         inv_number = inv.get("invoice_number", "")
-        # Idempotence: skip if a movement already references this invoice,
-        # either by explicit invoice_id field, or by invoice_number in reason text (legacy rows).
-        idem_query = {"$or": [{"invoice_id": inv_id}]}
-        if inv_number:
-            idem_query["$or"].append({"reason": {"$regex": inv_number, "$options": "i"}})
-        existing_mv = await db.stock_movements.count_documents(idem_query)
-        if existing_mv > 0:
-            skipped += 1
-            continue
+
+        if force:
+            # Supprime tous les mouvements liés à cette facture (par invoice_id ou par
+            # mention du numéro dans le motif) — puis réapplique le destockage à neuf.
+            del_q = {"$or": [{"invoice_id": inv_id}]}
+            if inv_number:
+                del_q["$or"].append({"reason": {"$regex": inv_number, "$options": "i"}})
+            r = await db.stock_movements.delete_many(del_q)
+            movements_deleted += r.deleted_count
+        else:
+            # Idempotence: skip if a movement already references this invoice,
+            # either by explicit invoice_id field, or by invoice_number in reason text (legacy rows).
+            idem_query = {"$or": [{"invoice_id": inv_id}]}
+            if inv_number:
+                idem_query["$or"].append({"reason": {"$regex": inv_number, "$options": "i"}})
+            existing_mv = await db.stock_movements.count_documents(idem_query)
+            if existing_mv > 0:
+                skipped += 1
+                continue
         try:
             await _apply_destocking_for_invoice(inv, db, logger)
             processed += 1
@@ -962,9 +976,11 @@ async def resync_destockage(date: Optional[str] = None, all_past: bool = False):
         "success": True,
         "date": day,
         "all_past": all_past,
+        "force": force,
         "total_invoices": len(invoices),
         "processed": processed,
         "skipped_already_destocked": skipped,
+        "movements_deleted": movements_deleted,
         "errors": errors,
         "error_details": error_details[:20],
     }
