@@ -331,18 +331,65 @@ async def update_product(product_id: str, data: dict = Body(...)):
     # créer un mouvement type 'ajustement' pour tracer le delta et préserver
     # l'historique cohérent. Le frontend peut envoyer `adjustment_reason` et
     # `adjustment_user` pour qualifier l'ajustement.
+    #
+    # === APPLICATION DU BACKLOG (31/05/2026) ===
+    # Si des ventes ont été effectuées alors que le stock affichait 0 (ou stock
+    # insuffisant), la dette est cumulée dans `pending_destock_quantity`. Au moment
+    # de l'ajustement manuel, on déduit AUTOMATIQUEMENT ce backlog du nouveau total
+    # saisi pour donner le solde réel. Ex : stock=0, 30 vendus à découvert, ajustement
+    # à 65 → solde réel = 65 - 30 = 35. Un mouvement de compensation est tracé.
     old_qty = float(product.get("quantity", 0) or 0)
     qty_in_data = data.get("quantity", None)
     movement_created = None
+    compensation_movement = None
     if qty_in_data is not None:
         try:
             new_qty_val = float(qty_in_data)
         except (TypeError, ValueError):
             new_qty_val = old_qty
+
+        adj_reason = (data.pop("adjustment_reason", "") or "").strip()
+        adj_user = (data.pop("adjustment_user", "") or "").strip() or "Admin"
+
+        # 1. Application du backlog des ventes à découvert (si quantité modifiée)
+        pending = float(product.get("pending_destock_quantity", 0) or 0)
+        if abs(new_qty_val - old_qty) > 0.0001 and pending > 0:
+            requested = new_qty_val  # saisie utilisateur AVANT déduction
+            new_qty_val = max(0.0, new_qty_val - pending)
+            # Trace de la compensation
+            compensation_movement = {
+                "id": str(uuid.uuid4()),
+                "product_id": product_id,
+                "product_name": product.get("name", ""),
+                "product_code": product.get("code", ""),
+                "movement_type": "sortie",
+                "quantity": pending,
+                "previous_quantity": requested,
+                "new_quantity": new_qty_val,
+                "unit": product.get("unit", ""),
+                "unit_price": float(product.get("purchase_price", 0) or 0),
+                "total_value": pending * float(product.get("purchase_price", 0) or 0),
+                "reason": (
+                    f"Régularisation backlog : {pending:g} {product.get('unit','')} déduits "
+                    f"(ventes antérieures à découvert)"
+                ),
+                "user_name": adj_user,
+                "source": "backlog_apply",
+                "created_at": data["updated_at"],
+            }
+            await db.stock_movements.insert_one(compensation_movement)
+            compensation_movement.pop("_id", None)
+            # On reset le pending APRÈS application
+            data["pending_destock_quantity"] = 0
+            logger.info(
+                f"[BACKLOG-APPLY] {product.get('name')}: saisie={requested} - pending={pending} "
+                f"= solde={new_qty_val} (by {adj_user})"
+            )
+
+        # 2. Mouvement d'ajustement standard (delta entre l'ancienne valeur et la nouvelle finale)
         delta = new_qty_val - old_qty
         if abs(delta) > 0.0001:
-            adj_reason = (data.pop("adjustment_reason", "") or "").strip() or "Ajustement manuel catalogue"
-            adj_user = (data.pop("adjustment_user", "") or "").strip() or "Admin"
+            adj_reason_final = adj_reason or "Ajustement manuel catalogue"
             unit_price = float(data.get("purchase_price", product.get("purchase_price", 0)) or 0)
             movement_created = {
                 "id": str(uuid.uuid4()),
@@ -358,7 +405,7 @@ async def update_product(product_id: str, data: dict = Body(...)):
                 "unit": product.get("unit", ""),
                 "unit_price": unit_price,
                 "total_value": abs(delta) * unit_price,
-                "reason": adj_reason,
+                "reason": adj_reason_final,
                 "user_name": adj_user,
                 "source": "catalog_edit",
                 "created_at": data["updated_at"],
@@ -367,8 +414,12 @@ async def update_product(product_id: str, data: dict = Body(...)):
             movement_created.pop("_id", None)
             logger.info(
                 f"[ADJUSTMENT] {product.get('name')}: {old_qty} → {new_qty_val} "
-                f"(Δ {delta:+.2f}) by {adj_user} — {adj_reason}"
+                f"(Δ {delta:+.2f}) by {adj_user} — {adj_reason_final}"
             )
+
+        # 3. Synchroniser la quantité finale dans data avant la sauvegarde
+        data["quantity"] = new_qty_val
+
     # Nettoyer toute clé d'ajustement qui pourrait rester dans data (sécurité)
     data.pop("adjustment_reason", None)
     data.pop("adjustment_user", None)
@@ -382,7 +433,12 @@ async def update_product(product_id: str, data: dict = Body(...)):
     data["statut"] = "rupture" if qty <= 0 else ("faible" if qty <= smin else "normal")
     await db.stock_products.update_one({"id": product_id}, {"$set": data})
     updated = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
-    return {"success": True, "product": updated, "adjustment_movement": movement_created}
+    return {
+        "success": True,
+        "product": updated,
+        "adjustment_movement": movement_created,
+        "compensation_movement": compensation_movement,
+    }
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str):

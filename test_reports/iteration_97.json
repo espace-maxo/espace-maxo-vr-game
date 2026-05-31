@@ -1,0 +1,71 @@
+{
+  "summary": "Bug 1 (pending_destock_quantity) - Backend 8/8 tests passed. All scenarios verified: (1) Stock=0, sell 30 units → over_destock=30, pending_destock_quantity=30, quantity stays 0; (2) PUT quantity=65 with pending=30 → compensation_movement (30), adjustment_movement (+35), final quantity=35, pending reset to 0; (3) No pending: PUT quantity=100 on stock=50 → simple adjustment (+50), no compensation; (4) Adjustment < pending: PUT quantity=20 with pending=30 → final=0, compensation=30, pending reset; (5) PUT without quantity change → pending unchanged, no compensation; (6) Recipe branch: ingredient in rupture sold → pending_destock_quantity incremented. Non-regression: bon_number generation and validated_only filter working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pending_destock_iter97.py",
+    "/app/test_reports/pytest/pending_destock_iter97_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "IMPORTANT: Destocking only triggers when transitioning from pending to validated via PUT /api/invoices/{id}, NOT when creating directly with validation_status='validated' via POST. This is by design but should be documented."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pending_destock_iter97.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)"
+  },
+  "test_credentials": {
+    "stock_admin": "username: admin / password: Admin2026"
+  },
+  "seed_data_creation": "Test data created with TEST_ITER97_ prefix, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug 1 (pending_destock_quantity mechanism) fully tested and working. Key verified features: (1) When selling items with stock=0, the system creates a movement with over_destock field and increments pending_destock_quantity on the stock product; (2) When adjusting stock via PUT /api/stock/products/{id}, the pending backlog is automatically deducted from the new quantity (e.g., PUT 65 with pending=30 → final=35); (3) A compensation_movement is created to trace the backlog application; (4) pending_destock_quantity is reset to 0 after application; (5) Recipe ingredients also get pending_destock_quantity incremented when sold in rupture. IMPORTANT: Destocking only triggers on PUT (pending→validated transition), not on POST with validation_status='validated'.",
+  "tests_executed": {
+    "backend": {
+      "pending_destock_scenarios": [
+        "test_scenario1_sell_with_zero_stock_creates_pending - PASSED (stock=0, sell 30 → pending=30, over_destock=30)",
+        "test_scenario2_adjustment_applies_pending_backlog - PASSED (PUT 65 with pending=30 → compensation=30, adjustment=+35, final=35)",
+        "test_scenario3_no_pending_simple_adjustment - PASSED (no pending, PUT 100 on stock=50 → adjustment=+50)",
+        "test_scenario4_adjustment_less_than_pending - PASSED (PUT 20 with pending=30 → final=0, compensation=30)",
+        "test_scenario5_no_quantity_change_no_compensation - PASSED (PUT price only → pending unchanged)",
+        "test_scenario6_recipe_ingredient_pending - PASSED (recipe ingredient in rupture → pending incremented)"
+      ],
+      "non_regression": [
+        "test_bon_number_generation_with_table_number - PASSED (BON-YYYYMMDD-NNNN format)",
+        "test_validated_only_filter - PASSED (filter working correctly)"
+      ]
+    }
+  },
+  "feature_verification": {
+    "over_destock_on_zero_stock_sale": "PASSED - Movement created with over_destock field when selling with stock=0",
+    "pending_destock_quantity_increment": "PASSED - stock_product.pending_destock_quantity incremented by over_destock amount",
+    "quantity_stays_zero": "PASSED - stock_product.quantity remains 0 (not negative)",
+    "compensation_movement_on_adjustment": "PASSED - PUT with pending>0 creates compensation_movement",
+    "adjustment_movement_created": "PASSED - PUT creates adjustment_movement with correct delta",
+    "final_quantity_calculation": "PASSED - final = max(0, new_qty - pending)",
+    "pending_reset_after_application": "PASSED - pending_destock_quantity reset to 0 after adjustment",
+    "no_compensation_when_no_pending": "PASSED - PUT without pending does not create compensation_movement",
+    "no_compensation_when_no_qty_change": "PASSED - PUT without quantity change does not trigger compensation",
+    "recipe_ingredient_pending": "PASSED - Recipe ingredients get pending_destock_quantity when sold in rupture",
+    "bon_number_generation": "PASSED - POST /api/invoices with table_number generates bon_number",
+    "validated_only_filter": "PASSED - GET /api/invoices?validated_only=true filters correctly"
+  },
+  "mongodb_security": {
+    "_id_excluded": "PASSED - no _id exposed in any response"
+  },
+  "bug_1_rca": {
+    "issue": "Stock à 0, ventes à découvert → système ne soustrait pas. Ajustement manuel doit automatiquement soustraire les ventes antérieures.",
+    "root_cause": "The over_destock mechanism was implemented to track sales when stock=0. The pending_destock_quantity field accumulates the debt. When adjusting stock via PUT, the system now automatically deducts this pending amount.",
+    "fix_verification": "All 6 scenarios pass. The fix correctly: (1) tracks over_destock in movements, (2) increments pending_destock_quantity, (3) applies pending on adjustment, (4) creates compensation_movement for traceability, (5) resets pending after application."
+  }
+}

@@ -703,6 +703,10 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
             for sp in linked_stock_products:
                 old_qty = sp.get("quantity", 0)
                 new_qty = max(0, old_qty - item_qty)
+                # Si la demande dépasse le stock disponible, on garde la dette dans
+                # `pending_destock_quantity` afin qu'elle soit appliquée au prochain
+                # ajustement manuel de stock (correction d'inventaire).
+                over_destock = max(0.0, float(item_qty) - float(old_qty))
                 new_valeur = new_qty * sp.get("purchase_price", 0)
                 smin = sp.get("stock_min", 5)
                 new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
@@ -716,25 +720,34 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                     "quantity": item_qty,
                     "previous_quantity": old_qty,
                     "new_quantity": new_qty,
+                    "over_destock": over_destock,
                     "unit": sp.get("unit", ""),
                     "unit_price": sp.get("purchase_price", 0),
                     "total_value": item_qty * sp.get("purchase_price", 0),
-                    "reason": f"Vente (lien direct{multi_suffix}) - Facture {invoice_number}",
+                    "reason": (
+                        f"Vente (lien direct{multi_suffix}) - Facture {invoice_number}"
+                        + (f" — {over_destock:g} en attente d'ajustement" if over_destock > 0 else "")
+                    ),
                     "user_name": current_invoice.get("created_by", "Caisse"),
                     "invoice_id": invoice_id,
                     "caisse_product_id": caisse_product_id,
                     "created_at": now_iso,
                 })
-                await db.stock_products.update_one(
-                    {"id": sp["id"]},
-                    {"$set": {
-                        "quantity": new_qty,
-                        "valeur_stock": new_valeur,
-                        "statut": new_statut,
-                        "updated_at": now_iso,
-                    }}
+                update_set = {
+                    "quantity": new_qty,
+                    "valeur_stock": new_valeur,
+                    "statut": new_statut,
+                    "updated_at": now_iso,
+                }
+                update_ops = {"$set": update_set}
+                if over_destock > 0:
+                    update_ops["$inc"] = {"pending_destock_quantity": over_destock}
+                await db.stock_products.update_one({"id": sp["id"]}, update_ops)
+                logger.info(
+                    f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} "
+                    f"(invoice {invoice_number})"
+                    + (f" [PENDING +{over_destock:g}]" if over_destock > 0 else "")
                 )
-                logger.info(f"Stock linked deduction: {sp['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
             continue  # skip fallback logic
 
         # 1bis) EXPLICIT RECIPE LINK: deduct all ingredients of the explicitly linked recipe.
@@ -745,6 +758,7 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                     ing_qty = ing["quantity"] * item_qty
                     old_qty = ing_product.get("quantity", 0)
                     new_qty = max(0, old_qty - ing_qty)
+                    over_destock = max(0.0, float(ing_qty) - float(old_qty))
                     new_valeur = new_qty * ing_product.get("purchase_price", 0)
                     smin = ing_product.get("stock_min", 5)
                     new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
@@ -757,25 +771,29 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                         "quantity": round(ing_qty, 3),
                         "previous_quantity": old_qty,
                         "new_quantity": new_qty,
+                        "over_destock": round(over_destock, 3),
                         "unit": ing_product.get("unit", ""),
                         "unit_price": ing_product.get("purchase_price", 0),
                         "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
-                        "reason": f"Vente (Recette liée: {linked_recipe['name']}) - Facture {invoice_number}",
+                        "reason": (
+                            f"Vente (Recette liée: {linked_recipe['name']}) - Facture {invoice_number}"
+                            + (f" — {over_destock:g} en attente d'ajustement" if over_destock > 0 else "")
+                        ),
                         "user_name": current_invoice.get("created_by", "Caisse"),
                         "invoice_id": invoice_id,
                         "caisse_product_id": caisse_product_id,
                         "recipe_id": linked_recipe["id"],
                         "created_at": now_iso,
                     })
-                    await db.stock_products.update_one(
-                        {"id": ing_product["id"]},
-                        {"$set": {
-                            "quantity": round(new_qty, 3),
-                            "valeur_stock": round(new_valeur, 2),
-                            "statut": new_statut,
-                            "updated_at": now_iso,
-                        }}
-                    )
+                    update_ops = {"$set": {
+                        "quantity": round(new_qty, 3),
+                        "valeur_stock": round(new_valeur, 2),
+                        "statut": new_statut,
+                        "updated_at": now_iso,
+                    }}
+                    if over_destock > 0:
+                        update_ops["$inc"] = {"pending_destock_quantity": round(over_destock, 3)}
+                    await db.stock_products.update_one({"id": ing_product["id"]}, update_ops)
             logger.info(f"Stock recipe-linked deduction: recipe={linked_recipe['name']} items={len(linked_recipe.get('ingredients', []))} (invoice {invoice_number})")
             continue  # skip fallback logic
 
@@ -790,6 +808,7 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                     ing_qty = ing["quantity"] * item_qty
                     old_qty = ing_product.get("quantity", 0)
                     new_qty = max(0, old_qty - ing_qty)
+                    over_destock = max(0.0, float(ing_qty) - float(old_qty))
                     new_valeur = new_qty * ing_product.get("purchase_price", 0)
                     smin = ing_product.get("stock_min", 5)
                     new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
@@ -803,25 +822,29 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                         "quantity": round(ing_qty, 3),
                         "previous_quantity": old_qty,
                         "new_quantity": new_qty,
+                        "over_destock": round(over_destock, 3),
                         "unit": ing_product.get("unit", ""),
                         "unit_price": ing_product.get("purchase_price", 0),
                         "total_value": round(ing_qty * ing_product.get("purchase_price", 0), 2),
-                        "reason": f"Vente (Recette: {recipe['name']}) - Facture {invoice_number}",
+                        "reason": (
+                            f"Vente (Recette: {recipe['name']}) - Facture {invoice_number}"
+                            + (f" — {over_destock:g} en attente d'ajustement" if over_destock > 0 else "")
+                        ),
                         "user_name": current_invoice.get("created_by", "Caisse"),
                         "invoice_id": invoice_id,
                         "recipe_id": recipe["id"],
                         "created_at": now_iso,
                     }
                     await db.stock_movements.insert_one(stock_mov)
-                    await db.stock_products.update_one(
-                        {"id": ing_product["id"]},
-                        {"$set": {
-                            "quantity": round(new_qty, 3),
-                            "valeur_stock": round(new_valeur, 2),
-                            "statut": new_statut,
-                            "updated_at": now_iso,
-                        }}
-                    )
+                    update_ops = {"$set": {
+                        "quantity": round(new_qty, 3),
+                        "valeur_stock": round(new_valeur, 2),
+                        "statut": new_statut,
+                        "updated_at": now_iso,
+                    }}
+                    if over_destock > 0:
+                        update_ops["$inc"] = {"pending_destock_quantity": round(over_destock, 3)}
+                    await db.stock_products.update_one({"id": ing_product["id"]}, update_ops)
                     logger.info(f"Stock recipe deduction: {ing_product['name']} {old_qty} -> {round(new_qty, 3)} (recipe: {recipe['name']}, invoice {invoice_number})")
         else:
             stock_product = await db.stock_products.find_one({
@@ -832,6 +855,7 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
             if stock_product:
                 old_qty = stock_product.get("quantity", 0)
                 new_qty = max(0, old_qty - item_qty)
+                over_destock = max(0.0, float(item_qty) - float(old_qty))
                 new_valeur = new_qty * stock_product.get("purchase_price", 0)
                 smin = stock_product.get("stock_min", 5)
                 new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= smin else "normal")
@@ -845,24 +869,28 @@ async def _apply_destocking_for_invoice(current_invoice, db, logger):
                     "quantity": item_qty,
                     "previous_quantity": old_qty,
                     "new_quantity": new_qty,
+                    "over_destock": round(over_destock, 3),
                     "unit": stock_product.get("unit", ""),
                     "unit_price": item_price,
                     "total_value": item_qty * item_price,
-                    "reason": f"Vente - Facture {invoice_number}",
+                    "reason": (
+                        f"Vente - Facture {invoice_number}"
+                        + (f" — {over_destock:g} en attente d'ajustement" if over_destock > 0 else "")
+                    ),
                     "user_name": current_invoice.get("created_by", "Caisse"),
                     "invoice_id": invoice_id,
                     "created_at": now_iso,
                 }
                 await db.stock_movements.insert_one(stock_mov)
-                await db.stock_products.update_one(
-                    {"id": stock_product["id"]},
-                    {"$set": {
-                        "quantity": new_qty,
-                        "valeur_stock": new_valeur,
-                        "statut": new_statut,
-                        "updated_at": now_iso,
-                    }}
-                )
+                update_ops = {"$set": {
+                    "quantity": new_qty,
+                    "valeur_stock": new_valeur,
+                    "statut": new_statut,
+                    "updated_at": now_iso,
+                }}
+                if over_destock > 0:
+                    update_ops["$inc"] = {"pending_destock_quantity": round(over_destock, 3)}
+                await db.stock_products.update_one({"id": stock_product["id"]}, update_ops)
                 logger.info(f"Stock updated: {stock_product['name']} {old_qty} -> {new_qty} (invoice {invoice_number})")
             else:
                 sale_record = {

@@ -161,6 +161,10 @@ export default function StockPage() {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
+  // Liste exhaustive des produits (sans filtre catalogue) — utilisée par les modales
+  // Fiche Technique et Mouvement qui doivent pouvoir lister TOUS les ingrédients
+  // même quand un filtre est actif dans l'onglet Produits.
+  const [allProducts, setAllProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -511,6 +515,17 @@ export default function StockPage() {
     } catch {}
   }, [searchQuery, filterCategory, filterAlert]);
 
+  // Charge la liste complète des produits (sans aucun filtre catalogue).
+  // Indispensable pour les modales Fiche Technique / Mouvement : si l'utilisateur
+  // a un filtre actif sur l'onglet Produits, `products` est tronqué et le dropdown
+  // de sélection d'ingrédient apparaît vide ou incomplet.
+  const fetchAllProducts = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/products`, { params: {} });
+      setAllProducts(r.data.products || []);
+    } catch {}
+  }, []);
+
   const fetchCategories = useCallback(async () => {
     try { const r = await axios.get(`${API}/categories`); setCategories(r.data.categories); } catch {}
   }, []);
@@ -640,8 +655,8 @@ export default function StockPage() {
   }, []);
 
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories(); fetchMagasinProducts();
-  }, [fetchDashboard, fetchProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
+    fetchDashboard(); fetchProducts(); fetchAllProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories(); fetchMagasinProducts();
+  }, [fetchDashboard, fetchProducts, fetchAllProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
 
   // Enhanced refresh with loading state, last-refreshed timestamp, and toast feedback
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -975,7 +990,10 @@ export default function StockPage() {
   // Recipe CRUD
   const addRecipeIngredient = () => {
     if (!recipeIngredient.product_id || recipeIngredient.quantity <= 0) return;
-    const p = products.find(x => x.id === recipeIngredient.product_id);
+    // Cherche d'abord dans la liste exhaustive (allProducts) — celle filtrée
+    // (`products`) peut ne pas contenir le produit si un filtre est actif.
+    const pool = allProducts.length > 0 ? allProducts : products;
+    const p = pool.find(x => x.id === recipeIngredient.product_id);
     setRecipeForm(prev => ({
       ...prev,
       ingredients: [...prev.ingredients, { product_id: recipeIngredient.product_id, product_name: p?.name || "", quantity: recipeIngredient.quantity, unit: p?.unit || "" }]
@@ -1007,6 +1025,9 @@ export default function StockPage() {
   const openEditRecipe = (r) => {
     setEditingItem(r);
     setRecipeForm({ name: r.name, caisse_product_name: r.caisse_product_name, selling_price: r.selling_price || 0, ingredients: r.ingredients || [], notes: r.notes || "" });
+    // Rafraîchit la liste exhaustive — au cas où des produits auraient été créés
+    // depuis le dernier mount, ils doivent apparaître dans le dropdown.
+    fetchAllProducts();
     setShowRecipeModal(true);
   };
 
@@ -2888,7 +2909,7 @@ export default function StockPage() {
                     Charger demo (Poulet braise)
                   </Button>
                 )}
-                <Button onClick={() => { setEditingItem(null); setRecipeForm({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" }); setRecipeIngredient({ product_id: "", quantity: 0 }); setShowRecipeModal(true); }}
+                <Button onClick={() => { setEditingItem(null); setRecipeForm({ name: "", caisse_product_name: "", selling_price: 0, ingredients: [], notes: "" }); setRecipeIngredient({ product_id: "", quantity: 0 }); fetchAllProducts(); setShowRecipeModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-recipe-btn"><Plus className="w-4 h-4 mr-1" /> Nouvelle Fiche</Button>
               </div>
             </div>
@@ -4799,9 +4820,16 @@ export default function StockPage() {
                   <Select value={recipeIngredient.product_id || "none"} onValueChange={v => setRecipeIngredient(p => ({...p, product_id: v === "none" ? "" : v}))}>
                     <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-8 text-xs"><SelectValue placeholder="Choisir un ingredient" /></SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700 max-h-[200px]">
-                      {products.filter(p => !recipeForm.ingredients.some(i => i.product_id === p.id)).map(p => (
-                        <SelectItem key={p.id} value={p.id} className="text-white text-xs">{p.name} ({p.unit})</SelectItem>
-                      ))}
+                      {(allProducts.length > 0 ? allProducts : products)
+                        .filter(p => !recipeForm.ingredients.some(i => i.product_id === p.id))
+                        .map(p => (
+                          <SelectItem key={p.id} value={p.id} className="text-white text-xs">{p.name} ({p.unit})</SelectItem>
+                        ))}
+                      {(allProducts.length > 0 ? allProducts : products).filter(p => !recipeForm.ingredients.some(i => i.product_id === p.id)).length === 0 && (
+                        <div className="text-slate-400 text-xs px-2 py-2 italic">
+                          Aucun produit disponible. Vérifiez la création d'un produit dans Stock.
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -4811,7 +4839,8 @@ export default function StockPage() {
               {recipeForm.ingredients.length > 0 && (
                 <div className="space-y-1 mt-2">
                   {recipeForm.ingredients.map((ing, i) => {
-                    const prod = products.find(p => p.id === ing.product_id);
+                    const pool = allProducts.length > 0 ? allProducts : products;
+                    const prod = pool.find(p => p.id === ing.product_id);
                     return (
                       <div key={i} className="flex justify-between items-center bg-slate-900/50 rounded px-2 py-1 text-xs">
                         <span className="text-white">{ing.product_name || prod?.name || "?"}</span>
