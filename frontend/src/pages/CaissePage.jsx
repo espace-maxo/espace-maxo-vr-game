@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { 
   Receipt, Plus, Minus, Trash2, Printer, Save, Search,
@@ -729,6 +729,34 @@ const CaissePage = () => {
 
   // Get current active table object
   const activeTable = openTables.find(t => t.id === activeTableId);
+
+  // ============== COACH PLAYERS DE LA TABLE (réciprocité avec PlayersTrackerTab) ==============
+  // Quand l'agent ouvre une table, on affiche en bas la consommation des joueurs Coach
+  // rattachés à cette table. Polling 10s pour suivre les +1 partie en temps réel.
+  const [tableCoachPlayers, setTableCoachPlayers] = useState({ count: 0, grand_total: 0, players: [] });
+  const fetchTableCoachPlayers = useCallback(async () => {
+    if (!activeTable || activeTable.table_number == null) {
+      setTableCoachPlayers({ count: 0, grand_total: 0, players: [] });
+      return;
+    }
+    try {
+      const r = await axios.get(`${API}/coach/players/by-table/${activeTable.table_number}`);
+      setTableCoachPlayers({
+        count: r.data.count || 0,
+        grand_total: r.data.grand_total || 0,
+        players: r.data.players || [],
+      });
+    } catch {
+      setTableCoachPlayers({ count: 0, grand_total: 0, players: [] });
+    }
+  }, [activeTable?.table_number]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchTableCoachPlayers();
+    if (!activeTable?.table_number) return;
+    const t = setInterval(fetchTableCoachPlayers, 10000);
+    return () => clearInterval(t);
+  }, [fetchTableCoachPlayers, activeTable?.table_number]);
 
   // ============== DATA FETCHING ==============
   const fetchAllData = async () => {
@@ -5574,6 +5602,7 @@ _Responsable Op. & Log - Espace Maxo_
               currentUser,
               cancellationRequests, modificationRequests,
               activeTable, activeTableId,
+              tableCoachPlayers, fetchTableCoachPlayers,
               activeDepartment, setActiveDepartment,
               currentBill,
               customItem, setCustomItem,

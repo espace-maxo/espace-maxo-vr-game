@@ -59,11 +59,13 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
 
   // Liste des tables ouvertes (toutes serveurs confondus) pour permettre au coach
   // de rattacher un joueur à la table où il consomme déjà des plats/boissons.
+  // ⚠ On affiche TOUTES les tables (y compris celles en `ready_to_invoice`) pour
+  // permettre au coach de continuer à imputer un client jusqu'à la facturation finale.
   const fetchOpenTables = useCallback(async () => {
     try {
       const r = await axios.get(`${API}/caisse/tables`);
       const tables = (r.data.tables || []).filter(
-        (t) => t.status !== "ready_to_invoice" && t.status !== "invoiced"
+        (t) => t.status !== "invoiced"
       );
       // Tri par numéro de table ascendant
       tables.sort((a, b) => (a.table_number || 0) - (b.table_number || 0));
@@ -82,15 +84,16 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
   }, [fetchPlayers, fetchOpenTables]);
 
   const addPlayer = async () => {
+    // Nom optionnel : le backend auto-génère "Joueur N" si vide. Cas typique :
+    // client venu jouer 1 partie rapide sans donner son nom.
     const name = newName.trim();
-    if (!name) return toast.error("Nom du joueur requis");
     try {
       await axios.post(`${API}/coach/players`, {
         player_name: name, coach_name: actorName, coach_role: actorRole,
         table_number: newTable ? Number(newTable) : null,
       });
       setNewName(""); setNewTable("");
-      toast.success(`Joueur ${name} ajouté`);
+      toast.success(name ? `Joueur ${name} ajouté` : "Joueur anonyme ajouté");
       fetchPlayers();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur");
@@ -240,7 +243,7 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Input value={newName} onChange={(e) => setNewName(e.target.value)}
-                 placeholder="Nom du joueur"
+                 placeholder="Nom du joueur (optionnel)"
                  className="bg-slate-900 border-slate-700 h-9 text-sm sm:col-span-2"
                  data-testid="new-player-name" />
           <Select
@@ -251,11 +254,11 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
               className="bg-slate-900 border-slate-700 h-9 text-sm"
               data-testid="new-player-table-select"
             >
-              <SelectValue placeholder="Table de la salle (optionnel)" />
+              <SelectValue placeholder="Choisir une table de la salle" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-700 max-h-[280px]">
-              <SelectItem value="none" className="text-slate-400 italic">
-                Aucune table (joueur seul)
+              <SelectItem value="none" className="text-amber-300 italic font-medium">
+                ⚡ Pas de table — facturer le client seul
               </SelectItem>
               {openTables.map((t) => {
                 const itemsCount = (t.items || []).length;
@@ -263,6 +266,8 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
                   (s, it) => s + Number(it.price || 0) * Number(it.quantity || 0),
                   0
                 );
+                const isOccupied = itemsCount > 0;
+                const isReady = t.status === "ready_to_invoice";
                 return (
                   <SelectItem
                     key={t.id}
@@ -272,12 +277,13 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
                   >
                     <div className="flex items-center justify-between gap-3 w-full">
                       <span className="flex items-center gap-1.5">
-                        <Hash className="w-3 h-3 text-blue-400" />
+                        <Hash className={`w-3 h-3 ${isOccupied ? "text-amber-400" : "text-blue-400"}`} />
                         <span className="font-semibold">T{t.table_number}</span>
                         <span className="text-slate-400 text-xs">· {t.server_name || "serveur"}</span>
+                        {isReady && <Badge className="bg-amber-500/30 text-amber-200 text-[9px] px-1.5 py-0">BON</Badge>}
                       </span>
-                      <span className="text-emerald-300 text-xs">
-                        {itemsCount} art. · {total.toLocaleString("fr-FR")} F
+                      <span className={`text-xs ${isOccupied ? "text-emerald-300" : "text-slate-500 italic"}`}>
+                        {isOccupied ? `${itemsCount} art. · ${total.toLocaleString("fr-FR")} F` : "libre"}
                       </span>
                     </div>
                   </SelectItem>
@@ -311,7 +317,7 @@ const PlayersTrackerTab = ({ currentUser, catalog }) => {
               <RefreshCw className="w-3 h-3" />
             </Button>
           </div>
-          <Button onClick={addPlayer} disabled={!newName.trim()}
+          <Button onClick={addPlayer}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white h-9 text-sm sm:col-span-3"
                   data-testid="add-player-btn">
             <UserPlus className="w-4 h-4 mr-1" /> Démarrer le suivi

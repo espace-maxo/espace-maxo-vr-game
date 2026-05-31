@@ -160,13 +160,21 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **COACH JEUX — Accès aux tables de la salle dans le menu JOUEURS (31/05/2026)** ✅
   - Le Coach peut désormais voir et choisir parmi la liste des tables actuellement ouvertes en salle pour rattacher un joueur. Plus besoin de mémoriser/demander le n° de table à l'agent
   - Frontend `PlayersTrackerTab.jsx` :
-    - Nouveau `fetchOpenTables` (polling 15s) qui appelle `GET /api/caisse/tables` et filtre celles `status != ready_to_invoice/invoiced`
-    - Le champ "N° table" devient un dropdown listant chaque table ouverte avec : n° table + nom serveur + nb articles + total. Option "Aucune table (joueur seul)" + champ libre de secours pour n° spécial
+    - Nouveau `fetchOpenTables` (polling 15s) qui appelle `GET /api/caisse/tables` et affiche TOUTES les tables ouvertes (libres et occupées) — exclut uniquement les `invoiced`
+    - Le champ "N° table" devient un dropdown listant chaque table avec : n° + nom serveur + nb articles + total (ou "libre" si vide). Distinction visuelle libre/occupée
+    - Première option mise en évidence : "⚡ Pas de table — facturer le client seul" (cas client venu uniquement pour jouer)
     - Badge "Table" cliquable sur chaque carte joueur (rattacher si vide, changer si déjà attaché)
-    - Badge "X tables ouvertes en salle" en haut à droite de la carte d'ajout
-  - Backend `coach_sessions.py` : nouveau `PATCH /api/coach/players/{id}` (rôle coach_jeux ou admin) permettant de modifier le `table_number` d'un joueur en cours
-  - Tests E2E backend : PATCH attach T5 ✓ · PATCH detach (null) ✓ · 403 pour rôle non autorisé ✓
-  - Vérif visuelle : dropdown affiche bien les 4 tables ouvertes (T1, T5, T94, T99) avec leur résumé
+    - Champ libre de secours pour saisir un n° si la table n'apparaît pas
+  - **Nom du joueur désormais OPTIONNEL** (31/05/2026 — Lot 2) :
+    - Frontend : placeholder "Nom du joueur (optionnel)", suppression du `disabled` sur le bouton et de l'erreur "Nom requis"
+    - Backend `POST /coach/players` : si `player_name` vide, auto-génère "Joueur N" (N = nb joueurs ouverts + 1). Cas typique : client venu jouer 1 partie rapide sans donner son nom
+  - Backend `coach_sessions.py` : nouveau `PATCH /api/coach/players/{id}` pour modifier le `table_number` d'un joueur en cours
+  - Tests E2E backend : POST sans nom → "Joueur 5" ✓ · PATCH attach/detach ✓ · 403 rôle non autorisé ✓
+  - Vérif visuelle : dropdown affiche les 4 tables (T1 libre, T5/T94/T99 occupées avec montants), bouton actif sans nom
+- **CAISSE — Réciprocité Coach : panneau joueurs sur la table active (31/05/2026)** ✅
+  - Quand l'agent / Resp. Op. ouvre une table dans CaissePage, un panneau violet apparaît juste avant le récap des totaux : "🎮 X joueurs Coach sur cette table" avec liste détaillée (nom, nb parties, forfait h, montant) + total cumulé en bandeau
+  - Mise à jour temps réel : polling 10s. Permet à la Resp. Op. d'avoir la vue 360° avant impression du BON CLIENT
+  - Nouveau endpoint `GET /api/coach/players/by-table/{table_number}` (sans auth — endpoint léger) retourne `{table_number, players, count, grand_total}`
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis

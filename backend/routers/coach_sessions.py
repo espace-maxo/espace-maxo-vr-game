@@ -47,12 +47,17 @@ class PlayerCreate(BaseModel):
 async def create_player(body: PlayerCreate):
     if body.coach_role not in ("coach_jeux", "admin"):
         raise HTTPException(403, "Action réservée au coach")
-    if not (body.player_name or "").strip():
-        raise HTTPException(400, "Nom du joueur requis")
+    # Le nom du joueur est désormais OPTIONNEL : si vide, on auto-génère un libellé
+    # générique "Joueur N" basé sur le nombre de joueurs ouverts. Cas d'usage typique :
+    # un client vient juste jouer 1 partie rapide sans donner son nom.
+    raw_name = (body.player_name or "").strip()
+    if not raw_name:
+        open_count = await db.coach_players.count_documents({"status": "open"})
+        raw_name = f"Joueur {open_count + 1}"
     now_iso = datetime.now(timezone.utc).isoformat()
     player = {
         "id": str(uuid.uuid4()),
-        "player_name": body.player_name.strip(),
+        "player_name": raw_name,
         "coach_name": body.coach_name,
         "coach_role": body.coach_role,
         "table_number": body.table_number,
@@ -79,6 +84,22 @@ async def list_players(actor_role: str = "", actor_name: str = "", status: str =
         q["coach_name"] = actor_name
     players = await db.coach_players.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"total": len(players), "players": players}
+
+
+@router.get("/coach/players/by-table/{table_number}")
+async def players_on_table(table_number: int):
+    """Récupère tous les joueurs ouverts (non transmis) rattachés à un n° de table.
+
+    Endpoint léger sans contrôle d'accès strict — utilisé par la CaissePage
+    (agent/Resp. Op.) pour afficher la consommation jeux sur la table en cours,
+    avant impression du BON CLIENT. Cela permet une vue 360° du ticket.
+    """
+    players = await db.coach_players.find(
+        {"table_number": int(table_number), "status": "open"},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+    grand_total = sum(float(p.get("total") or 0) for p in players)
+    return {"table_number": int(table_number), "players": players, "count": len(players), "grand_total": grand_total}
 
 
 class ConsumeBody(BaseModel):

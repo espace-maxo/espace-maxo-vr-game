@@ -62,6 +62,7 @@ const CommandeTab = ({ ctx }) => {
     DEPARTMENT_CONFIG,
     PAYMENT_METHODS,
     closeTable,
+    tableCoachPlayers,
   } = ctx;
   return (
     <>
@@ -696,6 +697,41 @@ const CommandeTab = ({ ctx }) => {
                             );
                           })}
                         </div>
+
+                        {/* Coach Players sur cette table — vue 360° */}
+                        {tableCoachPlayers && tableCoachPlayers.count > 0 && (
+                          <div className="mt-3 pt-3 border-t border-purple-500/30 bg-purple-950/30 -mx-3 px-3 py-2 rounded">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-purple-300 text-xs font-semibold flex items-center gap-1.5">
+                                🎮 {tableCoachPlayers.count} joueur{tableCoachPlayers.count > 1 ? "s" : ""} Coach sur cette table
+                              </span>
+                              <span className="text-purple-200 text-xs font-bold">
+                                +{formatPrice(tableCoachPlayers.grand_total)} F
+                              </span>
+                            </div>
+                            <div className="space-y-1" data-testid="table-coach-players-panel">
+                              {tableCoachPlayers.players.map((p) => (
+                                <div key={p.id} className="flex items-center justify-between text-[11px] bg-purple-900/30 rounded px-2 py-1">
+                                  <span className="text-purple-100 truncate">
+                                    <span className="font-medium">{p.player_name}</span>
+                                    <span className="text-purple-400/80 ml-1">
+                                      · {(p.items || []).reduce((s, it) => s + (it.parties || 0), 0)} partie(s)
+                                      {(p.items || []).some(it => it.billing_mode === "hourly") && (
+                                        <span> · forfait h</span>
+                                      )}
+                                    </span>
+                                  </span>
+                                  <span className="text-emerald-300 font-mono whitespace-nowrap ml-2">
+                                    {formatPrice(p.total || 0)} F
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-purple-400/70 italic mt-1.5">
+                              Ces montants seront ajoutés au bon lors de la transmission du Coach
+                            </p>
+                          </div>
+                        )}
 
                         {/* Discount & Payment */}
                         <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
