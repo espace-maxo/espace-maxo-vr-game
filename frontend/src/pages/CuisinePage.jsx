@@ -22,10 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChefHat, CheckCircle2, Clock, Bell, Camera, Upload, Loader2,
-  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText,
+  RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText, Package,
 } from "lucide-react";
 import { beepNewOrder, playBeep } from "../lib/notificationBeep";
 import DailyReportPanel from "../components/DailyReportPanel";
+import CuisineNeedsTab from "./cuisine/CuisineNeedsTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const POLL_INTERVAL = 5000;
@@ -377,6 +378,10 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               <FileText className="w-4 h-4 mr-1" />
               Rapport du jour
             </TabsTrigger>
+            <TabsTrigger value="needs" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white" data-testid="cuisine-tab-needs">
+              <Package className="w-4 h-4 mr-1" />
+              Besoin cuisine
+            </TabsTrigger>
           </TabsList>
 
           {/* COMMANDES */}
@@ -601,6 +606,11 @@ const CuisinePage = ({ currentUser, onLogout }) => {
           {/* RAPPORT DU JOUR */}
           <TabsContent value="report" className="mt-3">
             <DailyReportPanel currentUser={currentUser} kind="cuisine" />
+          </TabsContent>
+
+          {/* BESOIN EN CUISINE */}
+          <TabsContent value="needs" className="mt-3">
+            <CuisineNeedsTab currentUser={currentUser} />
           </TabsContent>
         </Tabs>
       </div>

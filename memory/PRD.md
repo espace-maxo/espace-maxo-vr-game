@@ -189,6 +189,18 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Frontend `JournalTab.jsx` : bandeau stats (4 colonnes Total/Transmis/Ouvert/Activité) + timeline visuelle avec icônes colorées par type, heures, badges table, montants à droite
   - Refresh auto 30s pendant la séance — pratique pour justifier l'activité en fin de journée
   - Suppression définitive du menu "Nouveau bon" (workflow Joueurs+Journal devient le standard)
+- **CUISINE — Onglet "Besoin cuisine" avec alerte Admin (31/05/2026)** ✅
+  - Nouvel onglet orange dans le profil Cuisinier : permet de transmettre à l'Admin une liste de produits nécessaires (réappro, urgence) en mode panier multi-lignes
+  - Backend `cuisine.py` :
+    - `GET /api/cuisine/products` : liste exhaustive (462 produits actifs hors magasin) avec stock courant, statut (faible/rupture), unité
+    - `POST /api/cuisine/needs` : crée une demande (status=pending) avec urgence normal/urgent et notes
+    - `GET /api/cuisine/needs?status=pending|seen|fulfilled|rejected` : liste avec compteurs par statut + `pending_count` + `urgent_pending_count`
+    - `PATCH /api/cuisine/needs/{id}` : Admin met à jour seen/fulfilled/rejected (avec rejection_reason). Rôle admin/manager requis
+    - `DELETE /api/cuisine/needs/{id}` : cuisinier peut supprimer ses propres pending, admin peut tout supprimer
+  - Frontend :
+    - `CuisineNeedsTab.jsx` (cuisinier) : dropdown produits avec badges stock, qty+unité, note ligne, panier visible, choix urgence (normal/urgent), notes globales, bouton "Transmettre à l'Admin", historique des besoins envoyés
+    - `CuisineNeedsAdminList.jsx` (admin) : intégré sous le sous-menu "Rapports" du RecoupementPanel. Badge "X en attente" pulsant + badge urgent rouge. Filtres par statut. Actions Vu / Approvisionné / Refuser (avec motif)
+  - Tests E2E : POST 2 produits urgent ✓ · PATCH seen→fulfilled ✓ · 403 rôle non autorisé ✓ · 462 produits visibles dans le dropdown ✓
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis

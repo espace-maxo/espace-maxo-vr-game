@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import CuisineHistory from "./CuisineHistory";
 import DailyReportsList from "./DailyReportsList";
 import CuisineMessagesAdminList from "./CuisineMessagesAdminList";
+import CuisineNeedsAdminList from "./CuisineNeedsAdminList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
@@ -801,6 +802,7 @@ const RecoupementPanel = ({ currentUser }) => {
             </CardContent>
           </Card>
           <DailyReportsList currentUser={currentUser} />
+          <CuisineNeedsAdminList currentUser={currentUser} />
           <CuisineMessagesAdminList currentUser={currentUser} />
         </TabsContent>
       </Tabs>

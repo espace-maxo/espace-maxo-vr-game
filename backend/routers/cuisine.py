@@ -536,3 +536,151 @@ async def ready_notifications(actor_role: str = "", since_seconds: int = 60):
             } for it in ready_items],
         })
     return {"total": len(out), "notifications": out}
+
+
+# ==================== BESOINS EN CUISINE ====================
+# Le cuisinier peut transmettre à l'administrateur la liste des produits dont il
+# a besoin (réapprovisionnement, manque urgent, etc.). Chaque "besoin" est une
+# demande regroupant plusieurs lignes (produit + qty + unité + urgence).
+#
+# Workflow :
+#   1. Cuisinier ouvre l'onglet "Besoin en cuisine", sélectionne des produits
+#      depuis la liste exhaustive (zone="cuisine"), saisit qty, urgence, note.
+#   2. Soumission → status="pending" + alerte côté Admin (compteur badge).
+#   3. Admin lit → marque "seen", puis "fulfilled" quand l'approvisionnement
+#      est terminé. À tout moment l'admin peut "rejeter" avec motif.
+#
+# Collection : cuisine_needs
+#   { id, requested_by, requested_at, status, urgency, items: [{product_id,
+#     product_name, quantity, unit, observed_stock, note}], notes, seen_at,
+#     seen_by, fulfilled_at, fulfilled_by, rejection_reason }
+
+class NeedLine(BaseModel):
+    product_id: Optional[str] = None
+    product_name: str
+    quantity: float = Field(gt=0)
+    unit: str = ""
+    observed_stock: Optional[float] = None  # stock que le cuisinier voit (informatif)
+    note: str = ""
+
+
+class NeedCreate(BaseModel):
+    requested_by: str
+    items: list[NeedLine] = Field(..., min_length=1)
+    urgency: str = Field("normal", description="normal | urgent")
+    notes: str = ""
+
+
+@router.get("/cuisine/products")
+async def list_cuisine_products(search: str = ""):
+    """Liste exhaustive des produits cuisine (zone='cuisine', is_active=True).
+
+    Utilisé par le formulaire 'Besoin en cuisine' du cuisinier.
+    Retourne {id, name, unit, quantity (stock actuel), category, stock_min, statut}.
+    """
+    # Par défaut, on inclut tous les produits actifs hors magasin (zone null/cuisine/None).
+    # Le magasin est exclu car c'est l'inventaire général, pas le périmètre du cuisinier.
+    q = {"is_active": True, "storage_zone": {"$ne": "magasin"}}
+    if search:
+        import re as _re
+        q["name"] = {"$regex": _re.escape(search), "$options": "i"}
+    products = await db.stock_products.find(
+        q,
+        {"_id": 0, "id": 1, "name": 1, "unit": 1, "quantity": 1, "category_id": 1, "stock_min": 1, "statut": 1}
+    ).sort("name", 1).to_list(2000)
+    return {"total": len(products), "products": products}
+
+
+@router.post("/cuisine/needs")
+async def create_need(body: NeedCreate):
+    """Cuisinier transmet un besoin à l'administrateur. Crée une alerte (status=pending)."""
+    requester = (body.requested_by or "").strip() or "Cuisinier"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    need = {
+        "id": str(uuid.uuid4()),
+        "requested_by": requester,
+        "requested_at": now_iso,
+        "urgency": "urgent" if body.urgency == "urgent" else "normal",
+        "status": "pending",
+        "items": [it.model_dump() for it in body.items],
+        "notes": (body.notes or "").strip(),
+        "items_count": len(body.items),
+        "total_quantity": sum(float(it.quantity) for it in body.items),
+        "seen_at": None,
+        "seen_by": None,
+        "fulfilled_at": None,
+        "fulfilled_by": None,
+        "rejection_reason": None,
+    }
+    await db.cuisine_needs.insert_one(need)
+    need.pop("_id", None)
+    return {"success": True, "need": need}
+
+
+@router.get("/cuisine/needs")
+async def list_needs(status: Optional[str] = None, requested_by: Optional[str] = None, limit: int = 100):
+    """Liste les besoins. Filtres optionnels par statut et par cuisinier."""
+    q = {}
+    if status:
+        q["status"] = status
+    if requested_by:
+        q["requested_by"] = requested_by
+    items = await db.cuisine_needs.find(q, {"_id": 0}).sort("requested_at", -1).to_list(min(int(limit), 500))
+    counts_pipeline = [{"$group": {"_id": "$status", "n": {"$sum": 1}}}]
+    counts = {c["_id"]: c["n"] async for c in db.cuisine_needs.aggregate(counts_pipeline)}
+    return {
+        "items": items,
+        "total": len(items),
+        "counts_by_status": counts,
+        "pending_count": counts.get("pending", 0),
+        "urgent_pending_count": await db.cuisine_needs.count_documents({"status": "pending", "urgency": "urgent"}),
+    }
+
+
+@router.patch("/cuisine/needs/{need_id}")
+async def update_need_status(need_id: str, payload: dict):
+    """Admin met à jour le statut d'un besoin (seen / fulfilled / rejected)."""
+    actor_role = (payload.get("actor_role") or "").strip()
+    if actor_role not in ("admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    new_status = (payload.get("status") or "").strip()
+    if new_status not in ("seen", "fulfilled", "rejected", "pending"):
+        raise HTTPException(400, "Statut invalide")
+    need = await db.cuisine_needs.find_one({"id": need_id}, {"_id": 0})
+    if not need:
+        raise HTTPException(404, "Besoin introuvable")
+
+    actor_name = (payload.get("actor_name") or "Admin").strip()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {"status": new_status}
+    if new_status == "seen":
+        update["seen_at"] = now_iso
+        update["seen_by"] = actor_name
+    elif new_status == "fulfilled":
+        update["fulfilled_at"] = now_iso
+        update["fulfilled_by"] = actor_name
+        if not need.get("seen_at"):
+            update["seen_at"] = now_iso
+            update["seen_by"] = actor_name
+    elif new_status == "rejected":
+        update["rejection_reason"] = (payload.get("rejection_reason") or "Refusé").strip()
+        update["fulfilled_at"] = now_iso
+        update["fulfilled_by"] = actor_name
+
+    await db.cuisine_needs.update_one({"id": need_id}, {"$set": update})
+    updated = await db.cuisine_needs.find_one({"id": need_id}, {"_id": 0})
+    return {"success": True, "need": updated}
+
+
+@router.delete("/cuisine/needs/{need_id}")
+async def delete_need(need_id: str, actor_role: str = ""):
+    if actor_role not in ("admin", "cuisinier"):
+        raise HTTPException(403, "Action réservée")
+    need = await db.cuisine_needs.find_one({"id": need_id})
+    if not need:
+        raise HTTPException(404, "Besoin introuvable")
+    # Cuisinier ne peut supprimer que ses propres besoins pending
+    if actor_role == "cuisinier" and need.get("status") != "pending":
+        raise HTTPException(400, "Vous ne pouvez supprimer qu'un besoin en attente")
+    await db.cuisine_needs.delete_one({"id": need_id})
+    return {"success": True}
