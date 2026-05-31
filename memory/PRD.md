@@ -139,6 +139,15 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Frontend `PublicTicketPage.jsx` (route `/ticket/:id`) : page mobile-first avec récap du ticket (articles, totaux, n° BON CLIENT) + formulaire avis (rating étoiles animées + nom + tél + commentaire 1000 chars), états : formulaire / "Avis déjà déposé" (affiche le rating + comment précédents) / "Merci pour votre retour"
   - `CaissePage.jsx` `printTicket` : génère un QR Code via la lib `qrcode` (220px) injecté en bas du ticket BON CLIENT (uniquement si `invoice.bon_number` présent), label "Scannez pour donner votre avis" + URL textuelle en fallback
   - Itération 96 : 17/17 tests backend ✓ (tous les codes erreurs validés : 404 pending, 409 duplicate, 422 rating invalide, 400 ticket pending, filtres reviews) — non-régression Lot 1 (bon_number + validated_only) confirmée
+- **STOCK — BACKLOG DESTOCKAGE & FICHE TECHNIQUE (31/05/2026)** ✅
+  - **Bug 1 corrigé — Ventes à découvert tracées via `pending_destock_quantity`** :
+    - `invoices.py` `_apply_destocking_for_invoice` : les 4 branches de destockage (lien direct, recette liée, recette par nom, fallback nom) calculent `over_destock = max(0, item_qty - old_qty)`. Si > 0, `$inc {pending_destock_quantity: over_destock}` sur le produit + champ `over_destock` dans le movement
+    - `stock.py` `PUT /products/{id}` : si `pending_destock_quantity > 0` et que la quantité change, le système déduit AUTOMATIQUEMENT le pending du nouveau total saisi → crée un `compensation_movement` (type sortie, motif "Régularisation backlog"), reset le pending à 0, puis crée le `adjustment_movement` classique. Réponse enrichie avec les deux movements
+    - Cas validé : stock=0 → 30 vendus → pending=30 → ajustement à 65 → solde réel = 35 ✓
+    - Itération 97 : 8/8 tests backend ✓ (6 scénarios pending + 2 non-régression bon_number/validated_only)
+  - **Bug 2 corrigé — Fiches Techniques : dropdown ingrédients vide** :
+    - `StockPage.jsx` : nouvel état `allProducts` chargé sans filtre via `fetchAllProducts` (au mount + à l'ouverture de la modale recette). Le dropdown utilise `allProducts.length > 0 ? allProducts : products` au lieu de `products` (qui est filtré par recherche/catégorie/alerte de l'onglet Produits)
+    - Vérifié visuellement : dropdown affiche bien 461 produits (liste complète du stock), peu importe le filtre actif
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis
