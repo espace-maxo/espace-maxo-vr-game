@@ -2600,9 +2600,19 @@ async def get_dashboard():
     faible = [p for p in products if 0 < p.get("quantity", 0) <= p.get("stock_min", 5)]
     critical = len(rupture) + len(faible)
     
-    # Products near expiry
-    peremption_proche = [p for p in products if p.get("date_peremption") and p["date_peremption"] <= peremption_limit and p["date_peremption"] >= today]
-    expired = [p for p in products if p.get("date_peremption") and p["date_peremption"] < today]
+    # Products near expiry (only those still in stock — we don't alert on empty products)
+    def _days_between(target_iso: str) -> int:
+        try:
+            t = datetime.fromisoformat(target_iso)
+            n = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            return (t.replace(tzinfo=None) - n).days
+        except Exception:
+            return 0
+    peremption_proche = [p for p in products if p.get("date_peremption") and p["date_peremption"] <= peremption_limit and p["date_peremption"] >= today and p.get("quantity", 0) > 0]
+    expired = [p for p in products if p.get("date_peremption") and p["date_peremption"] < today and p.get("quantity", 0) > 0]
+    # Sort by urgency (closest first)
+    peremption_proche.sort(key=lambda p: p["date_peremption"])
+    expired.sort(key=lambda p: p["date_peremption"])
     
     # Today's movements
     today_movements = await db.stock_movements.find(
@@ -2653,8 +2663,10 @@ async def get_dashboard():
         "ventes_caisse_value": ventes_caisse_value,
         "rupture": [{"id": p["id"], "name": p["name"], "code": p.get("code", ""), "unit": p.get("unit", "")} for p in rupture[:20]],
         "faible": [{"id": p["id"], "name": p["name"], "quantity": p["quantity"], "stock_min": p.get("stock_min", 5), "unit": p.get("unit", "")} for p in faible[:20]],
-        "peremption_proche": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"]} for p in peremption_proche[:10]],
-        "expired": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"]} for p in expired[:10]],
+        "peremption_proche": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"], "quantity": p.get("quantity", 0), "unit": p.get("unit", ""), "days_until": _days_between(p["date_peremption"])} for p in peremption_proche[:20]],
+        "peremption_proche_total": len(peremption_proche),
+        "expired": [{"id": p["id"], "name": p["name"], "date_peremption": p["date_peremption"], "quantity": p.get("quantity", 0), "unit": p.get("unit", ""), "days_since": -_days_between(p["date_peremption"])} for p in expired[:30]],
+        "expired_total": len(expired),
         "recent_movements": recent_movements,
         "recent_purchases": recent_purchases,
         "stock_by_category": stock_by_category,

@@ -233,11 +233,21 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 
 ## Backlog (Priorisé)
 - **P0-OFFLINE Phase 3** : Validation factures + reversements + résolution conflits + n° factures pré-alloués par blocs de 50
-- **P1** : Alertes de péremption produits (dashboard Stock)
 - **P2** : Export PDF/Excel du Compte courant (relevé bancaire)
 - **P3** : Intégration Resend pour mot de passe oublié
 - **P4** : Refactoring continu `CaissePage.jsx` (>8000 lignes) / `StockPage.jsx`
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
+
+## Recently Implemented (Fork 31/05/2026)
+- **Alertes de péremption — Dashboard Stock (DONE)** : 2 cartes dans la grille Alerts du Tableau de Bord Stock
+  - "Produits expirés" (rouge URGENT, animation pulse) avec date, nb jours depuis expiration, quantité encore en stock
+  - "Péremption proche ≤ 7j" (ambre, surligné si ≤ 2j) avec date, "aujourd'hui/demain/dans Nj", quantité
+  - Backend `/api/stock/dashboard` enrichi : `expired[]`, `expired_total`, `peremption_proche[]`, `peremption_proche_total`, chaque item inclut `quantity`, `unit`, `days_until`/`days_since`
+  - Filtre : ignore les produits à 0 (déjà rupture)
+  - Tri par urgence (date d'expiration croissante)
+- **Validation du travail injecté (autocomplétion stock cuisinier + notif admin)** : 100% fonctionnel testé manuellement
+  - Autocomplétion à 3+ lettres (catalogue produits cuisine) avec unité auto-remplie
+  - Badge urgent rouge animé sur l'onglet "Recoupement IA" lors d'un nouveau besoin cuisinier (polling 30s)
 
 ## Architecture
 - Backend : FastAPI + MongoDB (motor) — routes dans `/app/backend/routers/`

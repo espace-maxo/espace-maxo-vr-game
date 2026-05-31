@@ -1589,6 +1589,64 @@ export default function StockPage() {
                       </CardContent>
                     </Card>
                   )}
+                  {dashboard.expired?.length > 0 && (
+                    <Card className="bg-rose-950/40 border-rose-500/50 animate-pulse-slow" data-testid="dashboard-expired-card">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-rose-300 text-sm flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 animate-pulse" />
+                          Produits expir&eacute;s ({dashboard.expired_total ?? dashboard.expired.length})
+                          <Badge className="ml-auto bg-rose-500/30 text-rose-200 text-[10px]">URGENT</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1">
+                        {dashboard.expired.map(p => (
+                          <div key={p.id} className="flex items-center justify-between gap-2 py-1 px-2 bg-rose-950/40 rounded text-sm" data-testid={`expired-row-${p.id}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-white truncate">{p.name}</p>
+                              <p className="text-[10px] text-rose-300/70 font-mono">{p.date_peremption}{p.days_since > 0 ? ` · expir\u00e9 il y a ${p.days_since}j` : ""}</p>
+                            </div>
+                            <Badge className="bg-rose-500/30 text-rose-100 whitespace-nowrap">{p.quantity} {p.unit}</Badge>
+                          </div>
+                        ))}
+                        {dashboard.expired_total > dashboard.expired.length && (
+                          <p className="text-[10px] text-rose-300/60 italic text-center pt-1">
+                            + {dashboard.expired_total - dashboard.expired.length} autre(s)&hellip;
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                  {dashboard.peremption_proche?.length > 0 && (
+                    <Card className="bg-amber-950/30 border-amber-500/40" data-testid="dashboard-peremption-card">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-amber-300 text-sm flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          P&eacute;remption proche &le; 7j ({dashboard.peremption_proche_total ?? dashboard.peremption_proche.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1">
+                        {dashboard.peremption_proche.map(p => {
+                          const d = p.days_until ?? 0;
+                          const label = d <= 0 ? "aujourd'hui" : (d === 1 ? "demain" : `dans ${d}j`);
+                          const urgent = d <= 2;
+                          return (
+                            <div key={p.id} className={`flex items-center justify-between gap-2 py-1 px-2 rounded text-sm ${urgent ? "bg-amber-900/50" : "bg-amber-950/40"}`} data-testid={`peremption-row-${p.id}`}>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-white truncate">{p.name}</p>
+                                <p className="text-[10px] text-amber-300/70 font-mono">{p.date_peremption} &middot; {label}</p>
+                              </div>
+                              <Badge className={`whitespace-nowrap ${urgent ? "bg-amber-500/40 text-amber-100" : "bg-amber-500/20 text-amber-200"}`}>{p.quantity} {p.unit}</Badge>
+                            </div>
+                          );
+                        })}
+                        {dashboard.peremption_proche_total > dashboard.peremption_proche.length && (
+                          <p className="text-[10px] text-amber-300/60 italic text-center pt-1">
+                            + {dashboard.peremption_proche_total - dashboard.peremption_proche.length} autre(s)&hellip;
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Stock by Category */}
