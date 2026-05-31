@@ -142,16 +142,21 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **STOCK — BACKLOG DESTOCKAGE & FICHE TECHNIQUE (31/05/2026)** ✅
   - **Bug 1 corrigé — Ventes à découvert tracées via `pending_destock_quantity`** :
     - `invoices.py` `_apply_destocking_for_invoice` : les 4 branches de destockage (lien direct, recette liée, recette par nom, fallback nom) calculent `over_destock = max(0, item_qty - old_qty)`. Si > 0, `$inc {pending_destock_quantity: over_destock}` sur le produit + champ `over_destock` dans le movement
-    - `stock.py` `PUT /products/{id}` : si `pending_destock_quantity > 0` et que la quantité change, le système déduit AUTOMATIQUEMENT le pending du nouveau total saisi → crée un `compensation_movement` (type sortie, motif "Régularisation backlog"), reset le pending à 0, puis crée le `adjustment_movement` classique. Réponse enrichie avec les deux movements
-    - Cas validé : stock=0 → 30 vendus → pending=30 → ajustement à 65 → solde réel = 35 ✓
+    - `stock.py` `PUT /products/{id}` : si `pending_destock_quantity > 0` et que la quantité change, le système déduit AUTOMATIQUEMENT le pending du nouveau total saisi → crée un `compensation_movement` (type sortie, motif "Régularisation backlog"), reset le pending à 0, puis crée le `adjustment_movement` classique
     - Test E2E burger : Pain burger=0 → 3 Double Cheese Burgers vendus → pending=3 → ajustement à 5 → final=2 ✓
-    - Itération 97 : 8/8 tests backend ✓ (6 scénarios pending + 2 non-régression bon_number/validated_only)
+    - Itération 97 : 8/8 tests backend ✓
   - **Bug 2 corrigé — Fiches Techniques : dropdown ingrédients vide** :
-    - `StockPage.jsx` : nouvel état `allProducts` chargé sans filtre via `fetchAllProducts` (au mount + à l'ouverture de la modale recette). Le dropdown utilise `allProducts.length > 0 ? allProducts : products` au lieu de `products` (qui est filtré par recherche/catégorie/alerte de l'onglet Produits)
-    - Vérifié visuellement : dropdown affiche bien 461 produits (liste complète du stock), peu importe le filtre actif
+    - `StockPage.jsx` : nouvel état `allProducts` chargé sans filtre, utilisé par la modale recette à la place de `products` (filtré). 461 produits affichés dans le dropdown vérifiés ✓
   - **Nouveaux endpoints utilitaires** :
-    - `POST /api/stock/recipes/seed-burgers?cheddar_initial_qty=14&cheddar_price=500` : crée le Cheddar (si manquant) + 5 fiches techniques burger par défaut (MeetBurger, CheeseBurger, Double Cheese Burger, KingBurger, Burger Maxo) + lie chaque caisse_product à sa recette. Idempotent. Compositions par défaut : pain burger, steak haché, cheddar (sauf MeetBurger), frites surgelées, mayo + ketchup (+ bacon pour King/Maxo + moutarde pour Maxo).
-    - `POST /api/invoices/resync-destockage?date=YYYY-MM-DD&force=true` : nouveau paramètre `force` qui supprime les anciens movements (notamment "Vente non lié au stock") et réapplique le destockage à partir des fiches techniques actuelles. Permet de retraiter rétroactivement les ventes des plats qui n'avaient pas encore de fiche technique au moment de la vente.
+    - `POST /api/stock/recipes/seed-burgers` : crée Cheddar + 5 fiches burger par défaut + liaisons. Idempotent
+    - `POST /api/invoices/resync-destockage?force=true` : supprime les anciens movements de la facture et réapplique le destockage à partir des fiches techniques actuelles
+  - **🤖 Composer avec IA Gemini (31/05/2026)** ✅ :
+    - Nouveau bouton violet/fuchsia "Composer avec IA" dans Catalogue → Fiches Techniques (à côté de "Composer auto")
+    - Backend `POST /api/stock/recipes/auto-compose-ai` : envoie le catalogue stock + les noms de plats à `gemini-2.5-flash` par batches de 10. L'IA propose une fiche technique réaliste (qty conservatrices, mapping strict catalogue) qu'on valide ensuite côté Python contre les vrais produits stock
+    - Workflow UI : `prompt` → nombre de plats (1-50) → `confirm` aperçu dry-run → tableau récap → bouton final pour enregistrer
+    - Modes : `dry_run` (preview), `only_unmatched` (saute les plats déjà liés), `batch_size`, `max_dishes`
+    - Test E2E : Salade Niçoise → 12 ingrédients précis (Laitue, Tomate, Concombre, Oignon, Poivron, Thon, Oeufs, Haricots verts, Huile, Vinaigre, Sel, Poivre) avec quantités réalistes ✓
+    - Économise des heures de saisie pour les ~80 plats restants sans fiche
 - **JOURNAL COMPTABLE OHADA (27/05/2026)** ✅ Complet
   - `_log_audit` enrichi : snapshot contient désormais items, payment_method, subtotal, discount, table_number, invoice_number, dates création/validation, ventilation par département
   - `audit_engine.py` : 2 contrôles enrichis

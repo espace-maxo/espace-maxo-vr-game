@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck, AlertCircle
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck, AlertCircle, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2902,6 +2902,72 @@ export default function StockPage() {
                     title="Génère automatiquement des fiches techniques pour les plats Caisse non liés (1 portion par défaut, basée sur les mots-clés)"
                   >
                     <BookOpen className="w-4 h-4 mr-1" /> Composer auto
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button
+                    onClick={async () => {
+                      const maxStr = window.prompt(
+                        "🤖 COMPOSITION IA (Gemini)\n\n" +
+                        "L'IA analyse le nom de chaque plat + votre catalogue stock pour générer une fiche technique réaliste.\n\n" +
+                        "Combien de plats traiter au maximum ? (jusqu'à 50)",
+                        "20"
+                      );
+                      if (!maxStr) return;
+                      const maxDishes = Math.min(50, Math.max(1, parseInt(maxStr, 10) || 20));
+                      const dryRun = window.confirm(
+                        `▶ APERÇU avant validation ?\n\n` +
+                        `OK = Aperçu (dry-run) — l'IA propose les fiches sans rien enregistrer.\n` +
+                        `Annuler = Création directe (les fiches seront créées et liées aux produits Caisse).`
+                      );
+                      const t = toast.loading(`IA en cours sur ${maxDishes} plats...`);
+                      try {
+                        const res = await axios.post(`${API}/recipes/auto-compose-ai`, {
+                          only_unmatched: true,
+                          dry_run: dryRun,
+                          max_dishes: maxDishes,
+                          batch_size: 10,
+                          model: "gemini-2.5-flash",
+                        }, { timeout: 180000 });
+                        toast.dismiss(t);
+                        const d = res.data;
+                        if (dryRun) {
+                          const lines = [
+                            `📊 Aperçu IA (${d.scanned} plats analysés) :`,
+                            `• ${d.created_count} fiches à créer`,
+                            `• ${d.updated_count} fiches à mettre à jour`,
+                            `• ${d.skipped_no_ingredients_count} sans ingrédients`,
+                            `• ${d.unknown_products_count} produits inconnus écartés`,
+                          ];
+                          if (window.confirm(lines.join("\n") + "\n\n💾 Voulez-vous VALIDER et créer ces fiches maintenant ?")) {
+                            const t2 = toast.loading(`Enregistrement de ${d.created_count + d.updated_count} fiches...`);
+                            const res2 = await axios.post(`${API}/recipes/auto-compose-ai`, {
+                              only_unmatched: true,
+                              dry_run: false,
+                              max_dishes: maxDishes,
+                              batch_size: 10,
+                              model: "gemini-2.5-flash",
+                            }, { timeout: 180000 });
+                            toast.dismiss(t2);
+                            toast.success(`${res2.data.created_count} créées · ${res2.data.updated_count} mises à jour`);
+                            fetchRecipes();
+                          }
+                        } else {
+                          toast.success(`${d.created_count} créées · ${d.updated_count} mises à jour`, {
+                            description: `${d.skipped_no_ingredients_count} sans ingrédients · ${d.unknown_products_count} produits IA inconnus`,
+                          });
+                          fetchRecipes();
+                        }
+                      } catch (e) {
+                        toast.dismiss(t);
+                        toast.error(e?.response?.data?.detail || "Erreur IA");
+                      }
+                    }}
+                    className="bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-700 hover:to-violet-700"
+                    data-testid="ai-compose-recipes-btn"
+                    title="L'IA Gemini analyse vos plats + stock pour proposer des fiches techniques précises"
+                  >
+                    <Sparkles className="w-4 h-4 mr-1" /> Composer avec IA
                   </Button>
                 )}
                 {recipes.length === 0 && (

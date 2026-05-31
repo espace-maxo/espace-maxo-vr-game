@@ -3114,6 +3114,257 @@ async def auto_compose_recipes(body: AutoComposeBody):
         raise HTTPException(500, str(e))
 
 
+# ==================== AI RECIPE COMPOSER (Gemini) ====================
+
+class AIComposeBody(BaseModel):
+    department_filter: Optional[str] = None
+    only_unmatched: bool = True
+    dry_run: bool = True
+    model: str = "gemini-2.5-flash"  # gemini-2.5-flash | gemini-3-flash-preview | gemini-3.1-pro-preview
+    batch_size: int = 12  # plats par appel LLM
+    max_dishes: int = 50  # cap de sécurité
+
+
+async def _ai_propose_recipes_for_batch(dish_names: List[str], stock_catalog: List[Dict], model: str) -> Dict[str, List[Dict]]:
+    """Demande à Gemini de proposer une fiche technique par plat.
+
+    `stock_catalog` est une liste réduite : [{name, unit}]. Le LLM doit choisir
+    UNIQUEMENT des noms présents dans le catalogue (sinon on filtre côté Python).
+    Retourne {dish_name: [{product_name, quantity, unit}]}.
+    """
+    import os
+    import json as _json
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "EMERGENT_LLM_KEY manquante")
+
+    catalog_lines = "\n".join([f"- {p['name']} ({p['unit']})" for p in stock_catalog])
+    dishes_lines = "\n".join([f"- {d}" for d in dish_names])
+
+    system_msg = (
+        "Tu es un chef cuisinier expert qui crée des fiches techniques pour un restaurant "
+        "béninois (cuisine ouest-africaine + grillades + burgers + pizzas + glaces + jus). "
+        "Pour chaque plat fourni, propose UNIQUEMENT les ingrédients réellement présents dans "
+        "le CATALOGUE de stock. N'invente JAMAIS de nouveaux noms. Si un ingrédient manque, "
+        "ignore-le. Les quantités sont pour 1 portion vendue. Sois conservateur (qty raisonnables, "
+        "ex: 0.05 portion pour sauces, 1 portion pour pain/steak, 0.2-0.3 pour fromage râpé). "
+        "Réponds STRICTEMENT en JSON valide, sans markdown ni commentaire."
+    )
+
+    user_prompt = f"""CATALOGUE STOCK DISPONIBLE :
+{catalog_lines}
+
+PLATS À ANALYSER :
+{dishes_lines}
+
+Réponds en JSON pur avec cette structure exacte (un objet par plat) :
+{{
+  "recipes": [
+    {{
+      "dish": "Nom exact du plat",
+      "ingredients": [
+        {{"product_name": "nom EXACT du catalogue", "quantity": 1.0}}
+      ]
+    }}
+  ]
+}}
+
+Règles strictes :
+1. product_name DOIT correspondre exactement à un nom du CATALOGUE (sensible à la casse autorisée).
+2. quantity est un nombre (pas une chaîne). Utilise des décimales pour les petites quantités (0.05, 0.1, 0.2).
+3. Si un plat ne peut pas être composé avec le catalogue, retourne ingredients: [] pour ce plat.
+4. N'ajoute aucun texte hors du JSON."""
+
+    session_id = f"recipe_ai_{uuid.uuid4().hex[:8]}"
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=session_id,
+        system_message=system_msg,
+    ).with_model("gemini", model)
+
+    response = await chat.send_message(UserMessage(text=user_prompt))
+    raw = (response or "").strip()
+    # Strip possible markdown fences
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1] if "```" in raw[3:] else raw[3:]
+        if raw.startswith("json"):
+            raw = raw[4:].strip()
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+    try:
+        parsed = _json.loads(raw)
+    except Exception as e:
+        logger.error(f"AI compose JSON parse error: {e} | raw[:300]={raw[:300]}")
+        raise HTTPException(502, f"Réponse IA non parseable : {str(e)[:80]}")
+
+    result: Dict[str, List[Dict]] = {}
+    for r in parsed.get("recipes", []) or []:
+        dish = (r.get("dish") or "").strip()
+        ings = r.get("ingredients") or []
+        if dish:
+            result[dish] = [
+                {"product_name": (i.get("product_name") or "").strip(), "quantity": float(i.get("quantity") or 0)}
+                for i in ings if i.get("product_name")
+            ]
+    return result
+
+
+@router.post("/recipes/auto-compose-ai")
+async def auto_compose_recipes_ai(body: AIComposeBody):
+    """Compose des fiches techniques via IA Gemini.
+
+    Workflow :
+    1. Liste les plats Caisse sans fiche existante (filtrable par département)
+    2. Découpe en batches → envoie à Gemini avec le catalogue stock
+    3. Valide les noms retournés contre le catalogue réel (fuzzy match)
+    4. Crée/met à jour les fiches stock_recipes + lie les caisse_products via stock_recipe_id
+    5. `dry_run=true` retourne juste la proposition sans insérer
+    """
+    caisse_products = await db.caisse_products.find({}, {"_id": 0}).to_list(2000)
+    if body.department_filter:
+        caisse_products = [p for p in caisse_products if p.get("department") == body.department_filter]
+
+    existing_recipes = await db.stock_recipes.find({}, {"_id": 0, "caisse_product_name": 1}).to_list(2000)
+    existing_names = {(r.get("caisse_product_name") or "").strip().lower() for r in existing_recipes}
+
+    target_caisse = []
+    for cp in caisse_products:
+        name = (cp.get("name") or "").strip()
+        if not name:
+            continue
+        if body.only_unmatched and name.lower() in existing_names:
+            continue
+        target_caisse.append(cp)
+        if len(target_caisse) >= body.max_dishes:
+            break
+
+    stock_products = await db.stock_products.find(
+        {"is_active": True, "storage_zone": {"$ne": "magasin"}},
+        {"_id": 0}
+    ).to_list(5000)
+    catalog = [{"name": p["name"], "unit": p.get("unit", "")} for p in stock_products]
+    by_name_lower = {p["name"].lower(): p for p in stock_products}
+
+    report = {
+        "model": body.model,
+        "dry_run": body.dry_run,
+        "scanned": len(target_caisse),
+        "created": [],
+        "updated": [],
+        "skipped_no_ingredients": [],
+        "unknown_products_from_ai": [],
+        "errors": [],
+    }
+
+    if not target_caisse:
+        return {**report, "message": "Aucun plat à traiter (tous déjà liés ou filtre vide)."}
+
+    # Batch processing
+    new_recipes_to_insert = []
+    updates_to_apply = []  # (recipe_id, recipe_doc, caisse_product_id)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for start in range(0, len(target_caisse), body.batch_size):
+        batch = target_caisse[start:start + body.batch_size]
+        dish_names = [cp["name"] for cp in batch]
+        try:
+            proposed = await _ai_propose_recipes_for_batch(dish_names, catalog, body.model)
+        except HTTPException:
+            raise
+        except Exception as e:
+            report["errors"].append({"batch_start": start, "error": str(e)[:200]})
+            logger.error(f"AI batch error at {start}: {e}")
+            continue
+
+        for cp in batch:
+            cp_name = cp["name"]
+            ai_ings = proposed.get(cp_name, [])
+            if not ai_ings:
+                # tentative case-insensitive lookup
+                for k, v in proposed.items():
+                    if k.lower() == cp_name.lower():
+                        ai_ings = v
+                        break
+
+            # Validation des noms contre le catalogue
+            resolved = []
+            for ing in ai_ings:
+                prod_name = ing["product_name"]
+                qty = ing["quantity"]
+                prod = by_name_lower.get(prod_name.lower())
+                if not prod:
+                    report["unknown_products_from_ai"].append({"dish": cp_name, "proposed": prod_name})
+                    continue
+                if qty <= 0:
+                    continue
+                resolved.append({
+                    "product_id": prod["id"],
+                    "product_name": prod["name"],
+                    "quantity": round(qty, 4),
+                    "unit": prod.get("unit", ""),
+                })
+
+            if not resolved:
+                report["skipped_no_ingredients"].append(cp_name)
+                continue
+
+            recipe_doc = {
+                "name": cp_name,
+                "caisse_product_name": cp_name,
+                "selling_price": float(cp.get("price") or 0),
+                "ingredients": resolved,
+                "notes": f"Recette générée par IA ({body.model}). À relire et ajuster si besoin.",
+                "ai_generated": True,
+                "ai_model": body.model,
+                "updated_at": now_iso,
+            }
+
+            # Check if already exists
+            existing = await db.stock_recipes.find_one({
+                "caisse_product_name": {"$regex": f"^{re.escape(cp_name)}$", "$options": "i"}
+            })
+
+            if existing:
+                if not body.dry_run:
+                    await db.stock_recipes.update_one({"id": existing["id"]}, {"$set": recipe_doc})
+                    # Lier le caisse_product
+                    await db.caisse_products.update_one(
+                        {"id": cp["id"]},
+                        {"$set": {"stock_recipe_id": existing["id"], "updated_at": now_iso}}
+                    )
+                report["updated"].append({
+                    "dish": cp_name,
+                    "ingredients_count": len(resolved),
+                    "ingredients": [{"name": i["product_name"], "qty": i["quantity"], "unit": i["unit"]} for i in resolved],
+                })
+            else:
+                new_id = str(uuid.uuid4())
+                recipe_doc["id"] = new_id
+                recipe_doc["created_at"] = now_iso
+                new_recipes_to_insert.append((recipe_doc, cp["id"]))
+                report["created"].append({
+                    "dish": cp_name,
+                    "ingredients_count": len(resolved),
+                    "ingredients": [{"name": i["product_name"], "qty": i["quantity"], "unit": i["unit"]} for i in resolved],
+                })
+
+    if not body.dry_run and new_recipes_to_insert:
+        await db.stock_recipes.insert_many([r[0] for r in new_recipes_to_insert])
+        for recipe_doc, cp_id in new_recipes_to_insert:
+            await db.caisse_products.update_one(
+                {"id": cp_id},
+                {"$set": {"stock_recipe_id": recipe_doc["id"], "updated_at": now_iso}}
+            )
+
+    report["created_count"] = len(report["created"])
+    report["updated_count"] = len(report["updated"])
+    report["skipped_no_ingredients_count"] = len(report["skipped_no_ingredients"])
+    report["unknown_products_count"] = len(report["unknown_products_from_ai"])
+    return report
+
+
 
 # ==================== REPORTS / RAPPORTS ====================
 
