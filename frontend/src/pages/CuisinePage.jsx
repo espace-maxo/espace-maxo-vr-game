@@ -357,8 +357,8 @@ const CuisinePage = ({ currentUser, onLogout }) => {
           {/* Onglets : scroll horizontal sur mobile, icône + label minuscule en colonne.
               Sur ≥sm: layout horizontal classique avec libellé long */}
           <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
-            <TabsList className="bg-slate-800/60 border border-slate-700 inline-flex w-auto sm:flex h-auto p-1">
-              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-orders" title="Commandes">
+            <TabsList className="bg-slate-800/60 border border-slate-700 flex w-full h-auto p-1 gap-0.5">
+              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-orders" title="Commandes">
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {pendingCount > 0 && (
@@ -370,14 +370,14 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                   <span className="hidden sm:inline">Commandes</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-scan" title="Scanner un bon">
+              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-scan" title="Scanner un bon">
                 <Camera className="w-4 h-4" />
                 <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
                   <span className="sm:hidden">Scan</span>
                   <span className="hidden sm:inline">Scanner</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-messages" title="Messages">
+              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-messages" title="Messages">
                 <span className="flex items-center gap-1">
                   <MessageSquare className="w-4 h-4" />
                   {unreadMsgs > 0 && (
@@ -389,21 +389,21 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                   <span className="hidden sm:inline">Messages</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-history" title="Mon historique">
+              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-history" title="Mon historique">
                 <History className="w-4 h-4" />
                 <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
                   <span className="sm:hidden">Hist</span>
                   <span className="hidden sm:inline">Historique</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-report" title="Rapport du jour">
+              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-report" title="Rapport du jour">
                 <FileText className="w-4 h-4" />
                 <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
                   <span className="sm:hidden">Rap</span>
                   <span className="hidden sm:inline">Rapport</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="stock" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto" data-testid="cuisine-tab-stock" title="Stock cuisine">
+              <TabsTrigger value="stock" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-stock" title="Stock cuisine">
                 <Boxes className="w-4 h-4" />
                 <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">Stock</span>
               </TabsTrigger>
