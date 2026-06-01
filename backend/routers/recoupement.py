@@ -404,13 +404,25 @@ async def compare_jeux(body: CompareBody):
 
 
 @router.get("/recoupement/list")
-async def list_recoupements(kind: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 100):
-    q = {}
+async def list_recoupements(kind: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 100, include_scans: bool = False):
+    """Liste les recoupements pour l'historique admin.
+
+    Par défaut, exclut les scans bruts (kind="cuisine_scan", scanned_only=True)
+    qui n'ont pas été comparés au système : ils sont consultables séparément
+    via `/api/cuisine/scans/list`. Cela évite de polluer l'historique avec
+    des entrées dont le summary est vide (0 alertes / 0 ventes système / 0 rows).
+    """
+    q: dict = {}
     if kind:
         q["kind"] = kind
+    else:
+        # par défaut, on n'affiche que les vrais recoupements (cuisine + jeux)
+        q["kind"] = {"$in": ["cuisine", "jeux"]}
+    if not include_scans:
+        q["scanned_only"] = {"$ne": True}
     if start_date and end_date:
         q["date"] = {"$gte": start_date, "$lte": end_date}
-    items = await db.recoupements.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    items = await db.recoupements.find(q, {"_id": 0, "image_base64": 0}).sort("created_at", -1).to_list(limit)
     return {"total": len(items), "items": items}
 
 

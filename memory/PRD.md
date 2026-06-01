@@ -239,6 +239,17 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Recently Implemented (Fork 31/05/2026 — 01/06/2026)
+- **Scanner bon cuisinier — workflow "Valider et envoyer à l'admin" (01/06/2026)** :
+  - Après photo, l'IA extrait les plats → affichage d'une liste **éditable** dans le tab Scanner avec image preview
+  - Cuisinier peut corriger nom/quantité, ajouter/supprimer des lignes, ajouter une note
+  - Bouton "Valider et envoyer à l'administrateur" → marque `validated_by_cuisinier=True`
+  - Bouton "Annuler" → supprime le scan
+  - Backend : nouveaux endpoints `PATCH /api/cuisine/scan-bon/{id}/validate` + `DELETE /api/cuisine/scan-bon/{id}` + `GET /api/cuisine/scans/list?validated_only=true`
+  - Côté admin : nouveau composant `CuisineScansAdminList` dans Recoupement IA → onglet "Rapports" (badges Cuisinier + nb plats + date + liste détaillée + suppression)
+- **Bug Recoupement Historique faux/incomplet — résolu (01/06/2026)** :
+  - `/api/recoupement/list` exclut maintenant par défaut les scans bruts (`kind="cuisine_scan"`, `scanned_only=True`)
+  - Param `include_scans=true` pour les inclure si besoin
+  - Par défaut on ne filtre que `kind in ["cuisine", "jeux"]` (vrais recoupements avec rows complets, totaux système, écarts)
 - **Fusion onglets cuisinier "Mon stock" + "Besoin" → onglet unique "Stock" (01/06/2026)** :
   - Nouveau composant `/app/frontend/src/pages/cuisine/CuisineStockTab.jsx`
   - Section "Alerte stock" automatique listant les produits en rupture (qty≤0) ou proches du seuil

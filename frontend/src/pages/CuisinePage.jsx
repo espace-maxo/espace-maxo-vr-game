@@ -277,6 +277,9 @@ const CuisinePage = ({ currentUser, onLogout }) => {
   // ── Scan bon ──
   const fileRef = useRef(null);
   const [scanning, setScanning] = useState(false);
+  // Résultat éditable du scan (avant validation+envoi à l'admin)
+  const [scanResult, setScanResult] = useState(null); // { recoupement_id, items, notes, image_preview }
+  const [validatingScan, setValidatingScan] = useState(false);
 
   const handleScan = async (e) => {
     const f = e.target.files?.[0];
@@ -287,13 +290,28 @@ const CuisinePage = ({ currentUser, onLogout }) => {
     setScanning(true);
     try {
       const b64 = await fileToBase64(f);
+      const imagePreview = URL.createObjectURL(f);
       const r = await axios.post(`${API}/cuisine/scan-bon`, {
         image_base64: b64,
         mime_type: f.type,
         actor_name: currentUser?.full_name || currentUser?.username,
         actor_role: currentUser?.role || "cuisinier",
       }, { timeout: 60000 });
-      toast.success(`Bon scanné et archivé (${r.data.items_extracted} plats détectés)`);
+      const items = (r.data.items || []).map((it) => ({
+        name: it.name || "",
+        quantity: Number(it.quantity || 1),
+      }));
+      setScanResult({
+        recoupement_id: r.data.recoupement_id,
+        items,
+        notes: "",
+        image_preview: imagePreview,
+      });
+      if (items.length === 0) {
+        toast.warning("Aucun plat détecté — saisissez la liste manuellement");
+      } else {
+        toast.success(`${items.length} plat(s) extrait(s) — vérifiez et validez`);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur de scan");
     } finally {
@@ -301,6 +319,58 @@ const CuisinePage = ({ currentUser, onLogout }) => {
       if (fileRef.current) fileRef.current.value = "";
     }
   };
+
+  const updateScanItem = (idx, key, val) => {
+    setScanResult((prev) => prev && ({
+      ...prev,
+      items: prev.items.map((it, i) => i === idx ? { ...it, [key]: key === "quantity" ? Number(val || 0) : val } : it),
+    }));
+  };
+  const addScanRow = () => {
+    setScanResult((prev) => prev && ({ ...prev, items: [...prev.items, { name: "", quantity: 1 }] }));
+  };
+  const removeScanRow = (idx) => {
+    setScanResult((prev) => prev && ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+  };
+
+  const cancelScan = async () => {
+    if (!scanResult?.recoupement_id) { setScanResult(null); return; }
+    if (!window.confirm("Annuler ce scan ? La photo et la liste seront supprimées.")) return;
+    try {
+      await axios.delete(`${API}/cuisine/scan-bon/${scanResult.recoupement_id}`, {
+        params: { actor_role: "cuisinier" },
+      });
+      toast.info("Scan annulé");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur d'annulation");
+    } finally {
+      setScanResult(null);
+    }
+  };
+
+  const validateAndSendScan = async () => {
+    if (!scanResult?.recoupement_id) return;
+    const cleanItems = scanResult.items.filter((it) => (it.name || "").trim());
+    if (cleanItems.length === 0) {
+      return toast.error("Ajoutez au moins un plat avant de valider");
+    }
+    setValidatingScan(true);
+    try {
+      await axios.patch(`${API}/cuisine/scan-bon/${scanResult.recoupement_id}/validate`, {
+        items: cleanItems,
+        notes: scanResult.notes || "",
+        actor_name: currentUser?.full_name || currentUser?.username,
+        actor_role: currentUser?.role || "cuisinier",
+      });
+      toast.success(`Bon envoyé à l'administrateur (${cleanItems.length} plat(s))`);
+      setScanResult(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur de validation");
+    } finally {
+      setValidatingScan(false);
+    }
+  };
+
 
   // ── UI ──
   const pendingCount = orders.filter((o) => !o.all_ready).length;
@@ -521,35 +591,137 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-slate-400">
-                  Photographiez le bon reçu de la salle. Le bon sera archivé dans <strong>Recoupement IA</strong> (visible par l'administrateur)
-                  et les plats seront extraits automatiquement.
-                </p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  capture="environment"
-                  onChange={handleScan}
-                  className="hidden"
-                  data-testid="cuisine-scan-input"
-                />
-                <Button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={scanning}
-                  className="w-full bg-cyan-600 hover:bg-cyan-700 text-white h-12 text-sm"
-                  data-testid="cuisine-scan-btn"
-                >
-                  {scanning ? (
-                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Extraction en cours…</>
-                  ) : (
-                    <><Upload className="w-5 h-5 mr-2" /> Prendre / choisir une photo du bon</>
-                  )}
-                </Button>
-                <div className="text-[11px] text-slate-500 italic">
-                  Astuce : sur mobile, l'appareil photo se déclenche automatiquement.
-                </div>
+                {!scanResult && (
+                  <>
+                    <p className="text-xs text-slate-400">
+                      Photographiez un bon reçu de la salle. L'IA extraira les plats — vous pourrez
+                      les corriger avant de les <strong>envoyer à l'administrateur</strong>.
+                    </p>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      capture="environment"
+                      onChange={handleScan}
+                      className="hidden"
+                      data-testid="cuisine-scan-input"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={scanning}
+                      className="w-full bg-cyan-600 hover:bg-cyan-700 text-white h-12 text-sm"
+                      data-testid="cuisine-scan-btn"
+                    >
+                      {scanning ? (
+                        <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Extraction en cours…</>
+                      ) : (
+                        <><Upload className="w-5 h-5 mr-2" /> Prendre / choisir une photo du bon</>
+                      )}
+                    </Button>
+                    <div className="text-[11px] text-slate-500 italic">
+                      Astuce : sur mobile, l'appareil photo se déclenche automatiquement.
+                    </div>
+                  </>
+                )}
+
+                {scanResult && (
+                  <div className="space-y-3" data-testid="scan-edit-panel">
+                    {scanResult.image_preview && (
+                      <div className="rounded border border-cyan-500/30 bg-slate-900/40 p-1">
+                        <img
+                          src={scanResult.image_preview}
+                          alt="Bon scanné"
+                          className="rounded max-h-48 mx-auto object-contain"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <p className="text-xs text-cyan-200 font-semibold flex items-center gap-1.5">
+                        <FileText className="w-4 h-4" />
+                        Liste extraite ({scanResult.items.length} plat{scanResult.items.length > 1 ? "s" : ""}) — vérifiez et corrigez si besoin
+                      </p>
+                      <Button
+                        type="button" variant="ghost" size="sm"
+                        onClick={addScanRow}
+                        className="h-7 text-[11px] text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30"
+                        data-testid="scan-add-row"
+                      >
+                        + Ajouter une ligne
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+                      {scanResult.items.length === 0 && (
+                        <p className="text-xs text-slate-500 italic text-center py-3">
+                          Aucun plat détecté. Cliquez sur "Ajouter une ligne" pour saisir manuellement.
+                        </p>
+                      )}
+                      {scanResult.items.map((it, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-700 rounded p-1.5" data-testid={`scan-row-${i}`}>
+                          <input
+                            type="text"
+                            value={it.name}
+                            onChange={(e) => updateScanItem(i, "name", e.target.value)}
+                            placeholder="Nom du plat"
+                            className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded h-8 text-sm text-white px-2"
+                            data-testid={`scan-name-${i}`}
+                          />
+                          <input
+                            type="number" step="0.5" min={0}
+                            value={it.quantity}
+                            onChange={(e) => updateScanItem(i, "quantity", e.target.value)}
+                            className="w-16 bg-slate-900 border border-slate-700 rounded h-8 text-sm text-white px-2"
+                            data-testid={`scan-qty-${i}`}
+                          />
+                          <Button
+                            type="button" variant="ghost" size="sm"
+                            onClick={() => removeScanRow(i)}
+                            className="h-8 w-8 p-0 text-rose-400 hover:bg-rose-500/10"
+                            data-testid={`scan-remove-${i}`}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <textarea
+                      value={scanResult.notes}
+                      onChange={(e) => setScanResult((prev) => prev && ({ ...prev, notes: e.target.value }))}
+                      placeholder="Remarque optionnelle (illisibilité, table, etc.)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white min-h-[60px]"
+                      data-testid="scan-notes"
+                    />
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={cancelScan}
+                        disabled={validatingScan}
+                        variant="ghost"
+                        className="flex-1 h-10 text-rose-300 hover:bg-rose-500/10 border border-rose-500/40"
+                        data-testid="scan-cancel-btn"
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={validateAndSendScan}
+                        disabled={validatingScan || scanResult.items.filter((it) => (it.name || "").trim()).length === 0}
+                        className="flex-[2] h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        data-testid="scan-validate-btn"
+                      >
+                        {validatingScan ? (
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Envoi…</>
+                        ) : (
+                          <><Send className="w-4 h-4 mr-2" /> Valider et envoyer à l'admin</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -484,6 +484,8 @@ async def scan_bon(body: ScanBonBody):
         "actor_name": body.actor_name,
         "actor_role": body.actor_role,
         "scanned_only": True,
+        "validated_by_cuisinier": False,
+        "validated_at": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.recoupements.insert_one(rec)
@@ -503,6 +505,102 @@ async def scan_bon(body: ScanBonBody):
     except Exception as e:
         logger.error(f"cuisine event log scan: {e}")
     return {"success": True, "recoupement_id": rec["id"], "items_extracted": len(items), "items": items}
+
+
+class ScanValidateBody(BaseModel):
+    items: list[dict] = Field(default_factory=list)  # [{name, quantity}]
+    notes: str = ""
+    actor_name: str = ""
+    actor_role: str = "cuisinier"
+
+
+@router.patch("/cuisine/scan-bon/{rec_id}/validate")
+async def validate_scan_bon(rec_id: str, body: ScanValidateBody):
+    """Le cuisinier valide la liste extraite (éventuellement corrigée) et l'envoie à l'admin.
+
+    Met à jour les items du recoupement, calcule total_declared_qty et marque
+    validated_by_cuisinier=True. Le scan devient alors visible côté admin
+    dans la section "Scans cuisinier".
+    """
+    if body.actor_role not in ("cuisinier", "admin", "manager"):
+        raise HTTPException(403, "Action réservée")
+    rec = await db.recoupements.find_one({"id": rec_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Scan introuvable")
+    if rec.get("kind") != "cuisine_scan":
+        raise HTTPException(400, "Cet enregistrement n'est pas un scan cuisinier")
+
+    # Normalise items
+    clean_items = []
+    for it in body.items:
+        name = (it.get("name") or "").strip()
+        if not name:
+            continue
+        try:
+            qty = float(it.get("quantity") or 0)
+        except Exception:
+            qty = 0
+        clean_items.append({"name": name, "quantity": qty})
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {
+        "declared": clean_items,
+        "summary.total_declared_qty": sum(it["quantity"] for it in clean_items),
+        "summary.rows": [],
+        "notes": (body.notes or "").strip(),
+        "validated_by_cuisinier": True,
+        "validated_at": now_iso,
+        "validated_by": body.actor_name or rec.get("actor_name") or "Cuisinier",
+    }
+    await db.recoupements.update_one({"id": rec_id}, {"$set": update})
+
+    # Trace dans l'historique cuisinier
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "scan_validated",
+            "recoupement_id": rec_id,
+            "items_count": len(clean_items),
+            "actor_name": body.actor_name or rec.get("actor_name"),
+            "actor_role": body.actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine event log validate: {e}")
+
+    updated = await db.recoupements.find_one({"id": rec_id}, {"_id": 0, "image_base64": 0})
+    return {"success": True, "recoupement": updated}
+
+
+@router.delete("/cuisine/scan-bon/{rec_id}")
+async def delete_scan_bon(rec_id: str, actor_role: str = ""):
+    """Supprime un scan non validé (cuisinier peut annuler avant validation).
+
+    Admin peut toujours supprimer.
+    """
+    if actor_role not in ("cuisinier", "admin"):
+        raise HTTPException(403, "Action réservée")
+    rec = await db.recoupements.find_one({"id": rec_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Scan introuvable")
+    if rec.get("kind") != "cuisine_scan":
+        raise HTTPException(400, "Cet enregistrement n'est pas un scan cuisinier")
+    if actor_role == "cuisinier" and rec.get("validated_by_cuisinier"):
+        raise HTTPException(400, "Scan déjà validé — l'admin doit le supprimer")
+    await db.recoupements.delete_one({"id": rec_id})
+    return {"success": True}
+
+
+@router.get("/cuisine/scans/list")
+async def list_cuisine_scans(validated_only: bool = True, limit: int = 100):
+    """Liste les scans cuisinier (par défaut, uniquement les validés envoyés à l'admin)."""
+    q: dict = {"kind": "cuisine_scan"}
+    if validated_only:
+        q["validated_by_cuisinier"] = True
+    items = await db.recoupements.find(
+        q, {"_id": 0, "image_base64": 0}
+    ).sort("created_at", -1).to_list(min(int(limit), 500))
+    return {"total": len(items), "items": items}
 
 
 @router.get("/cuisine/ready-notifications")
