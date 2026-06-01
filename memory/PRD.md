@@ -238,7 +238,16 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P4** : Refactoring continu `CaissePage.jsx` (>8000 lignes) / `StockPage.jsx`
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
-## Recently Implemented (Fork 31/05/2026)
+## Recently Implemented (Fork 31/05/2026 — 01/06/2026)
+- **Fusion onglets cuisinier "Mon stock" + "Besoin" → onglet unique "Stock" (01/06/2026)** :
+  - Nouveau composant `/app/frontend/src/pages/cuisine/CuisineStockTab.jsx`
+  - Section "Alerte stock" automatique listant les produits en rupture (qty≤0) ou proches du seuil
+  - Checkbox + qty suggérée (2×seuil − reste) par item
+  - Bouton "Tout cocher" + sélection d'urgence Normal/Urgent + note libre
+  - Bouton "Envoyer la liste à l'administrateur" → crée un `need` (status=pending) côté admin (badge urgent existant)
+  - Édition qté du stock avec boutons rapides -1/-2/-5/-10/+1/+5 (décrémentation manuelle ergonomique)
+  - Historique compact des dernières listes envoyées (statut, urgence, date, items)
+  - Anciens composants `CuisineNeedsTab.jsx` + `CuisineInventoryTab.jsx` plus utilisés (gardés pour rollback)
 - **Alertes de péremption — Dashboard Stock (DONE)** : 2 cartes dans la grille Alerts du Tableau de Bord Stock
   - "Produits expirés" (rouge URGENT, animation pulse) avec date, nb jours depuis expiration, quantité encore en stock
   - "Péremption proche ≤ 7j" (ambre, surligné si ≤ 2j) avec date, "aujourd'hui/demain/dans Nj", quantité
