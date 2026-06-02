@@ -239,6 +239,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+- **Refonte totale des montants Locations (02/06/2026)** : suppression de la confusion entre montant contractuel et argent encaissé
+  - Distinction stricte de 3 valeurs partout : **Total locations** (rental_amount), **Avances reçues** (deposit_paid), **Solde à payer** (balance_remaining)
+  - Le résultat journalier / hebdo / mensuel n'inclut plus que les **avances réellement encaissées** (cohérent avec la caisse réelle)
+  - Backend : `/api/reports/weekly`, `/api/reports/monthly-stats`, `/api/reports/monthly-history`, `/api/financial-points/reversement-autofill` mis à jour
+  - Frontend : `HebdoReport` (colonne Loc affiche avances + récap Total/Avances/Solde + détail par location), `StatsTab` (3 lignes Total/Avances/Solde), `MonthlyHistoryView` (cartes & PDF), tooltips
+  - Backward compat : champ `locations_income` conservé et renvoie désormais `locations_advances`
 - **Sous-menu "Historique mensuel" dans Statistiques & Rapport (02/06/2026)** :
   - Nouveau composant `MonthlyHistoryView.jsx` accessible via 3e bouton dans StatsTab
   - Liste verticale de cartes pliables, un mois par carte, depuis Janvier 2026 (mois en cours en haut)

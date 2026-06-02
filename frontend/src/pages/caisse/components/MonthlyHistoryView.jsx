@@ -51,7 +51,7 @@ function openMonthlyPdf(m) {
     return;
   }
   const monthLabel = `${MONTH_NAMES[m.month - 1]} ${m.year}`;
-  const totalIncome = (m.total_revenue || 0) + (m.locations_income || 0);
+  const totalIncome = (m.total_revenue || 0) + (m.locations_advances || 0);
   const marge = totalIncome - (m.expenses_total || 0);
 
   const groupRows = Object.entries(GROUP_META).map(([k, meta]) => `
@@ -97,27 +97,29 @@ function openMonthlyPdf(m) {
   <div class="meta">Espace Maxo · Généré le ${new Date().toLocaleString("fr-FR")}</div>
   <div class="kpis">
     <div class="kpi"><span>CA Caisse</span><b>${fmt(m.total_revenue)} F</b></div>
-    <div class="kpi"><span>Locations</span><b>${fmt(m.locations_income)} F</b></div>
-    <div class="kpi" style="background:#e2f5e9"><span>TOTAL Recettes</span><b style="color:#197d3a">${fmt(totalIncome)} F</b></div>
+    <div class="kpi" style="background:#f5ecfc"><span>Total Locations</span><b style="color:#6b21a8">${fmt(m.locations_total)} F</b></div>
+    <div class="kpi" style="background:#e2f5e9"><span>Avances Locations</span><b style="color:#197d3a">${fmt(m.locations_advances)} F</b></div>
+    <div class="kpi" style="background:#fff3e0"><span>Solde locations à encaisser</span><b style="color:#b07a00">${fmt(m.locations_balance_due)} F</b></div>
+    <div class="kpi" style="background:#e2f5e9"><span>TOTAL Recettes (CA + avances)</span><b style="color:#197d3a">${fmt(totalIncome)} F</b></div>
     <div class="kpi" style="background:#fdecec"><span>Dépenses & Achats</span><b style="color:#a01010">${fmt(m.expenses_total)} F</b></div>
     <div class="kpi" style="background:${marge >= 0 ? "#e7f5ec" : "#fde2e2"}"><span>Marge brute</span><b style="color:${marge >= 0 ? "#197d3a" : "#a01010"}">${fmt(marge)} F</b></div>
     <div class="kpi"><span>Factures validées</span><b>${m.invoice_count}</b></div>
   </div>
   <div class="two-col">
     <div>
-      <h2>CA par catégorie</h2>
+      <h2>CA Caisse par catégorie</h2>
       <table>${groupRows}</table>
     </div>
     <div>
-      <h2>CA par mode de paiement</h2>
+      <h2>CA Caisse par mode de paiement</h2>
       <table>${paymentRows}</table>
     </div>
   </div>
-  <h2>Locations & Réservations (${m.locations_count})</h2>
+  <h2>Locations & Réservations (${m.locations_count}) — Total ${fmt(m.locations_total)} F · Avances ${fmt(m.locations_advances)} F · Solde ${fmt(m.locations_balance_due)} F</h2>
   ${(m.locations_details || []).length === 0
     ? '<p style="font-size:11px;color:#666">Aucune location ce mois.</p>'
-    : `<table><tr><th>Date</th><th>Client</th><th style="text-align:right">Montant</th><th>Statut</th></tr>${
-        (m.locations_details || []).map(l => `<tr><td>${l.reservation_date || ""}</td><td>${l.client_name || "—"}</td><td style="text-align:right;font-family:monospace">${fmt(l.amount)} F</td><td>${l.status || ""}</td></tr>`).join("")
+    : `<table><tr><th>Date</th><th>Client</th><th style="text-align:right">Total</th><th style="text-align:right">Avance</th><th style="text-align:right">Solde</th><th>Statut</th></tr>${
+        (m.locations_details || []).map(l => `<tr><td>${l.reservation_date || ""}</td><td>${l.client_name || "—"}</td><td style="text-align:right;font-family:monospace">${fmt(l.rental_amount)} F</td><td style="text-align:right;font-family:monospace;color:#197d3a">${fmt(l.deposit_paid)} F</td><td style="text-align:right;font-family:monospace;color:${(l.balance_remaining || 0) > 0 ? "#b07a00" : "#999"}">${fmt(l.balance_remaining || 0)} F</td><td>${l.status || ""}</td></tr>`).join("")
       }</table>`}
   <div class="two-col">
     <div>
@@ -130,7 +132,9 @@ function openMonthlyPdf(m) {
     </div>
   </div>
   <div class="footer">
-    Rapport généré par Caisse Pro — Espace Maxo. Toutes les valeurs sont en F CFA. Les factures transférées (assigned_week) sont prises en compte sur leur mois cible.
+    Rapport généré par Caisse Pro — Espace Maxo. Toutes les valeurs sont en F CFA.<br>
+    <b>Total Locations</b> = montant total facturé sur le mois. <b>Avances</b> = effectivement encaissé. <b>Solde</b> = reste dû par les clients.<br>
+    Les factures transférées (assigned_week) sont prises en compte sur leur mois cible.
   </div>
   <script>window.onload=function(){setTimeout(function(){window.print();},300)}</script>
 </body></html>`;
@@ -139,7 +143,7 @@ function openMonthlyPdf(m) {
 }
 
 const MonthCard = ({ m, open, onToggle }) => {
-  const totalIncome = (m.total_revenue || 0) + (m.locations_income || 0);
+  const totalIncome = (m.total_revenue || 0) + (m.locations_advances || 0);
   const marge = totalIncome - (m.expenses_total || 0);
   const monthLabel = `${MONTH_NAMES[m.month - 1]} ${m.year}`;
   return (
@@ -149,7 +153,10 @@ const MonthCard = ({ m, open, onToggle }) => {
           {open ? <ChevronDown className="w-5 h-5 text-amber-300" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
           <Calendar className="w-4 h-4 text-amber-300" />
           <span className="text-amber-100">{monthLabel}</span>
-          <Badge className="bg-emerald-500/20 text-emerald-300 ml-1">{fmt(totalIncome)} F</Badge>
+          <Badge className="bg-emerald-500/20 text-emerald-300 ml-1">{fmt(totalIncome)} F encaissé</Badge>
+          {(m.locations_balance_due || 0) > 0 && (
+            <Badge className="bg-amber-500/20 text-amber-200" title="Solde locations restant à encaisser">À encaisser {fmt(m.locations_balance_due)} F</Badge>
+          )}
           {(m.expenses_total || 0) > 0 && (
             <Badge className="bg-rose-500/20 text-rose-300">− {fmt(m.expenses_total)} F dépenses</Badge>
           )}
@@ -176,14 +183,15 @@ const MonthCard = ({ m, open, onToggle }) => {
               <p className="text-[10px] uppercase text-slate-400">CA Caisse</p>
               <p className="text-base font-bold text-amber-300 font-mono">{fmt(m.total_revenue)} F</p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-[10px] uppercase text-slate-400">Locations</p>
-              <p className="text-base font-bold text-purple-300 font-mono">{fmt(m.locations_income)} F</p>
-              <p className="text-[9px] text-slate-500">{m.locations_count} réservation{m.locations_count > 1 ? "s" : ""}</p>
-            </div>
             <div className="bg-emerald-900/30 rounded p-2 border border-emerald-500/30">
-              <p className="text-[10px] uppercase text-emerald-300">Total recettes</p>
+              <p className="text-[10px] uppercase text-emerald-300">Total recettes encaissées</p>
               <p className="text-base font-bold text-emerald-300 font-mono">{fmt(totalIncome)} F</p>
+              <p className="text-[9px] text-slate-500">CA Caisse + Avances</p>
+            </div>
+            <div className="bg-purple-900/20 rounded p-2 border border-purple-500/30">
+              <p className="text-[10px] uppercase text-purple-300">Total des locations</p>
+              <p className="text-base font-bold text-purple-300 font-mono">{fmt(m.locations_total)} F</p>
+              <p className="text-[9px] text-slate-500">{m.locations_count} réservation{m.locations_count > 1 ? "s" : ""}</p>
             </div>
             <div className="bg-rose-900/20 rounded p-2 border border-rose-500/30">
               <p className="text-[10px] uppercase text-rose-300">Dépenses</p>
@@ -191,6 +199,27 @@ const MonthCard = ({ m, open, onToggle }) => {
               <p className="text-[9px] text-slate-500">{m.expenses_count} opération{m.expenses_count > 1 ? "s" : ""}</p>
             </div>
           </div>
+
+          {/* Détail Locations : Avances reçues vs Solde à payer */}
+          {(m.locations_total || 0) > 0 && (
+            <div className="bg-slate-900/40 rounded border border-purple-500/30 p-2">
+              <p className="text-[11px] font-semibold text-purple-200 mb-1.5">Détail Locations & Réservations</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-purple-900/30 rounded p-1.5">
+                  <p className="text-[10px] text-purple-300/80">Total locations</p>
+                  <p className="text-sm font-mono font-bold text-purple-200">{fmt(m.locations_total)} F</p>
+                </div>
+                <div className="bg-emerald-900/30 rounded p-1.5">
+                  <p className="text-[10px] text-emerald-300/80">Avances reçues</p>
+                  <p className="text-sm font-mono font-bold text-emerald-200">{fmt(m.locations_advances)} F</p>
+                </div>
+                <div className="bg-amber-900/30 rounded p-1.5">
+                  <p className="text-[10px] text-amber-300/80">Solde à payer</p>
+                  <p className="text-sm font-mono font-bold text-amber-200">{fmt(m.locations_balance_due)} F</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* CA par catégorie */}
           <div>
@@ -238,13 +267,15 @@ const MonthCard = ({ m, open, onToggle }) => {
               <p className="text-[11px] font-semibold text-amber-200 mb-1.5">
                 Locations & Réservations ({m.locations_count})
               </p>
-              <div className="bg-slate-900/40 rounded border border-slate-700 max-h-40 overflow-y-auto">
+              <div className="bg-slate-900/40 rounded border border-slate-700 max-h-44 overflow-y-auto">
                 <table className="w-full text-[10px]">
                   <thead className="sticky top-0 bg-slate-800">
                     <tr className="text-slate-400">
                       <th className="text-left py-1 px-2">Date</th>
                       <th className="text-left py-1 px-2">Client</th>
-                      <th className="text-right py-1 px-2">Montant</th>
+                      <th className="text-right py-1 px-2">Total</th>
+                      <th className="text-right py-1 px-2">Avance</th>
+                      <th className="text-right py-1 px-2">Solde</th>
                       <th className="text-left py-1 px-2">Statut</th>
                     </tr>
                   </thead>
@@ -252,8 +283,12 @@ const MonthCard = ({ m, open, onToggle }) => {
                     {(m.locations_details || []).map((l) => (
                       <tr key={l.id} className="border-t border-slate-800">
                         <td className="py-1 px-2 text-slate-300 font-mono">{l.reservation_date}</td>
-                        <td className="py-1 px-2 text-slate-200 truncate max-w-[140px]">{l.client_name || "—"}</td>
-                        <td className="py-1 px-2 text-right font-mono text-purple-300">{fmt(l.amount)} F</td>
+                        <td className="py-1 px-2 text-slate-200 truncate max-w-[120px]">{l.client_name || "—"}</td>
+                        <td className="py-1 px-2 text-right font-mono text-purple-300">{fmt(l.rental_amount)} F</td>
+                        <td className="py-1 px-2 text-right font-mono text-emerald-300">{fmt(l.deposit_paid)} F</td>
+                        <td className={`py-1 px-2 text-right font-mono ${(l.balance_remaining || 0) > 0 ? "text-amber-300" : "text-slate-500"}`}>
+                          {fmt(l.balance_remaining || 0)} F
+                        </td>
                         <td className="py-1 px-2 text-[9px] text-slate-400">{l.status}</td>
                       </tr>
                     ))}
@@ -337,11 +372,13 @@ const MonthlyHistoryView = () => {
   const totals = useMemo(() => {
     return months.reduce((acc, m) => {
       acc.revenue += m.total_revenue || 0;
-      acc.locations += m.locations_income || 0;
+      acc.locations_total += m.locations_total || 0;
+      acc.locations_advances += m.locations_advances || 0;
+      acc.locations_balance_due += m.locations_balance_due || 0;
       acc.expenses += m.expenses_total || 0;
       acc.invoices += m.invoice_count || 0;
       return acc;
-    }, { revenue: 0, locations: 0, expenses: 0, invoices: 0 });
+    }, { revenue: 0, locations_total: 0, locations_advances: 0, locations_balance_due: 0, expenses: 0, invoices: 0 });
   }, [months]);
 
   return (
@@ -361,18 +398,22 @@ const MonthlyHistoryView = () => {
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+        <CardContent className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
           <div className="bg-slate-900/50 rounded p-2">
             <p className="text-[10px] uppercase text-slate-400">CA Caisse cumulé</p>
             <p className="text-base font-bold text-amber-300 font-mono">{fmt(totals.revenue)} F</p>
           </div>
-          <div className="bg-slate-900/50 rounded p-2">
-            <p className="text-[10px] uppercase text-slate-400">Locations cumulées</p>
-            <p className="text-base font-bold text-purple-300 font-mono">{fmt(totals.locations)} F</p>
+          <div className="bg-purple-900/30 rounded p-2 border border-purple-500/30">
+            <p className="text-[10px] uppercase text-purple-300">Total locations</p>
+            <p className="text-base font-bold text-purple-300 font-mono">{fmt(totals.locations_total)} F</p>
           </div>
-          <div className="bg-emerald-900/30 rounded p-2 border border-emerald-500/30">
-            <p className="text-[10px] uppercase text-emerald-300">Total recettes</p>
-            <p className="text-base font-bold text-emerald-300 font-mono">{fmt(totals.revenue + totals.locations)} F</p>
+          <div className="bg-slate-900/50 rounded p-2 border border-emerald-500/30">
+            <p className="text-[10px] uppercase text-emerald-300">Avances locations</p>
+            <p className="text-base font-bold text-emerald-300 font-mono">{fmt(totals.locations_advances)} F</p>
+          </div>
+          <div className="bg-amber-900/20 rounded p-2 border border-amber-500/30">
+            <p className="text-[10px] uppercase text-amber-300">Solde à encaisser</p>
+            <p className="text-base font-bold text-amber-300 font-mono">{fmt(totals.locations_balance_due)} F</p>
           </div>
           <div className="bg-rose-900/20 rounded p-2 border border-rose-500/30">
             <p className="text-[10px] uppercase text-rose-300">Dépenses cumulées</p>

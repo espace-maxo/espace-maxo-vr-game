@@ -240,14 +240,21 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
             ],
         }, {"_id": 0}).to_list(2000)
         _seen = set()
-        locations_income = 0
+        locations_total = 0          # somme rental_amount (total des locations)
+        locations_advances = 0       # somme deposit_paid (avances reçues)
+        locations_balance_due = 0    # solde à payer (rental − deposit)
         locations_count = 0
         for loc in loc_reservations:
             lid = loc.get("id")
             if lid in _seen:
                 continue
             _seen.add(lid)
-            locations_income += loc.get("rental_amount", 0) or 0
+            rental = float(loc.get("rental_amount", 0) or 0)
+            paid = float(loc.get("deposit_paid", 0) or 0)
+            balance = float(loc.get("balance_remaining", rental - paid) or 0)
+            locations_total += rental
+            locations_advances += paid
+            locations_balance_due += balance
             locations_count += 1
 
         return {
@@ -257,9 +264,15 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
             "invoice_count": len(invoices),
             "by_department": by_department,
             "by_revenue_group": by_revenue_group,
-            "locations_income": locations_income,
+            # Locations — 3 valeurs distinctes pour clarté financière
+            "locations_total": locations_total,           # total des locations (rental_amount)
+            "locations_advances": locations_advances,     # avances reçues (deposit_paid)
+            "locations_balance_due": locations_balance_due,  # solde à payer
             "locations_count": locations_count,
-            "total_income": total_revenue + locations_income,
+            # Backward compat (anciens consommateurs) : "locations_income" = avances reçues
+            "locations_income": locations_advances,
+            # total_income = recettes RÉELLEMENT encaissées (CA + avances)
+            "total_income": total_revenue + locations_advances,
             "daily_stats": daily_stats
         }
     except Exception as e:
@@ -641,7 +654,9 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                 ],
             }, {"_id": 0}).to_list(2000)
             seen_loc = set()
-            locations_income = 0
+            locations_total = 0          # somme rental_amount
+            locations_advances = 0       # somme deposit_paid
+            locations_balance_due = 0    # solde à payer
             locations_count = 0
             loc_details = []
             for loc in loc_reservations:
@@ -649,14 +664,20 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                 if lid in seen_loc:
                     continue
                 seen_loc.add(lid)
-                amount = loc.get("rental_amount", 0) or 0
-                locations_income += amount
+                rental = float(loc.get("rental_amount", 0) or 0)
+                paid = float(loc.get("deposit_paid", 0) or 0)
+                balance = float(loc.get("balance_remaining", rental - paid) or 0)
+                locations_total += rental
+                locations_advances += paid
+                locations_balance_due += balance
                 locations_count += 1
                 loc_details.append({
                     "id": lid,
                     "reservation_date": loc.get("reservation_date"),
-                    "client_name": loc.get("client_name") or loc.get("client"),
-                    "amount": amount,
+                    "client_name": loc.get("customer_name") or loc.get("client_name") or loc.get("client"),
+                    "rental_amount": rental,
+                    "deposit_paid": paid,
+                    "balance_remaining": balance,
                     "status": loc.get("status"),
                 })
 
@@ -692,10 +713,16 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                 "by_department": by_department,
                 "by_revenue_group": by_revenue_group,
                 "by_payment": by_payment,
-                "locations_income": locations_income,
+                # Locations — 3 valeurs distinctes
+                "locations_total": locations_total,
+                "locations_advances": locations_advances,
+                "locations_balance_due": locations_balance_due,
                 "locations_count": locations_count,
                 "locations_details": loc_details[:50],
-                "total_income": total_revenue + locations_income,
+                # Backward compat
+                "locations_income": locations_advances,
+                # Total = CA caisse + AVANCES (réellement encaissées)
+                "total_income": total_revenue + locations_advances,
                 "expenses_total": expenses_total,
                 "expenses_count": expenses_count,
                 "by_expense_payment_mode": by_expense_payment_mode,

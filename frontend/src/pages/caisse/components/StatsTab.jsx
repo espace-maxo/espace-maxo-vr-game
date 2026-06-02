@@ -93,11 +93,22 @@ const StatsTab = ({
               <div>
                 <p className="text-slate-400 text-sm">Chiffre d'affaires du mois</p>
                 <p className="text-2xl sm:text-3xl font-bold text-amber-500" data-testid="stats-total-revenue">{formatPrice(monthlyStats.total_revenue)} F</p>
-                {(monthlyStats.locations_income || 0) > 0 && (
-                  <p className="text-xs text-purple-300 mt-1">
-                    + Locations & Réservations : <span className="font-bold">{formatPrice(monthlyStats.locations_income)} F</span>
-                    {' '}<span className="text-slate-400">= Total Recettes <span className="text-emerald-400 font-bold">{formatPrice(monthlyStats.total_income || (monthlyStats.total_revenue + (monthlyStats.locations_income || 0)))} F</span></span>
-                  </p>
+                {((monthlyStats.locations_total || 0) > 0 || (monthlyStats.locations_advances || monthlyStats.locations_income || 0) > 0) && (
+                  <div className="text-xs mt-1 space-y-0.5" data-testid="stats-locations-breakdown">
+                    <p className="text-purple-300">
+                      Total Locations : <span className="font-bold">{formatPrice(monthlyStats.locations_total || 0)} F</span>
+                      <span className="text-slate-500"> · {monthlyStats.locations_count || 0} réservation{(monthlyStats.locations_count || 0) > 1 ? "s" : ""}</span>
+                    </p>
+                    <p className="text-emerald-300">
+                      Avances reçues : <span className="font-bold">{formatPrice(monthlyStats.locations_advances || monthlyStats.locations_income || 0)} F</span>
+                      {' '}<span className="text-slate-400">→ Total Recettes encaissées <span className="text-emerald-400 font-bold">{formatPrice(monthlyStats.total_income || (monthlyStats.total_revenue + (monthlyStats.locations_advances || monthlyStats.locations_income || 0)))} F</span></span>
+                    </p>
+                    {(monthlyStats.locations_balance_due || 0) > 0 && (
+                      <p className="text-amber-300">
+                        Solde à encaisser (locations) : <span className="font-bold">{formatPrice(monthlyStats.locations_balance_due)} F</span>
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500/20 rounded-full flex items-center justify-center">

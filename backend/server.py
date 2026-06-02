@@ -6872,22 +6872,25 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             locations.append(_l)
         
         # Calculate total locations income
-        total_locations_income = 0
+        total_locations_amount = 0       # somme rental_amount (total des locations)
+        total_locations_advances = 0     # somme deposit_paid (avances reçues)
+        total_locations_balance_due = 0  # solde à payer
         locations_count = 0
         locations_by_space = {}
         locations_details = []
         
         # Initialize locations in daily data
         for date in daily_data:
-            daily_data[date]["locations"] = {"count": 0, "total": 0, "items": []}
+            daily_data[date]["locations"] = {"count": 0, "total": 0, "advances": 0, "balance_due": 0, "items": []}
         
         for loc in locations:
-            rental_amount = loc.get("rental_amount", 0)
-            deposit_paid = loc.get("deposit_paid", 0)
-            # Count the deposit paid as the income received
-            income = deposit_paid if deposit_paid > 0 else rental_amount
+            rental_amount = float(loc.get("rental_amount", 0) or 0)
+            deposit_paid = float(loc.get("deposit_paid", 0) or 0)
+            balance_remaining = float(loc.get("balance_remaining", rental_amount - deposit_paid) or 0)
             
-            total_locations_income += rental_amount
+            total_locations_amount += rental_amount
+            total_locations_advances += deposit_paid
+            total_locations_balance_due += balance_remaining
             locations_count += 1
             
             # Track by space type
@@ -6911,13 +6914,16 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
             res_date = (settled_at[:10] if settled_at else (loc.get("reservation_date", "") or "")[:10])
             if res_date in daily_data:
                 daily_data[res_date]["locations"]["count"] += 1
-                daily_data[res_date]["locations"]["total"] += rental_amount
+                daily_data[res_date]["locations"]["total"] += rental_amount       # total contractuel
+                daily_data[res_date]["locations"]["advances"] += deposit_paid      # avances reçues
+                daily_data[res_date]["locations"]["balance_due"] += balance_remaining
                 daily_data[res_date]["locations"]["items"].append({
                     "id": loc.get("id"),
                     "customer_name": loc.get("customer_name"),
                     "space_type": space_label,
                     "rental_amount": rental_amount,
                     "deposit_paid": deposit_paid,
+                    "balance_remaining": balance_remaining,
                     "event_type": loc.get("event_type")
                 })
             
@@ -6928,16 +6934,18 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 "reservation_date": loc.get("reservation_date"),
                 "rental_amount": rental_amount,
                 "deposit_paid": deposit_paid,
+                "balance_remaining": balance_remaining,
                 "event_type": loc.get("event_type"),
                 "status": loc.get("status")
             })
         
         # Recalculate daily results including locations
         for date in daily_data:
-            locations_income = daily_data[date]["locations"]["total"]
+            # Le résultat journalier reflète l'argent réellement encaissé (avances), pas le total contractuel
+            advances = daily_data[date]["locations"].get("advances", 0)
             daily_data[date]["result"] = (
                 daily_data[date]["sales"]["total"] + 
-                locations_income - 
+                advances - 
                 daily_data[date]["expenses"]["total"]
             )
         
@@ -6983,8 +6991,8 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 daily_data[pdate]["manager_general"]["purchases_count"] += 1
                 daily_data[pdate]["manager_general"]["purchases_total"] += p.get("amount", 0)
         
-        # Recalculate total result including locations
-        total_income = total_sales + total_locations_income
+        # Recalculate total result including locations — n'inclut QUE les avances réellement encaissées
+        total_income = total_sales + total_locations_advances
         result = total_income - total_expenses
         
         return {
@@ -6997,7 +7005,9 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
                 "by_revenue_group": sales_by_revenue_group_total,
             },
             "locations": {
-                "total": total_locations_income,
+                "total": total_locations_amount,           # total des locations (rental_amount cumulé)
+                "advances": total_locations_advances,      # avances reçues (deposit_paid cumulé)
+                "balance_due": total_locations_balance_due, # solde à payer
                 "count": locations_count,
                 "by_space": locations_by_space,
                 "details": locations_details

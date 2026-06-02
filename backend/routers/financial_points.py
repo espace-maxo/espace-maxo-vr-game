@@ -1042,9 +1042,10 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
             if lid in seen:
                 continue
             seen.add(lid)
-            amt = loc.get("rental_amount", 0) or 0
-            # Pour les locations, on n'a pas de payment_method enregistré explicitement.
-            # Convention : on met tout en cash par défaut. La Responsable Op. & Log pourra reventiler.
+            # Reversement = ce qui a été RÉELLEMENT encaissé (avances), pas le total contractuel.
+            amt = float(loc.get("deposit_paid", 0) or 0)
+            if amt <= 0:
+                continue
             pm = _norm_payment_method(loc.get("payment_method"))
             result["locations"][pm] += amt
             result["locations"]["total"] += amt

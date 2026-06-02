@@ -677,8 +677,13 @@ const HebdoReport = ({
                           <span className="text-blue-400 font-bold">{formatPrice(data.sales?.by_revenue_group?.jeux || 0)} F</span>
                         </td>
                         <td className="px-3 py-3 text-right">
-                          <span className="text-purple-400 font-bold">{formatPrice(data.locations?.total || 0)} F</span>
+                          <span className="text-purple-400 font-bold" title={`Total locations : ${formatPrice(data.locations?.total || 0)} F · Avances : ${formatPrice(data.locations?.advances || 0)} F · Solde : ${formatPrice(data.locations?.balance_due || 0)} F`}>
+                            {formatPrice(data.locations?.advances || 0)} F
+                          </span>
                           {(data.locations?.count || 0) > 0 && <span className="text-slate-500 text-[10px] ml-1">({data.locations.count})</span>}
+                          {(data.locations?.balance_due || 0) > 0 && (
+                            <span className="block text-amber-400/80 text-[10px] font-mono">+{formatPrice(data.locations.balance_due)} F à recevoir</span>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-right">
                           <span className="text-red-400 font-bold">{formatPrice(data.expenses?.total || 0)} F</span>
@@ -950,36 +955,64 @@ const HebdoReport = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-purple-400 flex items-center gap-2">
                   <Building2 className="w-5 h-5" />
-                  Locations par Espace
+                  Locations & Réservations
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {Object.entries(weeklyReport.locations.by_space).map(([space, amount]) => (
-                    <div key={space} className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 text-center">
-                      <p className="text-purple-300 text-sm">{space}</p>
-                      <p className="text-purple-400 font-bold text-lg">{formatPrice(amount)} F</p>
-                    </div>
-                  ))}
+                {/* Récap financier locations : Total / Avances / Solde */}
+                <div className="grid grid-cols-3 gap-3" data-testid="locations-financial-summary">
+                  <div className="bg-purple-900/30 border border-purple-500/40 rounded-lg p-3 text-center">
+                    <p className="text-purple-300 text-xs uppercase tracking-wider">Total locations</p>
+                    <p className="text-purple-200 font-bold text-lg font-mono">{formatPrice(weeklyReport.locations.total || 0)} F</p>
+                    <p className="text-slate-500 text-[10px]">{weeklyReport.locations.count || 0} réservation{(weeklyReport.locations.count || 0) > 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-lg p-3 text-center">
+                    <p className="text-emerald-300 text-xs uppercase tracking-wider">Avances reçues</p>
+                    <p className="text-emerald-200 font-bold text-lg font-mono">{formatPrice(weeklyReport.locations.advances || 0)} F</p>
+                    <p className="text-slate-500 text-[10px]">Comptées dans le résultat</p>
+                  </div>
+                  <div className="bg-amber-900/30 border border-amber-500/40 rounded-lg p-3 text-center">
+                    <p className="text-amber-300 text-xs uppercase tracking-wider">Solde à payer</p>
+                    <p className="text-amber-200 font-bold text-lg font-mono">{formatPrice(weeklyReport.locations.balance_due || 0)} F</p>
+                    <p className="text-slate-500 text-[10px]">Reste dû par les clients</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-slate-400 text-sm mb-2">Total par espace (montant contractuel) :</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {Object.entries(weeklyReport.locations.by_space).map(([space, amount]) => (
+                      <div key={space} className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 text-center">
+                        <p className="text-purple-300 text-sm">{space}</p>
+                        <p className="text-purple-400 font-bold text-lg">{formatPrice(amount)} F</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 
                 {/* Liste détaillée des locations */}
                 {weeklyReport.locations?.details?.length > 0 && (
                   <div className="mt-4">
                     <p className="text-slate-400 text-sm mb-2">Détail des locations :</p>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
                       {weeklyReport.locations.details.map((loc, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-slate-700/30 rounded-lg px-3 py-2">
-                          <div>
-                            <span className="text-white font-medium">{loc.customer_name}</span>
-                            <span className="text-slate-400 text-sm ml-2">({loc.space_type})</span>
-                            {loc.event_type && (
-                              <Badge className="ml-2 bg-slate-600/50 text-slate-300 text-xs">{loc.event_type}</Badge>
-                            )}
+                        <div key={idx} className="bg-slate-700/30 rounded-lg px-3 py-2">
+                          <div className="flex justify-between items-start mb-1 flex-wrap gap-1">
+                            <div>
+                              <span className="text-white font-medium">{loc.customer_name}</span>
+                              <span className="text-slate-400 text-sm ml-2">({loc.space_type})</span>
+                              {loc.event_type && (
+                                <Badge className="ml-2 bg-slate-600/50 text-slate-300 text-xs">{loc.event_type}</Badge>
+                              )}
+                            </div>
+                            <span className="text-slate-500 text-xs">{loc.reservation_date}</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-purple-400 font-bold">{formatPrice(loc.rental_amount)} F</p>
-                            <p className="text-slate-500 text-xs">{loc.reservation_date}</p>
+                          <div className="flex justify-between items-center text-xs font-mono">
+                            <span className="text-purple-400">Total {formatPrice(loc.rental_amount)} F</span>
+                            <span className="text-emerald-400">Avance {formatPrice(loc.deposit_paid || 0)} F</span>
+                            <span className={`${(loc.balance_remaining || 0) > 0 ? "text-amber-400 font-bold" : "text-slate-500"}`}>
+                              Solde {formatPrice(loc.balance_remaining || 0)} F
+                            </span>
                           </div>
                         </div>
                       ))}
