@@ -227,17 +227,13 @@ async def get_monthly_stats(year: int = Query(None), month: int = Query(None)):
             for k in by_revenue_group:
                 by_revenue_group[k] += g[k]
 
-        # Recettes Locations & Réservations (collection séparée) sur le mois
-        # On prend toutes les réservations payées dans le mois (settled_at) OU dont la
-        # date de réservation tombe dans le mois (statut != cancelled).
+        # Locations — attribution par date de réservation uniquement (UN seul mois par résa).
+        # Évite les double-comptages quand settled_at tombe dans un mois différent.
         month_start = f"{date_prefix}-01"
         month_end = f"{date_prefix}-{last_day_num:02d}"
         loc_reservations = await db.location_reservations.find({
             "status": {"$nin": ["cancelled", "annule", "annulee"]},
-            "$or": [
-                {"reservation_date": {"$gte": month_start, "$lte": month_end}},
-                {"settled_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"}},
-            ],
+            "reservation_date": {"$gte": month_start, "$lte": month_end},
         }, {"_id": 0}).to_list(2000)
         _seen = set()
         locations_total = 0          # somme rental_amount (total des locations)
@@ -645,13 +641,12 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                 if pm in by_payment:
                     by_payment[pm] += inv.get("total", 0)
 
-            # Locations
+            # Locations — attribution par date de réservation (UNIQUE mois)
+            # On n'utilise plus settled_at pour le rattachement mensuel : une location
+            # serait sinon comptée 2 fois (mois de la réservation + mois du solde).
             loc_reservations = await db.location_reservations.find({
                 "status": {"$nin": ["cancelled", "annule", "annulee"]},
-                "$or": [
-                    {"reservation_date": {"$gte": month_start, "$lte": month_end}},
-                    {"settled_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"}},
-                ],
+                "reservation_date": {"$gte": month_start, "$lte": month_end},
             }, {"_id": 0}).to_list(2000)
             seen_loc = set()
             locations_total = 0          # somme rental_amount

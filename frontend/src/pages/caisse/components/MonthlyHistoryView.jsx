@@ -293,6 +293,15 @@ const MonthCard = ({ m, open, onToggle }) => {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-purple-500/50 bg-slate-800/80">
+                      <td className="py-1.5 px-2 text-[10px] uppercase text-purple-200 font-bold" colSpan={2}>TOTAL ({m.locations_count})</td>
+                      <td className="py-1.5 px-2 text-right font-mono font-bold text-purple-200">{fmt(m.locations_total)} F</td>
+                      <td className="py-1.5 px-2 text-right font-mono font-bold text-emerald-300">{fmt(m.locations_advances)} F</td>
+                      <td className="py-1.5 px-2 text-right font-mono font-bold text-amber-300">{fmt(m.locations_balance_due)} F</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>

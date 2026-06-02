@@ -239,6 +239,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+- **Bug double-comptage Locations dans rapports mensuels — résolu (02/06/2026)** :
+  - **Cause** : le filtre `$or: [reservation_date, settled_at]` provoquait un double comptage quand une réservation était soldée dans un mois différent de sa date d'événement (ex : événement en mai, paiement final en juin → comptée 2 fois).
+  - **Fix** : `/api/reports/monthly-stats` et `/api/reports/monthly-history` filtrent désormais uniquement par `reservation_date` → chaque location appartient à UN seul mois (le mois de l'événement).
+  - Frontend MonthlyHistoryView : ajout d'une ligne **TOTAL** au bas du tableau de détail des locations (rend visible la cohérence : Total = somme rental, Avances = somme paid, Solde = somme balance).
+  - Nettoyage du `settled_at` résiduel dans la collection (test résidu).
 - **Bug solde des réservations qui ne s'actualisait pas — résolu (02/06/2026)** :
   - **Cause racine** : le formulaire d'édition Locations envoyait `deposit_amount`, mais le PUT backend ne recalculait `balance_remaining` que si `deposit_paid` était présent. Le solde restait donc figé après modification de l'avance.
   - **Fix backend** : PUT `/locations/{id}` synchronise désormais `deposit_amount → deposit_paid`, recalcule `balance_remaining`, et marque automatiquement `settled_at` quand tout est payé.
