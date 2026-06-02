@@ -7681,13 +7681,21 @@ async def update_location(
         before = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
         update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
         
+        # Sync deposit_amount → deposit_paid (le formulaire d'édition envoie deposit_amount).
+        # Cela évite que le solde reste figé quand on modifie l'avance via l'UI Locations.
+        if "deposit_amount" in update_dict and "deposit_paid" not in update_dict:
+            update_dict["deposit_paid"] = update_dict["deposit_amount"]
+        
         # Recalculate balance if amounts changed
-        if "rental_amount" in update_dict or "deposit_paid" in update_dict:
+        if "rental_amount" in update_dict or "deposit_paid" in update_dict or "deposit_amount" in update_dict:
             existing = await db.location_reservations.find_one({"id": location_id})
             if existing:
-                rental = update_dict.get("rental_amount", existing.get("rental_amount", 0))
-                deposit = update_dict.get("deposit_paid", existing.get("deposit_paid", 0))
-                update_dict["balance_remaining"] = rental - deposit
+                rental = float(update_dict.get("rental_amount", existing.get("rental_amount", 0)) or 0)
+                deposit = float(update_dict.get("deposit_paid", existing.get("deposit_paid", 0)) or 0)
+                update_dict["balance_remaining"] = max(0, rental - deposit)
+                # Si tout est payé, marquer settled_at automatiquement (utile pour les rapports)
+                if update_dict["balance_remaining"] == 0 and deposit > 0 and not existing.get("settled_at"):
+                    update_dict["settled_at"] = update_dict["updated_at"]
         
         result = await db.location_reservations.update_one(
             {"id": location_id},
@@ -7728,6 +7736,67 @@ async def update_location(
     except Exception as e:
         logger.error(f"Error updating location: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/locations/{location_id}/add-payment")
+async def add_payment_to_location(
+    location_id: str,
+    amount: float = Body(..., embed=True),
+    actor_name: Optional[str] = Query(None),
+    actor_role: Optional[str] = Query(None),
+):
+    """Ajouter un paiement partiel sur une réservation.
+
+    Le montant `amount` est ajouté à `deposit_paid` (cumulatif).
+    `balance_remaining` est recalculé. Si tout est payé, on marque settled_at.
+    """
+    if amount is None or float(amount) <= 0:
+        raise HTTPException(status_code=400, detail="Montant invalide")
+    existing = await db.location_reservations.find_one({"id": location_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Location non trouvée")
+
+    rental = float(existing.get("rental_amount") or 0)
+    prev_paid = float(existing.get("deposit_paid") or 0)
+    new_paid = prev_paid + float(amount)
+    if new_paid > rental:
+        new_paid = rental  # plafond
+    new_balance = max(0.0, rental - new_paid)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    update = {
+        "deposit_paid": new_paid,
+        "deposit_amount": new_paid,  # garde la cohérence avec l'UI
+        "balance_remaining": new_balance,
+        "updated_at": now_iso,
+    }
+    if new_balance == 0:
+        update["status"] = "completed"
+        update["settled_at"] = now_iso
+
+    await db.location_reservations.update_one({"id": location_id}, {"$set": update})
+    updated = await db.location_reservations.find_one({"id": location_id}, {"_id": 0})
+
+    try:
+        from routers.invoices import _log_audit as _log_audit_fn
+        snapshot_doc = {
+            "id": updated.get("id"),
+            "invoice_number": (updated.get("id", "") or "")[:8],
+            "total": updated.get("rental_amount"),
+            "items": [],
+            "client_name": updated.get("customer_name"),
+            "validation_status": updated.get("status"),
+        }
+        await _log_audit_fn(
+            "location", snapshot_doc, "add_payment",
+            {"name": actor_name, "role": actor_role},
+            {"deposit_paid": {"from": prev_paid, "to": new_paid},
+             "balance_remaining": {"from": existing.get("balance_remaining"), "to": new_balance},
+             "payment_added": float(amount)},
+        )
+    except Exception as _e:
+        logger.error(f"location add-payment audit failed: {_e}")
+    return {"success": True, "location": updated, "payment_added": float(amount), "fully_settled": new_balance == 0}
+
 
 @api_router.post("/locations/{location_id}/settle")
 async def settle_location(

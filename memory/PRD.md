@@ -239,6 +239,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+- **Bug solde des réservations qui ne s'actualisait pas — résolu (02/06/2026)** :
+  - **Cause racine** : le formulaire d'édition Locations envoyait `deposit_amount`, mais le PUT backend ne recalculait `balance_remaining` que si `deposit_paid` était présent. Le solde restait donc figé après modification de l'avance.
+  - **Fix backend** : PUT `/locations/{id}` synchronise désormais `deposit_amount → deposit_paid`, recalcule `balance_remaining`, et marque automatiquement `settled_at` quand tout est payé.
+  - **Nouveau endpoint** `POST /locations/{id}/add-payment` (paiement partiel cumulatif). Met à jour deposit_paid + balance_remaining + settled_at si soldé.
+  - **Frontend** : bouton "Ajouter paiement" (avance partielle saisie via prompt) visible tant que balance > 0. Bouton "Solder en 1 clic" visible désormais pour TOUS les statuts non-annulés/non-completed (auparavant uniquement `confirmed`).
 - **Refonte totale des montants Locations (02/06/2026)** : suppression de la confusion entre montant contractuel et argent encaissé
   - Distinction stricte de 3 valeurs partout : **Total locations** (rental_amount), **Avances reçues** (deposit_paid), **Solde à payer** (balance_remaining)
   - Le résultat journalier / hebdo / mensuel n'inclut plus que les **avances réellement encaissées** (cohérent avec la caisse réelle)

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { 
   Calendar, Building2, TreePine, Gamepad2, Plus, Edit2, Trash2, 
   Users, Clock, Phone, DollarSign, CheckCircle, X, Eye, FileText, Printer, Receipt,
-  CalendarDays, List, Calculator,
+  CalendarDays, List, Calculator, Wallet,
 } from "lucide-react";
 import { LOGO_BASE64 } from "../constants_logo";
 import LocationCalendarTab from "./LocationCalendarTab";
@@ -1436,47 +1436,88 @@ const LocationsTab = ({ currentUser, formatPrice }) => {
               </div>
 
               {/* Manager/Admin Actions */}
-              {canManageLocations && viewingLocation.status === "confirmed" && (
+              {canManageLocations && viewingLocation.status !== "cancelled" && (
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Button
-                    onClick={async () => {
-                      const remaining = Number(viewingLocation.balance_remaining || 0);
-                      const total = Number(viewingLocation.rental_amount || 0);
-                      const msg = remaining > 0
-                        ? `Solder la réservation de ${viewingLocation.customer_name} ?\n\nMontant total : ${total.toLocaleString("fr-FR")} F\nReste à payer : ${remaining.toLocaleString("fr-FR")} F\n\nLe solde sera enregistré dans les recettes d'aujourd'hui.`
-                        : `Marquer la réservation comme soldée ?\n\nMontant : ${total.toLocaleString("fr-FR")} F déjà perçus.`;
-                      if (!window.confirm(msg)) return;
-                      try {
-                        await axios.post(`${API}/locations/${viewingLocation.id}/settle?${actorQs()}`);
-                        toast.success("Réservation soldée — recette ajoutée à aujourd'hui");
-                        setViewingLocation(null);
-                        fetchLocations();
-                      } catch (e) {
-                        toast.error(e?.response?.data?.detail || "Erreur lors du solde");
-                      }
-                    }}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                    data-testid="location-settle-btn"
-                    title="Marque comme payée intégralement + enregistre la recette à la date du jour"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Solder en 1 clic
-                  </Button>
-                  <Button
-                    onClick={() => { handleStatusChange(viewingLocation.id, "completed"); setViewingLocation(null); }}
-                    className="bg-green-700 hover:bg-green-800"
-                    title="Termine sans toucher au solde"
-                  >
-                    Terminée
-                  </Button>
-                  <Button
-                    onClick={() => { handleStatusChange(viewingLocation.id, "cancelled"); setViewingLocation(null); }}
-                    variant="outline"
-                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Annuler
-                  </Button>
+                  {Number(viewingLocation.balance_remaining || 0) > 0 && (
+                    <Button
+                      onClick={async () => {
+                        const remaining = Number(viewingLocation.balance_remaining || 0);
+                        const input = window.prompt(
+                          `Ajouter un paiement (avance partielle).\n\nReste à payer : ${remaining.toLocaleString("fr-FR")} F\n\nMontant reçu :`,
+                          String(remaining)
+                        );
+                        if (input === null) return;
+                        const amount = Number(input.replace(/[^\d.,-]/g, "").replace(",", "."));
+                        if (!Number.isFinite(amount) || amount <= 0) {
+                          toast.error("Montant invalide");
+                          return;
+                        }
+                        try {
+                          const r = await axios.post(`${API}/locations/${viewingLocation.id}/add-payment?${actorQs()}`, { amount });
+                          if (r.data.fully_settled) {
+                            toast.success("Paiement enregistré — réservation soldée");
+                          } else {
+                            toast.success(`Paiement de ${amount.toLocaleString("fr-FR")} F enregistré`);
+                          }
+                          setViewingLocation(r.data.location || null);
+                          fetchLocations();
+                        } catch (e) {
+                          toast.error(e?.response?.data?.detail || "Erreur lors de l'ajout du paiement");
+                        }
+                      }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      data-testid="location-add-payment-btn"
+                      title="Ajouter une avance partielle reçue (le solde se met à jour automatiquement)"
+                    >
+                      <Wallet className="w-4 h-4 mr-2" />
+                      Ajouter paiement
+                    </Button>
+                  )}
+                  {viewingLocation.status !== "completed" && (
+                    <Button
+                      onClick={async () => {
+                        const remaining = Number(viewingLocation.balance_remaining || 0);
+                        const total = Number(viewingLocation.rental_amount || 0);
+                        const msg = remaining > 0
+                          ? `Solder la réservation de ${viewingLocation.customer_name} ?\n\nMontant total : ${total.toLocaleString("fr-FR")} F\nReste à payer : ${remaining.toLocaleString("fr-FR")} F\n\nLe solde sera enregistré dans les recettes d'aujourd'hui.`
+                          : `Marquer la réservation comme soldée ?\n\nMontant : ${total.toLocaleString("fr-FR")} F déjà perçus.`;
+                        if (!window.confirm(msg)) return;
+                        try {
+                          await axios.post(`${API}/locations/${viewingLocation.id}/settle?${actorQs()}`);
+                          toast.success("Réservation soldée — recette ajoutée à aujourd'hui");
+                          setViewingLocation(null);
+                          fetchLocations();
+                        } catch (e) {
+                          toast.error(e?.response?.data?.detail || "Erreur lors du solde");
+                        }
+                      }}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                      data-testid="location-settle-btn"
+                      title="Marque comme payée intégralement + enregistre la recette à la date du jour"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Solder en 1 clic
+                    </Button>
+                  )}
+                  {viewingLocation.status === "confirmed" && (
+                    <Button
+                      onClick={() => { handleStatusChange(viewingLocation.id, "completed"); setViewingLocation(null); }}
+                      className="bg-green-700 hover:bg-green-800"
+                      title="Termine sans toucher au solde"
+                    >
+                      Terminée
+                    </Button>
+                  )}
+                  {viewingLocation.status !== "cancelled" && viewingLocation.status !== "completed" && (
+                    <Button
+                      onClick={() => { handleStatusChange(viewingLocation.id, "cancelled"); setViewingLocation(null); }}
+                      variant="outline"
+                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Annuler
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
