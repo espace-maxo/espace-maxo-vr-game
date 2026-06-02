@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   FileText, Plus, Trash2, Edit2, Eye, Send, CheckCircle, 
   RefreshCw, Search, Calendar, User, Phone, Mail, MapPin,
-  DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package, Save
+  DollarSign, Printer, ArrowRight, Clock, AlertCircle, Package, Save, Zap
 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGO_BASE64 } from "../constants_logo";
@@ -297,6 +297,46 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
       payment_methods: ["especes", "virement", "mobile_money"],
     });
     setEditingProforma(null);
+  };
+
+  /**
+   * Modèle Proforma Standard — Location espace vert à 350 000 F
+   *
+   * Pré-rempli : Chaises et tables · Sécurité · Sono.
+   * Pas de TVA (apply_tva=false, "exonere").
+   * L'utilisateur n'a normalement qu'à renseigner le client puis enregistrer.
+   * Il peut modifier l'objet (proforma_title) s'il veut au besoin.
+   */
+  const loadStandardTemplate = () => {
+    const items = [
+      { name: "Chaises et tables", quantity: 1, unit_price: 200000, subtotal: 200000, department: "autres", is_label: false },
+      { name: "Sécurité",          quantity: 1, unit_price: 75000,  subtotal: 75000,  department: "autres", is_label: false },
+      { name: "Sono",              quantity: 1, unit_price: 75000,  subtotal: 75000,  department: "autres", is_label: false },
+    ];
+    const subtotal = items.reduce((s, it) => s + (it.subtotal || 0), 0);
+    setFormData({
+      proforma_title: "Location espace vert",
+      client_name: "",
+      client_phone: "",
+      client_email: "",
+      client_address: "",
+      client_ifu: "",
+      items,
+      subtotal,
+      discount: 0,
+      tax: 0,
+      total: subtotal,
+      notes: "",
+      validity_days: 30,
+      apply_tva: false,
+      tva_exempt_mention: "exonere",
+      payment_mode: "total",
+      payment_percentage: 50,
+      payment_methods: ["especes", "virement", "mobile_money"],
+    });
+    setEditingProforma(null);
+    setShowCreateModal(true);
+    toast.success("Modèle « Location espace vert » chargé — modifiez le client puis enregistrez");
   };
 
   const openEditModal = (proforma) => {
@@ -1023,6 +1063,10 @@ const ProformaTab = ({ currentUser, formatPrice, catalog }) => {
           <Button onClick={fetchProformas} variant="outline" className="border-slate-600 text-slate-300">
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualiser
+          </Button>
+          <Button onClick={loadStandardTemplate} className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-amber-400/40" data-testid="proforma-standard-template-btn" title="Charge un modèle prêt à l'emploi : Location espace vert · Chaises et tables · Sécurité · Sono = 350 000 F">
+            <Zap className="w-4 h-4 mr-2" />
+            Modèle 350 000 F
           </Button>
           <Button onClick={() => { resetForm(); setShowCreateModal(true); }} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="w-4 h-4 mr-2" />
