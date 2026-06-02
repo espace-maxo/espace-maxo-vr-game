@@ -54,24 +54,40 @@ def _item_status(it: dict) -> str:
 
 
 @router.get("/cuisine/orders")
-async def list_cuisine_orders(actor_role: str = ""):
-    """Liste les bons de table actifs avec items cuisine.
-    - cuisinier : voit ses bons (pas les bons déjà servis)
-    - manager/admin : voit tout, y compris bons servis (pour suivi)
+async def list_cuisine_orders(actor_role: str = "", status_filter: str = "active", days: int = 1):
+    """Liste les bons de table avec items cuisine.
+
+    Params :
+    - status_filter : "active" (par défaut) = bons non encore tous prêts (all_ready_at vide)
+                      "done"   = bons terminés (all_ready_at présent)
+                      "all"    = tous les bons
+    - days : nombre de jours en arrière à inclure (1 = aujourd'hui uniquement).
+             Utile pour l'historique cuisinier (ex: 14 jours).
     """
     if actor_role not in ("cuisinier", "admin", "manager"):
         raise HTTPException(403, "Action réservée au cuisinier / admin")
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        days_back = max(1, int(days))
+    except Exception:
+        days_back = 1
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back - 1)).strftime("%Y-%m-%d")
     # Tables actives (non encore facturées)
-    tables = await db.caisse_tables.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    tables = await db.caisse_tables.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     out = []
     for t in tables:
         items = t.get("items") or []
         cui_items = [(idx, it) for idx, it in enumerate(items) if _is_cuisine_item(it)]
         if not cui_items:
             continue
-        # Filter on today only (cuisine vues du jour)
-        if (t.get("created_at") or "")[:10] != today_str and (t.get("updated_at") or "")[:10] != today_str:
+        # Filter on date range (cutoff..today)
+        t_date = (t.get("created_at") or "")[:10] or (t.get("updated_at") or "")[:10]
+        if t_date and t_date < cutoff:
+            continue
+        # Filter on all_ready status
+        is_all_ready = bool(t.get("all_ready_at"))
+        if status_filter == "active" and is_all_ready:
+            continue
+        if status_filter == "done" and not is_all_ready:
             continue
         # Augment items with status info
         items_out = [{
@@ -96,7 +112,7 @@ async def list_cuisine_orders(actor_role: str = ""):
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
             "notes": t.get("notes"),
-            "all_ready": bool(t.get("all_ready_at")),
+            "all_ready": is_all_ready,
             "all_ready_at": t.get("all_ready_at"),
             "all_served": all(i["status"] == "served" for i in items_out) if items_out else False,
             "items": items_out,

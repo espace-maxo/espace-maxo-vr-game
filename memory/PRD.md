@@ -238,7 +238,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P4** : Refactoring continu `CaissePage.jsx` (>8000 lignes) / `StockPage.jsx`
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
-## Recently Implemented (Fork 31/05/2026 — 01/06/2026)
+## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+- **Historique cuisinier groupé par date + commandes terminées (02/06/2026)** :
+  - Backend `/api/cuisine/orders` accepte `status_filter` (`active`/`done`/`all`) et `days` (range jours)
+  - Tab "Commandes" filtre désormais `active` → bons `all_ready=true` disparaissent automatiquement
+  - Tab "Historique" : refondu pour afficher les bons terminés groupés par date (Aujourd'hui / 3 / 7 / 14 / 30 jours)
+  - Headers de jour sticky avec barre violette, badge "N bons", liste détaillée des plats par bon
+- **Menu cuisinier plein écran (01/06/2026)** : tabs `flex w-full` + `flex-1 min-w-0` pour répartition uniforme
 - **Scanner bon cuisinier — workflow "Valider et envoyer à l'admin" (01/06/2026)** :
   - Après photo, l'IA extrait les plats → affichage d'une liste **éditable** dans le tab Scanner avec image preview
   - Cuisinier peut corriger nom/quantité, ajouter/supprimer des lignes, ajouter une note

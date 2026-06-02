@@ -50,17 +50,18 @@ const ACTION_META = {
 };
 
 const CuisineHistoryView = ({ actorName }) => {
-  const [items, setItems] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [daysBack, setDaysBack] = useState(14);
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await axios.get(`${API}/cuisine/events`, {
-        params: { actor_role: "cuisinier", actor_name: actorName, limit: 200 },
+      const r = await axios.get(`${API}/cuisine/orders`, {
+        params: { actor_role: "cuisinier", status_filter: "done", days: daysBack },
         timeout: 15000,
       });
-      setItems(r.data.items || []);
+      setOrders(r.data.orders || []);
     } catch {
       toast.error("Erreur chargement historique");
     } finally {
@@ -68,61 +69,120 @@ const CuisineHistoryView = ({ actorName }) => {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [actorName]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [actorName, daysBack]);
+
+  // Regroupement par date (YYYY-MM-DD) à partir de all_ready_at (sinon updated_at)
+  const grouped = React.useMemo(() => {
+    const byDate = {};
+    for (const o of orders) {
+      const ts = o.all_ready_at || o.updated_at || o.created_at || "";
+      const day = (ts || "").slice(0, 10) || "—";
+      if (!byDate[day]) byDate[day] = [];
+      byDate[day].push(o);
+    }
+    // Trier les bons de chaque jour par all_ready_at desc
+    Object.values(byDate).forEach((list) =>
+      list.sort((a, b) => (b.all_ready_at || b.updated_at || "").localeCompare(a.all_ready_at || a.updated_at || ""))
+    );
+    // Trier les dates desc
+    return Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [orders]);
+
+  const fmtDayHeader = (day) => {
+    if (!day || day === "—") return "Date inconnue";
+    try {
+      return format(new Date(day + "T00:00:00"), "EEEE d MMMM yyyy", { locale: fr });
+    } catch {
+      return day;
+    }
+  };
 
   return (
     <Card className="bg-slate-800/60 border-purple-500/40" data-testid="cuisine-history-view">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center justify-between">
+        <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
           <span className="flex items-center gap-2">
             <History className="w-5 h-5 text-purple-400" />
-            Mon historique d'aujourd'hui
+            Historique des bons terminés
           </span>
-          <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="text-slate-300 h-7 text-[11px]">
-            {loading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-            Actualiser
-          </Button>
+          <div className="flex items-center gap-1">
+            <select
+              value={daysBack}
+              onChange={(e) => setDaysBack(Number(e.target.value))}
+              className="bg-slate-900 border border-slate-700 rounded h-7 text-[11px] text-white px-1"
+              data-testid="history-days-select"
+            >
+              <option value={1}>Aujourd'hui</option>
+              <option value={3}>3 derniers jours</option>
+              <option value={7}>7 derniers jours</option>
+              <option value={14}>14 derniers jours</option>
+              <option value={30}>30 derniers jours</option>
+            </select>
+            <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="text-slate-300 h-7 text-[11px]" data-testid="history-refresh">
+              {loading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+              Actualiser
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="text-xs">
-        {items.length === 0 && !loading && (
+      <CardContent className="text-xs space-y-3">
+        {orders.length === 0 && !loading && (
           <p className="text-slate-500 italic text-center py-6">
-            Aucune action enregistrée pour l'instant.
+            Aucun bon terminé sur la période sélectionnée.
           </p>
         )}
-        {items.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-700">
-                  <th className="text-left py-1.5 pr-2">Heure</th>
-                  <th className="text-left py-1.5 px-1">Action</th>
-                  <th className="text-left py-1.5 px-1">Table</th>
-                  <th className="text-left py-1.5 px-1">Détail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((ev) => {
-                  const meta = ACTION_META[ev.action] || { label: ev.action, color: "bg-slate-700 text-slate-300" };
-                  return (
-                    <tr key={ev.id} className="border-b border-slate-800">
-                      <td className="py-1.5 pr-2 text-slate-300 font-mono text-[10px]">
-                        {ev.created_at ? format(new Date(ev.created_at), "HH:mm:ss") : ""}
-                      </td>
-                      <td className="px-1"><Badge className={meta.color}>{meta.label}</Badge></td>
-                      <td className="px-1 text-slate-200">{ev.table_number != null ? `T${ev.table_number}` : "—"}</td>
-                      <td className="px-1 text-slate-300">
-                        {ev.action === "item_ready" && <span>{ev.item_name} x{ev.item_quantity || 1}</span>}
-                        {ev.action === "all_ready" && <span className="text-slate-400">{ev.items_count} plat(s)</span>}
-                        {ev.action === "scan_bon" && <span className="text-slate-400">{ev.items_count} plat(s) extrait(s)</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {grouped.map(([day, list]) => (
+          <div key={day} className="space-y-1.5" data-testid={`history-day-${day}`}>
+            <div className="flex items-center gap-2 sticky top-0 bg-slate-800/95 backdrop-blur py-1 z-10 border-b border-purple-500/30">
+              <div className="h-5 w-1 bg-purple-500 rounded" />
+              <h3 className="text-[12px] font-bold text-purple-200 capitalize">
+                {fmtDayHeader(day)}
+              </h3>
+              <Badge className="bg-purple-500/20 text-purple-200 text-[10px]">
+                {list.length} bon{list.length > 1 ? "s" : ""}
+              </Badge>
+            </div>
+            <div className="space-y-1.5 pl-2">
+              {list.map((o) => {
+                const totalQty = (o.items || []).reduce((s, it) => s + Number(it.quantity || 1), 0);
+                const readyAt = o.all_ready_at ? format(new Date(o.all_ready_at), "HH:mm") : "";
+                return (
+                  <div
+                    key={o.id}
+                    className="rounded border border-slate-700 bg-slate-900/40 px-2.5 py-1.5"
+                    data-testid={`history-order-${o.id}`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <Badge className="bg-amber-500/20 text-amber-200 border border-amber-500/30">
+                        <Hash className="w-3 h-3 mr-1 inline" /> T{o.table_number}
+                      </Badge>
+                      {o.server_name && (
+                        <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{o.server_name}</span>
+                      )}
+                      <Badge className="bg-emerald-500/20 text-emerald-200 text-[10px]">
+                        <CheckCircle2 className="w-3 h-3 mr-1 inline" /> Prêt
+                      </Badge>
+                      {readyAt && (
+                        <span className="text-[10px] text-emerald-300/70 font-mono ml-auto">{readyAt}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-200">
+                      {(o.items || []).map((it, i) => (
+                        <div key={i} className="flex items-center justify-between">
+                          <span className="truncate">{it.name}</span>
+                          <span className="text-slate-400 font-mono shrink-0 ml-2">×{it.quantity || 1}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-slate-500 mt-1">
+                      Total : {totalQty} plat{totalQty > 1 ? "s" : ""}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        )}
+        ))}
       </CardContent>
     </Card>
   );
@@ -147,7 +207,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
     if (!silent) setLoading(true);
     try {
       const r = await axios.get(`${API}/cuisine/orders`, {
-        params: { actor_role: currentUser?.role || "cuisinier" },
+        params: { actor_role: currentUser?.role || "cuisinier", status_filter: "active" },
         timeout: 10000,
       });
       const list = r.data.orders || [];
