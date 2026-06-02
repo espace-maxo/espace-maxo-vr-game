@@ -536,3 +536,175 @@ async def get_revenue_by_payment_method(week_start: str = None, date: str = None
     except Exception as e:
         logger.error(f"Error getting revenue by payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== HISTORIQUE MENSUEL (Admin) ====================
+
+@router.get("/reports/monthly-history")
+async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
+    """Historique consolidé mois par mois pour l'Admin.
+
+    Pour chaque mois depuis (start_year, start_month) jusqu'à mois en cours :
+      - total_revenue (factures validées)
+      - by_revenue_group (bar / menu_combos / jeux / autres)
+      - by_department (salle_jardin, accompagnements, jeux, bar, location, autres)
+      - by_payment (cash, mobile, cheque, wallet)
+      - locations_income + locations_count
+      - expenses_total + expenses_count + by_expense_payment_mode
+      - invoice_count
+      - total_income = total_revenue + locations_income
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        cur_year, cur_month = now.year, now.month
+
+        # Liste des (year, month) entre start et maintenant
+        months = []
+        y, m = start_year, start_month
+        while (y, m) <= (cur_year, cur_month):
+            months.append((y, m))
+            m += 1
+            if m > 12:
+                y, m = y + 1, 1
+
+        out = []
+        for y, m in months:
+            date_prefix = f"{y}-{m:02d}"
+            last_day_num = calendar.monthrange(y, m)[1]
+            month_start = f"{date_prefix}-01"
+            month_end = f"{date_prefix}-{last_day_num:02d}"
+
+            # Native invoices for this month (no transfer)
+            native = await db.invoices.find({
+                "validation_status": "validated",
+                "created_at": {"$regex": f"^{date_prefix}"},
+                "$or": [
+                    {"assigned_week": {"$exists": False}},
+                    {"assigned_week": None},
+                    {"assigned_week": ""}
+                ]
+            }, {"_id": 0}).to_list(20000)
+
+            # Invoices assigned IN this month (transferred from elsewhere)
+            mondays = []
+            d = datetime(y, m, 1)
+            while d <= datetime(y, m, last_day_num):
+                if d.weekday() == 0:
+                    mondays.append(d.strftime("%Y-%m-%d"))
+                d += timedelta(days=1)
+            assigned_in = []
+            if mondays:
+                assigned_in = await db.invoices.find({
+                    "validation_status": "validated",
+                    "assigned_week": {"$in": mondays}
+                }, {"_id": 0}).to_list(20000)
+
+            # Dedup
+            seen = set()
+            invoices = []
+            for inv in native + assigned_in:
+                iid = inv.get("id")
+                if iid in seen:
+                    continue
+                seen.add(iid)
+                invoices.append(inv)
+
+            # Invoices transferred OUT to other months
+            transferred_out = await db.invoices.find({
+                "created_at": {"$regex": f"^{date_prefix}"},
+                "assigned_week": {"$exists": True, "$nin": [None, ""], "$not": {"$in": mondays + [""]}}
+            }, {"_id": 0, "id": 1}).to_list(20000)
+            tids = {x["id"] for x in transferred_out}
+            invoices = [inv for inv in invoices if inv.get("id") not in tids]
+
+            total_revenue = sum(inv.get("total", 0) for inv in invoices)
+            by_department = {"salle_jardin": 0, "accompagnements": 0, "jeux": 0, "bar": 0, "location": 0, "autres": 0}
+            by_revenue_group = {"bar": 0, "menu_combos": 0, "jeux": 0, "autres": 0}
+            by_payment = {"cash": 0, "mobile": 0, "cheque": 0, "wallet": 0}
+            for inv in invoices:
+                dpt = extract_department_totals(inv)
+                for k in by_department:
+                    by_department[k] += dpt[k]
+                grp = extract_revenue_groups(inv)
+                for k in by_revenue_group:
+                    by_revenue_group[k] += grp[k]
+                pm = normalize_payment_method(inv.get("payment_method") or inv.get("payment_mode"))
+                if pm in by_payment:
+                    by_payment[pm] += inv.get("total", 0)
+
+            # Locations
+            loc_reservations = await db.location_reservations.find({
+                "status": {"$nin": ["cancelled", "annule", "annulee"]},
+                "$or": [
+                    {"reservation_date": {"$gte": month_start, "$lte": month_end}},
+                    {"settled_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"}},
+                ],
+            }, {"_id": 0}).to_list(2000)
+            seen_loc = set()
+            locations_income = 0
+            locations_count = 0
+            loc_details = []
+            for loc in loc_reservations:
+                lid = loc.get("id")
+                if lid in seen_loc:
+                    continue
+                seen_loc.add(lid)
+                amount = loc.get("rental_amount", 0) or 0
+                locations_income += amount
+                locations_count += 1
+                loc_details.append({
+                    "id": lid,
+                    "reservation_date": loc.get("reservation_date"),
+                    "client_name": loc.get("client_name") or loc.get("client"),
+                    "amount": amount,
+                    "status": loc.get("status"),
+                })
+
+            # Expenses (achats + dépenses validés / payés) sur le mois
+            expenses = await db.expenses.find({
+                "created_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"},
+                "status": {"$in": ["paid", "approved", "purchased", "fulfilled"]},
+            }, {"_id": 0}).to_list(5000)
+            expenses_total = 0
+            expenses_count = 0
+            by_expense_payment_mode = {"fonds_propres": 0, "caisse_restau": 0, "other": 0}
+            by_expense_category = {}
+            for e in expenses:
+                amt = e.get("amount", 0) or 0
+                expenses_total += amt
+                expenses_count += 1
+                pm = (e.get("payment_mode") or e.get("paid_with") or "other").lower()
+                if pm in ("fonds_propres", "fonds propres", "personnel"):
+                    by_expense_payment_mode["fonds_propres"] += amt
+                elif pm in ("caisse_restau", "caisse", "caisse_resto"):
+                    by_expense_payment_mode["caisse_restau"] += amt
+                else:
+                    by_expense_payment_mode["other"] += amt
+                cat = e.get("category") or "Autre"
+                by_expense_category[cat] = by_expense_category.get(cat, 0) + amt
+
+            out.append({
+                "year": y,
+                "month": m,
+                "month_label": datetime(y, m, 1).strftime("%Y-%m"),
+                "invoice_count": len(invoices),
+                "total_revenue": total_revenue,
+                "by_department": by_department,
+                "by_revenue_group": by_revenue_group,
+                "by_payment": by_payment,
+                "locations_income": locations_income,
+                "locations_count": locations_count,
+                "locations_details": loc_details[:50],
+                "total_income": total_revenue + locations_income,
+                "expenses_total": expenses_total,
+                "expenses_count": expenses_count,
+                "by_expense_payment_mode": by_expense_payment_mode,
+                "by_expense_category": by_expense_category,
+            })
+
+        # Plus récent en premier
+        out.reverse()
+        return {"total": len(out), "months": out}
+    except Exception as e:
+        logger.error(f"Error getting monthly history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

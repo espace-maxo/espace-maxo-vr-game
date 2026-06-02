@@ -16,6 +16,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import ProductSalesTab from './ProductSalesTab';
+import MonthlyHistoryView from './MonthlyHistoryView';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -56,9 +57,19 @@ const StatsTab = ({
       >
         <Package className="w-4 h-4 mr-1" /> Ventes par produit
       </Button>
+      <Button
+        variant={view === "monthly_history" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setView("monthly_history")}
+        className={view === "monthly_history" ? "bg-amber-600 hover:bg-amber-700 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
+        data-testid="stats-view-monthly-history"
+      >
+        <Calendar className="w-4 h-4 mr-1" /> Historique mensuel
+      </Button>
     </div>
 
     {view === "by_product" && <ProductSalesTab />}
+    {view === "monthly_history" && <MonthlyHistoryView />}
 
     {view === "overview" && (
     <>

@@ -239,6 +239,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
 ## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+- **Sous-menu "Historique mensuel" dans Statistiques & Rapport (02/06/2026)** :
+  - Nouveau composant `MonthlyHistoryView.jsx` accessible via 3e bouton dans StatsTab
+  - Liste verticale de cartes pliables, un mois par carte, depuis Janvier 2026 (mois en cours en haut)
+  - Backend nouveau endpoint `GET /api/reports/monthly-history?start_year=2026&start_month=1`
+  - Pour chaque mois : CA Caisse + CA par catégorie (bar/menu/jeux/autres) + CA par mode de paiement (cash/mobile/cheque/wallet) + Locations (income + count + détails) + Dépenses (total + par catégorie + par mode fonds_propres/caisse_restau)
+  - Bandeau cumulé en tête (CA + Locations + Total recettes + Dépenses sur toute la période)
+  - Bouton **PDF** par mois — rapport mensuel complet imprimable (KPIs, ventilations, locations, dépenses)
+  - Respecte `assigned_week` (transferts inter-semaine/mois) comme les autres rapports
 - **Historique cuisinier groupé par date + commandes terminées (02/06/2026)** :
   - Backend `/api/cuisine/orders` accepte `status_filter` (`active`/`done`/`all`) et `days` (range jours)
   - Tab "Commandes" filtre désormais `active` → bons `all_ready=true` disparaissent automatiquement
