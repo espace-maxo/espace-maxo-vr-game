@@ -23,6 +23,7 @@ import {
 import ExpenseAnalysisBadges from "./ExpenseAnalysisBadges";
 import DrinkPurchaseDialog from "./DrinkPurchaseDialog";
 import PurchasePriceHistoryTab from "./PurchasePriceHistoryTab";
+import ExpensesByProductTab from "./ExpensesByProductTab";
 import AchatsManagerPanels from "./AchatsManagerPanels";
 
 const STRIKE_REASONS = [
@@ -456,7 +457,7 @@ const AchatsTab = ({ ctx }) => {
                     },
                     {
                       key: 'historique', label: 'Historique', color: 'cyan',
-                      sub: ['rejetes', 'repertoire_prix'],
+                      sub: ['rejetes', 'repertoire_prix', 'par_produit'],
                       countFn: () => expenses.filter(e => e.status === 'rejected').length,
                     },
                     // 4ème sous-menu : Achats Manager — strictement Admin
@@ -515,6 +516,7 @@ const AchatsTab = ({ ctx }) => {
                   historique: [
                     { key: 'rejetes', label: 'Rejetés', count: expenses.filter(e => e.status === 'rejected').length },
                     { key: 'repertoire_prix', label: 'Répertoire prix' },
+                    { key: 'par_produit', label: 'Par produit (regroupé)' },
                   ],
                   achats_manager: [
                     { key: 'achete', label: 'Produits achetés', count: expenses.filter(e => e.source === 'appro_manager' && e.payment_mode).length },
@@ -523,7 +525,8 @@ const AchatsTab = ({ ctx }) => {
                 const groupKey = ['en_cours', 'a_reviser', 'mes_demandes'].includes(achatsSubView) ? 'a_valider'
                   : ['valides'].includes(achatsSubView) ? 'valides_group'
                   : ['achete'].includes(achatsSubView) ? 'achats_manager'
-                  : 'historique';
+                  : ['rejetes', 'repertoire_prix', 'par_produit'].includes(achatsSubView) ? 'historique'
+                  : 'a_valider';
                 const list = subFilters[groupKey] || [];
                 if (list.length <= 1) return null;
                 return (
@@ -550,7 +553,8 @@ const AchatsTab = ({ ctx }) => {
                 );
               })()}
 
-              {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> : (<>
+              {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> :
+               achatsSubView === 'par_produit' ? <ExpensesByProductTab /> : (<>
 
               {/* Categories legend */}
               <div className="flex flex-wrap gap-2 items-center justify-between">

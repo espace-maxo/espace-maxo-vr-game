@@ -1440,3 +1440,152 @@ async def payment_mode_cumul(
             "count": len(caisse),
         },
     }
+
+
+
+# ==================== Agrégation par produit ====================
+
+def _normalize_product_name(raw: str) -> str:
+    """Normalise un nom de produit pour le regroupement.
+
+    - Trim, lowercase
+    - Supprime accents simples (à é è ê î ô ù ç) pour fusionner "Tomate" et "tomâte"
+    - Réduit espaces multiples
+    """
+    if not raw:
+        return ""
+    s = str(raw).strip().lower()
+    table = str.maketrans({
+        "á": "a", "à": "a", "â": "a", "ä": "a", "ã": "a",
+        "é": "e", "è": "e", "ê": "e", "ë": "e",
+        "í": "i", "ì": "i", "î": "i", "ï": "i",
+        "ó": "o", "ò": "o", "ô": "o", "ö": "o", "õ": "o",
+        "ú": "u", "ù": "u", "û": "u", "ü": "u",
+        "ç": "c", "ñ": "n",
+    })
+    s = s.translate(table)
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+@router.get("/expenses/by-product")
+async def get_expenses_by_product(
+    include_archived: bool = True,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 5000,
+):
+    """Agrège les achats par produit (par nom normalisé).
+
+    Pour chaque produit unique :
+      - count : nombre d'achats
+      - total_quantity : somme des quantités achetées
+      - total_amount : somme des montants dépensés
+      - last_purchase_date : date du dernier achat
+      - history[] : liste chronologique (la plus récente en premier) {date, quantity, unit_price, amount, supplier, category, expense_id, description}
+      - display_name : un nom "joli" (titre du premier élément rencontré)
+
+    Inclut les expenses ARCHIVÉS par défaut (l'historique d'achat est important).
+    """
+    from server import db
+    q = {}
+    if not include_archived:
+        q["archived"] = {"$ne": True}
+    if start_date and end_date:
+        q["created_at"] = {"$gte": start_date, "$lte": end_date + "T23:59:59"}
+    expenses = await db.expenses.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    products: dict = {}
+
+    def _add_entry(key: str, display: str, entry: dict):
+        if key not in products:
+            products[key] = {
+                "key": key,
+                "display_name": display,
+                "count": 0,
+                "total_quantity": 0.0,
+                "total_amount": 0.0,
+                "last_purchase_date": None,
+                "first_purchase_date": None,
+                "history": [],
+            }
+        p = products[key]
+        p["count"] += 1
+        p["total_quantity"] += float(entry.get("quantity") or 0)
+        p["total_amount"] += float(entry.get("amount") or 0)
+        d = entry.get("date") or ""
+        if d and (p["last_purchase_date"] is None or d > p["last_purchase_date"]):
+            p["last_purchase_date"] = d
+        if d and (p["first_purchase_date"] is None or d < p["first_purchase_date"]):
+            p["first_purchase_date"] = d
+        p["history"].append(entry)
+
+    for exp in expenses:
+        created = exp.get("created_at") or exp.get("planned_date") or ""
+        supplier = exp.get("supplier") or ""
+        archived = bool(exp.get("archived"))
+        status = exp.get("status")
+        items = exp.get("items") or []
+
+        if items and exp.get("is_group"):
+            for it in items:
+                name_raw = (it.get("description") or it.get("name") or "").strip()
+                if not name_raw:
+                    continue
+                key = _normalize_product_name(name_raw)
+                qty = float(it.get("quantity") or 0)
+                up = float(it.get("unit_price") or 0)
+                amt = float(it.get("amount") or (qty * up))
+                _add_entry(key, name_raw, {
+                    "date": created,
+                    "quantity": qty,
+                    "unit_price": up,
+                    "amount": amt,
+                    "supplier": supplier,
+                    "category": it.get("category") or exp.get("category"),
+                    "expense_id": exp.get("id"),
+                    "description": name_raw,
+                    "archived": archived,
+                    "status": status,
+                })
+        else:
+            name_raw = (exp.get("description") or "").strip()
+            if not name_raw:
+                continue
+            key = _normalize_product_name(name_raw)
+            qty = float(exp.get("quantity") or 0)
+            up = float(exp.get("unit_price") or 0)
+            amt = float(exp.get("amount") or (qty * up))
+            _add_entry(key, name_raw, {
+                "date": created,
+                "quantity": qty,
+                "unit_price": up,
+                "amount": amt,
+                "supplier": supplier,
+                "category": exp.get("category"),
+                "expense_id": exp.get("id"),
+                "description": name_raw,
+                "archived": archived,
+                "status": status,
+            })
+
+    # Sort history desc + compute avg unit price + sort products by total_amount desc
+    out = []
+    for p in products.values():
+        p["history"].sort(key=lambda e: e.get("date") or "", reverse=True)
+        p["avg_unit_price"] = (p["total_amount"] / p["total_quantity"]) if p["total_quantity"] else 0
+        p["last_unit_price"] = p["history"][0]["unit_price"] if p["history"] else 0
+        out.append(p)
+    out.sort(key=lambda p: p["total_amount"], reverse=True)
+
+    grand_total_amount = sum(p["total_amount"] for p in out)
+    grand_total_quantity = sum(p["total_quantity"] for p in out)
+    grand_total_purchases = sum(p["count"] for p in out)
+
+    return {
+        "total_products": len(out),
+        "total_purchases": grand_total_purchases,
+        "total_quantity": grand_total_quantity,
+        "total_amount": grand_total_amount,
+        "products": out,
+    }
