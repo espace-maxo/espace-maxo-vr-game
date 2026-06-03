@@ -27,6 +27,7 @@ import ExpensesByProductTab from "./ExpensesByProductTab";
 import AchatsManagerPanels from "./AchatsManagerPanels";
 import ArchiveAllPurchasesButton from "./ArchiveAllPurchasesButton";
 import AssignDateDialog from "./AssignDateDialog";
+import ArchivedExpensesView from "./ArchivedExpensesView";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -540,6 +541,7 @@ const AchatsTab = ({ ctx }) => {
                     { key: 'rejetes', label: 'Rejetés', count: expenses.filter(e => e.status === 'rejected').length },
                     { key: 'repertoire_prix', label: 'Répertoire prix' },
                     { key: 'par_produit', label: 'Par produit (regroupé)' },
+                    ...(currentUser?.role === 'admin' ? [{ key: 'archives', label: '🗄️ Archives' }] : []),
                   ],
                   achats_manager: [
                     { key: 'achete', label: 'Produits achetés', count: expenses.filter(e => e.source === 'appro_manager' && e.payment_mode).length },
@@ -548,7 +550,7 @@ const AchatsTab = ({ ctx }) => {
                 const groupKey = ['en_cours', 'a_reviser', 'mes_demandes'].includes(achatsSubView) ? 'a_valider'
                   : ['valides'].includes(achatsSubView) ? 'valides_group'
                   : ['achete'].includes(achatsSubView) ? 'achats_manager'
-                  : ['rejetes', 'repertoire_prix', 'par_produit'].includes(achatsSubView) ? 'historique'
+                  : ['rejetes', 'repertoire_prix', 'par_produit', 'archives'].includes(achatsSubView) ? 'historique'
                   : 'a_valider';
                 const list = subFilters[groupKey] || [];
                 if (list.length <= 1) return null;
@@ -577,7 +579,8 @@ const AchatsTab = ({ ctx }) => {
               })()}
 
               {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> :
-               achatsSubView === 'par_produit' ? <ExpensesByProductTab /> : (<>
+               achatsSubView === 'par_produit' ? <ExpensesByProductTab /> :
+               achatsSubView === 'archives' ? <ArchivedExpensesView currentUser={currentUser} /> : (<>
 
               {/* Toolbar (tri + voir tout) — légende retirée pour aérer la vue */}
               <div className="flex flex-wrap gap-2 items-center justify-end">

@@ -129,3 +129,29 @@ async def archive_summary():
         "expenses": {"total": exp_total, "archived": exp_archived, "active": exp_total - exp_archived},
         "appro_manager": {"total": appro_total, "archived": appro_archived, "active": appro_total - appro_archived},
     }
+
+
+class RestoreOneBody(BaseModel):
+    ids: list[str] = Field(..., min_length=1)
+    actor_role: str = "admin"
+    actor_name: Optional[str] = None
+
+
+@router.post("/admin/maintenance/restore-one")
+async def restore_one_expense(body: RestoreOneBody):
+    """Restaure un ou plusieurs expenses archivés (sans mot de passe : action
+    réversible et limitée aux admins). Pour restaurer en masse avec mot de passe
+    voir /admin/maintenance/restore-purchases.
+    """
+    if body.actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
+
+    res = await db.expenses.update_many(
+        {"id": {"$in": body.ids}, "archived": True},
+        {"$unset": {"archived": "", "archived_at": "", "archived_by": ""}},
+    )
+    return {
+        "success": True,
+        "restored": res.modified_count,
+        "by": body.actor_name or "Admin",
+    }
