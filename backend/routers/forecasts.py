@@ -164,9 +164,10 @@ async def _compute_treasury(today: datetime) -> dict:
         seen.add(inv["id"])
         ca += inv.get("total", 0)
 
-    # --- Approved / completed expenses of the week ---
+    # --- Approved / completed expenses of the week (archived = exclus) ---
     expenses = await db.expenses.find({
         "status": {"$in": ["approved", "completed"]},
+        "archived": {"$ne": True},
         "$or": [
             {
                 "$and": [
@@ -740,11 +741,13 @@ async def expenses_analysis():
         available = treasury["available"]
 
         exp = await db.expenses.find({
-            "status": {"$in": ["pending", "revision_requested", "approved"]}
+            "status": {"$in": ["pending", "revision_requested", "approved"]},
+            "archived": {"$ne": True},
         }, {"_id": 0}).to_list(500)
 
         recent = await db.expenses.find({
-            "created_at": {"$gte": lookback_str}
+            "created_at": {"$gte": lookback_str},
+            "archived": {"$ne": True},
         }, {"_id": 0}).to_list(1000)
 
         stock_products = await db.stock_products.find({"is_active": True}, {"_id": 0}).to_list(2000)

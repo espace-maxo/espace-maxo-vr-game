@@ -5212,8 +5212,9 @@ async def detect_weekly_duplicates(week_start: str):
             })
         seen_ids.add(inv["id"])
     
-    # Same for expenses
+    # Same for expenses (archivés exclus)
     expenses = await db.expenses.find({
+        "archived": {"$ne": True},
         "$or": [
             {"created_at": {"$gte": start_str, "$lte": end_str}},
             {"assigned_week": start_str}
@@ -6643,6 +6644,7 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         #    (planned_date in period) OR (no planned_date AND created_at in period).
         expenses_by_date = await db.expenses.find({
             "status": {"$in": ["completed", "approved", "pending", "revision_requested"]},
+            "archived": {"$ne": True},
             "$or": [
                 {"planned_date": {"$gte": start_str, "$lte": end_str[:10]}},
                 {
@@ -6673,6 +6675,7 @@ async def get_weekly_report(week_start: Optional[str] = None, end_date: Optional
         expenses_assigned = await db.expenses.find({
             "assigned_week": start_str,
             "status": {"$in": ["completed", "approved", "pending", "revision_requested"]},
+            "archived": {"$ne": True},
             "$and": [not_excluded_filter],
         }, {"_id": 0}).to_list(500)
         
@@ -7149,9 +7152,10 @@ async def get_activity_report(
         
         # ============== EXPENSES (Dépenses) ==============
         
-        # Completed expenses
+        # Completed expenses (archivés exclus)
         expenses = await db.expenses.find({
             "status": "completed",
+            "archived": {"$ne": True},
             "$or": [
                 {"completed_at": {"$gte": start_str, "$lte": end_str}},
                 {"created_at": {"$gte": start_str, "$lte": end_str}}
@@ -7182,9 +7186,10 @@ async def get_activity_report(
             "created_at": {"$gte": start_str, "$lte": end_str}
         }, {"_id": 0, "id": 1, "invoice_number": 1, "total": 1, "created_by": 1, "created_at": 1}).to_list(500)
         
-        # Pending expenses (not yet completed)
+        # Pending expenses (not yet completed) — archivés exclus
         pending_expenses = await db.expenses.find({
             "status": {"$in": ["pending", "approved", "revision_requested"]},
+            "archived": {"$ne": True},
             "created_at": {"$gte": start_str, "$lte": end_str}
         }, {"_id": 0, "id": 1, "description": 1, "amount": 1, "status": 1, "requested_by": 1, "created_at": 1}).to_list(500)
         

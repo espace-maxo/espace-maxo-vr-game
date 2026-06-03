@@ -106,11 +106,15 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
             total_in_real += float(inv.get("tip_total") or 0)
 
         # Dépenses : completed + (paiement & is_paid), depuis cutoff aussi.
-        exp_query = {"$or": [
-            {"completed_at": {"$gte": cutoff}},
-            {"paid_at": {"$gte": cutoff}},
-            {"created_at": {"$gte": cutoff}},
-        ]}
+        # On exclut les dépenses archivées (Remise à zéro Admin).
+        exp_query = {
+            "archived": {"$ne": True},
+            "$or": [
+                {"completed_at": {"$gte": cutoff}},
+                {"paid_at": {"$gte": cutoff}},
+                {"created_at": {"$gte": cutoff}},
+            ],
+        }
         if excl_exp:
             exp_query["id"] = {"$nin": list(excl_exp)}
         # Déjà liées manuellement ? → on les retire ici pour éviter le doublon
@@ -288,8 +292,9 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
                 "excludable": True,
             })
 
-        # Expenses in window
+        # Expenses in window — on exclut les dépenses archivées (Remise à zéro Admin)
         exp_q = {
+            "archived": {"$ne": True},
             "$or": [
                 {"status": "completed", "completed_at": {"$gte": cutoff}},
                 {"category": "paiement", "is_paid": True, "paid_at": {"$gte": cutoff}},
@@ -479,7 +484,7 @@ async def list_available_expenses(
     - si elle est déjà comptée automatiquement (status=completed ou paid),
     - ou déjà liée manuellement via `journal_manual.linked_expense_id`.
     """
-    query = {}
+    query = {"archived": {"$ne": True}}
     if search:
         rgx = {"$regex": re.escape(search.strip()), "$options": "i"}
         query["$or"] = [

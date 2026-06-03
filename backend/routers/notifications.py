@@ -38,10 +38,11 @@ async def _admin_counts() -> dict:
     needs_pending = await db.needs.count_documents({"status": "en_attente"})
     po_draft = await db.purchase_orders.count_documents({"status": "draft"})
     expenses_pending = await db.expenses.count_documents({
-        "status": {"$in": ["pending", "revision_requested"]}
+        "status": {"$in": ["pending", "revision_requested"]},
+        "archived": {"$ne": True},
     })
     # Only the strictly "pending" subset (manager-created, not yet actioned by admin)
-    expenses_pending_only = await db.expenses.count_documents({"status": "pending"})
+    expenses_pending_only = await db.expenses.count_documents({"status": "pending", "archived": {"$ne": True}})
     cancellation_pending = await db.cancellation_requests.count_documents({"status": "pending"})
     modification_pending = await db.modification_requests.count_documents({"status": "pending"})
     invoices_pending = await db.invoices.count_documents({"validation_status": "pending"})
@@ -64,7 +65,7 @@ async def _admin_counts() -> dict:
     latest = {
         "needs": await _latest_date("needs", {"status": "en_attente"}),
         "purchase_orders": await _latest_date("purchase_orders", {"status": "draft"}),
-        "expenses": await _latest_date("expenses", {"status": {"$in": ["pending", "revision_requested"]}}),
+        "expenses": await _latest_date("expenses", {"status": {"$in": ["pending", "revision_requested"]}, "archived": {"$ne": True}}),
         "cancellation_requests": await _latest_date("cancellation_requests", {"status": "pending"}),
         "modification_requests": await _latest_date("modification_requests", {"status": "pending"}),
         "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
@@ -76,7 +77,7 @@ async def _admin_counts() -> dict:
     # Cross-role banner (Responsable Op. & Log → Admin): aggregate items produced by the manager
     cross = {
         "needs": {"count": needs_pending, "latest": latest["needs"]},
-        "expenses": {"count": expenses_pending_only, "latest": await _latest_date("expenses", {"status": "pending"})},
+        "expenses": {"count": expenses_pending_only, "latest": await _latest_date("expenses", {"status": "pending", "archived": {"$ne": True}})},
         "tips_today": {"count": tips_today, "latest": latest["tips_today"]},
         "financial_points": {"count": fp_pending, "latest": latest["financial_points"]},
         "notes": {"count": notes_unread, "latest": latest["notes"]},
@@ -104,7 +105,7 @@ async def _admin_counts() -> dict:
 
 
 async def _manager_counts(user_name: Optional[str] = None) -> dict:
-    expenses_revision = await db.expenses.count_documents({"status": "revision_requested"})
+    expenses_revision = await db.expenses.count_documents({"status": "revision_requested", "archived": {"$ne": True}})
     po_sent = await db.purchase_orders.count_documents({"status": "sent"})
     invoices_pending = await db.invoices.count_documents({"validation_status": "pending"})
     try:
@@ -117,7 +118,7 @@ async def _manager_counts(user_name: Optional[str] = None) -> dict:
     except Exception:
         notes_unread = 0
     latest = {
-        "expenses": await _latest_date("expenses", {"status": "revision_requested"}),
+        "expenses": await _latest_date("expenses", {"status": "revision_requested", "archived": {"$ne": True}}),
         "purchase_orders": await _latest_date("purchase_orders", {"status": "sent"}),
         "invoices": await _latest_date("invoices", {"validation_status": "pending"}),
         "notes": await _latest_date("instructions", {"sender_role": "admin"}),

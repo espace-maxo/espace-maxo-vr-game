@@ -2147,7 +2147,7 @@ async def get_purchases(supplier_id: str = None, date_from: str = None, date_to:
     # Filtered by the "Passer en stock" flag (global to_stock or item override).
     synced_expense_ids = {p.get("expense_id") for p in purchases if p.get("expense_id")}
     
-    expense_query = {}
+    expense_query = {"archived": {"$ne": True}}
     if date_from or date_to:
         eq = {}
         if date_from: eq["$gte"] = date_from

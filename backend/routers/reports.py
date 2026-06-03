@@ -676,10 +676,11 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                     "status": loc.get("status"),
                 })
 
-            # Expenses (achats + dépenses validés / payés) sur le mois
+            # Expenses (achats + dépenses validés / payés) sur le mois — on exclut les archivés
             expenses = await db.expenses.find({
                 "created_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"},
                 "status": {"$in": ["paid", "approved", "purchased", "fulfilled"]},
+                "archived": {"$ne": True},
             }, {"_id": 0}).to_list(5000)
             expenses_total = 0
             expenses_count = 0

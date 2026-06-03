@@ -1417,8 +1417,9 @@ async def payment_mode_cumul(
     source: Optional[str] = Query(None, description="Filtre par source (ex: appro_manager)"),
 ):
     """Retourne le cumul des dépenses par mode de paiement.
-    Si source fourni, filtre uniquement ces dépenses (ex: appro_manager)."""
-    q = {"payment_mode": {"$in": ["fonds_propres", "caisse_restau"]}}
+    Si source fourni, filtre uniquement ces dépenses (ex: appro_manager).
+    Les dépenses archivées (Remise à zéro Admin) sont exclues."""
+    q = {"payment_mode": {"$in": ["fonds_propres", "caisse_restau"]}, "archived": {"$ne": True}}
     if source:
         q["source"] = source
     rows = await db.expenses.find(q, {"_id": 0}).to_list(5000)
