@@ -122,8 +122,11 @@ async def list_items(
     reservation_id: Optional[str] = None,
     expense_id: Optional[str] = None,
     limit: int = 500,
+    include_archived: bool = False,
 ):
     q = {}
+    if not include_archived:
+        q["archived"] = {"$ne": True}
     if scope:
         q["scope"] = scope
     if status:

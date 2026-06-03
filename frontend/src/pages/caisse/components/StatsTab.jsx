@@ -11,12 +11,13 @@ import { Label } from "@/components/ui/label";
 import {
   Calendar, TrendingUp, TreePine, Gamepad2, Wine, Package,
   BarChart3, FileText, CheckCircle, Clock, Users, Eye, Printer,
-  Download, MessageCircle, RefreshCw
+  Download, MessageCircle, RefreshCw, ShieldAlert
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import ProductSalesTab from './ProductSalesTab';
 import MonthlyHistoryView from './MonthlyHistoryView';
+import MaintenancePanel from './MaintenancePanel';
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 
@@ -33,6 +34,7 @@ const StatsTab = ({
   generateRapportPDF,
   sendRapportWhatsApp,
   viewServerDetail,
+  currentUser,
 }) => {
   const [view, setView] = useState("overview"); // overview | by_product
   return (
@@ -66,10 +68,23 @@ const StatsTab = ({
       >
         <Calendar className="w-4 h-4 mr-1" /> Historique mensuel
       </Button>
+      {currentUser?.role === "admin" && (
+        <Button
+          variant={view === "maintenance" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("maintenance")}
+          className={view === "maintenance" ? "bg-rose-600 hover:bg-rose-700 text-white" : "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"}
+          data-testid="stats-view-maintenance"
+          title="Administration — opérations sensibles (Admin uniquement)"
+        >
+          <ShieldAlert className="w-4 h-4 mr-1" /> Administration
+        </Button>
+      )}
     </div>
 
     {view === "by_product" && <ProductSalesTab />}
     {view === "monthly_history" && <MonthlyHistoryView />}
+    {view === "maintenance" && currentUser?.role === "admin" && <MaintenancePanel currentUser={currentUser} />}
 
     {view === "overview" && (
     <>

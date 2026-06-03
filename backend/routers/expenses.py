@@ -219,10 +219,17 @@ async def get_expenses(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     respect_assigned_week: Optional[bool] = None,
+    include_archived: bool = False,
 ):
-    """Get all expenses with optional filters. If respect_assigned_week=true, excludes expenses transferred to another week."""
+    """Get all expenses with optional filters. If respect_assigned_week=true, excludes expenses transferred to another week.
+
+    Par défaut, les expenses archivés (par la fonction "Remise à zéro" Admin) sont exclus.
+    Passer include_archived=true pour les voir.
+    """
     try:
         query = {}
+        if not include_archived:
+            query["archived"] = {"$ne": True}
         if status:
             query["status"] = status
         if category:

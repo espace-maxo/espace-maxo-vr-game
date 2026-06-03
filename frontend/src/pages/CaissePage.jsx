@@ -5963,6 +5963,7 @@ _Responsable Op. & Log - Espace Maxo_
               generateRapportPDF={generateRapportPDF}
               sendRapportWhatsApp={sendRapportWhatsApp}
               viewServerDetail={viewServerDetail}
+              currentUser={currentUser}
             />
           </TabsContent>
 

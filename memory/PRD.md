@@ -238,7 +238,17 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - **P4** : Refactoring continu `CaissePage.jsx` (>8000 lignes) / `StockPage.jsx`
 - **P2 (legacy)** : Clarifier règles de portioning ("b")
 
-## Recently Implemented (Fork 31/05/2026 — 02/06/2026)
+## Recently Implemented (Fork 31/05/2026 — 03/06/2026)
+- **Remise à zéro des Achats (Admin) — 03/06/2026** :
+  - Nouveau routeur backend `routers/maintenance.py` : `POST /api/admin/maintenance/reset-purchases`, `restore-purchases`, `GET /api/admin/maintenance/archive-summary`
+  - Confirmation par mot de passe Admin Full
+  - **Non destructif** : marque `archived=true` + `archived_at` + `archived_by` (Expenses + Appro Manager). L'historique des prix est conservé.
+  - Endpoints `/api/expenses` et `/api/shopping-list` filtrent `archived` par défaut (param `include_archived=true` disponible)
+  - Frontend : nouveau composant `MaintenancePanel.jsx` dans Statistiques & Rapport → sous-onglet "Administration" (Admin uniquement, RISQUE)
+  - Bouton "Restaurer" pour annuler la remise à zéro
+- **Tri alphabétique Achats + Appro Manager (03/06/2026)** :
+  - Sélecteur "Tri" en haut des deux onglets : Plus récent / Plus ancien / A→Z / Z→A / Montant ↑↓
+  - Items à l'intérieur d'une demande triés A→Z automatiquement
 - **Bug double-comptage Locations dans rapports mensuels — résolu (02/06/2026)** :
   - **Cause** : le filtre `$or: [reservation_date, settled_at]` provoquait un double comptage quand une réservation était soldée dans un mois différent de sa date d'événement (ex : événement en mai, paiement final en juin → comptée 2 fois).
   - **Fix** : `/api/reports/monthly-stats` et `/api/reports/monthly-history` filtrent désormais uniquement par `reservation_date` → chaque location appartient à UN seul mois (le mois de l'événement).
