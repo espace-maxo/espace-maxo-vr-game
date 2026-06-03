@@ -26,6 +26,7 @@ import PurchasePriceHistoryTab from "./PurchasePriceHistoryTab";
 import ExpensesByProductTab from "./ExpensesByProductTab";
 import AchatsManagerPanels from "./AchatsManagerPanels";
 import ArchiveAllPurchasesButton from "./ArchiveAllPurchasesButton";
+import AssignDateDialog from "./AssignDateDialog";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -168,6 +169,21 @@ const AchatsTab = ({ ctx }) => {
   // Local state for "rayer une ligne" edits per pending grouped expense.
   // Shape: { [expenseId]: [ { ...item, struck, strike_reason, strike_note } ] }
   const [strikeEdits, setStrikeEdits] = React.useState({});
+
+  // Mode sélection multiple pour rattachement de période (admin uniquement)
+  const [selectionMode, setSelectionMode] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState(new Set());
+  const [showAssignDateDialog, setShowAssignDateDialog] = React.useState(false);
+
+  const toggleSelection = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   // Toggle which list to display for admin_review expenses: 'original' | 'corrected'.
   // Defaults to 'corrected' for admin (their work-in-progress) and 'original' for manager.
@@ -631,6 +647,59 @@ const AchatsTab = ({ ctx }) => {
               )}
 
               {/* ALERT ratio Dépenses/CA — supprimée pour aérer la vue */}
+
+              {/* === Barre de sélection multiple (Admin) — rattachement à période === */}
+              {currentUser?.role === 'admin' && (
+                <div className="flex items-center gap-2 flex-wrap" data-testid="bulk-assign-bar">
+                  {!selectionMode ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectionMode(true)}
+                      className="border-purple-500/40 text-purple-300 hover:bg-purple-500/10"
+                      data-testid="enter-selection-mode-btn"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1.5" />
+                      Sélection multiple
+                    </Button>
+                  ) : (
+                    <>
+                      <span className="text-purple-300 text-xs font-semibold">
+                        Mode sélection · {selectedIds.size} achat{selectedIds.size > 1 ? 's' : ''} coché{selectedIds.size > 1 ? 's' : ''}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowAssignDateDialog(true)}
+                        disabled={selectedIds.size === 0}
+                        className="bg-purple-600 hover:bg-purple-700"
+                        data-testid="open-assign-date-btn"
+                      >
+                        <Calendar className="w-4 h-4 mr-1.5" />
+                        Rattacher à une période…
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={clearSelection}
+                        disabled={selectedIds.size === 0}
+                        className="border-slate-600 text-slate-300"
+                        data-testid="clear-selection-btn"
+                      >
+                        Vider
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setSelectionMode(false); clearSelection(); }}
+                        className="border-slate-600 text-slate-300"
+                        data-testid="exit-selection-mode-btn"
+                      >
+                        <X className="w-4 h-4 mr-1" /> Quitter
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* === KPI Cards aérées (regroupement par état) === */}
               {expenses.length > 0 && (() => {
@@ -1376,7 +1445,27 @@ const AchatsTab = ({ ctx }) => {
                       const keptTotal = showOriginal ? managerAmount : correctedAmount;
                       const struckCount = isAdmin ? correctedItems.filter(it => it.struck).length : 0;
                       return (
-                        <div key={expense.id} className={`rounded-lg p-4 border ${isAdmin ? 'bg-amber-900/15 border-amber-500/30' : 'bg-slate-800/40 border-slate-600/40'}`}>
+                        <div
+                          key={expense.id}
+                          className={`rounded-lg p-4 border relative ${selectionMode && selectedIds.has(expense.id) ? 'border-purple-500/70 ring-1 ring-purple-500/40' : (isAdmin ? 'bg-amber-900/15 border-amber-500/30' : 'bg-slate-800/40 border-slate-600/40')} ${selectionMode && !selectedIds.has(expense.id) ? (isAdmin ? 'bg-amber-900/15' : 'bg-slate-800/40') : ''}`}
+                          onClick={selectionMode ? () => toggleSelection(expense.id) : undefined}
+                          style={selectionMode ? { cursor: 'pointer' } : undefined}
+                        >
+                          {selectionMode && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(expense.id)}
+                              onChange={() => toggleSelection(expense.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute top-2 left-2 w-4 h-4 accent-purple-500 cursor-pointer z-10"
+                              data-testid={`select-expense-${expense.id}`}
+                            />
+                          )}
+                          {expense.assigned_date && (
+                            <span className="absolute top-2 right-2 text-[10px] bg-purple-500/30 text-purple-200 border border-purple-500/50 rounded-full px-2 py-0.5 z-10" data-testid={`assigned-badge-${expense.id}`}>
+                              📌 {expense.assignment_precision === 'month' ? `Rattaché à ${expense.assigned_date.slice(0,7)}` : `Rattaché au ${expense.assigned_date}`}
+                            </span>
+                          )}
                           {/* Header */}
                           <div className="flex items-start justify-between gap-3 flex-wrap">
                             <div className="flex-1 min-w-0">
@@ -1737,7 +1826,27 @@ const AchatsTab = ({ ctx }) => {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {approvedVisible.map(expense => (
-                      <div key={expense.id} className="bg-green-900/20 rounded-lg p-3 border border-green-500/30">
+                      <div
+                        key={expense.id}
+                        className={`bg-green-900/20 rounded-lg p-3 border ${selectionMode && selectedIds.has(expense.id) ? 'border-purple-500/70 ring-1 ring-purple-500/40' : 'border-green-500/30'} relative`}
+                        onClick={selectionMode ? () => toggleSelection(expense.id) : undefined}
+                        style={selectionMode ? { cursor: 'pointer' } : undefined}
+                      >
+                        {selectionMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(expense.id)}
+                            onChange={() => toggleSelection(expense.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute top-2 left-2 w-4 h-4 accent-purple-500 cursor-pointer z-10"
+                            data-testid={`select-expense-${expense.id}`}
+                          />
+                        )}
+                        {expense.assigned_date && (
+                          <span className="absolute top-2 right-2 text-[10px] bg-purple-500/30 text-purple-200 border border-purple-500/50 rounded-full px-2 py-0.5 z-10" data-testid={`assigned-badge-${expense.id}`}>
+                            📌 {expense.assignment_precision === 'month' ? `Rattaché à ${expense.assigned_date.slice(0,7)}` : `Rattaché au ${expense.assigned_date}`}
+                          </span>
+                        )}
                         <div className="flex flex-col gap-2">
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                             <div className="flex-1">
@@ -2024,8 +2133,8 @@ const AchatsTab = ({ ctx }) => {
                 />
               )}
 
-              {/* Completed expenses (Achats terminés — dedicated sub-menu) */}
-              {achatsSubView === 'termines' && isAdminUser && (() => {
+              {/* Completed expenses (Achats terminés — affichés sous Validés pour admin, ou via vue 'termines' dédiée) */}
+              {(achatsSubView === 'termines' || achatsSubView === 'valides') && isAdminUser && (() => {
                 const finishedList = sortExpenses(expenses.filter(isFinished));
                 return finishedList.length > 0 ? (
                   <Card className="bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-slate-600/50" data-testid="completed-expenses-card">
@@ -2066,7 +2175,28 @@ const AchatsTab = ({ ctx }) => {
                     </CardHeader>
                     <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
                       {finishedList.map(expense => (
-                        <div key={expense.id} className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/30" data-testid={`completed-expense-${expense.id}`}>
+                        <div
+                          key={expense.id}
+                          className={`bg-slate-700/20 rounded-lg p-3 border ${selectionMode && selectedIds.has(expense.id) ? 'border-purple-500/70 ring-1 ring-purple-500/40' : 'border-slate-600/30'} relative`}
+                          data-testid={`completed-expense-${expense.id}`}
+                          onClick={selectionMode ? () => toggleSelection(expense.id) : undefined}
+                          style={selectionMode ? { cursor: 'pointer' } : undefined}
+                        >
+                          {selectionMode && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(expense.id)}
+                              onChange={() => toggleSelection(expense.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute top-2 left-2 w-4 h-4 accent-purple-500 cursor-pointer z-10"
+                              data-testid={`select-expense-${expense.id}`}
+                            />
+                          )}
+                          {expense.assigned_date && (
+                            <span className="absolute top-2 right-2 text-[10px] bg-purple-500/30 text-purple-200 border border-purple-500/50 rounded-full px-2 py-0.5 z-10" data-testid={`assigned-badge-${expense.id}`}>
+                              📌 {expense.assignment_precision === 'month' ? `Rattaché à ${expense.assigned_date.slice(0,7)}` : `Rattaché au ${expense.assigned_date}`}
+                            </span>
+                          )}
                           <div className="flex flex-col gap-2">
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
@@ -2371,6 +2501,16 @@ const AchatsTab = ({ ctx }) => {
                 onClose={() => setShowDrinksPurchase(false)}
                 currentUser={currentUser}
                 onCreated={() => { if (fetchExpenses) fetchExpenses(); }}
+              />
+
+              {/* Dialog : Rattachement à une période (sélection multiple) */}
+              <AssignDateDialog
+                open={showAssignDateDialog}
+                onClose={() => setShowAssignDateDialog(false)}
+                collection="expenses"
+                ids={Array.from(selectedIds)}
+                currentUser={currentUser}
+                onDone={() => { clearSelection(); setSelectionMode(false); if (fetchExpenses) fetchExpenses(); }}
               />
             </div>
 

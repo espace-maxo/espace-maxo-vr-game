@@ -676,11 +676,26 @@ async def get_monthly_history(start_year: int = 2026, start_month: int = 1):
                     "status": loc.get("status"),
                 })
 
-            # Expenses (achats + dépenses validés / payés) sur le mois — on exclut les archivés
+            # Expenses (achats + dépenses validés / payés) — on exclut les archivés.
+            # Période effective = assigned_date si défini, sinon created_at.
             expenses = await db.expenses.find({
-                "created_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"},
-                "status": {"$in": ["paid", "approved", "purchased", "fulfilled"]},
+                "status": {"$in": ["paid", "approved", "purchased", "fulfilled", "completed"]},
                 "archived": {"$ne": True},
+                "$or": [
+                    # Cas 1 : rattaché manuellement à ce mois
+                    {"assigned_date": {"$gte": month_start, "$lte": month_end}},
+                    # Cas 2 : pas de rattachement manuel → date d'origine doit être dans le mois
+                    {
+                        "$and": [
+                            {"$or": [
+                                {"assigned_date": {"$exists": False}},
+                                {"assigned_date": None},
+                                {"assigned_date": ""},
+                            ]},
+                            {"created_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"}},
+                        ]
+                    },
+                ],
             }, {"_id": 0}).to_list(5000)
             expenses_total = 0
             expenses_count = 0

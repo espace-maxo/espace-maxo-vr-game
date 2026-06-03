@@ -107,9 +107,11 @@ async def journal_dashboard(days: int = Query(30, ge=1, le=180)):
 
         # Dépenses : completed + (paiement & is_paid), depuis cutoff aussi.
         # On exclut les dépenses archivées (Remise à zéro Admin).
+        # Période effective : assigned_date si défini, sinon completed_at/paid_at/created_at.
         exp_query = {
             "archived": {"$ne": True},
             "$or": [
+                {"assigned_date": {"$gte": cutoff[:10]}},
                 {"completed_at": {"$gte": cutoff}},
                 {"paid_at": {"$gte": cutoff}},
                 {"created_at": {"$gte": cutoff}},
@@ -315,7 +317,8 @@ async def journal_realtime(days: int = Query(30, ge=1, le=365), limit: int = Que
             {"_id": 0},
         ).sort("created_at", -1).to_list(limit)
         for e in expenses:
-            ts = e.get("completed_at") or e.get("paid_at") or e.get("created_at")
+            # Date affichée : assigned_date (rattachement manuel) prime sur les autres.
+            ts = e.get("assigned_date") or e.get("completed_at") or e.get("paid_at") or e.get("created_at")
             rows.append({
                 "id": "exp-" + str(e.get("id", "")),
                 "type": "depense",

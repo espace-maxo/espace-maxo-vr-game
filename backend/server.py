@@ -62,6 +62,7 @@ from routers.daily_reports import router as daily_reports_router
 from routers.coach_sessions import router as coach_sessions_router
 from routers.public_ticket import router as public_ticket_router, set_db as set_public_ticket_db
 from routers.maintenance import router as maintenance_router, set_db as set_maintenance_db
+from routers.period_assignment import router as period_assignment_router, set_db as set_period_assignment_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -102,6 +103,7 @@ set_shopping_list_db(db)
 set_receipt_scan_db(db)
 set_public_ticket_db(db)
 set_maintenance_db(db)
+set_period_assignment_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -187,6 +189,7 @@ api_router.include_router(daily_reports_router)
 api_router.include_router(coach_sessions_router)
 api_router.include_router(public_ticket_router)
 api_router.include_router(maintenance_router)
+api_router.include_router(period_assignment_router)
 
 # Configure logging
 logging.basicConfig(
