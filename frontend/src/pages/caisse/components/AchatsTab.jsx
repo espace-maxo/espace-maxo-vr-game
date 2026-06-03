@@ -177,6 +177,31 @@ const AchatsTab = ({ ctx }) => {
 
   // Author filter for "Validation en cours" (admin only) : 'all' | 'admin' | 'manager' | 'other'
   const [authorFilter, setAuthorFilter] = React.useState('all');
+  // Tri global des listes : date_desc | date_asc | name_asc | name_desc | amount_desc | amount_asc
+  const [sortBy, setSortBy] = React.useState('date_desc');
+
+  /** Tri des items à l'intérieur d'une dépense (alphabétique A→Z). */
+  const sortItems = React.useCallback((items) => {
+    const arr = Array.isArray(items) ? [...items] : [];
+    return arr.sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'fr', { sensitivity: 'base' }));
+  }, []);
+
+  /** Tri global appliqué à un tableau d'expenses. */
+  const sortExpenses = React.useCallback((arr) => {
+    const list = Array.isArray(arr) ? [...arr] : [];
+    const cmp = (a, b) => {
+      switch (sortBy) {
+        case 'name_asc':   return (a.title || a.description || '').localeCompare(b.title || b.description || '', 'fr', { sensitivity: 'base' });
+        case 'name_desc':  return (b.title || b.description || '').localeCompare(a.title || a.description || '', 'fr', { sensitivity: 'base' });
+        case 'amount_desc': return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+        case 'amount_asc':  return (Number(a.amount) || 0) - (Number(b.amount) || 0);
+        case 'date_asc':   return (a.created_at || '').localeCompare(b.created_at || '');
+        case 'date_desc':
+        default:           return (b.created_at || '').localeCompare(a.created_at || '');
+      }
+    };
+    return list.sort(cmp);
+  }, [sortBy]);
 
   // Helpers : qu'est-ce qu'une dépense "terminée" ?
   //  - status === 'completed' : achat normal réglé.
@@ -535,15 +560,31 @@ const AchatsTab = ({ ctx }) => {
                   <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
                   <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowAllExpenses(!showAllExpenses)}
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                >
-                  <Eye className="w-4 h-4 mr-1" />
-                  {showAllExpenses ? 'Masquer détails' : 'Voir tout en détail'}
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-400 text-xs">Tri :</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="bg-slate-700 border border-slate-600 text-slate-200 text-[11px] rounded px-2 py-1"
+                    data-testid="achats-sort-select"
+                  >
+                    <option value="date_desc">Plus récent</option>
+                    <option value="date_asc">Plus ancien</option>
+                    <option value="name_asc">A → Z</option>
+                    <option value="name_desc">Z → A</option>
+                    <option value="amount_desc">Montant décroissant</option>
+                    <option value="amount_asc">Montant croissant</option>
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAllExpenses(!showAllExpenses)}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    {showAllExpenses ? 'Masquer détails' : 'Voir tout en détail'}
+                  </Button>
+                </div>
               </div>
 
               {/* AUTHOR FILTER (admin only) — visible only on "Validation en cours" subtab */}
@@ -844,7 +885,7 @@ const AchatsTab = ({ ctx }) => {
                               )}
                             </tr>
                             {/* Show sub-items for grouped lists */}
-                            {expense.is_group && expense.items && expense.items.map((item, subIndex) => (
+                            {expense.is_group && expense.items && sortItems(expense.items).map((item, subIndex) => (
                               <tr key={`${expense.id}-${subIndex}`} className="bg-slate-800/30 border-b border-slate-700/30 text-xs">
                                 <td className="p-1 pl-6 text-slate-600">↳</td>
                                 <td className="p-1">
@@ -892,7 +933,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {expenses.filter(e => e.status === 'revision_requested').map(expense => (
+                    {sortExpenses(expenses.filter(e => e.status === 'revision_requested')).map(expense => (
                       <div key={expense.id} className="bg-amber-900/20 rounded-lg p-3 border border-amber-500/30">
                         <div className="flex flex-col gap-2">
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -937,7 +978,7 @@ const AchatsTab = ({ ctx }) => {
                             <div className="bg-slate-800/50 rounded p-2 mt-1">
                               <p className="text-xs text-slate-400 mb-2">Détails de la liste ({expense.items.length} articles):</p>
                               <div className="space-y-1">
-                                {expense.items.map((item, idx) => (
+                                {sortItems(expense.items).map((item, idx) => (
                                   <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
                                     <div className="flex items-center gap-2">
                                       <span className="text-slate-500">{idx + 1}.</span>
@@ -981,7 +1022,7 @@ const AchatsTab = ({ ctx }) => {
                     <p className="text-xs text-slate-400">
                       Ces demandes ont été modifiées par vous et renvoyées à la responsable op. & log. Vous pouvez les approuver directement ou demander une nouvelle révision.
                     </p>
-                    {expenses.filter(e => e.status === 'revision_requested').map(expense => (
+                    {sortExpenses(expenses.filter(e => e.status === 'revision_requested')).map(expense => (
                       <div key={expense.id} className="bg-orange-900/20 rounded-lg p-3 border border-orange-500/30">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-start justify-between flex-wrap gap-2">
@@ -1037,7 +1078,7 @@ const AchatsTab = ({ ctx }) => {
                             <div className="bg-slate-800/50 rounded p-2 mt-1">
                               <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
                               <div className="space-y-1">
-                                {expense.items.map((item, idx) => (
+                                {sortItems(expense.items).map((item, idx) => (
                                   <div key={idx} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-1">
                                     <div className="flex items-center gap-2">
                                       <span className="text-slate-500">{idx + 1}.</span>
@@ -1077,7 +1118,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {expenses.filter(e => e.status === 'pending' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).map(expense => (
+                    {sortExpenses(expenses.filter(e => e.status === 'pending' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e)))).map(expense => (
                       <div key={expense.id} className="bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
                         <div className="flex flex-col gap-3">
                           <div className="flex items-start justify-between">
@@ -1335,7 +1376,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {expenses.filter(e => e.status === 'admin_review' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e))).map(expense => {
+                    {sortExpenses(expenses.filter(e => e.status === 'admin_review' && (currentUser?.role !== 'admin' || matchesAuthorFilter(e)))).map(expense => {
                       const isAdmin = currentUser?.role === 'admin';
                       // Manager sees the ORIGINAL snapshot (before admin started correcting)
                       const managerItems = expense.original_items || expense.items || [];
@@ -1661,9 +1702,9 @@ const AchatsTab = ({ ctx }) => {
               {/* Approved expenses (ready for purchase) */}
               {achatsSubView === 'valides' && (() => {
                 // La Responsable Op. & Log ne voit plus les prestations déjà payées (elles vont dans Terminés admin).
-                const approvedVisible = expenses.filter(e =>
+                const approvedVisible = sortExpenses(expenses.filter(e =>
                   e.status === 'approved' && (isAdminUser || !(e.category === 'paiement' && e.is_paid === true))
-                );
+                ));
                 if (approvedVisible.length === 0) return null;
                 return (
                 <Card className="bg-gradient-to-br from-green-900/30 to-emerald-900/20 border-green-500/50">
@@ -1957,7 +1998,7 @@ const AchatsTab = ({ ctx }) => {
                             <div className="bg-slate-800/50 rounded p-2 mt-1">
                               <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
                               <div className="space-y-1">
-                                {expense.items.map((item, idx) => (
+                                {sortItems(expense.items).map((item, idx) => (
                                   <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
                                     <div className="flex items-center gap-2">
                                       <span className="text-slate-500">{idx + 1}.</span>
@@ -1990,7 +2031,7 @@ const AchatsTab = ({ ctx }) => {
               {achatsSubView === 'achete' && isAdminUser && (
                 <AchatsManagerPanels
                   subView={achatsSubView}
-                  expenses={expenses}
+                  expenses={sortExpenses(expenses)}
                   formatPrice={formatPrice}
                   deleteExpense={deleteExpense}
                   onChanged={fetchExpenses}
@@ -2000,7 +2041,7 @@ const AchatsTab = ({ ctx }) => {
 
               {/* Completed expenses (Achats terminés — dedicated sub-menu) */}
               {achatsSubView === 'termines' && isAdminUser && (() => {
-                const finishedList = expenses.filter(isFinished);
+                const finishedList = sortExpenses(expenses.filter(isFinished));
                 return finishedList.length > 0 ? (
                   <Card className="bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-slate-600/50" data-testid="completed-expenses-card">
                     <CardHeader className="pb-2">
@@ -2133,7 +2174,7 @@ const AchatsTab = ({ ctx }) => {
                               <div className="bg-slate-800/40 rounded p-2 mt-1">
                                 <p className="text-xs text-slate-400 mb-2">📋 Détails de la liste:</p>
                                 <div className="space-y-1">
-                                  {expense.items.map((item, idx) => (
+                                  {sortItems(expense.items).map((item, idx) => (
                                     <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-slate-500">{idx + 1}.</span>
@@ -2182,7 +2223,7 @@ const AchatsTab = ({ ctx }) => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {expenses.filter(e => e.status === 'rejected').map(expense => (
+                    {sortExpenses(expenses.filter(e => e.status === 'rejected')).map(expense => (
                       <div key={expense.id} className="flex items-center justify-between gap-2 bg-rose-800/10 rounded-lg p-2 border border-rose-500/20" data-testid={`rejected-expense-${expense.id}`}>
                         <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                           <Badge className={`text-xs ${
@@ -2219,9 +2260,9 @@ const AchatsTab = ({ ctx }) => {
                   ============================================================ */}
               {achatsSubView === 'mes_demandes' && currentUser?.role === 'admin' && (() => {
                 const me = currentUser?.full_name || currentUser?.username || '';
-                const myExpenses = expenses.filter(e =>
+                const myExpenses = sortExpenses(expenses.filter(e =>
                   e.requested_by === me || e.requested_by === currentUser?.username
-                );
+                ));
                 if (myExpenses.length === 0) {
                   return (
                     <Card className="bg-slate-800/30 border-slate-700" data-testid="my-requests-empty">

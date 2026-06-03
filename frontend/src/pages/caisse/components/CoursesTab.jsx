@@ -35,6 +35,8 @@ const CoursesTab = ({ currentUser }) => {
   // Filters
   const [filterScope, setFilterScope] = useState('all'); // all | restaurant | reservation
   const [filterStatus, setFilterStatus] = useState('pending'); // 'pending' | 'done' | 'cumul'
+  // Tri : date_desc (défaut) | date_asc | name_asc | name_desc | price_asc | price_desc
+  const [sortBy, setSortBy] = useState('date_desc');
   const isAdmin = currentUser?.role === 'admin';
 
   // Edit item modal (PU + Qté)
@@ -101,6 +103,17 @@ const CoursesTab = ({ currentUser }) => {
 
   // Group items by scope (and reservation for clarity)
   const grouped = useMemo(() => {
+    const cmp = (a, b) => {
+      switch (sortBy) {
+        case 'name_asc':  return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
+        case 'name_desc': return (b.name || '').localeCompare(a.name || '', 'fr', { sensitivity: 'base' });
+        case 'price_asc': return (Number(a.estimated_unit_price) || 0) - (Number(b.estimated_unit_price) || 0);
+        case 'price_desc': return (Number(b.estimated_unit_price) || 0) - (Number(a.estimated_unit_price) || 0);
+        case 'date_asc':  return (a.created_at || '').localeCompare(b.created_at || '');
+        case 'date_desc':
+        default:          return (b.created_at || '').localeCompare(a.created_at || '');
+      }
+    };
     const g = { restaurant: [], reservations: {} };
     items.forEach((it) => {
       if (it.scope === 'restaurant') {
@@ -113,8 +126,10 @@ const CoursesTab = ({ currentUser }) => {
         g.reservations[key].items.push(it);
       }
     });
+    g.restaurant.sort(cmp);
+    Object.values(g.reservations).forEach(p => p.items.sort(cmp));
     return g;
-  }, [items]);
+  }, [items, sortBy]);
 
   const openMarkModal = (item) => {
     setMarkModalItem(item);
@@ -527,6 +542,20 @@ const CoursesTab = ({ currentUser }) => {
               </button>
             ))}
           </div>
+          <span className="text-slate-400 text-xs ml-2">Tri :</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-slate-700 border border-slate-600 text-slate-200 text-[11px] rounded px-2 py-1"
+            data-testid="appro-sort-select"
+          >
+            <option value="date_desc">Plus récent</option>
+            <option value="date_asc">Plus ancien</option>
+            <option value="name_asc">A → Z</option>
+            <option value="name_desc">Z → A</option>
+            <option value="price_desc">Prix décroissant</option>
+            <option value="price_asc">Prix croissant</option>
+          </select>
           {isAdmin && filterStatus === 'done' && (
             <>
               <Button size="sm" onClick={reimburseAll} className="bg-purple-600 hover:bg-purple-700 text-white h-8 ml-2" data-testid="appro-reimburse-all-btn">
