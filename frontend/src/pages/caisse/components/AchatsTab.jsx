@@ -556,14 +556,8 @@ const AchatsTab = ({ ctx }) => {
               {achatsSubView === 'repertoire_prix' ? <PurchasePriceHistoryTab /> :
                achatsSubView === 'par_produit' ? <ExpensesByProductTab /> : (<>
 
-              {/* Categories legend */}
-              <div className="flex flex-wrap gap-2 items-center justify-between">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-green-500/20 text-green-400">Cuisine</Badge>
-                  <Badge className="bg-orange-500/20 text-orange-400">Bar</Badge>
-                  <Badge className="bg-blue-500/20 text-blue-400">Paiement</Badge>
-                  <Badge className="bg-slate-500/20 text-slate-400">Autres</Badge>
-                </div>
+              {/* Toolbar (tri + voir tout) — légende retirée pour aérer la vue */}
+              <div className="flex flex-wrap gap-2 items-center justify-end">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-slate-400 text-xs">Tri :</span>
                   <select
@@ -629,27 +623,7 @@ const AchatsTab = ({ ctx }) => {
                 </div>
               )}
 
-              {/* ALERT: Expense ratio > 40% (gardée car critique) */}
-              {currentUser?.role === 'admin' && expenseRatioAlert?.isOverLimit && (
-                <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/30 border-red-500/70 animate-pulse" data-testid="expense-ratio-alert">
-                  <CardContent className="py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-red-500 rounded-full p-2">
-                        <AlertCircle className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-red-400 font-bold text-lg">Alerte : Ratio Dépenses/CA élevé</p>
-                        <p className="text-red-300">
-                          Les dépenses de la semaine représentent <span className="font-bold text-xl">{expenseRatioAlert.ratio}%</span> du CA validé de la semaine
-                        </p>
-                        <p className="text-slate-400 text-sm mt-1">
-                          Dépenses semaine: {formatPrice(expenseRatioAlert.expenses)} F • CA semaine: {formatPrice(expenseRatioAlert.ca)} F • Seuil: 40%
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* ALERT ratio Dépenses/CA — supprimée pour aérer la vue */}
 
               {/* === KPI Cards aérées (regroupement par état) === */}
               {expenses.length > 0 && (() => {
