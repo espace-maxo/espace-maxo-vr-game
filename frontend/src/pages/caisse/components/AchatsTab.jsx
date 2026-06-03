@@ -25,6 +25,7 @@ import DrinkPurchaseDialog from "./DrinkPurchaseDialog";
 import PurchasePriceHistoryTab from "./PurchasePriceHistoryTab";
 import ExpensesByProductTab from "./ExpensesByProductTab";
 import AchatsManagerPanels from "./AchatsManagerPanels";
+import ArchiveAllPurchasesButton from "./ArchiveAllPurchasesButton";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -429,6 +430,12 @@ const AchatsTab = ({ ctx }) => {
                           <Badge className="ml-2 bg-white/20 text-white">{shoppingList.length}</Badge>
                         )}
                       </Button>
+                    )}
+                    {currentUser?.role === 'admin' && (
+                      <ArchiveAllPurchasesButton
+                        currentUser={currentUser}
+                        onArchived={fetchExpenses}
+                      />
                     )}
                   </div>
                 )}
