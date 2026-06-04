@@ -352,8 +352,18 @@ async def update_product(product_id: str, data: dict = Body(...)):
         adj_user = (data.pop("adjustment_user", "") or "").strip() or "Admin"
 
         # 1. Application du backlog des ventes à découvert (si quantité modifiée)
+        # Sauf si l'ajustement est explicitement un "Inventaire physique" (= comptage
+        # direct du stock visible). Dans ce cas, le chiffre saisi EST le stock final ;
+        # le backlog est annulé sans déduction (la dette est apurée par le comptage).
         pending = float(product.get("pending_destock_quantity", 0) or 0)
-        if abs(new_qty_val - old_qty) > 0.0001 and pending > 0:
+        adj_reason_lower = adj_reason.lower()
+        is_physical_inventory = (
+            "inventaire physique" in adj_reason_lower
+            or "physique" in adj_reason_lower
+            or "comptage" in adj_reason_lower
+        )
+
+        if abs(new_qty_val - old_qty) > 0.0001 and pending > 0 and not is_physical_inventory:
             requested = new_qty_val  # saisie utilisateur AVANT déduction
             new_qty_val = max(0.0, new_qty_val - pending)
             # Trace de la compensation
@@ -384,6 +394,38 @@ async def update_product(product_id: str, data: dict = Body(...)):
             logger.info(
                 f"[BACKLOG-APPLY] {product.get('name')}: saisie={requested} - pending={pending} "
                 f"= solde={new_qty_val} (by {adj_user})"
+            )
+        elif pending > 0 and is_physical_inventory:
+            # Mode "Inventaire physique" : on apure le backlog sans toucher au chiffre saisi.
+            # Une trace est conservée pour audit (mouvement "sortie" de 0 unité avec raison claire).
+            compensation_movement = {
+                "id": str(uuid.uuid4()),
+                "product_id": product_id,
+                "product_name": product.get("name", ""),
+                "product_code": product.get("code", ""),
+                "movement_type": "ajustement",
+                "quantity": 0,
+                "adjustment_delta": 0,
+                "previous_quantity": old_qty,
+                "new_quantity": new_qty_val,
+                "unit": product.get("unit", ""),
+                "unit_price": float(product.get("purchase_price", 0) or 0),
+                "total_value": 0,
+                "reason": (
+                    f"Backlog apuré par inventaire physique : "
+                    f"{pending:g} {product.get('unit','')} de dette effacée "
+                    f"(le stock final saisi = {new_qty_val:g} reste intact)"
+                ),
+                "user_name": adj_user,
+                "source": "backlog_clear_by_inventory",
+                "created_at": data["updated_at"],
+            }
+            await db.stock_movements.insert_one(compensation_movement)
+            compensation_movement.pop("_id", None)
+            data["pending_destock_quantity"] = 0
+            logger.info(
+                f"[BACKLOG-CLEAR-INVENTORY] {product.get('name')}: "
+                f"backlog={pending} apuré sans déduction (inventaire physique = {new_qty_val})"
             )
 
         # 2. Mouvement d'ajustement standard (delta entre l'ancienne valeur et la nouvelle finale)

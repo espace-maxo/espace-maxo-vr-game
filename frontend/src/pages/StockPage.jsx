@@ -4297,6 +4297,20 @@ export default function StockPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {adjustReason === "Inventaire physique" && Number(editingItem?.pending_destock_quantity || 0) > 0 && (
+                <div className="mt-2 text-[11px] bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 rounded p-2" data-testid="physical-inventory-info">
+                  ℹ️ <strong>Mode comptage physique</strong> : tu as {Number(editingItem.pending_destock_quantity).toLocaleString("fr-FR")} {editingItem?.unit || ""} de
+                  dette accumulée pendant la rupture. Cette dette sera <strong>effacée</strong> sans toucher au chiffre
+                  saisi : le stock final restera {adjustInfo.new} {editingItem?.unit || ""}.
+                </div>
+              )}
+              {adjustReason && adjustReason !== "Inventaire physique" && Number(editingItem?.pending_destock_quantity || 0) > 0 && (
+                <div className="mt-2 text-[11px] bg-amber-500/10 border border-amber-500/40 text-amber-200 rounded p-2" data-testid="backlog-deduction-info">
+                  ⚠️ <strong>Attention dette stock</strong> : {Number(editingItem.pending_destock_quantity).toLocaleString("fr-FR")} {editingItem?.unit || ""} seront <strong>déduits</strong> de {adjustInfo.new} →
+                  stock final = {Math.max(0, adjustInfo.new - Number(editingItem.pending_destock_quantity))}. Choisis
+                  "<em>Inventaire physique</em>" si tu veux que le chiffre saisi soit le stock final.
+                </div>
+              )}
             </div>
             {adjustReason === "Autre (préciser)" && (
               <div>
