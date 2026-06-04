@@ -1702,10 +1702,20 @@ async def create_movement(data: StockMovementCreate):
         raise HTTPException(404, "Produit non trouvé")
     
     current_qty = product.get("quantity", 0)
-    
+    pending_backlog = float(product.get("pending_destock_quantity", 0) or 0)
+    backlog_to_apply = 0.0
+    backlog_movement = None
+
     # Calculate new quantity
     if data.movement_type in ["entree", "retour_fournisseur", "transfert_entree"]:
         new_qty = current_qty + data.quantity
+        # === APPLICATION AUTOMATIQUE DU BACKLOG (04/06/2026) ===
+        # Si des ventes ont été faites à découvert (stock=0, dette accumulée dans
+        # pending_destock_quantity), on apure cette dette automatiquement lors
+        # d'une entrée de stock. Ex : stock=5, +5 entrée, backlog=2 → final=10-2=8.
+        if pending_backlog > 0:
+            backlog_to_apply = min(pending_backlog, new_qty)
+            new_qty = max(0.0, new_qty - backlog_to_apply)
     elif data.movement_type in ["sortie", "perte", "casse", "transfert_sortie"]:
         if data.quantity > current_qty:
             raise HTTPException(400, f"Stock insuffisant. Disponible: {current_qty} {product.get('unit', '')}")
@@ -1736,16 +1746,49 @@ async def create_movement(data: StockMovementCreate):
     
     await db.stock_movements.insert_one(movement)
     movement.pop("_id", None)
-    
+
+    # Trace de la régularisation du backlog si une dette a été apurée
+    if backlog_to_apply > 0:
+        backlog_movement = {
+            "id": str(uuid.uuid4()),
+            "product_id": data.product_id,
+            "product_name": product.get("name", ""),
+            "product_code": product.get("code", ""),
+            "movement_type": "sortie",
+            "quantity": backlog_to_apply,
+            "previous_quantity": current_qty + data.quantity,
+            "new_quantity": new_qty,
+            "unit": product.get("unit", ""),
+            "unit_price": float(product.get("purchase_price", 0) or 0),
+            "total_value": backlog_to_apply * float(product.get("purchase_price", 0) or 0),
+            "reason": (
+                f"Régularisation backlog : {backlog_to_apply:g} {product.get('unit','')} "
+                f"apurés sur entrée de stock (dette antérieure)"
+            ),
+            "user_name": data.user_name,
+            "source": "backlog_apply_on_entry",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.stock_movements.insert_one(backlog_movement)
+        backlog_movement.pop("_id", None)
+        logger.info(
+            f"[BACKLOG-ON-ENTRY] {product.get('name')}: entrée={data.quantity}, "
+            f"backlog={pending_backlog} → apuré={backlog_to_apply}, final={new_qty}"
+        )
+
     # Update product quantity + valeur_stock + statut
     new_valeur = new_qty * product.get("purchase_price", 0)
     new_statut = "rupture" if new_qty <= 0 else ("faible" if new_qty <= product.get("stock_min", 5) else "normal")
+    update_set = {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if backlog_to_apply > 0:
+        # On déduit ce qui a été apuré (s'il reste de la dette > stock entré, on garde le reste)
+        update_set["pending_destock_quantity"] = max(0.0, pending_backlog - backlog_to_apply)
     await db.stock_products.update_one(
         {"id": data.product_id},
-        {"$set": {"quantity": new_qty, "valeur_stock": new_valeur, "statut": new_statut, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": update_set}
     )
-    
-    return {"success": True, "movement": movement}
+
+    return {"success": True, "movement": movement, "backlog_applied": backlog_to_apply, "backlog_movement": backlog_movement}
 
 @router.delete("/movements/{movement_id}")
 async def delete_movement(movement_id: str):
