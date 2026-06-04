@@ -2340,12 +2340,19 @@ async def create_purchase(data: StockPurchaseCreate):
             product = await db.stock_products.find_one({"id": pid})
             if product:
                 old_qty = product.get("quantity", 0)
-                new_qty = old_qty + qty
+                provisional_qty = old_qty + qty
+                # Apurement automatique du backlog (dette accumulée pendant rupture)
+                pending_backlog = float(product.get("pending_destock_quantity", 0) or 0)
+                backlog_to_apply = min(pending_backlog, provisional_qty) if pending_backlog > 0 else 0.0
+                new_qty = max(0.0, provisional_qty - backlog_to_apply)
+                update_set = {"quantity": new_qty, "purchase_price": price, "updated_at": datetime.now(timezone.utc).isoformat()}
+                if backlog_to_apply > 0:
+                    update_set["pending_destock_quantity"] = max(0.0, pending_backlog - backlog_to_apply)
                 await db.stock_products.update_one(
                     {"id": pid},
-                    {"$set": {"quantity": new_qty, "purchase_price": price, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": update_set}
                 )
-                # Create movement
+                # Create movement entrée
                 mov = {
                     "id": str(uuid.uuid4()),
                     "product_id": pid,
@@ -2354,7 +2361,7 @@ async def create_purchase(data: StockPurchaseCreate):
                     "movement_type": "entree",
                     "quantity": qty,
                     "previous_quantity": old_qty,
-                    "new_quantity": new_qty,
+                    "new_quantity": provisional_qty,
                     "unit": product.get("unit", ""),
                     "unit_price": price,
                     "total_value": qty * price,
@@ -2364,7 +2371,35 @@ async def create_purchase(data: StockPurchaseCreate):
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 await db.stock_movements.insert_one(mov)
-    
+                # Mouvement de régularisation du backlog si nécessaire
+                if backlog_to_apply > 0:
+                    backlog_mov = {
+                        "id": str(uuid.uuid4()),
+                        "product_id": pid,
+                        "product_name": product.get("name", ""),
+                        "product_code": product.get("code", ""),
+                        "movement_type": "sortie",
+                        "quantity": backlog_to_apply,
+                        "previous_quantity": provisional_qty,
+                        "new_quantity": new_qty,
+                        "unit": product.get("unit", ""),
+                        "unit_price": price,
+                        "total_value": backlog_to_apply * price,
+                        "reason": (
+                            f"Régularisation backlog : {backlog_to_apply:g} {product.get('unit','')} "
+                            f"apurés sur achat (dette antérieure)"
+                        ),
+                        "user_name": data.user_name,
+                        "purchase_id": purchase["id"],
+                        "source": "backlog_apply_on_purchase",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    await db.stock_movements.insert_one(backlog_mov)
+                    logger.info(
+                        f"[BACKLOG-ON-PURCHASE] {product.get('name')}: achat={qty}, "
+                        f"backlog={pending_backlog} → apuré={backlog_to_apply}, final={new_qty}"
+                    )
+
     return {"success": True, "purchase": purchase}
 
 @router.delete("/purchases/{purchase_id}")
