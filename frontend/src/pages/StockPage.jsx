@@ -332,6 +332,7 @@ export default function StockPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [photoZoom, setPhotoZoom] = useState(null); // { url, name } | null
   const [showMovementModal, setShowMovementModal] = useState(false);
+  const [movementProductSearch, setMovementProductSearch] = useState("");
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -1942,7 +1943,7 @@ export default function StockPage() {
                 <p className="text-slate-500 text-sm mt-0.5">Gestion du catalogue et des niveaux de stock</p>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => { setShowMovementModal(true); setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); }}
+                <Button onClick={() => { setShowMovementModal(true); setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setMovementProductSearch(""); }}
                   className="bg-blue-600 hover:bg-blue-700" data-testid="new-movement-btn"><ArrowUpDown className="w-4 h-4 mr-1" /> Mouvement</Button>
                 {isAdmin && (
                   <Button onClick={() => setShowBulkConvertModal(true)}
@@ -2716,7 +2717,7 @@ export default function StockPage() {
                 >
                   <FileText className="w-4 h-4 mr-1" /> Exporter CSV
                 </Button>
-                <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setShowMovementModal(true); }}
+                <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setMovementProductSearch(""); setShowMovementModal(true); }}
                   className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
               </div>
             </div>
@@ -4805,11 +4806,99 @@ export default function StockPage() {
       <Dialog open={showMovementModal} onOpenChange={setShowMovementModal}>
         <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
           <DialogHeader><DialogTitle className="text-white">Nouveau Mouvement</DialogTitle><DialogDescription className="text-slate-400">Enregistrer une entree, sortie ou ajustement</DialogDescription></DialogHeader>          <div className="space-y-3">
-            <div><Label className="text-slate-300 text-xs">Produit *</Label>
-              <Select value={movementForm.product_id} onValueChange={v => setMovementForm(p => ({...p, product_id: v}))}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choisir un produit" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 max-h-[200px]">{products.map(p => <SelectItem key={p.id} value={p.id} className="text-white">{p.name} ({p.quantity} {p.unit})</SelectItem>)}</SelectContent>
-              </Select>
+            <div>
+              <Label className="text-slate-300 text-xs">Produit *</Label>
+              {(() => {
+                const selected = products.find(p => p.id === movementForm.product_id);
+                const query = (movementProductSearch || "").trim().toLowerCase();
+                const filtered = query.length === 0
+                  ? products.slice(0, 30)
+                  : products
+                      .filter(p =>
+                        (p.name || "").toLowerCase().includes(query) ||
+                        (p.code || "").toLowerCase().includes(query)
+                      )
+                      .slice(0, 50);
+                return (
+                  <div className="space-y-1.5">
+                    {/* Champ de recherche : tape le nom complet ou partiel */}
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        value={movementProductSearch}
+                        onChange={(e) => setMovementProductSearch(e.target.value)}
+                        placeholder="Rechercher : nom complet ou partiel, ou code produit…"
+                        className="bg-slate-800 border-slate-700 text-white pr-8"
+                        data-testid="movement-product-search"
+                        autoFocus
+                      />
+                      {movementProductSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setMovementProductSearch("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          title="Effacer"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Sélection courante (badge) */}
+                    {selected && (
+                      <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/40 rounded px-2 py-1.5 text-xs" data-testid="movement-product-selected">
+                        <span className="text-emerald-300 font-semibold">✓ Sélectionné :</span>
+                        <span className="text-white flex-1 truncate">{selected.name}</span>
+                        <span className="text-slate-300">{selected.quantity} {selected.unit}</span>
+                        <button
+                          type="button"
+                          onClick={() => { setMovementForm(p => ({...p, product_id: ""})); setMovementProductSearch(""); }}
+                          className="text-rose-300 hover:text-rose-200"
+                          title="Changer"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Liste des résultats : visible seulement si on tape OU rien n'est sélectionné */}
+                    {(!selected || movementProductSearch) && (
+                      <div className="bg-slate-800 border border-slate-700 rounded max-h-56 overflow-y-auto" data-testid="movement-product-results">
+                        {filtered.length === 0 ? (
+                          <p className="text-slate-500 text-xs text-center py-3">
+                            Aucun produit ne correspond à "{movementProductSearch}".
+                          </p>
+                        ) : (
+                          filtered.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setMovementForm(prev => ({
+                                  ...prev,
+                                  product_id: p.id,
+                                  unit_price: prev.unit_price || p.purchase_price || 0,
+                                }));
+                                setMovementProductSearch("");
+                              }}
+                              className={`w-full text-left px-2 py-1.5 hover:bg-slate-700/60 text-xs flex items-center justify-between gap-2 border-b border-slate-700/40 last:border-b-0 ${movementForm.product_id === p.id ? 'bg-emerald-500/10' : ''}`}
+                              data-testid={`movement-product-option-${p.id}`}
+                            >
+                              <span className="text-white truncate">
+                                {p.code && <span className="text-slate-500 mr-1">{p.code}</span>}
+                                {p.name}
+                              </span>
+                              <span className="text-slate-400 whitespace-nowrap">
+                                {p.quantity} {p.unit}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div><Label className="text-slate-300 text-xs">Type de mouvement</Label>
               <Select value={movementForm.movement_type} onValueChange={v => setMovementForm(p => ({...p, movement_type: v}))}>
