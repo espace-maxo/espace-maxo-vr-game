@@ -28,6 +28,7 @@ import AchatsManagerPanels from "./AchatsManagerPanels";
 import ArchiveAllPurchasesButton from "./ArchiveAllPurchasesButton";
 import AssignDateDialog from "./AssignDateDialog";
 import ArchivedExpensesView from "./ArchivedExpensesView";
+import ExpenseCompactList from "./ExpenseCompactList";
 
 const STRIKE_REASONS = [
   { value: "pas_opportun", label: "Pas opportun" },
@@ -175,6 +176,16 @@ const AchatsTab = ({ ctx }) => {
   const [selectionMode, setSelectionMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState(new Set());
   const [showAssignDateDialog, setShowAssignDateDialog] = React.useState(false);
+
+  // Mode d'affichage compact des achats (lignes avec tiret cliquables).
+  // Par défaut : compact. Désactivable pour revenir aux cartes détaillées.
+  const [compactMode, setCompactMode] = React.useState(true);
+  const [expandedExpenseId, setExpandedExpenseId] = React.useState(null);
+
+  const isCompactView = compactMode && achatsSubView !== 'rejetes'
+    && achatsSubView !== 'repertoire_prix'
+    && achatsSubView !== 'par_produit'
+    && achatsSubView !== 'archives';
 
   const toggleSelection = (id) => {
     setSelectedIds((prev) => {
@@ -608,6 +619,16 @@ const AchatsTab = ({ ctx }) => {
                     <Eye className="w-4 h-4 mr-1" />
                     {showAllExpenses ? 'Masquer détails' : 'Voir tout en détail'}
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCompactMode(!compactMode)}
+                    className={compactMode ? "border-amber-500/40 text-amber-300 hover:bg-amber-500/10" : "border-slate-600 text-slate-300 hover:bg-slate-700"}
+                    data-testid="toggle-compact-view"
+                    title={compactMode ? "Repasser en cartes détaillées" : "Passer en lignes compactes (tirets cliquables)"}
+                  >
+                    {compactMode ? 'Vue : lignes' : 'Vue : cartes'}
+                  </Button>
                 </div>
               </div>
 
@@ -976,6 +997,31 @@ const AchatsTab = ({ ctx }) => {
                   </CardContent>
                 </Card>
               )}
+
+              {/* === MODE LIGNES COMPACTES (par défaut) === */}
+              {isCompactView && (
+                <ExpenseCompactList
+                  expenses={expenses}
+                  currentUser={currentUser}
+                  achatsSubView={achatsSubView}
+                  matchesAuthorFilter={matchesAuthorFilter}
+                  isFinished={isFinished}
+                  sortExpenses={sortExpenses}
+                  updateExpense={updateExpense}
+                  deleteExpense={deleteExpense}
+                  openExpenseForEdit={openExpenseForEdit}
+                  openReviseModal={openReviseModal}
+                  convertExpenseToPO={convertExpenseToPO}
+                  printSingleExpenseTicket={printSingleExpenseTicket}
+                  printExpensePDF={printExpensePDF}
+                  allocateExpenseToAccount={allocateExpenseToAccount}
+                  availableAccounts={availableAccounts}
+                  receiveExpenseStock={receiveExpenseStock}
+                />
+              )}
+
+              {/* === Cards détaillées (Vue : cartes) === */}
+              {!isCompactView && (<>
 
               {/* Pending expenses that need manager revision (revision_requested) */}
               {achatsSubView === 'a_reviser' && currentUser?.role === 'manager' && expenses.filter(e => e.status === 'revision_requested').length > 0 && (
@@ -2327,6 +2373,9 @@ const AchatsTab = ({ ctx }) => {
                   </Card>
                 );
               })()}
+
+              {/* Fin du bloc "Vue : cartes" — la suite (Rejetés, Mes demandes, modals) reste toujours visible */}
+              </>)}
 
               {/* Rejected expenses */}
               {achatsSubView === 'rejetes' && expenses.filter(e => e.status === 'rejected').length > 0 && (
