@@ -26,6 +26,9 @@ import { format, subDays, startOfMonth, endOfMonth, startOfWeek } from "date-fns
 import { fr } from "date-fns/locale";
 import QRCode from "qrcode";
 
+// Offline auth helpers
+import { rememberLogin, tryLocalLogin, isNetworkError } from "./caisse/utils/offlineAuth";
+
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
 import RespOpWelcome from "./caisse/components/RespOpWelcome";
@@ -546,15 +549,41 @@ const CaissePage = () => {
 
   // ============== AUTH ==============
   const handleLogin = async () => {
+    const enteredPin = loginForm?.pin;
+    const enteredPwd = loginForm?.password;
     try {
-      const response = await axios.post(`${API}/caisse/login`, loginForm);
+      const response = await axios.post(`${API}/caisse/login`, loginForm, { timeout: 8000 });
       if (response.data.success) {
         setIsAuthenticated(true);
         setCurrentUser(response.data.user);
         toast.success(`Bienvenue ${response.data.user.full_name || response.data.user.username}`);
+        // Stocke un hash du code pour permettre une connexion offline ultérieure
+        rememberLogin({
+          pin: enteredPin,
+          password: enteredPwd,
+          user: response.data.user,
+        }).catch(() => {});
         fetchAllData();
       }
     } catch (error) {
+      // Fallback mode offline : si erreur réseau, on tente une validation locale
+      if (isNetworkError(error)) {
+        try {
+          const local = await tryLocalLogin({ pin: enteredPin, password: enteredPwd });
+          if (local.success) {
+            setIsAuthenticated(true);
+            setCurrentUser({ ...local.user, _offline: true });
+            toast.success(
+              `Bienvenue ${local.user.full_name || local.user.username} · Mode hors-ligne`,
+              { duration: 4500 }
+            );
+            // Pas de fetchAllData en offline — l'app fonctionne sur cache local.
+            return;
+          }
+        } catch (_) { /* ignore */ }
+        toast.error("Pas de connexion Internet — code inconnu en local. Connecte-toi une première fois en ligne.");
+        return;
+      }
       toast.error(error.response?.data?.detail || "Identifiants incorrects");
     }
   };
@@ -5021,6 +5050,13 @@ _Responsable Op. & Log - Espace Maxo_
             <Button onClick={handleLogin} className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-6 text-lg shadow-lg">
               Se connecter
             </Button>
+
+            {/* Indicateur de connexion réseau */}
+            {!navigator.onLine && (
+              <div className="text-center text-amber-300 text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2" data-testid="offline-banner">
+                ⚠️ Tu es <strong>hors-ligne</strong>. Si tu t'es déjà connecté(e) sur cet appareil, ton code marchera quand même.
+              </div>
+            )}
             
             {/* Code oublié */}
             <div className="text-center pt-2">
@@ -5095,6 +5131,16 @@ _Responsable Op. & Log - Espace Maxo_
               </div>
               {/* Real-time sync + offline indicator (Phase 1) */}
               <OfflineIndicator />
+              {/* Badge si l'utilisateur s'est connecté en mode hors-ligne */}
+              {currentUser?._offline && (
+                <span
+                  className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-500/40 text-amber-200"
+                  title="Tu t'es connecté(e) sans Internet. Les nouvelles données se synchroniseront dès le retour du réseau."
+                  data-testid="offline-session-badge"
+                >
+                  ⚠️ Connecté hors-ligne
+                </span>
+              )}
               {/* Plats prêts depuis la cuisine */}
               {readyNotif.unreadCount > 0 && (
                 <button
