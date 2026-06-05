@@ -33,6 +33,7 @@ import { rememberLogin, tryLocalLogin, isNetworkError } from "./caisse/utils/off
 import TablesTab from "./caisse/components/TablesTab";
 import RespOpWelcome from "./caisse/components/RespOpWelcome";
 import MomoDailyRecap from "./caisse/components/MomoDailyRecap";
+import CustomerReviewsTab from "./caisse/components/CustomerReviewsTab";
 import BillettageGlobalCard from "./caisse/components/BillettageGlobalCard";
 import LocationsTab from "./caisse/components/LocationsTab";
 import InstructionsTab from "./caisse/components/InstructionsTab";
@@ -5681,6 +5682,14 @@ _Responsable Op. & Log - Espace Maxo_
                 <NotifBadge count={effectiveCounts.tips_today} color="amber" testid="badge-tips" />
               )}
             </TabsTrigger>
+            {/* 15.6 AVIS CLIENTS (Admin only) */}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="customer-reviews" className="data-[state=active]:bg-pink-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-customer-reviews">
+                <MessageSquare className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="inline text-[11px] sm:text-sm">Avis clients</span>
+                <NotifBadge count={effectiveCounts.reviews_unread} color="pink" testid="badge-reviews" />
+              </TabsTrigger>
+            )}
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
@@ -6687,6 +6696,13 @@ _Responsable Op. & Log - Espace Maxo_
           <TabsContent value="tips">
             <TipsTab currentUser={currentUser} />
           </TabsContent>
+
+          {/* ==================== AVIS CLIENTS (Admin only) ==================== */}
+          {currentUser?.role === 'admin' && (
+            <TabsContent value="customer-reviews">
+              <CustomerReviewsTab currentUser={currentUser} />
+            </TabsContent>
+          )}
         </Tabs>
         )}
       </div>

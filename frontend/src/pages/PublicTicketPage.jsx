@@ -281,7 +281,8 @@ export default function PublicTicketPage() {
                 placeholder="Ce que vous avez aimé, ce qu'on pourrait améliorer…"
                 maxLength={1000}
                 rows={4}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", fontSize: "16px", lineHeight: 1.45 }}
+                className="w-full px-3 py-2 text-base border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none placeholder:text-slate-400"
                 data-testid="review-comment-input"
               />
               <p className="text-[10px] text-slate-400 text-right">{comment.length} / 1000</p>
