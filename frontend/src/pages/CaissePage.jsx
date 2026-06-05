@@ -5657,7 +5657,7 @@ _Responsable Op. & Log - Espace Maxo_
             {/* 14.6 RECOUPEMENT IA — Cuisine & Jeux (Admin only) */}
             {currentUser?.role === 'admin' && (
               <TabsTrigger value="recoupement" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3 relative" data-testid="tab-recoupement">
-                <Sparkles className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Recoupement IA</span>
+                <Sparkles className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Cuisine & Jeux</span>
                 {cuisineNeedsPending.pending > 0 && (
                   <Badge
                     className={`absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold ${cuisineNeedsPending.urgent > 0 ? "bg-rose-500 animate-pulse" : "bg-amber-500"} text-white border-2 border-slate-900`}

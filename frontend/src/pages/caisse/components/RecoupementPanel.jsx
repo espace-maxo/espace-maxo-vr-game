@@ -28,6 +28,7 @@ import CuisineScansAdminList from "./CuisineScansAdminList";
 // eslint-disable-next-line no-unused-vars
 const _CSAL = CuisineScansAdminList;
 import RecoupementSyntheseTable from "./RecoupementSyntheseTable";
+import DailyReportsBubbles from "./DailyReportsBubbles";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
@@ -775,6 +776,10 @@ const RecoupementPanel = ({ currentUser }) => {
                        data-testid="recoupement-tab-reports">
             <FileText className="w-4 h-4 mr-1" /> Rapports
           </TabsTrigger>
+          <TabsTrigger value="needs" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                       data-testid="recoupement-tab-needs">
+            <FileText className="w-4 h-4 mr-1" /> Besoins Cuisine
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="ocr" className="mt-3 space-y-4">
@@ -799,18 +804,30 @@ const RecoupementPanel = ({ currentUser }) => {
           <Card className="bg-slate-800/50 border-slate-700">
             <CardContent className="p-3 text-xs text-slate-300">
               <p>
-                <strong className="text-emerald-300">Rapports du terrain</strong> — Les rapports de fin de journée
-                transmis par le cuisinier et le coach jeux. Comparaison automatique avec les ventes validées du système.
-                Vous pouvez aussi supprimer les messages et événements cuisinier ci-dessous.
+                <strong className="text-emerald-300">Rapports du terrain</strong> — Vue synthétique des rapports
+                par jour, et tableaux de recoupement Cuisine / Jeux comparant terrain vs caisse.
               </p>
             </CardContent>
           </Card>
-          <DailyReportsList currentUser={currentUser} />
-          {/* Historique cuisine retiré (juin 2026) — remplacé par les 2 tableaux de synthèse ci-dessous */}
+          {/* Bulles cliquables des rapports du terrain (cuisinier + coach) */}
+          <DailyReportsBubbles currentUser={currentUser} />
+          {/* Tableaux de comparaison */}
           <RecoupementSyntheseTable kind="cuisine" />
           <RecoupementSyntheseTable kind="jeux" />
-          <CuisineNeedsAdminList currentUser={currentUser} />
           <CuisineMessagesAdminList currentUser={currentUser} />
+        </TabsContent>
+
+        {/* ============= BESOINS CUISINE ============= */}
+        <TabsContent value="needs" className="mt-3 space-y-3">
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="p-3 text-xs text-slate-300">
+              <p>
+                <strong className="text-amber-300">Besoins en cuisine</strong> — Les alertes de stock envoyées
+                par le cuisinier lorsqu'il manque d'ingrédients ou de matériel. Validez, refusez ou supprimez.
+              </p>
+            </CardContent>
+          </Card>
+          <CuisineNeedsAdminList currentUser={currentUser} />
         </TabsContent>
       </Tabs>
     </div>
