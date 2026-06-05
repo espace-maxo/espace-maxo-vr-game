@@ -6579,8 +6579,10 @@ _Responsable Op. & Log - Espace Maxo_
                     hideBillettage={true}
                   />
 
-                  {/* Récap Momo journalier */}
-                  <MomoDailyRecap currentUser={currentUser} />
+                  {/* Récap Momo journalier (Admin uniquement) */}
+                  {currentUser?.role === 'admin' && (
+                    <MomoDailyRecap currentUser={currentUser} />
+                  )}
                 </div>
               </TabsContent>
 
