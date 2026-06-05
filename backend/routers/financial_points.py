@@ -1059,3 +1059,63 @@ async def reversement_auto_fill(date: str, period_type: str = "daily", end_date:
     except Exception as e:
         logger.error(f"Error computing reversement auto-fill: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reversements/momo-daily")
+async def get_momo_daily_recap(
+    start_date: str,
+    end_date: str = "",
+):
+    """Récapitulatif des Momo envoyés jour par jour sur une période.
+
+    Renvoie pour chaque date du range : la liste des reversements avec montant
+    Momo (mobile_amount), numéro Momo, destination, signataire, et le total
+    cumulé Momo de la journée.
+
+    Si end_date est omis, on prend uniquement start_date.
+    """
+    if not end_date:
+        end_date = start_date
+
+    cursor = db.financial_points.find(
+        {"date": {"$gte": start_date, "$lte": end_date}},
+        {"_id": 0},
+    ).sort("date", 1)
+    points = await cursor.to_list(1000)
+
+    # Groupement par date
+    by_date: dict[str, dict] = {}
+    grand_total = 0.0
+    for p in points:
+        mobile = float(p.get("mobile_amount", 0) or 0)
+        if mobile <= 0 and not (p.get("momo_number") or "").strip():
+            # Ignore les points sans Momo (ni montant ni numéro renseigné)
+            continue
+        d = p.get("date", "—")
+        if d not in by_date:
+            by_date[d] = {"date": d, "items": [], "total_mobile": 0.0, "count": 0}
+        by_date[d]["items"].append({
+            "id": p.get("id"),
+            "category": p.get("category", "all"),
+            "mobile_amount": mobile,
+            "momo_number": p.get("momo_number", "") or "",
+            "destination": p.get("destination", "") or "",
+            "signed_by": p.get("signed_by", "") or p.get("created_by", "") or "",
+            "signed_at": p.get("signed_at") or p.get("created_at") or "",
+            "validated_by": p.get("validated_by", "") or "",
+            "validated_at": p.get("validated_at") or "",
+            "status": p.get("status", "") or "",
+            "notes": p.get("notes", "") or "",
+        })
+        by_date[d]["total_mobile"] += mobile
+        by_date[d]["count"] += 1
+        grand_total += mobile
+
+    days = sorted(by_date.values(), key=lambda x: x["date"], reverse=True)
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "grand_total_mobile": grand_total,
+        "days_count": len(days),
+        "days": days,
+    }

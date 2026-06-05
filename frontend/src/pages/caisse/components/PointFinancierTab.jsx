@@ -62,7 +62,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   const isManager = currentUser?.role === "manager";
   const canEdit = isAdmin || isManager;
 
-  const [periodType, setPeriodType] = useState("weekly");
+  const [periodType, setPeriodType] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [weekStart, setWeekStart] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
   const [weekEnd, setWeekEnd] = useState(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
@@ -749,48 +749,13 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
     </Card>
   );
 
-  // ===== BLOCAGE : Responsable Op. & Log doit valider "Faire le point" avant Reversement =====
-  // Ne s'applique PAS à l'Admin (bypass), et seulement si aucun reversement n'a encore été créé.
-  // BYPASS aussi si AUCUN serveur n'a fait de vente sur la période (Resp. Op. peut alors faire un
-  // "reversement direct" sans passer par "Faire le point").
-  const noServerActivity = revenueData?.servers_with_sales === 0;
-  const needsValidation = !isAdmin && !pointValidation
-    && Object.keys(pointsByCategory).length === 0
-    && !noServerActivity;
-  if (!pointValidationLoading && needsValidation) {
-    return (
-      <div className="space-y-6" data-testid="point-financier-tab">
-        <Header periodType={periodType} setPeriodType={setPeriodType} subtitle="Validation préalable requise" />
-        <PeriodSelector {...{ periodType, weekStart, weekEnd, selectedDate, setSelectedDate, handleWeekChange, periodLabel, fetchPoints }} />
-
-        <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border-2 border-amber-500/50">
-          <CardContent className="p-8 text-center space-y-4">
-            <div className="w-16 h-16 mx-auto bg-amber-500/20 rounded-full flex items-center justify-center">
-              <Lock className="w-8 h-8 text-amber-400" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-amber-300 mb-2">Reversement bloqué</h3>
-              <p className="text-slate-300 max-w-lg mx-auto">
-                Vous devez d'abord <strong className="text-white">valider "Faire le point"</strong> de cette période avant de pouvoir saisir un reversement.
-              </p>
-              <p className="text-slate-400 text-sm mt-2">
-                Cette étape garantit que toutes les ventes ont été contrôlées avant la remise des recettes.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
-              <Button
-                onClick={() => onGotoHebdo && onGotoHebdo()}
-                className="bg-cyan-600 hover:bg-cyan-700 text-white"
-                data-testid="reversement-goto-hebdo-btn"
-              >
-                <ArrowLeft className="w-4 h-4 mr-1" /> Aller à "Faire le point"
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // ===== BLOCAGE (supprimé) =====
+  // L'ancien verrou exigeait que "Faire le point" soit validé avant tout
+  // reversement. Suite à la demande utilisateur, ce verrou est désactivé :
+  // le reversement est désormais accessible directement (l'onglet "Faire le
+  // point" a été retiré de la navigation).
+  // (Le code de validation préalable a été conservé en commentaire dans
+  // l'historique git si on souhaite le réactiver.)
 
   // ===== LOCKED VIEW =====
   if (isLocked && currentPoint) {
@@ -1379,8 +1344,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
 // Sub-components
 function Header({ periodType, setPeriodType, subtitle }) {
   return (<div className="flex items-center justify-between flex-wrap gap-4"><div><h2 className="text-2xl font-bold text-white flex items-center gap-2"><Banknote className="w-6 h-6 text-green-400" />Reversement des Recettes</h2><p className="text-slate-400 text-sm">{subtitle}</p></div><div className="flex items-center gap-2">
-    <Button data-testid="fp-period-weekly" variant={periodType === "weekly" ? "default" : "outline"} size="sm" onClick={() => setPeriodType("weekly")} className={periodType === "weekly" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-600 text-slate-300"}><Calendar className="w-4 h-4 mr-1" /> Hebdomadaire</Button>
-    <Button data-testid="fp-period-daily" variant={periodType === "daily" ? "default" : "outline"} size="sm" onClick={() => setPeriodType("daily")} className={periodType === "daily" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-600 text-slate-300"}><Clock className="w-4 h-4 mr-1" /> Journalier</Button>
+    <Button data-testid="fp-period-daily" variant="default" size="sm" onClick={() => setPeriodType("daily")} className="bg-green-600 hover:bg-green-700 text-white"><Clock className="w-4 h-4 mr-1" /> Journalier</Button>
   </div></div>);
 }
 
@@ -1413,12 +1377,12 @@ function BillettageReadOnly({ billettage }) {
 }
 
 function ComparisonCard({ comparison, totalReversed, totalRecorded, totalDiff }) {
-  if (!totalRecorded && !totalReversed) return null;
-  return (<Card className="bg-slate-800/50 border-slate-700" data-testid="fp-comparison-card"><CardHeader className="pb-2"><CardTitle className="text-white flex items-center gap-2 text-base"><ArrowUpDown className="w-5 h-5 text-cyan-400" />Comparaison Reversement / Recettes Point Hebdo</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-slate-400 border-b border-slate-700"><th className="p-2">Mode</th><th className="p-2 text-right">Reverse</th><th className="p-2 text-right">Recettes (Systeme)</th><th className="p-2 text-right">Ecart</th></tr></thead><tbody>
-    {comparison.map(c => (<tr key={c.key} className="border-b border-slate-700/50"><td className="p-2 text-slate-300 flex items-center gap-2"><c.icon className={`w-4 h-4 text-${c.color}-400`} />{c.label}</td><td className="p-2 text-right text-white font-medium">{formatPrice(c.reversed)} F</td><td className="p-2 text-right text-slate-400">{formatPrice(c.recorded)} F</td><td className={`p-2 text-right font-bold ${c.diff === 0 ? 'text-slate-500' : c.diff > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{c.diff === 0 ? '-' : `${c.diff > 0 ? '+' : ''}${formatPrice(c.diff)} F`}</td></tr>))}
-  </tbody><tfoot><tr className="bg-slate-900/50 font-bold border-t-2 border-slate-600"><td className="p-2 text-white">TOTAL</td><td className="p-2 text-right text-green-400">{formatPrice(totalReversed)} F</td><td className="p-2 text-right text-slate-300">{formatPrice(totalRecorded)} F</td><td className={`p-2 text-right ${totalDiff === 0 ? 'text-slate-500' : totalDiff > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{totalDiff === 0 ? <span className="flex items-center justify-end gap-1"><CheckCircle className="w-4 h-4" /> Conforme</span> : <span className="flex items-center justify-end gap-1">{totalDiff > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}{totalDiff > 0 ? '+' : ''}{formatPrice(totalDiff)} F</span>}</td></tr></tfoot></table></div>
-    {totalDiff !== 0 && (<div className={`mt-3 p-3 rounded-lg border text-sm ${totalDiff > 0 ? 'bg-emerald-900/10 border-emerald-500/30 text-emerald-400' : 'bg-red-900/10 border-red-500/30 text-red-400'}`}>{totalDiff > 0 ? `Excedent de ${formatPrice(totalDiff)} F` : `Deficit de ${formatPrice(Math.abs(totalDiff))} F`}</div>)}
-  </CardContent></Card>);
+  // Désactivé sur demande utilisateur (déc. 2026) : la comparaison
+  // "Reversement / Recettes Point Hebdo" n'est plus affichée. Le composant
+  // est conservé pour compatibilité mais ne rend rien.
+  // eslint-disable-next-line no-unused-vars
+  const _unused = { comparison, totalReversed, totalRecorded, totalDiff };
+  return null;
 }
 
 function WorkflowGuide({ step }) {
