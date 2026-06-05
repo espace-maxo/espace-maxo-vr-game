@@ -868,6 +868,10 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
   }
 
   // ===== EDIT/CREATE =====
+  // Pas de serveur ayant fait de vente sur la période : affichage d'un bandeau
+  // "Reversement direct" (utilisé pour la Resp. Op. & Log).
+  const noServerActivity = (revenueData?.servers_with_sales || 0) === 0;
+
   return (
     <div className="space-y-6" data-testid="point-financier-tab">
       <PendingValidationsBanner />
