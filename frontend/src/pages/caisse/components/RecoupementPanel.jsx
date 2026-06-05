@@ -25,6 +25,9 @@ import DailyReportsList from "./DailyReportsList";
 import CuisineMessagesAdminList from "./CuisineMessagesAdminList";
 import CuisineNeedsAdminList from "./CuisineNeedsAdminList";
 import CuisineScansAdminList from "./CuisineScansAdminList";
+// eslint-disable-next-line no-unused-vars
+const _CSAL = CuisineScansAdminList;
+import RecoupementSyntheseTable from "./RecoupementSyntheseTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Camera, Upload, Loader2, Trash2, Plus, ArrowRight,
@@ -789,7 +792,7 @@ const RecoupementPanel = ({ currentUser }) => {
             <RecoupementCard kind="jeux" currentUser={currentUser} onCompared={refreshHistory} />
           </div>
           <RecoupementHistory refreshKey={historyKey} currentUser={currentUser} />
-          <CuisineHistory currentUser={currentUser} />
+          {/* Historique Cuisine (CuisineHistory) retiré sur demande utilisateur (juin 2026) */}
         </TabsContent>
 
         <TabsContent value="reports" className="mt-3 space-y-3">
@@ -803,7 +806,9 @@ const RecoupementPanel = ({ currentUser }) => {
             </CardContent>
           </Card>
           <DailyReportsList currentUser={currentUser} />
-          <CuisineScansAdminList currentUser={currentUser} />
+          {/* Historique cuisine retiré (juin 2026) — remplacé par les 2 tableaux de synthèse ci-dessous */}
+          <RecoupementSyntheseTable kind="cuisine" />
+          <RecoupementSyntheseTable kind="jeux" />
           <CuisineNeedsAdminList currentUser={currentUser} />
           <CuisineMessagesAdminList currentUser={currentUser} />
         </TabsContent>

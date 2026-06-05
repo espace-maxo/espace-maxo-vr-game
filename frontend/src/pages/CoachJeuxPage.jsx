@@ -28,6 +28,7 @@ import {
 import DailyReportPanel from "../components/DailyReportPanel";
 import PlayersTrackerTab from "./coach/PlayersTrackerTab";
 import JournalTab from "./coach/JournalTab";
+import RecoupementSyntheseTable from "./caisse/components/RecoupementSyntheseTable";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const DEFAULT_HOURLY_RATE = 12000;  // 12 000 F / heure (forfait global)
@@ -255,6 +256,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
               <FileText className="w-4 h-4 mr-1" />
               Rapport du jour
             </TabsTrigger>
+            <TabsTrigger value="recoupement" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                         data-testid="coach-tab-recoupement">
+              <FileText className="w-4 h-4 mr-1" />
+              Recoupement
+            </TabsTrigger>
           </TabsList>
 
           {/* MES BONS */}
@@ -362,6 +368,11 @@ const CoachJeuxPage = ({ currentUser, onLogout }) => {
           {/* JOURNAL — Timeline horodatée de la séance */}
           <TabsContent value="journal" className="mt-3">
             <JournalTab currentUser={currentUser} />
+          </TabsContent>
+
+          {/* RECOUPEMENT — comparaison jeux déclarés (coach) vs facturés (caisse) */}
+          <TabsContent value="recoupement" className="mt-3">
+            <RecoupementSyntheseTable kind="jeux" title="Mes jeux : déclarés vs facturés caisse" />
           </TabsContent>
         </Tabs>
       </div>

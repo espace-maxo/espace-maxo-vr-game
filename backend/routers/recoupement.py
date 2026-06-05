@@ -455,3 +455,224 @@ async def delete_recoupement(rec_id: str, actor_name: str = "", actor_role: str 
     except Exception as e:
         logger.error(f"audit log delete recoupement failed: {e}")
     return {"success": True}
+
+# ──────────────────────────────────────────────────────────────────────
+# SYNTHÈSE COMPARATIVE — Cuisine & Jeux
+# Ajoutée juin 2026 sur demande utilisateur :
+#   - "Améliorer le recoupement des bons de cuisine avec les recettes"
+#   - "Améliorer le recoupement des jeux du coach avec les recettes"
+#
+# Diff vs /compare-cuisine (existant) :
+#   - Multi-jours (start_date → end_date)
+#   - Agrège TOUS les recoupements validés/sauvegardés de la période
+#     (pas besoin de relancer la photo OCR)
+#   - Compare avec toutes les factures validées de la période
+#   - Retourne un tableau par plat/jeu : déclaré (terrain) vs facturé (caisse)
+#     avec écart en quantité, écart en valeur F, taux d'écart %
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get("/recoupement/synthese")
+async def synthese_comparative(
+    kind: str = "cuisine",  # "cuisine" | "jeux"
+    start_date: str = "",
+    end_date: str = "",
+):
+    """Tableau de synthèse comparative sur une période.
+
+    Pour CUISINE : compare les quantités issues des bons cuisinier (scans validés
+    ET recoupements manuels enregistrés) aux ventes système des départements
+    "cuisine" / "menu_combos".
+
+    Pour JEUX : compare les compteurs déclarés par le coach (recoupements kind=jeux)
+    aux factures système des départements "jeux".
+    """
+    if kind not in ("cuisine", "jeux"):
+        raise HTTPException(400, "kind must be 'cuisine' or 'jeux'")
+    if not start_date:
+        start_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if not end_date:
+        end_date = start_date
+
+    # 1) Agrégation des quantités déclarées sur la période depuis `recoupements`
+    declared_by_item: dict = {}
+    declared_total_revenue = 0.0
+    declared_total_qty = 0.0
+    days_covered = set()
+
+    q_recoupement = {
+        "date": {"$gte": start_date, "$lte": end_date},
+        "$or": [
+            {"kind": kind},
+        ],
+    }
+    # Pour cuisine : on inclut aussi les "cuisine_scan" (bons photo validés par cuisinier+admin)
+    if kind == "cuisine":
+        q_recoupement["$or"].append({"kind": "cuisine_scan", "status": {"$in": ["validated", "saved"]}})
+
+    rec_cursor = db.recoupements.find(q_recoupement, {"_id": 0})
+    async for rec in rec_cursor:
+        d = rec.get("date") or ""
+        if d:
+            days_covered.add(d)
+        items_src = []
+        if rec.get("kind") == "cuisine_scan":
+            # Format scan : items = [{name, quantity, price?}]
+            items_src = rec.get("items") or []
+        else:
+            # Format recoupement classique : declared = [{name, quantity}]
+            items_src = rec.get("declared") or rec.get("items") or []
+        declared_total_revenue += float(rec.get("declared_total_revenue") or 0)
+        for it in items_src:
+            name = (it.get("name") or "").strip()
+            if not name:
+                continue
+            qty = float(it.get("quantity") or 0)
+            price = float(it.get("price") or 0)
+            entry = declared_by_item.setdefault(
+                name.lower(),
+                {"name": name, "declared_quantity": 0.0, "declared_value": 0.0, "occurrences": 0},
+            )
+            entry["declared_quantity"] += qty
+            entry["declared_value"] += qty * price
+            entry["occurrences"] += 1
+            declared_total_qty += qty
+
+    # 2) Agrégation des ventes système sur la même période (factures validées)
+    if kind == "cuisine":
+        dept_keywords = {"cuisine", "menu_combos", "menu", "combo", "menus", "plats"}
+    else:
+        dept_keywords = {"jeux", "playstation", "ps5", "baby", "billard"}
+
+    sys_start = f"{start_date}T00:00:00"
+    sys_end = f"{end_date}T23:59:59.999999"
+    invoices = await db.invoices.find({
+        "created_at": {"$gte": sys_start, "$lte": sys_end},
+        "validation_status": "validated",
+    }, {"_id": 0, "items": 1, "created_at": 1}).to_list(20000)
+
+    system_by_item: dict = {}
+    system_total_revenue = 0.0
+    system_total_qty = 0.0
+
+    for inv in invoices:
+        d = (inv.get("created_at") or "")[:10]
+        if d:
+            days_covered.add(d)
+        for it in (inv.get("items") or []):
+            dept = ((it.get("department") or it.get("category") or "") or "").lower()
+            name = (it.get("name") or "").strip()
+            if not name:
+                continue
+            # Filtre département :
+            #   - CUISINE : on inclut si dept matche ou si pas de dept (cas legacy)
+            #   - JEUX    : on EXIGE un dept qui matche (sinon on confond avec la cuisine)
+            if kind == "jeux":
+                relevant = bool(dept) and any(k in dept for k in dept_keywords)
+            else:
+                relevant = (not dept) or any(k in dept for k in dept_keywords)
+            if not relevant:
+                continue
+            q = float(it.get("quantity") or 0)
+            p = float(it.get("price") or 0)
+            entry = system_by_item.setdefault(
+                name.lower(),
+                {"name": name, "system_quantity": 0.0, "system_value": 0.0, "department": dept},
+            )
+            entry["system_quantity"] += q
+            entry["system_value"] += q * p
+            system_total_revenue += q * p
+            system_total_qty += q
+
+    # 3) Fusion : tableau aligné par nom (fuzzy match basique sur lowercase)
+    rows = []
+    seen_system_keys = set()
+    for key, d_entry in declared_by_item.items():
+        s_entry = system_by_item.get(key)
+        # fuzzy si pas trouvé : recherche par contains
+        if not s_entry:
+            for skey, sval in system_by_item.items():
+                if skey in key or key in skey:
+                    s_entry = sval
+                    seen_system_keys.add(skey)
+                    break
+        else:
+            seen_system_keys.add(key)
+        sys_qty = (s_entry or {}).get("system_quantity", 0.0)
+        sys_val = (s_entry or {}).get("system_value", 0.0)
+        diff_qty = d_entry["declared_quantity"] - sys_qty
+        diff_val = d_entry["declared_value"] - sys_val
+        # Taux d'écart sur la quantité
+        if sys_qty > 0:
+            pct = abs(diff_qty) / sys_qty
+        elif d_entry["declared_quantity"] > 0:
+            pct = 1.0
+        else:
+            pct = 0.0
+        # Statut
+        if abs(diff_qty) < 0.01:
+            severity = "ok"
+        elif pct >= 0.10 or abs(diff_qty) >= 2:
+            severity = "alert"
+        else:
+            severity = "warning"
+        rows.append({
+            "name": d_entry["name"],
+            "declared_quantity": round(d_entry["declared_quantity"], 2),
+            "declared_value": round(d_entry["declared_value"], 0),
+            "system_quantity": round(sys_qty, 2),
+            "system_value": round(sys_val, 0),
+            "diff_quantity": round(diff_qty, 2),
+            "diff_value": round(diff_val, 0),
+            "pct": round(pct, 4),
+            "severity": severity,
+            "occurrences": d_entry["occurrences"],
+            "in_declared": True,
+            "in_system": s_entry is not None,
+        })
+
+    # 4) Items vus côté SYSTÈME mais pas dans le déclaré (ventes non recoupées)
+    for skey, sval in system_by_item.items():
+        if skey in seen_system_keys:
+            continue
+        rows.append({
+            "name": sval["name"],
+            "declared_quantity": 0,
+            "declared_value": 0,
+            "system_quantity": round(sval["system_quantity"], 2),
+            "system_value": round(sval["system_value"], 0),
+            "diff_quantity": round(-sval["system_quantity"], 2),
+            "diff_value": round(-sval["system_value"], 0),
+            "pct": 1.0,
+            "severity": "alert",
+            "occurrences": 0,
+            "in_declared": False,
+            "in_system": True,
+        })
+
+    # Tri par sévérité puis valeur absolue de l'écart
+    severity_order = {"alert": 0, "warning": 1, "ok": 2}
+    rows.sort(key=lambda r: (severity_order.get(r["severity"], 9), -abs(r["diff_value"])))
+
+    summary = {
+        "kind": kind,
+        "start_date": start_date,
+        "end_date": end_date,
+        "days_covered": sorted(list(days_covered)),
+        "declared_total_quantity": round(declared_total_qty, 2),
+        "declared_total_revenue": round(declared_total_revenue, 0),
+        "system_total_quantity": round(system_total_qty, 2),
+        "system_total_revenue": round(system_total_revenue, 0),
+        "global_diff_revenue": round(declared_total_revenue - system_total_revenue, 0),
+        "global_diff_pct": (
+            round(abs(declared_total_revenue - system_total_revenue) / system_total_revenue, 4)
+            if system_total_revenue else 0
+        ),
+        "alert_rows": sum(1 for r in rows if r["severity"] == "alert"),
+        "warning_rows": sum(1 for r in rows if r["severity"] == "warning"),
+        "ok_rows": sum(1 for r in rows if r["severity"] == "ok"),
+        "total_rows": len(rows),
+    }
+
+    return {"summary": summary, "rows": rows}
+
