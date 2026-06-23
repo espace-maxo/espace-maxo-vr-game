@@ -103,7 +103,7 @@ const BonsTab = ({
 
           {/* Cancellation requests (admin) */}
           {isAdmin && cancellationRequests.length > 0 && (
-            <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50">
+            <Card className="bg-gradient-to-br from-red-900/30 to-orange-900/20 border-red-500/50" data-testid="cancellation-requests-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-red-400 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
@@ -112,22 +112,102 @@ const BonsTab = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {cancellationRequests.map(req => (
-                  <div key={req.id} className="flex items-center justify-between gap-2 bg-red-900/20 rounded-lg p-3 border border-red-500/30">
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{req.invoice_number}</p>
-                      <p className="text-slate-400 text-sm">Demandé par: {req.requested_by} • Motif: {req.reason}</p>
+                {cancellationRequests.map(req => {
+                  const invoice = invoices.find(inv => inv.id === req.invoice_id);
+                  const itemsCount = invoice?.items?.length || 0;
+                  const amount = invoice?.total_ttc ?? invoice?.total ?? 0;
+                  let timeLabel = "";
+                  try {
+                    if (req.created_at) {
+                      const d = new Date(req.created_at);
+                      timeLabel = d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+                    }
+                  } catch (_) {}
+                  return (
+                    <div
+                      key={req.id}
+                      className="bg-red-900/20 rounded-lg p-3 border border-red-500/30 space-y-2"
+                      data-testid={`cancellation-req-${req.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-white font-bold text-base">{req.invoice_number}</p>
+                            {amount > 0 && (
+                              <Badge className="bg-red-500/30 text-red-200 border border-red-500/40 text-xs">
+                                {formatPrice(amount)} F
+                              </Badge>
+                            )}
+                            {itemsCount > 0 && (
+                              <Badge className="bg-slate-700/60 text-slate-200 text-[10px]">
+                                {itemsCount} article{itemsCount > 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-slate-300 text-xs mt-1">
+                            <strong className="text-white">{req.requested_by || "—"}</strong>
+                            {timeLabel && (
+                              <span className="text-slate-400"> · demande envoyée le {timeLabel}</span>
+                            )}
+                          </p>
+                          <p className="text-slate-300 text-sm mt-1">
+                            <span className="text-slate-400">Motif :</span>{" "}
+                            <em className="text-red-200">{req.reason || "(non précisé)"}</em>
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setViewInvoice && invoice && setViewInvoice(invoice)}
+                            disabled={!invoice}
+                            className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10"
+                            data-testid={`cancellation-view-${req.id}`}
+                            title={invoice ? "Voir le détail de la facture (articles, montants)" : "Facture introuvable"}
+                          >
+                            <Eye className="w-4 h-4 mr-1" /> Voir détail
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => approveCancellationRequest(req.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                            data-testid={`cancellation-approve-${req.id}`}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" /> Annuler Facture
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => rejectCancellationRequest(req.id)}
+                            className="border-slate-600 text-slate-400 hover:bg-slate-700"
+                            data-testid={`cancellation-reject-${req.id}`}
+                          >
+                            Refuser
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Mini-récap des articles pour décision rapide */}
+                      {itemsCount > 0 && (
+                        <details className="bg-slate-900/40 border border-slate-700/40 rounded p-2 group">
+                          <summary className="text-[11px] text-slate-300 cursor-pointer hover:text-amber-300 select-none">
+                            Aperçu des articles ({itemsCount}) ▾
+                          </summary>
+                          <ul className="text-[11px] text-slate-300 mt-2 space-y-0.5 max-h-40 overflow-y-auto">
+                            {invoice.items.map((it, i) => (
+                              <li key={i} className="flex justify-between">
+                                <span className="truncate">— {it.name}</span>
+                                <span className="text-slate-400 whitespace-nowrap">
+                                  {it.quantity} × {formatPrice(it.price)} = <strong className="text-slate-200">{formatPrice((it.quantity || 0) * (it.price || 0))} F</strong>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => approveCancellationRequest(req.id)} className="bg-red-600 hover:bg-red-700">
-                        <CheckCircle className="w-4 h-4 mr-1" />Annuler Facture
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => rejectCancellationRequest(req.id)} className="border-slate-600 text-slate-400">
-                        Refuser
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           )}
