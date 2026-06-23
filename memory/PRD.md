@@ -17,6 +17,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Phase 3 Offline]** Pré-allocation des numéros de factures via `POST /api/offline/preallocate?count=N` (format `EM-YYYYMMDD-O0001`). Pool local en IndexedDB consommé à la création de facture hors-ligne. Badge `OfflinePreallocBadge` dans le header Caisse pour Admin/Manager (recharge automatique sous seuil de 10, batch 30).
+- **[Feb 2026 — Phase 3 Offline]** Nouveaux handlers dans `sync_queue.py` :
+  - `validate_invoice` — passe `validation_status` à "validated" en idempotent
+  - `create_financial_point` — crée un reversement avec garde-fou unicité (date+period_type+category)
+- **[Feb 2026 — Phase 3 Offline]** Tests pytest exhaustifs : `/app/backend/tests/test_offline_phase3_iter98.py` (17/17 passants).
+- **[Feb 2026]** `BonsTab.jsx` — alertes de demande d'annulation enrichies : heure de la demande (fr-FR), bouton "Voir détail" → `setViewInvoice`, mini-récap repliable des articles.
 - Billettage global unique + auto-création + traçabilité ajustements
 - Réconciliation garde-fou (justification écarts par l'admin)
 - Sync Caisse ↔ Stock (toggle "Passer en stock" sur items d'achat)
