@@ -8,7 +8,8 @@ Body :
   "actions": [
     {
       "client_id": "uuid",
-      "type": "create_table" | "update_table" | "create_invoice" | "delete_table",
+      "type": "create_table" | "update_table" | "create_invoice" | "delete_table"
+              | "validate_invoice" | "create_financial_point",
       "payload": {...},
       "queued_at": "ISO date"
     },
@@ -161,10 +162,27 @@ async def _handle_create_invoice(action: QueuedAction) -> dict:
         return {"status": "conflict", "reason": "La journée n'est pas ouverte sur le serveur. Action rejetée."}
 
     today_yyyymmdd = datetime.now(timezone.utc).strftime("%Y%m%d")
-    count = await db.invoices.count_documents({
-        "created_at": {"$regex": f"^{today_str}"}
-    })
-    invoice_number = p.get("invoice_number") or f"EM-{today_yyyymmdd}-{count + 1:04d}"
+    provided_number = (p.get("invoice_number") or "").strip()
+
+    # Si un numéro pré-alloué offline est fourni, on le consomme et l'accepte
+    invoice_number = None
+    if provided_number and "-O" in provided_number and provided_number.startswith("EM-"):
+        try:
+            from .offline_prealloc import mark_offline_number_used  # local import to avoid cycle
+            ok_resa = await mark_offline_number_used(provided_number, p.get("id") or "")
+        except Exception as e:
+            logger.error(f"prealloc validation failed: {e}")
+            ok_resa = False
+        if ok_resa:
+            invoice_number = provided_number
+        # Si le numéro n'était pas pré-alloué (collision improbable), on retombera
+        # sur la séquence standard ci-dessous.
+
+    if invoice_number is None:
+        count = await db.invoices.count_documents({
+            "created_at": {"$regex": f"^{today_str}"}
+        })
+        invoice_number = provided_number or f"EM-{today_yyyymmdd}-{count + 1:04d}"
 
     invoice = {
         "id": p.get("id") or str(uuid.uuid4()),
@@ -198,7 +216,120 @@ HANDLERS = {
     "update_table": _handle_update_table,
     "delete_table": _handle_delete_table,
     "create_invoice": _handle_create_invoice,
+    "validate_invoice": None,  # set below
+    "create_financial_point": None,  # set below
 }
+
+
+# ─────────── Phase 3 handlers : validation + reversement ───────────
+
+async def _handle_validate_invoice(action: QueuedAction) -> dict:
+    """Passe `validation_status` à 'validated' sur une facture existante."""
+    p = action.payload or {}
+    invoice_id = p.get("id") or p.get("invoice_id")
+    if not invoice_id:
+        return {"status": "error", "reason": "id de facture manquant"}
+
+    existing = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not existing:
+        return {"status": "conflict", "reason": "Facture introuvable (peut-être supprimée par l'administrateur)"}
+
+    # Si déjà validée, idempotent
+    if existing.get("validation_status") == "validated":
+        return {"status": "ok", "data": existing, "reason": "Déjà validée"}
+
+    # Si la facture a été annulée entre-temps, rejet
+    if existing.get("validation_status") == "cancelled":
+        return {"status": "conflict", "reason": "Facture annulée entre-temps par l'administrateur"}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "validation_status": "validated",
+        "validated_by": p.get("validated_by") or (action.user or {}).get("name") or existing.get("created_by") or "",
+        "validated_at": p.get("validated_at") or now_iso,
+        "updated_at": now_iso,
+        "_offline_validated": True,
+        "_offline_validated_at": action.queued_at or now_iso,
+    }
+    await db.invoices.update_one({"id": invoice_id}, {"$set": patch})
+    refreshed = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return {"status": "ok", "data": refreshed}
+
+
+async def _handle_create_financial_point(action: QueuedAction) -> dict:
+    """Crée un point financier (reversement) en respectant l'unicité (date, period_type, category)."""
+    p = action.payload or {}
+    date = p.get("date")
+    period_type = p.get("period_type") or "daily"
+    category = p.get("category") or "all"
+
+    if not date:
+        return {"status": "error", "reason": "date manquante"}
+
+    # Unicité : un reversement existe-t-il déjà pour cette période/catégorie ?
+    if period_type == "weekly" and p.get("end_date"):
+        existing = await db.financial_points.find_one({
+            "period_type": "weekly",
+            "date": date,
+            "end_date": p.get("end_date"),
+            "category": category,
+        }, {"_id": 0})
+    else:
+        existing = await db.financial_points.find_one({
+            "date": date,
+            "period_type": period_type,
+            "category": category,
+        }, {"_id": 0})
+
+    if existing:
+        return {
+            "status": "conflict",
+            "reason": f"Un reversement existe déjà pour cette période et la catégorie {category}",
+            "data": existing,
+        }
+
+    cash = float(p.get("cash_amount") or 0)
+    mobile = float(p.get("mobile_amount") or 0)
+    cheque = float(p.get("cheque_amount") or 0)
+    wallet = float(p.get("wallet_amount") or 0)
+    total = cash + mobile + cheque + wallet
+
+    point = {
+        "id": p.get("id") or str(uuid.uuid4()),
+        "date": date,
+        "end_date": p.get("end_date") or "",
+        "period_type": period_type,
+        "category": category,
+        "cash_amount": cash,
+        "mobile_amount": mobile,
+        "cheque_amount": cheque,
+        "wallet_amount": wallet,
+        "total_amount": total,
+        "notes": p.get("notes") or "",
+        "created_by": p.get("created_by") or (action.user or {}).get("name") or "",
+        "created_at": action.queued_at or datetime.now(timezone.utc).isoformat(),
+        "status": "pending",
+        "admin_validated": False,
+        "admin_validated_by": None,
+        "admin_validated_at": None,
+        "signed": False,
+        "signed_by": None,
+        "signed_at": None,
+        "billettage": p.get("billettage") or {},
+        "momo_number": p.get("momo_number") or "",
+        "destination": p.get("destination") or "admin",
+        "adjustments": [],
+        "auto_fill_snapshot": None,
+        "_offline_origin": True,
+        "_offline_client_id": action.client_id,
+    }
+    await db.financial_points.insert_one(point)
+    point.pop("_id", None)
+    return {"status": "ok", "data": point}
+
+
+HANDLERS["validate_invoice"] = _handle_validate_invoice
+HANDLERS["create_financial_point"] = _handle_create_financial_point
 
 
 # ─────────────── Main endpoint ───────────────

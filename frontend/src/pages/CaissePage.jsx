@@ -28,6 +28,8 @@ import QRCode from "qrcode";
 
 // Offline auth helpers
 import { rememberLogin, tryLocalLogin, isNetworkError } from "./caisse/utils/offlineAuth";
+import { refillIfLow as refillInvoiceNumbers } from "../lib/offlineInvoiceNumbers";
+import OfflinePreallocBadge from "./caisse/components/OfflinePreallocBadge";
 
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
@@ -562,6 +564,13 @@ const CaissePage = () => {
           pin: enteredPin,
           password: enteredPwd,
           user: response.data.user,
+        }).catch(() => {});
+        // Phase 3 — recharge silencieusement le pool de numéros pré-alloués
+        refillInvoiceNumbers({
+          apiBase: API.replace(/\/api$/, ""),
+          user: response.data.user,
+          threshold: 10,
+          batchSize: 30,
         }).catch(() => {});
         fetchAllData();
       }
@@ -3880,13 +3889,35 @@ _Responsable Op. & Log - Espace Maxo_
         ...invoiceData,
         id: invoiceData.id || ((typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `inv_${Date.now()}`),
       };
+      // Phase 3 — Si nous sommes hors-ligne, on consomme un numéro pré-alloué
+      // pour que la facture porte un numéro propre dès l'émission.
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (isOffline && !enriched.invoice_number) {
+        try {
+          const { consumeNumber } = await import("../lib/offlineInvoiceNumbers");
+          const preNumber = await consumeNumber(enriched.id);
+          if (preNumber) {
+            enriched.invoice_number = preNumber;
+            enriched._offline_prealloc_number = true;
+          } else {
+            toast.warning("Pool de numéros pré-alloués vide — facture en attente d'un numéro serveur");
+          }
+        } catch (_) {
+          /* noop */
+        }
+      }
       const r = await trySync({
         type: "create_invoice",
         payload: enriched,
         user: { name: currentUser?.full_name || currentUser?.username, role: currentUser?.role },
       });
       if (r.queued) {
-        toast.warning("Facture créée hors-ligne — sera synchronisée au retour de la connexion", { duration: 5000 });
+        toast.warning(
+          enriched.invoice_number
+            ? `Facture ${enriched.invoice_number} créée hors-ligne — sera synchronisée au retour de la connexion`
+            : "Facture créée hors-ligne — sera synchronisée au retour de la connexion",
+          { duration: 5000 }
+        );
         // Skip side-effects requiring server (client stats, table mutation)
         return;
       }
@@ -5131,6 +5162,16 @@ _Responsable Op. & Log - Espace Maxo_
               </div>
               {/* Real-time sync + offline indicator (Phase 1) */}
               <OfflineIndicator />
+              {/* Phase 3 — pool local de numéros de factures pré-alloués */}
+              {(currentUser?.role === "admin" || currentUser?.role === "manager") && (
+                <OfflinePreallocBadge
+                  user={{
+                    name: currentUser?.full_name || currentUser?.username,
+                    role: currentUser?.role,
+                  }}
+                  className="hidden sm:inline-flex"
+                />
+              )}
               {/* Badge si l'utilisateur s'est connecté en mode hors-ligne */}
               {currentUser?._offline && (
                 <span

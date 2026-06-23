@@ -15,11 +15,13 @@
  *   - subscribe(listener)
  *       S'abonner aux changements de queue (pour mettre à jour le badge).
  *
- * Actions supportées (Phase 2) :
- *   - create_table     POST /api/caisse/tables
- *   - update_table     PUT  /api/caisse/tables/{id}
- *   - delete_table     DELETE /api/caisse/tables/{id}
- *   - create_invoice   POST /api/invoices
+ * Actions supportées (Phase 2/3) :
+ *   - create_table         POST /api/caisse/tables
+ *   - update_table         PUT  /api/caisse/tables/{id}
+ *   - delete_table         DELETE /api/caisse/tables/{id}
+ *   - create_invoice       POST /api/invoices
+ *   - validate_invoice     PUT  /api/invoices/{id} (force validation_status="validated")
+ *   - create_financial_point  POST /api/financial-points
  *
  * Idempotency :
  *   Chaque action porte un `client_id` (UUID v4) injecté ici.
@@ -35,6 +37,19 @@ const REST_MAP = {
   update_table:   { method: "put",    url: (p) => `/caisse/tables/${p.id}` },
   delete_table:   { method: "delete", url: (p) => `/caisse/tables/${p.id}` },
   create_invoice: { method: "post",   url: () => "/invoices" },
+  // Phase 3 — validation des factures et reversements en offline
+  validate_invoice: {
+    method: "put",
+    url: (p) => `/invoices/${p.id}`,
+    // Le backend accepte le payload générique ; on force validation_status.
+    transform: (p, user) => ({
+      ...p,
+      validation_status: "validated",
+      validated_by: p.validated_by || user?.name || "",
+      validated_at: p.validated_at || new Date().toISOString(),
+    }),
+  },
+  create_financial_point: { method: "post", url: () => "/financial-points" },
 };
 
 function uuid() {
@@ -52,7 +67,9 @@ async function sendDirect(action) {
   if (!map) throw new Error(`Type inconnu : ${action.type}`);
   const url = `${API}${map.url(action.payload)}`;
   const config = { timeout: 15000 };
-  const data = action.payload;
+  const data = map.transform
+    ? map.transform(action.payload, action.user)
+    : action.payload;
   let res;
   if (map.method === "post") res = await axios.post(url, data, config);
   else if (map.method === "put") res = await axios.put(url, data, config);

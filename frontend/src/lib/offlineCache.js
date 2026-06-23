@@ -16,10 +16,11 @@
  */
 
 const DB_NAME = "caissepro_offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_SNAPSHOT = "snapshot";
 const STORE_QUEUE = "queue";
 const STORE_META = "meta";
+const STORE_PREALLOC = "prealloc_numbers"; // Phase 3 : pré-allocation N° factures
 
 let _dbPromise = null;
 
@@ -38,6 +39,10 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(STORE_PREALLOC)) {
+        const p = db.createObjectStore(STORE_PREALLOC, { keyPath: "number" });
+        p.createIndex("used", "used", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
