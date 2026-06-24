@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Gamepad2, UtensilsCrossed, Calendar, Phone, ChevronRight } from "lucide-react";
 import ImageLightbox from "@/components/ImageLightbox";
 import PromoVacancesSection from "@/components/PromoVacancesSection";
+import PromoTeaserPopup from "@/components/PromoTeaserPopup";
 import { TestimonialsSection } from "@/pages/TestimonialsPage";
 
 const INTERIOR_IMAGES = [
@@ -420,6 +421,9 @@ const HomePage = () => {
 
       {/* Testimonials Section - AVIS */}
       <TestimonialsSection />
+
+      {/* Popup teaser Promo Vacances (apparait 20s après le chargement) */}
+      <PromoTeaserPopup />
     </div>
   );
 };

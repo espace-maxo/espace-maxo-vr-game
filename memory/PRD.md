@@ -21,6 +21,8 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
   - Section "Promo Vacances Maxo" affichée sur la HomePage juste après le hero (5 cartes : Promo -25%, Pack Game Fresh 2 000 F, Pack Solo Fun 3 500 F, Pack Duo Snack VR 5 500 F, Pack Fun Maxo 6 500 F).
   - Faux compteur "Plus que N/100 places" (entre 18 et 42 au démarrage, décrémente aléatoirement toutes les 25-60s en localStorage) pour les 3 packs limités aux 100 premières réservations.
   - Bouton "Réserver" → `/booking?pack={id}` → BookingPage affiche un bandeau "PACK SÉLECTIONNÉ" avec image + nom + prix + flow de paiement Kkiapay existant.
+  - **Popup teaser** (`PromoTeaserPopup.jsx`) qui apparaît 20s après l'arrivée sur la HomePage avec un pack aléatoire (parmi les 100 premières), compte à rebours de 5 min animé, et boutons "Plus tard" / "Réserver maintenant". Suppression 24h après fermeture (localStorage).
+  - **Dashboard Admin** (`PromoOrdersDashboard.jsx`) dans l'onglet Produits : liste de toutes les commandes promo, compteurs par pack, recherche, boutons "Appeler" et "WhatsApp" pré-rempli.
   - Enregistrement automatique de la commande promo dans `promo_vacances_orders` lors de la création de la réservation.
   - Toggle Admin : `PromoVacancesAdminToggle.jsx` dans l'onglet Produits (Admin) pour activer/désactiver la promo en un clic. Statut stocké dans `site_settings` (clé `promo_vacances`).
   - Endpoints : `GET /api/promo-vacances` · `PUT /api/promo-vacances/toggle` · `POST /api/promo-vacances/order` · `GET /api/promo-vacances/orders`.
