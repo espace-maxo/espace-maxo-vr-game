@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Gamepad2, UtensilsCrossed, Calendar, Phone, ChevronRight } from "lucide-react";
 import ImageLightbox from "@/components/ImageLightbox";
 import PromoVacancesSection from "@/components/PromoVacancesSection";
 import PromoTeaserPopup from "@/components/PromoTeaserPopup";
 import { TestimonialsSection } from "@/pages/TestimonialsPage";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const INTERIOR_IMAGES = [
   "https://customer-assets.emergentagent.com/job_ef6106ad-2a78-46b4-9069-e8f0a2d9a6b0/artifacts/ix3jsee6_1af7712a-41b2-40d6-a148-c77efdf0a6c4.JPG",
@@ -18,6 +21,20 @@ const INTERIOR_IMAGES = [
 const HomePage = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [promoActive, setPromoActive] = useState(true); // bannière visible par défaut
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/promo-vacances`)
+      .then(({ data }) => {
+        if (!cancelled && data && data.active === false) setPromoActive(false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openLightbox = (index) => {
     setLightboxIndex(index);
@@ -34,11 +51,12 @@ const HomePage = () => {
         onClose={() => setLightboxOpen(false)}
       />
       {/* Bandeau Promo Vacances (clic → section promo plus bas) */}
-      <a
-        href="#promo-vacances"
-        className="block w-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-slate-900 hover:from-amber-400 hover:to-rose-400 transition-colors"
-        data-testid="promo-vacances-banner"
-      >
+      {promoActive && (
+        <a
+          href="#promo-vacances"
+          className="block w-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-slate-900 hover:from-amber-400 hover:to-rose-400 transition-colors"
+          data-testid="promo-vacances-banner"
+        >
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-center gap-2 sm:gap-3 flex-wrap text-center">
           <span className="inline-flex items-center gap-1 bg-slate-900/15 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest">
             🔥 Promo Vacances
@@ -51,6 +69,7 @@ const HomePage = () => {
           </span>
         </div>
       </a>
+      )}
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden" data-testid="hero-section">
         {/* Background Image */}

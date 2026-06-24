@@ -17,6 +17,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Mar 2026 — Robustification Promo Vacances + Suppression Combos]**
+  - **Fallback en dur** (`FALLBACK_PACKS`) ajouté dans `PromoVacancesSection.jsx` et `PromoTeaserPopup.jsx` : la promo s'affiche **immédiatement** même si l'API `/api/promo-vacances` est indisponible (résout le bug "ca ne s'affiche pas après déploiement").
+  - **Bannière annonceur** orange/rose au-dessus du hero sur la HomePage (clic → scroll vers la section promo). Masquée si l'Admin a désactivé la promo.
+  - **Suppression de la page Combos** : route `/menu` retirée d'`App.js`, lien "Combos" supprimé du `Navbar`, fichier `MenuPage.jsx` supprimé. Lien CTA "Voir nos combos" remplacé par "Voir nos packs Vacances".
+  - Tests E2E (testing_agent iteration 100) : 9/9 frontend + 2/2 backend passants. Toggle Admin masque bien section + popup + bannière quand désactivé.
 - **[Mar 2026 — Promo Vacances Maxo (site public)]**
   - Section "Promo Vacances Maxo" affichée sur la HomePage juste après le hero (5 cartes : Promo -25%, Pack Game Fresh 2 000 F, Pack Solo Fun 3 500 F, Pack Duo Snack VR 5 500 F, Pack Fun Maxo 6 500 F).
   - Faux compteur "Plus que N/100 places" (entre 18 et 42 au démarrage, décrémente aléatoirement toutes les 25-60s en localStorage) pour les 3 packs limités aux 100 premières réservations.
