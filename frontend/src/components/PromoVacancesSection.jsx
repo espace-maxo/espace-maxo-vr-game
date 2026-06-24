@@ -206,28 +206,28 @@ export default function PromoVacancesSection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 max-w-6xl mx-auto">
           {cards.map((p) => {
             const remaining = counters[p.id];
             const isLowStock = p.limit_100_first && remaining !== undefined && remaining <= 15;
             return (
               <div
                 key={p.id}
-                className="group relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-b from-slate-900/80 to-slate-950/90 hover:border-amber-400/60 transition-all duration-300 hover:shadow-[0_0_40px_rgba(255,180,40,0.25)]"
+                className="group relative overflow-hidden rounded-2xl border-2 border-amber-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 hover:border-amber-400 transition-all duration-300 hover:shadow-[0_0_50px_rgba(255,180,40,0.35)] hover:-translate-y-1"
                 data-testid={`promo-pack-card-${p.id}`}
               >
-                {/* Image */}
-                <div className="relative aspect-square overflow-hidden bg-slate-950">
+                {/* Image — ratio portrait pour afficher les affiches en entier */}
+                <div className="relative aspect-[4/5] overflow-hidden bg-slate-950">
                   <img
                     src={p.image}
                     alt={p.title}
                     loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-contain bg-slate-950 transition-transform duration-500 group-hover:scale-[1.03]"
                   />
                   {/* Badge "100 premières" */}
                   {p.limit_100_first && (
-                    <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2">
-                      <Badge className="bg-red-600/90 text-white text-[10px] uppercase tracking-wider shadow-lg">
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                      <Badge className="bg-red-600 text-white text-[11px] uppercase tracking-wider shadow-lg px-2.5 py-1">
                         <Flame className="w-3 h-3 mr-1" />
                         100 premières
                       </Badge>
@@ -235,8 +235,8 @@ export default function PromoVacancesSection() {
                         <Badge
                           className={
                             isLowStock
-                              ? "bg-red-500 text-white animate-pulse text-[10px]"
-                              : "bg-amber-500/90 text-slate-900 text-[10px]"
+                              ? "bg-red-500 text-white animate-pulse text-[11px] px-2.5 py-1"
+                              : "bg-amber-500 text-slate-900 text-[11px] px-2.5 py-1 shadow-lg"
                           }
                           data-testid={`promo-pack-counter-${p.id}`}
                         >
@@ -246,36 +246,45 @@ export default function PromoVacancesSection() {
                       )}
                     </div>
                   )}
-                  {/* Prix flottant */}
-                  {p.price && (
-                    <div className="absolute bottom-2 right-2 bg-amber-500 text-slate-900 font-black px-3 py-1 rounded-lg shadow-lg">
-                      <span className="font-orbitron text-lg leading-none">{formatFCFA(p.price)}</span>
-                      <span className="text-[10px] ml-0.5">FCFA</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Body */}
-                <div className="p-3 sm:p-4 space-y-2">
-                  <h3 className="font-orbitron font-bold text-white text-sm sm:text-base leading-tight uppercase line-clamp-2">
+                <div className="p-4 sm:p-5 space-y-2.5">
+                  <h3 className="font-orbitron font-bold text-white text-base sm:text-lg leading-tight uppercase">
                     {p.title}
                   </h3>
                   {p.subtitle && (
-                    <p className="text-amber-200/90 text-xs font-medium line-clamp-2">{p.subtitle}</p>
+                    <p className="text-amber-200/90 text-sm font-medium">{p.subtitle}</p>
                   )}
-                  {p.old_price && (
-                    <p className="text-[11px] text-slate-400">
-                      Prix habituel :{" "}
-                      <span className="line-through">{formatFCFA(p.old_price)} FCFA</span>
-                    </p>
-                  )}
+                  <div className="flex items-end justify-between gap-2">
+                    {p.price ? (
+                      <div>
+                        <span className="font-orbitron font-black text-amber-400 text-2xl sm:text-3xl leading-none">
+                          {formatFCFA(p.price)}
+                        </span>
+                        <span className="text-amber-200 text-xs font-bold ml-1">FCFA</span>
+                        {p.old_price && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            <span className="line-through">{formatFCFA(p.old_price)} F</span>
+                            <span className="text-emerald-400 font-semibold ml-1">
+                              -{formatFCFA(p.old_price - p.price)} F
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="font-orbitron font-bold text-amber-400 text-xl uppercase">
+                        Promo -25%
+                      </span>
+                    )}
+                  </div>
                   <Link
                     to={`/booking?pack=${encodeURIComponent(p.booking_param)}`}
                     data-testid={`promo-pack-cta-${p.id}`}
                   >
                     <Button
-                      size="sm"
-                      className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-slate-900 font-bold uppercase tracking-wide text-xs sm:text-sm mt-1 hover:from-amber-400 hover:to-orange-400 hover:shadow-[0_0_25px_rgba(255,140,0,0.5)] transition-all"
+                      size="lg"
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-slate-900 font-bold uppercase tracking-wide text-sm mt-2 hover:from-amber-400 hover:to-orange-400 hover:shadow-[0_0_25px_rgba(255,140,0,0.6)] transition-all"
                     >
                       {p.cta_label || "Réserver"}
                     </Button>

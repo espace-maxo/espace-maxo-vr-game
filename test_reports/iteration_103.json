@@ -1,0 +1,30 @@
+{
+  "summary": "Validated both user-reported fixes successfully: (1) Promo affiche visibility on HomePage — 5 cards in lg:grid-cols-3 grid, card width 368px (>280px target), aspect-[4/5] portrait + object-contain showing full affiche, big bold price (font-orbitron font-black text-2xl/3xl), badges still readable. (2) Pack paiement intégral on /booking?pack=pack_solo_fun — récap shows 'Pack sélectionné: Pack Solo Fun Maxo', 'Prix habituel 5 000 FCFA' (barré), 'Économie -1 500 FCFA' (vert), amber encart 'Paiement intégral requis', NO 'Frais de réservation 500 FCFA' line, NO 'Payer le montant total en ligne' checkbox, Total = 3 500 FCFA, Submit button 'PAYER 3 500 FCFA'. (3) Non-pack classic booking flow unchanged — 'Frais de réservation 500 FCFA' present, full-payment checkbox present, default button 'PAYER 500 FCFA'. (4) No regressions on prior fixes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BookingPage.jsx still 1073 lines — above the 700-line guideline. Suggest splitting Step1/Step2/Step3 components and extracting Kkiapay logic to useKkiapay hook.",
+    "calculateTotal() is called many times per render in step-3 JSX (>8 invocations). Consider memoizing with useMemo to avoid recomputations.",
+    "Submit button label uses formatPrice() which yields non-breaking space U+202F (Intl.NumberFormat fr-FR). Cosmetically fine but breaks naive string assertions in automated tests — purely a test-side note, not a bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin / Nikeland2026 (not exercised — fixes are client-facing)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pack flow auto-sets payFullAmount=true and locks numberOfPlayers/numberOfGames via /api/promo-vacances included_* fields. Step-3 récap branches on `promoPack` truthy: shows 'Pack sélectionné/Prix habituel/Économie/Paiement intégral requis' instead of 'Frais de réservation' line, and hides the 'Payer le montant total en ligne' checkbox. calculateTotal() returns isPack=true + reservationFee=0 + total=pack.price for packs. HomePage promo grid: lg:grid-cols-3 with aspect-[4/5] images using object-contain. Pack price 3500 (pack_solo_fun), 5500 (pack_duo_snack_vr), 6500 (pack_fun_maxo_vacances), 2000 (pack_game_fresh).",
+  "verification_details": {
+    "homepage_promo_card": "data-testid='promo-pack-card-pack_solo_fun' bbox: width=368px, height=661px (>280 OK). Image bbox: 364x455, aspect 1.25 (4/5 portrait). Counter badge 'Plus que 39/100' visible. Price '3 500' displayed via font-orbitron font-black.",
+    "homepage_grid": "5 cards in 3-column grid on desktop 1920px (row1: x=384/776/1168; row2: x=384/776). max-w-6xl mx-auto ensures large card sizes.",
+    "pack_step3_paiement_integral": "All conditions met: 'Pack sélectionné': True, 'Pack Solo Fun Maxo': True, 'Prix habituel' barré: True, 'Économie': True, 'Paiement intégral requis' encart: True, 'Frais de réservation': False, 'Payer le montant total en ligne' checkbox: False. Total=3 500 FCFA. Submit btn: 'PAYER 3 500 FCFA'.",
+    "non_pack_step3_classic": "All conditions met: 'Frais de réservation': True, full-payment checkbox: True, 'Paiement intégral requis': False, 'Pack sélectionné': False. Total=2 500 FCFA (2000 games + 500 fee). Submit btn: 'PAYER 500 FCFA' (default amountToPay=reservationFee since payFullAmount=false).",
+    "no_regression": "Promo banner only shows on pack URL (data-testid='promo-pack-banner' hidden on /booking without pack). Calendar + slots still work. Continuer validation still works (0197000000 accepted)."
+  }
+}

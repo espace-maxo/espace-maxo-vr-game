@@ -98,12 +98,14 @@ const BookingPage = () => {
         if (pack) {
           setPromoPack(pack);
           // Fige le nombre de jeux et de joueurs en fonction du pack
+          // Active automatiquement le paiement intégral (pas de frais de réservation pour les packs)
           setFormData((prev) => ({
             ...prev,
             numberOfGames:
               typeof pack.included_games === "number" ? pack.included_games : prev.numberOfGames,
             numberOfPlayers:
               typeof pack.included_players === "number" ? pack.included_players : prev.numberOfPlayers,
+            payFullAmount: true,
           }));
         }
       })
@@ -159,6 +161,27 @@ const BookingPage = () => {
   };
 
   const calculateTotal = () => {
+    // ─── Cas spécial : promo pack avec paiement intégral obligatoire ───
+    // Pas de frais de réservation séparé : le client paie le prix du pack en entier.
+    if (promoPack && typeof promoPack.price === "number" && promoPack.price > 0) {
+      const total = promoPack.price;
+      let walletUsed = 0;
+      let amountToPay = total;
+      if (formData.useWallet && walletBalance > 0) {
+        walletUsed = Math.min(walletBalance, amountToPay);
+        amountToPay = amountToPay - walletUsed;
+      }
+      return {
+        gamesPrice: total,
+        reservationFee: 0,
+        total,
+        amountToPay,
+        walletUsed,
+        gamePrice: total,
+        isPack: true,
+      };
+    }
+
     // Prix différents selon le type de jeu
     const gamePrice = formData.gameType === "RACING_SIMULATOR" ? 1500 : 2000;
     const reservationFee = 500;
@@ -185,7 +208,8 @@ const BookingPage = () => {
       total,
       amountToPay,
       walletUsed,
-      gamePrice
+      gamePrice,
+      isPack: false,
     };
   };
 
@@ -859,20 +883,54 @@ const BookingPage = () => {
                 </h2>
                 
                 <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400 font-outfit">
-                      {formData.numberOfPlayers} joueur(s) x {formData.numberOfGames} partie(s) x {formatPrice(calculateTotal().gamePrice)} FCFA
-                    </span>
-                    <span className="text-white font-rajdhani font-bold">
-                      {formatPrice(calculateTotal().gamesPrice)} FCFA
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400 font-outfit">Frais de réservation</span>
-                    <span className="text-white font-rajdhani font-bold">
-                      {formatPrice(calculateTotal().reservationFee)} FCFA
-                    </span>
-                  </div>
+                  {promoPack ? (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 font-outfit">
+                          Pack sélectionné
+                        </span>
+                        <span className="text-amber-300 font-rajdhani font-bold">
+                          {promoPack.title}
+                        </span>
+                      </div>
+                      {promoPack.old_price && promoPack.old_price > (promoPack.price || 0) && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Prix habituel</span>
+                          <span className="text-gray-500 line-through">
+                            {formatPrice(promoPack.old_price)} FCFA
+                          </span>
+                        </div>
+                      )}
+                      {promoPack.old_price && promoPack.old_price > (promoPack.price || 0) && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-emerald-400 font-semibold">Économie</span>
+                          <span className="text-emerald-400 font-semibold">
+                            -{formatPrice(promoPack.old_price - (promoPack.price || 0))} FCFA
+                          </span>
+                        </div>
+                      )}
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-200">
+                        <span className="font-bold">Paiement intégral requis</span> — les packs ne sont pas vendus en réservation partielle.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400 font-outfit">
+                          {formData.numberOfPlayers} joueur(s) x {formData.numberOfGames} partie(s) x {formatPrice(calculateTotal().gamePrice)} FCFA
+                        </span>
+                        <span className="text-white font-rajdhani font-bold">
+                          {formatPrice(calculateTotal().gamesPrice)} FCFA
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400 font-outfit">Frais de réservation</span>
+                        <span className="text-white font-rajdhani font-bold">
+                          {formatPrice(calculateTotal().reservationFee)} FCFA
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="border-t border-white/10 pt-3 mt-3">
                     <div className="flex justify-between">
                       <span className="text-white font-outfit font-semibold">Total</span>
@@ -887,7 +945,8 @@ const BookingPage = () => {
                 <div className="mt-6 space-y-4">
                   <h3 className="font-rajdhani font-bold text-white text-lg">Options de paiement</h3>
                   
-                  {/* Full Payment Option */}
+                  {/* Full Payment Option (masqué pour les packs : paiement intégral imposé) */}
+                  {!promoPack && (
                   <label className="flex items-start gap-3 p-4 rounded-lg bg-surface-highlight/50 border border-white/10 cursor-pointer hover:border-neon-blue/50 transition-colors">
                     <input
                       type="checkbox"
@@ -902,6 +961,7 @@ const BookingPage = () => {
                       </p>
                     </div>
                   </label>
+                  )}
 
                   {/* Wallet Option */}
                   {walletBalance > 0 ? (
@@ -964,7 +1024,7 @@ const BookingPage = () => {
                         {formatPrice(calculateTotal().amountToPay)} FCFA
                       </span>
                     </div>
-                    {!formData.payFullAmount && calculateTotal().amountToPay > 0 && (
+                    {!formData.payFullAmount && !promoPack && calculateTotal().amountToPay > 0 && (
                       <p className="text-gray-400 font-outfit text-xs mt-2">
                         Reste à payer sur place: {formatPrice(calculateTotal().total - calculateTotal().amountToPay - calculateTotal().walletUsed)} FCFA
                       </p>
@@ -996,7 +1056,7 @@ const BookingPage = () => {
                   ) : (
                     <>
                       <Smartphone className="w-5 h-5 mr-2" />
-                      Payer 500 FCFA
+                      Payer {formatPrice(calculateTotal().amountToPay)} FCFA
                     </>
                   )}
                 </Button>
