@@ -17,6 +17,17 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Mar 2026 — Workflow d'approbation produits Caisse]**
+  - Modèle `CaisseProduct` étendu : `status` (`approved`|`pending`), `created_by`, `created_by_role`, `approved_by/_at`, `rejected_by/_at`, `rejection_reason`.
+  - `POST /api/caisse/products` : si `modified_by_role` ≠ `admin` → produit `pending`, invisible dans `GET /api/caisse/products` par défaut.
+  - Nouveaux endpoints : `GET /caisse/products/pending`, `POST /caisse/products/{id}/approve`, `POST /caisse/products/{id}/reject` (avec audit dans `caisse_products_rejections`).
+  - UI : composant `PendingProductsPanel.jsx` affiché en haut de l'onglet Produits pour les Admins (recharge auto 60s, modal raison de rejet).
+- **[Mar 2026 — Déduplication produits Caisse]**
+  - `GET /caisse/products/duplicates` détecte les groupes de doublons (nom normalisé : lower + sans accents + espaces collapsés).
+  - `POST /caisse/products/deduplicate` (dry_run optionnel) conserve l'exemplaire avec le plus d'historique (factures + dépenses), le plus ancien en cas d'égalité. Log dans `caisse_products_dedup_logs`.
+  - UI : section "Doublons détectés" avec modal détail + bouton "Supprimer les doublons".
+  - **6 doublons existants ont été supprimés en preview** (résidus de tests E2E). En production, l'Admin pourra cliquer sur "Supprimer les doublons" après déploiement.
+- Tests backend : `/app/backend/tests/test_caisse_product_workflow_iter99.py` (14/14 passants).
 - **[Feb 2026 — Phase 3 Offline]** Pré-allocation des numéros de factures via `POST /api/offline/preallocate?count=N` (format `EM-YYYYMMDD-O0001`). Pool local en IndexedDB consommé à la création de facture hors-ligne. Badge `OfflinePreallocBadge` dans le header Caisse pour Admin/Manager (recharge automatique sous seuil de 10, batch 30).
 - **[Feb 2026 — Phase 3 Offline]** Nouveaux handlers dans `sync_queue.py` :
   - `validate_invoice` — passe `validation_status` à "validated" en idempotent
