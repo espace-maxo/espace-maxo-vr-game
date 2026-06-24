@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import { rememberLogin, tryLocalLogin, isNetworkError } from "./caisse/utils/off
 import { refillIfLow as refillInvoiceNumbers } from "../lib/offlineInvoiceNumbers";
 import OfflinePreallocBadge from "./caisse/components/OfflinePreallocBadge";
 import SiteNotificationsBell from "./caisse/components/SiteNotificationsBell";
+import SiteNotificationsPanel from "./caisse/components/SiteNotificationsPanel";
 
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
@@ -5745,6 +5746,12 @@ _Responsable Op. & Log - Espace Maxo_
                 <NotifBadge count={effectiveCounts.reviews_unread} color="pink" testid="badge-reviews" />
               </TabsTrigger>
             )}
+            {currentUser?.role === 'admin' && (
+              <TabsTrigger value="site-notifications" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-site-notifications">
+                <Globe className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="inline text-[11px] sm:text-sm">Notifs Site</span>
+              </TabsTrigger>
+            )}
             {/* Server-specific tabs */}
             {currentUser?.role === 'server' && (
               <TabsTrigger value="mon_point" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white px-2 sm:px-3">
@@ -6760,6 +6767,13 @@ _Responsable Op. & Log - Espace Maxo_
           {currentUser?.role === 'admin' && (
             <TabsContent value="customer-reviews">
               <CustomerReviewsTab currentUser={currentUser} />
+            </TabsContent>
+          )}
+          {currentUser?.role === 'admin' && (
+            <TabsContent value="site-notifications">
+              <SiteNotificationsPanel
+                actorName={currentUser?.full_name || currentUser?.username || "Admin"}
+              />
             </TabsContent>
           )}
         </Tabs>
