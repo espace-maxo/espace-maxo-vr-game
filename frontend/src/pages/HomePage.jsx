@@ -70,7 +70,11 @@ const HomePage = () => {
         </div>
       </a>
       )}
-      {/* Hero Section */}
+
+      {/* Promo Vacances Maxo (PREMIER bloc visible après bandeau) */}
+      <PromoVacancesSection />
+
+      {/* Hero Section "Prêt à Jouer" — affichée après la Promo */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden" data-testid="hero-section">
         {/* Background Image */}
         <div className="absolute inset-0">
@@ -139,9 +143,6 @@ const HomePage = () => {
           <ChevronRight className="w-8 h-8 text-neon-blue rotate-90" />
         </div>
       </section>
-
-      {/* Promo Vacances Maxo (juste après le hero) */}
-      <PromoVacancesSection />
 
       {/* Features Section */}
       <section className="py-20 px-4 bg-dark-bg" data-testid="features-section">

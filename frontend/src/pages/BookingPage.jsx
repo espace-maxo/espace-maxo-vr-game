@@ -95,7 +95,17 @@ const BookingPage = () => {
       .then(({ data }) => {
         if (cancelled) return;
         const pack = (data?.packs || []).find((p) => p.booking_param === preselectedPack || p.id === preselectedPack);
-        if (pack) setPromoPack(pack);
+        if (pack) {
+          setPromoPack(pack);
+          // Fige le nombre de jeux et de joueurs en fonction du pack
+          setFormData((prev) => ({
+            ...prev,
+            numberOfGames:
+              typeof pack.included_games === "number" ? pack.included_games : prev.numberOfGames,
+            numberOfPlayers:
+              typeof pack.included_players === "number" ? pack.included_players : prev.numberOfPlayers,
+          }));
+        }
       })
       .catch(() => {});
     return () => {
@@ -365,8 +375,13 @@ const BookingPage = () => {
     }
   };
 
-  const isPhoneValid = formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01');
-  const canProceedToStep2 = formData.customerName && isPhoneValid;
+  // Bénin 2026 : multi-opérateurs (MTN, Moov, Celtiis) → on accepte tout numéro
+  // mobile à 10 chiffres commençant par 0, ou 8 chiffres (ancien format).
+  const phoneDigits = (formData.customerPhone || "").replace(/\D/g, "");
+  const isPhoneValid =
+    (phoneDigits.length === 10 && phoneDigits.startsWith("0")) ||
+    phoneDigits.length === 8;
+  const canProceedToStep2 = formData.customerName && formData.customerName.trim().length >= 2 && isPhoneValid;
   const canProceedToStep3 = formData.date && formData.timeSlot;
 
   return (
@@ -519,13 +534,11 @@ const BookingPage = () => {
                     />
                     {formData.customerPhone && formData.customerPhone.length > 0 && (
                       <p className={`text-xs ${
-                        formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01')
-                          ? 'text-green-500'
-                          : 'text-yellow-500'
+                        isPhoneValid ? 'text-green-500' : 'text-yellow-500'
                       }`}>
-                        {formData.customerPhone.length === 10 && formData.customerPhone.startsWith('01')
+                        {isPhoneValid
                           ? 'Format valide'
-                          : `Format requis: 01XXXXXXXX (${formData.customerPhone.length}/10 chiffres)`
+                          : `Format requis: 10 chiffres (commence par 0) ou 8 chiffres (${formData.customerPhone.length} saisis)`
                         }
                       </p>
                     )}
@@ -585,6 +598,11 @@ const BookingPage = () => {
                 <h2 className="font-orbitron font-bold text-xl text-neon-blue mb-6 flex items-center gap-2">
                   <Users className="w-5 h-5" />
                   Nombre de Joueurs & Parties
+                  {promoPack && (typeof promoPack.included_games === "number" || typeof promoPack.included_players === "number") && (
+                    <span className="text-[11px] uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full ml-auto">
+                      Figé par le pack
+                    </span>
+                  )}
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -595,8 +613,12 @@ const BookingPage = () => {
                     <Select 
                       value={formData.numberOfPlayers.toString()} 
                       onValueChange={(v) => handleInputChange("numberOfPlayers", parseInt(v))}
+                      disabled={!!(promoPack && typeof promoPack.included_players === "number")}
                     >
-                      <SelectTrigger className="bg-surface-highlight border-white/20 text-white" data-testid="select-players">
+                      <SelectTrigger
+                        className={`bg-surface-highlight border-white/20 text-white ${promoPack && typeof promoPack.included_players === "number" ? "opacity-70 cursor-not-allowed" : ""}`}
+                        data-testid="select-players"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-dark-card border-white/20">
@@ -607,6 +629,11 @@ const BookingPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {promoPack && typeof promoPack.included_players === "number" && (
+                      <p className="text-[11px] text-amber-300">
+                        Inclus dans le pack {promoPack.title}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -616,8 +643,12 @@ const BookingPage = () => {
                     <Select 
                       value={formData.numberOfGames.toString()} 
                       onValueChange={(v) => handleInputChange("numberOfGames", parseInt(v))}
+                      disabled={!!(promoPack && typeof promoPack.included_games === "number")}
                     >
-                      <SelectTrigger className="bg-surface-highlight border-white/20 text-white" data-testid="select-games">
+                      <SelectTrigger
+                        className={`bg-surface-highlight border-white/20 text-white ${promoPack && typeof promoPack.included_games === "number" ? "opacity-70 cursor-not-allowed" : ""}`}
+                        data-testid="select-games"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-dark-card border-white/20">
