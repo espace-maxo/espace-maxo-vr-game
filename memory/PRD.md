@@ -17,6 +17,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Suppression individuelle des notifications Admin]**
+  - Nouveau soft-delete : bouton corbeille rouge sur chaque carte du `SiteNotificationsPanel` (data-testid `site-panel-delete-{type}-{id}`) et chaque ligne de la cloche `SiteNotificationsBell` (data-testid `site-notif-delete-{type}-{id}`).
+  - Backend : `POST /api/admin/site-notifications/delete` (soft-delete via collection `admin_notif_deleted`) + `POST /api/admin/site-notifications/restore` (annulation). Le document source (booking/order/review/etc.) reste intact.
+  - Filtre `_filter_deleted` appliqué à chaque type dans le GET pour exclure les notifications masquées.
+  - Tests : 6/6 pytest (`/app/backend/tests/test_site_notif_delete_iter109.py`) + 2/2 flows Playwright PASS (iteration 109).
 - **[Feb 2026 — Fix bouton submit en mode Retrait sur place (DeliveryPage)]**
   - Bug : sur `/livraison` (Notre carte de menus), le bouton final "Payer / Soumettre" restait DÉSACTIVÉ en mode `pickup` car la condition `disabled` exigeait toujours `orderForm.address` (vide en pickup).
   - Fix appliqué (DeliveryPage.jsx ligne 994) : `disabled={... || (orderForm.mode !== "pickup" && !orderForm.address)}` — cohérent avec la validation déjà présente dans `handleSubmitOrder` (ligne 371).
