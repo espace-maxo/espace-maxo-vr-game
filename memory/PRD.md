@@ -17,6 +17,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Aération onglet Mouvements (StockPage)]**
+  - Header en 2 lignes claires : titre + meta `{N} ligne(s)` + badge synchro auto 60s, puis ligne d'actions séparée (4 boutons : Actualiser / Rattraper tout / Export CSV / Nouveau Mouvement).
+  - Toggle catégorie compact : `Tout · N` / `🍹 Boissons · N` / `🍽️ Autres · N` (note italique de classification déplacée en tooltip via `title`).
+  - Nouveau bouton **"Filtres"** repliable (data-testid `movements-filters-toggle`) : card cachée par défaut, indicateur point vert si des filtres sont actifs.
+  - Tableau aéré : `p-4` au lieu de `p-3`, colonnes secondaires `Avant`/`Après`/`Motif`/`Utilisateur` masquées sur petits écrans via `hidden md/lg/xl:table-cell`.
+  - Tests : 8/8 critères UX validés (iteration 111). Aucune régression sur les filtres catégorie (Tout 200 / Boissons 14 / Autres 186).
 - **[Feb 2026 — 3 modes commande + Règle des 6h (DeliveryPage + BookingPage)]**
   - `DeliveryPage` (`/livraison`) propose maintenant 3 modes : `delivery` (Livraison à domicile), `pickup` (Retrait sur place), `dine_in` (Consommation sur place au restaurant). Radio 3 colonnes responsive.
   - Pour `dine_in` uniquement : sélecteur **Date + Heure de venue** obligatoire ; affichage faux message "Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance." si < 6h ; bouton submit désactivé.
