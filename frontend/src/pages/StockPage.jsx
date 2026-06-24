@@ -544,6 +544,8 @@ export default function StockPage() {
   });
   // Boissons vs Autres produits filter ("all" | "boissons" | "autres")
   const [movementCategoryView, setMovementCategoryView] = useState("all");
+  // Filtres avancés repliés par défaut pour aérer la vue Mouvements
+  const [showMovementFilters, setShowMovementFilters] = useState(false);
 
   // "Stock magasin" zone (manual-only stock — no auto-destock from invoices)
   const [magasinProducts, setMagasinProducts] = useState([]);
@@ -2606,32 +2608,37 @@ export default function StockPage() {
             allVisible;
 
           return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Mouvements de Stock</h2>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Historique restaurant · {visibleMovements.length} ligne(s) affichée(s)
-                  {movements.length - allVisible.length > 0 && (
-                    <span className="ml-2 text-amber-400">
-                      ({movements.length - allVisible.length} mouvement(s) magasin masqué(s) — voir <em>Stock magasin</em>)
-                    </span>
-                  )}
-                </p>
-                <p className="text-slate-500 text-[11px] mt-0.5" data-testid="movements-last-refresh">
+          <div className="space-y-6" data-testid="movements-section">
+            {/* ─── HEADER : titre seul (ligne 1) + meta (ligne 2) ─── */}
+            <div className="space-y-2">
+              <div className="flex items-end justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Mouvements de Stock</h2>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {visibleMovements.length} ligne(s) affichée(s)
+                    {movements.length - allVisible.length > 0 && (
+                      <span className="ml-1.5 text-amber-400/80">
+                        · {movements.length - allVisible.length} masqué(s)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <p className="text-slate-500 text-[11px]" data-testid="movements-last-refresh">
                   {movementsAutoSyncing ? (
-                    <span className="text-amber-400">⏳ Synchronisation en cours…</span>
+                    <span className="text-amber-400">⏳ Synchro…</span>
                   ) : movementsLastRefresh ? (
                     <>
-                      Dernière synchro : <span className="text-emerald-400">{movementsLastRefresh.toLocaleTimeString('fr-FR')}</span>
-                      <span className="text-slate-500"> · auto toutes les 60s · tri du plus récent au plus ancien</span>
+                      <span className="text-emerald-400">✓</span> {movementsLastRefresh.toLocaleTimeString('fr-FR')}
+                      <span className="text-slate-600"> · auto 60s</span>
                     </>
                   ) : (
-                    <span className="text-slate-500">Chargement…</span>
+                    <span className="text-slate-600">Chargement…</span>
                   )}
                 </p>
               </div>
-              <div className="flex gap-2 flex-wrap">
+
+              {/* Ligne d'actions séparée, alignée à droite, avec espacement aéré */}
+              <div className="flex gap-2 flex-wrap justify-end pt-1">
                 <Button
                   onClick={async () => {
                     try {
@@ -2655,11 +2662,13 @@ export default function StockPage() {
                       toast.error(e?.response?.data?.detail || "Erreur lors de l'actualisation");
                     }
                   }}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  size="sm"
+                  variant="outline"
+                  className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10"
                   data-testid="movements-resync-btn"
                   title="Refresh + re-applique le déstockage automatique des factures du jour + consommation journalière"
                 >
-                  <Activity className="w-4 h-4 mr-1" /> Actualiser (re-sync)
+                  <Activity className="w-4 h-4 mr-1.5" /> Actualiser
                 </Button>
                 <Button
                   onClick={async () => {
@@ -2680,14 +2689,16 @@ export default function StockPage() {
                       toast.error(e?.response?.data?.detail || "Erreur");
                     }
                   }}
+                  size="sm"
                   variant="outline"
-                  className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10"
+                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
                   data-testid="movements-resync-all-btn"
                   title="Rattrape toutes les factures passées non-déstockées (utile après avoir créé des recettes)"
                 >
                   ↺ Rattraper tout
                 </Button>
                 <Button
+                  size="sm"
                   variant="outline"
                   className="border-slate-700 text-slate-300 hover:bg-slate-800"
                   onClick={() => {
@@ -2715,16 +2726,20 @@ export default function StockPage() {
                   }}
                   data-testid="movements-export-csv"
                 >
-                  <FileText className="w-4 h-4 mr-1" /> Exporter CSV
+                  <FileText className="w-4 h-4 mr-1.5" /> Export CSV
                 </Button>
-                <Button onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setMovementProductSearch(""); setShowMovementModal(true); }}
-                  className="bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4 mr-1" /> Nouveau Mouvement</Button>
+                <Button
+                  size="sm"
+                  onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setMovementProductSearch(""); setShowMovementModal(true); }}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" /> Nouveau Mouvement
+                </Button>
               </div>
             </div>
 
-            {/* Category view toggle: Tout | Boissons | Autres produits */}
-            <div className="flex flex-wrap gap-2 items-center" data-testid="movements-category-toggle">
-              <span className="text-slate-500 text-xs uppercase mr-1">Catégorie :</span>
+            {/* ─── Toggle catégorie + bouton filtres : ligne unique, aérée ─── */}
+            <div className="flex flex-wrap items-center gap-2 py-1" data-testid="movements-category-toggle">
               <Button
                 size="sm"
                 variant={movementCategoryView === "all" ? "default" : "outline"}
@@ -2732,35 +2747,52 @@ export default function StockPage() {
                 className={movementCategoryView === "all" ? "bg-slate-700 hover:bg-slate-600 text-white" : "border-slate-700 text-slate-300 hover:bg-slate-800"}
                 data-testid="movements-cat-all"
               >
-                Tout ({allVisible.length})
+                Tout · {allVisible.length}
               </Button>
               <Button
                 size="sm"
                 variant={movementCategoryView === "boissons" ? "default" : "outline"}
                 onClick={() => setMovementCategoryView("boissons")}
-                className={movementCategoryView === "boissons" ? "bg-orange-600 hover:bg-orange-700 text-white" : "border-orange-500/50 text-orange-300 hover:bg-orange-500/10"}
+                className={movementCategoryView === "boissons" ? "bg-orange-600 hover:bg-orange-700 text-white" : "border-orange-500/40 text-orange-300 hover:bg-orange-500/10"}
                 data-testid="movements-cat-boissons"
+                title="Bouteilles, briques, canettes, jus, sodas…"
               >
-                🍹 Boissons ({beverageMovements.length})
+                🍹 Boissons · {beverageMovements.length}
               </Button>
               <Button
                 size="sm"
                 variant={movementCategoryView === "autres" ? "default" : "outline"}
                 onClick={() => setMovementCategoryView("autres")}
-                className={movementCategoryView === "autres" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10"}
+                className={movementCategoryView === "autres" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"}
                 data-testid="movements-cat-autres"
+                title="Ingrédients cuisine, viandes, légumes, etc."
               >
-                🍽️ Autres produits ({otherMovements.length})
+                🍽️ Autres · {otherMovements.length}
               </Button>
-              <span className="text-slate-500 text-[11px] ml-2 italic">
-                Classification automatique par unité (bouteille/brique/canette/litre/cl) et mots-clés
-              </span>
+
+              <div className="flex-1" />
+
+              {/* Bouton repli / déploi filtres */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowMovementFilters(v => !v)}
+                className={`border-slate-700 ${showMovementFilters ? "text-emerald-300 bg-emerald-500/5" : "text-slate-300 hover:bg-slate-800"}`}
+                data-testid="movements-filters-toggle"
+              >
+                <FileText className="w-4 h-4 mr-1.5" />
+                Filtres
+                {(movementFilters.product_id || movementFilters.movement_type || movementFilters.date_from || movementFilters.date_to) && (
+                  <span className="ml-1.5 inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                )}
+              </Button>
             </div>
 
-            {/* Filters bar */}
+            {/* Filters bar — repliable */}
+            {showMovementFilters && (
             <Card className="bg-slate-900/60 border-slate-800">
-              <CardContent className="p-3">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+              <CardContent className="p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   <div>
                     <Label className="text-slate-400 text-xs uppercase">Produit</Label>
                     {(() => {
@@ -2894,27 +2926,36 @@ export default function StockPage() {
                 )}
               </CardContent>
             </Card>
+            )}
 
             {isAdmin && <BulkBar count={selectedItems.filter(id => visibleMovements.some(m => m.id === id)).length} label="mouvement(s)" endpoint="movements/delete-bulk" ids={selectedItems.filter(id => visibleMovements.some(m => m.id === id))} refreshFn={fetchMovements} />}
             <Card className="bg-slate-900/80 border-slate-800"><CardContent className="p-0"><div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-900/50">
-                  {isAdmin && <th className="p-3 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={visibleMovements.length > 0 && visibleMovements.every(m => selectedItems.includes(m.id))} onChange={() => toggleSelectAll(visibleMovements.map(m => m.id))} /></th>}
-                  <th className="p-3">Date</th><th className="p-3">Produit</th><th className="p-3">Type</th><th className="p-3 text-right">Quantite</th><th className="p-3 text-right">Avant</th><th className="p-3 text-right">Apres</th><th className="p-3">Motif</th><th className="p-3">Utilisateur</th>{isAdmin && <th className="p-3"></th>}
+                  {isAdmin && <th className="p-4 w-8"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={visibleMovements.length > 0 && visibleMovements.every(m => selectedItems.includes(m.id))} onChange={() => toggleSelectAll(visibleMovements.map(m => m.id))} /></th>}
+                  <th className="p-4 font-medium">Date</th>
+                  <th className="p-4 font-medium">Produit</th>
+                  <th className="p-4 font-medium">Type</th>
+                  <th className="p-4 font-medium text-right">Quantité</th>
+                  <th className="p-4 font-medium text-right hidden lg:table-cell">Avant</th>
+                  <th className="p-4 font-medium text-right hidden lg:table-cell">Après</th>
+                  <th className="p-4 font-medium hidden md:table-cell">Motif</th>
+                  <th className="p-4 font-medium hidden xl:table-cell">Utilisateur</th>
+                  {isAdmin && <th className="p-4 w-10"></th>}
                 </tr></thead>
                 <tbody>
                   {visibleMovements.map(m => (
                     <tr key={m.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(m.id) ? 'bg-slate-800/50' : ''}`}>
-                      {isAdmin && <td className="p-3"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>}
-                      <td className="p-3 text-slate-400 text-xs">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className="p-3 text-white">{m.product_name}</td>
-                      <td className="p-3"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' || m.movement_type === 'transfert_entree' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
-                      <td className="p-3 text-right text-white font-medium">{m.quantity} {m.unit}</td>
-                      <td className="p-3 text-right text-slate-500">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
-                      <td className="p-3 text-right text-slate-300">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
-                      <td className="p-3 text-slate-400 text-xs max-w-[200px] truncate">{m.reason}</td>
-                      <td className="p-3 text-slate-500 text-xs">{m.user_name}</td>
-                      {isAdmin && <td className="p-3"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteMovement(m.id)}><Trash2 className="w-3.5 h-3.5" /></Button></td>}
+                      {isAdmin && <td className="p-4"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>}
+                      <td className="p-4 text-slate-400 text-xs whitespace-nowrap">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="p-4 text-white">{m.product_name}</td>
+                      <td className="p-4"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' || m.movement_type === 'transfert_entree' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
+                      <td className="p-4 text-right text-white font-medium whitespace-nowrap">{m.quantity} {m.unit}</td>
+                      <td className="p-4 text-right text-slate-500 hidden lg:table-cell">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
+                      <td className="p-4 text-right text-slate-300 hidden lg:table-cell">{typeof m.new_quantity === 'number' ? parseFloat(m.new_quantity.toFixed(2)) : m.new_quantity}</td>
+                      <td className="p-4 text-slate-400 text-xs max-w-[220px] truncate hidden md:table-cell">{m.reason}</td>
+                      <td className="p-4 text-slate-500 text-xs hidden xl:table-cell">{m.user_name}</td>
+                      {isAdmin && <td className="p-4"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteMovement(m.id)}><Trash2 className="w-3.5 h-3.5" /></Button></td>}
                     </tr>
                   ))}
                 </tbody>

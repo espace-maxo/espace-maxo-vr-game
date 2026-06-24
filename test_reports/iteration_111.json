@@ -1,0 +1,61 @@
+{
+  "summary": "Frontend-only UX validation du panneau 'Mouvements' de StockPage après aération. Tous les critères du review_request sont validés (8/8). Header aéré sur 2 lignes (titre+meta puis 4 boutons d'action), toggle catégorie compact sans note italique 'Classification automatique' (déplacée en tooltip via attribut title), bouton 'Filtres' visible avec card cachée par défaut et dépliable. Tableau avec p-4 et colonnes secondaires masquées via .hidden lg/md/xl:table-cell. Régression filtres catégorie OK (Tout 200 / Boissons 14 / Autres 186).",
+  "backend_tests": {"skipped": "Backend testing skipped per review_request (testing_type: frontend only)"},
+  "frontend_tests": {
+    "movements_section_visible": true,
+    "header_title": "h2 'Mouvements de Stock' présent (1)",
+    "header_meta": "'200 ligne(s) affichée(s)' sur ligne séparée sous le titre",
+    "auto_60s_badge": "✓ 19:06:09 · auto 60s visible",
+    "actions_row_separate": "Actualiser / Rattraper tout / Export CSV / Nouveau Mouvement sur une ligne dédiée (visibles + enabled)",
+    "italic_classification_note_removed": "0 occurrence de 'Classification automatique' dans le DOM (note bien déplacée en tooltip)",
+    "category_toggle": {
+      "all": "Tout · 200",
+      "boissons": "🍹 Boissons · 14 (title='Bouteilles, briques, canettes, jus, sodas…')",
+      "autres": "🍽️ Autres · 186 (title='Ingrédients cuisine, viandes, légumes, etc.')"
+    },
+    "filters_toggle_button_visible": true,
+    "filters_card_hidden_by_default": "0 input[type=date] avant clic sur Filtres",
+    "filters_card_after_click": "2 input[type=date] + 1 grid avec classe lg:grid-cols-5 présents",
+    "filters_card_close_again": "0 input[type=date] après second clic (toggle fonctionne)",
+    "table_headers": [
+      ["[checkbox]", true, "p-4=true", "hidden=false"],
+      ["Date", true, "p-4=true", "hidden=false"],
+      ["Produit", true, "p-4=true", "hidden=false"],
+      ["Type", true, "p-4=true", "hidden=false"],
+      ["Quantité", true, "p-4=true", "hidden=false"],
+      ["Avant", true, "p-4=true", "hidden=true (lg:table-cell)"],
+      ["Après", true, "p-4=true", "hidden=true (lg:table-cell)"],
+      ["Motif", true, "p-4=true", "hidden=true (md:table-cell)"],
+      ["Utilisateur", true, "p-4=true", "hidden=true (xl:table-cell)"],
+      ["[actions]", true, "p-4=true", "hidden=false"]
+    ],
+    "category_filter_regression": {
+      "tout": 200,
+      "boissons": 14,
+      "autres": 186
+    },
+    "screenshots": ["/tmp/movements_before_filtres.png", "/tmp/movements_after_filtres.png"]
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "StockPage.jsx fait 5141 lignes — bien au-delà du seuil de 700 lignes. Recommandation forte : extraire en sous-composants (MovementsPanel, StockMagasinPanel, InventoryPanel, etc.) pour faciliter la maintenance. Non-bloquant pour cette itération UX mais à planifier.",
+    "Hydration warnings console observés (span enrobant tr/th/td/option) — ils proviennent de l'instrumentation visualeditor (attributs x-component/x-ve-dynamic) injectée en environnement preview, PAS du code applicatif. Aucun impact fonctionnel ni en production.",
+    "1 erreur 404 console non liée à ce panneau (resource non identifiée) — pré-existante, à investiguer si elle persiste sur d'autres pages.",
+    "Le bouton 'Filtres' affiche un petit point vert (badge) quand des filtres sont actifs (L2785-2787) — bonne UX. Idem flèche/chevron pour indiquer l'état ouvert/fermé serait un plus (actuellement la couleur emerald-300 suffit mais reste subtile)."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (8/8 critères review_request validés)"},
+  "test_credentials": "Stock Admin : admin / Admin2026 (utilisé depuis /app/memory/test_credentials.md)",
+  "seed_data_creation": "Aucune. Lecture seule du panneau Mouvements (200 mouvements existants déjà en base).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter111 : UX aérée onglet Mouvements StockPage. Tous les data-testid utilisés : movements-section, movements-last-refresh, movements-resync-btn, movements-resync-all-btn, movements-export-csv, movements-category-toggle, movements-cat-all/boissons/autres, movements-filters-toggle, movements-filter-type, movements-filter-reset. Navigation : login /stock → sidebar 'Stocks' → onglet 'Mouvements'. Filtres card cachée par défaut (state showMovementFilters).",
+  "rca_of_the_issue": "N/A - feature UX validée sans bug"
+}
