@@ -20,6 +20,71 @@ import { Flame, Sparkles, AlertTriangle } from "lucide-react";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const COUNTER_KEY = "promo_vacances_counters_v1";
 
+// Fallback statique au cas où l'API ne répond pas (backend non déployé p. ex.).
+// Source : routers/promo_vacances.py — PROMO_PACKS.
+const FALLBACK_PACKS = [
+  {
+    id: "promo_vacances_25",
+    title: "Promo Vacances Maxo · -25%",
+    subtitle: "Réservez votre table en ligne",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/agb5ia56_PHOTO-2026-06-21-11-13-38.jpg",
+    price: null,
+    old_price: null,
+    limit_100_first: false,
+    cta_label: "Réserver ma table",
+    booking_param: "promo_vacances_25",
+  },
+  {
+    id: "pack_game_fresh",
+    title: "Pack Game Fresh Maxo",
+    subtitle: "1 jeu au choix + 1 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/1l3ba1rv_PHOTO-2026-06-21-11-14-16.jpg",
+    price: 2000,
+    old_price: 3000,
+    limit_100_first: false,
+    cta_label: "Réserver le Pack Game Fresh",
+    booking_param: "pack_game_fresh",
+  },
+  {
+    id: "pack_solo_fun",
+    title: "Pack Solo Fun Maxo",
+    subtitle: "1 panini + 1 jeu au choix + 1 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/c30zz192_PHOTO-2026-06-21-11-14-52.jpg",
+    price: 3500,
+    old_price: 5000,
+    limit_100_first: true,
+    cta_label: "Réserver le Pack Solo Fun",
+    booking_param: "pack_solo_fun",
+  },
+  {
+    id: "pack_duo_snack_vr",
+    title: "Pack Duo Snack VR",
+    subtitle: "1 jeu VR + 1 burger + 1 chawarma + 2 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/4hm69l6i_PHOTO-2026-06-21-11-15-27.jpg",
+    price: 5500,
+    old_price: 8500,
+    limit_100_first: true,
+    cta_label: "Réserver le Pack Duo Snack VR",
+    booking_param: "pack_duo_snack_vr",
+  },
+  {
+    id: "pack_fun_maxo_vacances",
+    title: "Pack Fun Maxo Vacances",
+    subtitle: "Pizza + VR + 2 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/x9kbexuk_PHOTO-2026-06-21-11-15-48.jpg",
+    price: 6500,
+    old_price: 10000,
+    limit_100_first: true,
+    cta_label: "Réserver le Pack Fun Maxo",
+    booking_param: "pack_fun_maxo_vacances",
+  },
+];
+
 /** Renvoie un compteur entre 18 et 42 pour amorcer le faux décompte. */
 function seedCounter() {
   return 18 + Math.floor(Math.random() * 25); // 18..42
@@ -62,10 +127,10 @@ const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR").format(n || 0).replace(/\s/g, " ");
 
 export default function PromoVacancesSection() {
-  const [active, setActive] = useState(false);
-  const [packs, setPacks] = useState([]);
-  const [counters, setCounters] = useState({});
-  const [loaded, setLoaded] = useState(false);
+  const [active, setActive] = useState(true); // par défaut visible, désactivable côté Admin
+  const [packs, setPacks] = useState(FALLBACK_PACKS);
+  const [counters, setCounters] = useState(() => readCounters(FALLBACK_PACKS));
+  const [loaded, setLoaded] = useState(true); // affichage immédiat avec fallback
 
   useEffect(() => {
     let cancelled = false;
@@ -73,12 +138,22 @@ export default function PromoVacancesSection() {
       .get(`${API}/promo-vacances`)
       .then(({ data }) => {
         if (cancelled) return;
-        setActive(!!data?.active);
-        setPacks(data?.packs || []);
-        setCounters(readCounters(data?.packs || []));
-        setLoaded(true);
+        // Si le backend renvoie active=false, on masque la section.
+        if (data && data.active === false) {
+          setActive(false);
+          return;
+        }
+        if (data?.packs?.length) {
+          setPacks(data.packs);
+          setCounters(readCounters(data.packs));
+        }
       })
-      .catch(() => setLoaded(true));
+      .catch(() => {
+        /* fallback déjà chargé */
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
     return () => {
       cancelled = true;
     };

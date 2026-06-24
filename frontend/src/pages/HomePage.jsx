@@ -33,6 +33,24 @@ const HomePage = () => {
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
       />
+      {/* Bandeau Promo Vacances (clic → section promo plus bas) */}
+      <a
+        href="#promo-vacances"
+        className="block w-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-slate-900 hover:from-amber-400 hover:to-rose-400 transition-colors"
+        data-testid="promo-vacances-banner"
+      >
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-center gap-2 sm:gap-3 flex-wrap text-center">
+          <span className="inline-flex items-center gap-1 bg-slate-900/15 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest">
+            🔥 Promo Vacances
+          </span>
+          <span className="font-orbitron font-black text-xs sm:text-sm uppercase tracking-wide">
+            -25% & Packs dès 2 000 FCFA pour les 100 premières réservations
+          </span>
+          <span className="font-orbitron font-black text-xs sm:text-sm uppercase underline">
+            Voir les packs →
+          </span>
+        </div>
+      </a>
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden" data-testid="hero-section">
         {/* Background Image */}
@@ -181,9 +199,9 @@ const HomePage = () => {
                 <p className="text-gray-400 font-outfit mb-4">
                   Savourez nos burgers, pizzas et cocktails dans une ambiance gaming unique.
                 </p>
-                <Link to="/menu" className="font-rajdhani font-bold text-neon-blue text-lg hover:underline">
-                  Voir nos combos →
-                </Link>
+                <a href="#promo-vacances" className="font-rajdhani font-bold text-neon-blue text-lg hover:underline">
+                  Voir nos packs Vacances →
+                </a>
               </div>
             </div>
           </div>

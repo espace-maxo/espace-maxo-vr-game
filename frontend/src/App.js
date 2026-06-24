@@ -5,7 +5,6 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import HelpButton from "@/components/HelpButton";
 import HomePage from "@/pages/HomePage";
-import MenuPage from "@/pages/MenuPage";
 import GamesPage from "@/pages/GamesPage";
 import BookingPage from "@/pages/BookingPage";
 import ConfirmationPage from "@/pages/ConfirmationPage";
@@ -43,7 +42,6 @@ function App() {
               <main>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
-                  <Route path="/menu" element={<MenuPage />} />
                   <Route path="/games" element={<GamesPage />} />
                   <Route path="/booking" element={<BookingPage />} />
                   <Route path="/booking/confirmation" element={<ConfirmationPage />} />

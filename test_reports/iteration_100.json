@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 100 — Full E2E test of the Promo Vacances Maxo feature + removal of the Combos page. ALL 9 requested test items passed. Backend GET/POST endpoints OK. Frontend banner, section (5 packs), 20s teaser popup, /booking?pack=... promo banner, /menu fallback (no JS errors), Combos absent from nav, and admin toggle (testid promo-vacances-toggle) all verified. The toggle correctly hides the section + popup when OFF and was restored to TRUE after testing as requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "Verified live via curl + Playwright (no new pytest file — endpoints are 2 simple ones already covered by manual curl in summary)"
+  ],
+  "tested_scenarios": {
+    "promo_vacances_section_5_cards": "PASS — [data-testid=promo-vacances-section] visible + 5 [data-testid^=promo-pack-card-] cards rendered (ids: promo_vacances_25, pack_game_fresh, pack_solo_fun, pack_duo_snack_vr, pack_fun_maxo_vacances)",
+    "promo_vacances_banner_above_hero": "PASS — [data-testid=promo-vacances-banner] visible immediately at top, gradient amber→rose. Click scrolls to section (y=1120 after click).",
+    "popup_teaser_20s": "PASS — [data-testid=promo-teaser-popup] appears after ~22s with countdown 04:58 ([data-testid=promo-teaser-countdown]), 'Plus tard' button + 'Réserver maintenant' CTA both visible.",
+    "combos_link_removed": "PASS — Navbar text: 'ACCUEIL | LIVRAISON | RÉSERVER TABLE | PORTE-MONNAIE | NOUS REJOINDRE | ADMIN | REPROGRAMMER SESSION'. No 'Combos' anywhere.",
+    "menu_route_fallback": "PASS — GET /menu → HTTP 200, SPA loads home with navbar, no JS pageerror.",
+    "booking_with_pack_param": "PASS — /booking?pack=pack_solo_fun shows [data-testid=promo-pack-banner] with text 'PROMO VACANCES MAXO — PACK SÉLECTIONNÉ — Pack Solo Fun Maxo — 3 500 FCFA'.",
+    "admin_toggle_visibility": "PASS — Login admin (Caisse2026) on /caisse → onglet Produits → carte 'Promo Vacances Maxo' contient le toggle [data-testid=promo-vacances-toggle] visible et ON ('Affichée sur le site').",
+    "toggle_off_hides_section_and_popup": "PASS — Via PUT /api/promo-vacances/toggle {active:false}: section disappears (count=0), popup never appears after 22s. Banner statique reste visible (comportement attendu — banner not API-gated).",
+    "backend_GET_promo_vacances": "PASS — Returns {active: true, packs: [5 items], updated_by, updated_at}.",
+    "backend_POST_promo_vacances_order": "PASS — pack_id=pack_solo_fun → {success: true, order: {id, pack_title:'Pack Solo Fun Maxo', pack_price:3500, status:'pending', created_at}}"
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Excellent defensive design: both PromoVacancesSection.jsx and PromoTeaserPopup.jsx have hardcoded FALLBACK_PACKS so the UI stays usable even if the backend is unreachable. The user-reported issue ('ne s'affiche pas après déploiement') is addressed at the root.",
+    "promo-vacances-banner is intentionally not gated by the API (always visible). This is good for marketing but be aware: if admin disables the promo, the banner still shows and clicking it scrolls to a hidden anchor (#promo-vacances no longer exists in DOM). Consider hiding the banner too when active=false in a future iteration. NOT blocking for this release.",
+    "PromoTeaserPopup correctly respects the 24h SUPPRESS_FOR_MS via localStorage SEEN_KEY. Good UX.",
+    "Backend /api/promo-vacances/order writes to MongoDB without auth — acceptable since it's an intent-to-book endpoint (no money moves). Phone/name are stripped/sanitized minimally; consider adding basic regex validation for phone format in the future."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (2/2 endpoints)", "frontend": "100% (9/9 scenarios)"},
+  "test_credentials": "admin password 'Caisse2026' on /caisse → Admin tab (works).",
+  "seed_data_creation": "Created 1 TEST_USER promo order via POST — cleaned up at end (db.promo_vacances_orders.delete_many({customer_name:'TEST_USER'}) → 1 deleted).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Toggle was restored to active=true. localStorage key 'promo_teaser_seen_at_v1' has been cleared during tests — visitors who already saw the popup before today will still see the 24h cooldown. The fallback strategy in the two frontend components means the feature works even if backend is temporarily down (verified by code review, not forced-failure test).",
+  "rca_of_the_issue": "User-reported issue ('promo ne s'affiche pas après déploiement') is now fully addressed: (1) FALLBACK_PACKS hardcoded in both components ensures display even with API failure, (2) initial state of `loaded` set to true → instant render, (3) banner above hero gives extra visibility without scroll. /menu route removal handled gracefully by the /* catch-all in App.js → falls back to HomePage with no JS errors."
+}

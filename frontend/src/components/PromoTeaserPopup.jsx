@@ -22,6 +22,43 @@ const DELAY_MS = 20000;
 const SUPPRESS_FOR_MS = 24 * 60 * 60 * 1000; // 24h
 const COUNTDOWN_SECONDS = 5 * 60;
 
+// Fallback (synchronisé avec routers/promo_vacances.py)
+const FALLBACK_PACKS = [
+  {
+    id: "pack_solo_fun",
+    title: "Pack Solo Fun Maxo",
+    subtitle: "1 panini + 1 jeu au choix + 1 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/c30zz192_PHOTO-2026-06-21-11-14-52.jpg",
+    price: 3500,
+    old_price: 5000,
+    limit_100_first: true,
+    booking_param: "pack_solo_fun",
+  },
+  {
+    id: "pack_duo_snack_vr",
+    title: "Pack Duo Snack VR",
+    subtitle: "1 jeu VR + 1 burger + 1 chawarma + 2 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/4hm69l6i_PHOTO-2026-06-21-11-15-27.jpg",
+    price: 5500,
+    old_price: 8500,
+    limit_100_first: true,
+    booking_param: "pack_duo_snack_vr",
+  },
+  {
+    id: "pack_fun_maxo_vacances",
+    title: "Pack Fun Maxo Vacances",
+    subtitle: "Pizza + VR + 2 jus",
+    image:
+      "https://customer-assets.emergentagent.com/job_3de0f0c6-25b2-49f2-827d-b5127dbc79ab/artifacts/x9kbexuk_PHOTO-2026-06-21-11-15-48.jpg",
+    price: 6500,
+    old_price: 10000,
+    limit_100_first: true,
+    booking_param: "pack_fun_maxo_vacances",
+  },
+];
+
 function shouldShow() {
   try {
     const ts = parseInt(localStorage.getItem(SEEN_KEY) || "0", 10);
@@ -64,25 +101,34 @@ export default function PromoTeaserPopup() {
   useEffect(() => {
     if (!shouldShow()) return undefined;
     let cancelled = false;
+    let openTimer = null;
+
+    const scheduleOpen = (chosen) => {
+      openTimer = setTimeout(() => {
+        if (cancelled || !chosen) return;
+        setPack(chosen);
+        setVisible(true);
+        setSeconds(COUNTDOWN_SECONDS);
+      }, DELAY_MS);
+    };
 
     axios
       .get(`${API}/promo-vacances`)
       .then(({ data }) => {
-        if (cancelled || !data?.active) return;
-        const chosen = pickRandomPack(data.packs || []);
-        if (!chosen) return;
-        const t = setTimeout(() => {
-          if (cancelled) return;
-          setPack(chosen);
-          setVisible(true);
-          setSeconds(COUNTDOWN_SECONDS);
-        }, DELAY_MS);
-        return () => clearTimeout(t);
+        if (cancelled) return;
+        // Si l'admin a désactivé la promo, on ne montre pas le popup
+        if (data && data.active === false) return;
+        const list = data?.packs?.length ? data.packs : FALLBACK_PACKS;
+        scheduleOpen(pickRandomPack(list));
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fallback si l'API est indisponible
+        if (!cancelled) scheduleOpen(pickRandomPack(FALLBACK_PACKS));
+      });
 
     return () => {
       cancelled = true;
+      if (openTimer) clearTimeout(openTimer);
     };
   }, []);
 
