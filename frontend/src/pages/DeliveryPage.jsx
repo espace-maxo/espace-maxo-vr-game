@@ -702,12 +702,10 @@ const DeliveryPage = () => {
                 <div className="text-xs text-yellow-400">
                   * Hors Cotonou: frais à confirmer
                 </div>
-                {discountEligible && (
-                  <div className="flex justify-between text-white font-bold border-t border-white/10 pt-2">
-                    <span>Total</span>
-                    <span>{totalWithDelivery.toLocaleString()} FCFA</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-white font-bold border-t border-white/10 pt-2" data-testid="delivery-total-line">
+                  <span>Total</span>
+                  <span>{totalWithDelivery.toLocaleString()} FCFA</span>
+                </div>
               </div>
 
               <Button
