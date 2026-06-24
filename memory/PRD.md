@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — 3 modes commande + Règle des 6h (DeliveryPage + BookingPage)]**
+  - `DeliveryPage` (`/livraison`) propose maintenant 3 modes : `delivery` (Livraison à domicile), `pickup` (Retrait sur place), `dine_in` (Consommation sur place au restaurant). Radio 3 colonnes responsive.
+  - Pour `dine_in` uniquement : sélecteur **Date + Heure de venue** obligatoire ; affichage faux message "Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance." si < 6h ; bouton submit désactivé.
+  - `BookingPage` (Promo Vacances + Réserver table) : les créneaux à moins de 6h du moment actuel sont marqués **"Complet"** (style rosé, désactivés). Garde-fou supplémentaire dans `handleSubmit`.
+  - **Backend** : modèle `DeliveryOrder` étend `scheduled_at: Optional[str]` + validation 6h dans `POST /api/delivery-orders` pour `dine_in`. `POST /api/bookings` valide aussi la règle 6h (fuseau Bénin UTC+1). Tests pytest : 7/7 PASS (`/app/backend/tests/test_dine_in_6h_iter110.py`).
+  - SMS d'admin enrichi (`SUR PLACE (RESTO)` / `RETRAIT SUR PLACE` / `COTONOU`) + créneau si `scheduled_at` présent.
+  - Agrégateur de notifications `admin_site_notifications.py` affiche correctement le mode dans le subtitle (sur place au resto / retrait / livraison).
 - **[Feb 2026 — Suppression individuelle des notifications Admin]**
   - Nouveau soft-delete : bouton corbeille rouge sur chaque carte du `SiteNotificationsPanel` (data-testid `site-panel-delete-{type}-{id}`) et chaque ligne de la cloche `SiteNotificationsBell` (data-testid `site-notif-delete-{type}-{id}`).
   - Backend : `POST /api/admin/site-notifications/delete` (soft-delete via collection `admin_notif_deleted`) + `POST /api/admin/site-notifications/restore` (annulation). Le document source (booking/order/review/etc.) reste intact.
