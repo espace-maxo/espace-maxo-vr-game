@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend E2E testing complete pour : (1) renommage Navbar 'Livraison' → 'Notre carte de menus', (2) bandeau Promo Vacances -25% sur /livraison, (3) calcul auto réduction 25% pour panier ≥ 10 000 FCFA, (4) hint si panier < 10 000, (5) toggle Admin /admin (Nikeland2026). Tous les flows valident à 100%. Backend /api/promo-vacances OK (5 packs + active flag). Promo laissée ACTIVE à la fin.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DeliveryPage > Modal Panier (promo OFF ou panier < 10 000)", "issues": ["Le récap panier n'affiche PAS de ligne 'Total' quand discountEligible=false. Seuls Sous-total et 'Frais de livraison (Cotonou)' sont affichés. L'utilisateur ne voit donc pas le montant total à payer dans la modale panier sauf si la promo s'applique. À envisager : afficher la ligne Total dans tous les cas (DeliveryPage.jsx lignes 705-710 condition `{discountEligible && ...}` à élargir)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_106.json"
+  ],
+  "action_items": [
+    "(Optionnel/UX) Afficher la ligne 'Total' dans la modale panier de /livraison même quand la promo n'est pas applicable (cart < 10 000 ou promo désactivée). Actuellement la ligne Total n'apparaît que sous condition discountEligible."
+  ],
+  "critical_code_review_comments": [
+    "DeliveryPage.jsx ligne 705 : le bloc Total est wrappé dans `{discountEligible && (...)}` — incohérence d'UX (Total invisible si pas de promo).",
+    "Logique de discount propre et bien isolée : promoActive (état) + cartTotal >= 10000 → Math.round(cartTotal * 0.25). Backend persistence via /api/delivery-orders inclut discount_amount + promo_25_applied (bon traçage).",
+    "Le toggle Admin réutilise correctement le même endpoint /api/promo-vacances : effet bord intentionnel (désactive AUSSI les packs HomePage/BookingPage). Bien documenté dans le commentaire de la section AdminPage.jsx ligne 695.",
+    "PromoVacancesAdminToggle bien isolé (component réutilisable), data-testid présents (promo-vacances-admin-card / promo-vacances-toggle / promo-vacances-status-badge / promo-vacances-refresh).",
+    "AdminPage.jsx fait 2838 lignes — à découper en sous-pages/onglets séparés (action longue durée, non bloquante)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (1/1 endpoint testé via curl)", "frontend": "100% (9/9 assertions)"},
+  "test_credentials": "AdminPage password : Nikeland2026 (validé). PIN gérante 2468 non re-testé (hors scope, déjà OK iter 105).",
+  "seed_data_creation": "Aucun seed créé. Aucune commande de livraison réelle créée (Kkiapay non déclenché conformément à la demande). Le toggle Admin a été basculé OFF puis remis ON pour ne pas perturber l'app.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Promo Vacances -25% sur DeliveryPage validée bout-en-bout. État final : promo ACTIVE (backend active=true, 5 packs). Toggle Admin /admin testé et fonctionnel. Sélecteurs clés: [data-testid='delivery-promo-banner'], [data-testid='delivery-promo-discount'], [data-testid='delivery-promo-hint'], [data-testid='promo-vacances-admin-card'], [data-testid='promo-vacances-toggle']. Petit point UX à signaler : la ligne 'Total' dans la modale panier est conditionnée à discountEligible — à l'écran l'utilisateur ne voit pas de Total si le panier est sous seuil ou promo OFF.",
+  "rca of the issue": "Pas de bug — feature testée. Tous les comportements demandés sont conformes : (a) Navbar 'Notre carte de menus' OK sur HomePage et /livraison, (b) H1 'NOTRE CARTE DE MENUS' OK (uppercase CSS), (c) bandeau promo visible quand actif (avec sous-texte '10 000 FCFA'), (d) réduction -25% appliquée à 10 800 FCFA = -2 700 FCFA → total 9 100 FCFA (avec frais 1 000 FCFA), (e) hint affiche 'Ajoutez encore 6 400 FCFA…' quand panier 3 600, (f) toggle Admin bascule active=true→false→true via PUT /api/promo-vacances/toggle, (g) après désactivation, le rechargement /livraison masque bandeau + discount + hint comme attendu."
+}

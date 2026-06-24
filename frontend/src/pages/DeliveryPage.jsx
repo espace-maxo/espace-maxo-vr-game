@@ -309,10 +309,27 @@ const DeliveryPage = () => {
     return new Intl.NumberFormat('fr-FR').format(price);
   };
 
+  // Promo Vacances -25% (toggle Admin via /api/promo-vacances)
+  const [promoActive, setPromoActive] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/promo-vacances`)
+      .then(({ data }) => {
+        if (!cancelled && data && data.active === false) setPromoActive(false);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const deliveryFee = orderForm.zone === "cotonou" ? 1000 : 0; // Frais uniquement pour Cotonou
-  const totalWithDelivery = cartTotal + deliveryFee;
+  // Réduction -25% appliquée si total ≥ 10 000 FCFA et promo active
+  const discountEligible = promoActive && cartTotal >= 10000;
+  const discountAmount = discountEligible ? Math.round(cartTotal * 0.25) : 0;
+  const subtotalAfterDiscount = cartTotal - discountAmount;
+  const totalWithDelivery = subtotalAfterDiscount + deliveryFee;
   
   // Calculate wallet usage
   const walletAmountToUse = useWallet ? Math.min(walletBalance, totalWithDelivery) : 0;
@@ -332,6 +349,8 @@ const DeliveryPage = () => {
         quantity: item.quantity
       })),
       subtotal: cartTotal,
+      discount_amount: discountAmount,
+      promo_25_applied: discountEligible,
       delivery_fee: deliveryFee,
       total: totalWithDelivery,
       payment_status: paymentStatus,
@@ -483,12 +502,22 @@ const DeliveryPage = () => {
         <div className="max-w-6xl mx-auto text-center">
           <Truck className="w-16 h-16 text-food-orange mx-auto mb-4" />
           <h1 className="font-orbitron font-black text-3xl sm:text-4xl lg:text-5xl uppercase tracking-tight mb-4">
-            <span className="text-white">Livraison</span>{" "}
-            <span className="text-food-orange">de Repas</span>
+            <span className="text-white">Notre carte</span>{" "}
+            <span className="text-food-orange">de menus</span>
           </h1>
           <p className="text-gray-300 font-outfit text-lg max-w-2xl mx-auto mb-6">
-            Savourez les délices d'Espace Maxo chez vous ! Commandez en ligne et faites-vous livrer.
+            Savourez les délices d'Espace Maxo chez vous ou sur place ! Commandez en ligne et profitez d'une livraison rapide.
           </p>
+          {promoActive && (
+            <div className="bg-gradient-to-r from-amber-500/30 via-orange-500/20 to-rose-500/30 border border-amber-400/50 rounded-xl px-4 py-3 mb-6 max-w-2xl mx-auto" data-testid="delivery-promo-banner">
+              <p className="text-amber-300 font-orbitron font-black text-base sm:text-lg uppercase">
+                🎁 Promo Vacances · -25%
+              </p>
+              <p className="text-amber-100/90 text-sm mt-1">
+                Sur toute commande dès <span className="font-bold">10 000 FCFA</span>. Réduction appliquée automatiquement au panier.
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap justify-center gap-4 text-sm">
             <Badge className="bg-food-gold/20 text-food-gold border-food-gold/30 px-4 py-2">
               <Clock className="w-4 h-4 mr-2" />
@@ -655,6 +684,17 @@ const DeliveryPage = () => {
                   <span>Sous-total</span>
                   <span>{cartTotal.toLocaleString()} FCFA</span>
                 </div>
+                {discountEligible && (
+                  <div className="flex justify-between text-emerald-400 font-bold" data-testid="delivery-promo-discount">
+                    <span>🎁 Promo Vacances -25%</span>
+                    <span>-{discountAmount.toLocaleString()} FCFA</span>
+                  </div>
+                )}
+                {promoActive && !discountEligible && cartTotal > 0 && (
+                  <p className="text-[11px] text-amber-300 italic" data-testid="delivery-promo-hint">
+                    Ajoutez encore {(10000 - cartTotal).toLocaleString()} FCFA pour bénéficier de la promo -25%
+                  </p>
+                )}
                 <div className="flex justify-between text-gray-400">
                   <span>Frais de livraison (Cotonou)</span>
                   <span>1 000 FCFA</span>
@@ -662,6 +702,12 @@ const DeliveryPage = () => {
                 <div className="text-xs text-yellow-400">
                   * Hors Cotonou: frais à confirmer
                 </div>
+                {discountEligible && (
+                  <div className="flex justify-between text-white font-bold border-t border-white/10 pt-2">
+                    <span>Total</span>
+                    <span>{totalWithDelivery.toLocaleString()} FCFA</span>
+                  </div>
+                )}
               </div>
 
               <Button

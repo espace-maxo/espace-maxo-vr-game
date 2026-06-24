@@ -9,7 +9,7 @@ const Navbar = () => {
 
   const navLinks = [
     { label: "Accueil", path: "/" },
-    { label: "Livraison", path: "/livraison", icon: "truck" },
+    { label: "Notre carte de menus", path: "/livraison", icon: "truck" },
     { label: "Réserver Table", path: "/reserver-table", icon: "table" },
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },

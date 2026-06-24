@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import PromoVacancesAdminToggle from "@/pages/caisse/components/PromoVacancesAdminToggle";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -690,6 +691,13 @@ const AdminPage = () => {
           )}
         </section>
       )}
+
+      {/* Toggle Promo Vacances -25% (gère aussi la promo affichée sur DeliveryPage et BookingPage) */}
+      <section className="px-4 pb-4">
+        <div className="max-w-7xl mx-auto">
+          <PromoVacancesAdminToggle actorName="Admin Site" />
+        </div>
+      </section>
 
       {/* Tabs for Bookings, Loyalty and Reviews */}
       <section className="px-4 pb-4">
