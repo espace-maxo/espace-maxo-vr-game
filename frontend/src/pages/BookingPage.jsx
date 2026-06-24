@@ -424,6 +424,27 @@ const BookingPage = () => {
         </div>
       </section>
 
+      {/* Promo Vacances Maxo -25% (visible quand PAS de pack) */}
+      {!promoPack && (
+        <section className="py-3 px-4 bg-gradient-to-r from-amber-600/30 via-orange-600/20 to-rose-600/30 border-y border-amber-500/40" data-testid="promo-25-banner">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-center sm:text-left">
+            <span className="text-3xl sm:text-4xl">🎁</span>
+            <div className="flex-1">
+              <p className="font-orbitron font-black text-amber-300 text-base sm:text-lg uppercase tracking-tight leading-tight">
+                Promo Vacances Maxo · -25% sur votre addition
+              </p>
+              <p className="text-amber-100/90 text-xs sm:text-sm mt-0.5">
+                Pour toute consommation au restaurant à partir de <span className="font-bold">10 000 FCFA</span>.
+                Réservation en ligne obligatoire ✓ Présentez cette confirmation à votre arrivée.
+              </p>
+            </div>
+            <span className="bg-amber-500 text-slate-900 font-black px-3 py-1.5 rounded-lg text-sm whitespace-nowrap">
+              -25% appliqués
+            </span>
+          </div>
+        </section>
+      )}
+
       {/* Promo Pack Banner (if reservation comes from promo vacances) */}
       {promoPack && (
         <section className="py-4 px-4 bg-gradient-to-r from-amber-600/30 via-orange-600/20 to-rose-600/30 border-y border-amber-500/50" data-testid="promo-pack-banner">

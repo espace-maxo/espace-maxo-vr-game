@@ -1,0 +1,29 @@
+{
+  "summary": "iter104: Validated Promo -25% banner (conditional /booking display) + Admin SiteNotificationsBell + new aggregator endpoints. Backend: 6/6 pytest passed (GET /api/admin/site-notifications structure, POST mark-read, POST mark-all-read, full functional flow create→list→mark-read, idempotency, no ObjectId leak). Frontend: promo-25-banner visible on /booking with all required content (🎁, 'Promo Vacances Maxo · -25% sur votre addition', '10 000 FCFA' mention, '-25% appliqués' badge) inside orange/red gradient section; hidden on /booking?pack=pack_solo_fun where promo-pack-banner replaces it. Admin login (password Nikeland2026 — admin login has password-only, no username) → site-notifications-bell appears in header, dropdown opens with 6 tabs (Tout + booking/promo_order/review/wallet/join), empty state message correct. Functional E2E: created promo order via API → bell badge shows '1' unread → Packs Promo tab shows item with green/emerald unread style → click item marks read (loses green styling). No regression on prior pack flow (Pack Solo Fun Maxo banner, 3500 FCFA, 1 panini+1 jeu+1 jus content intact).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_site_notifications_iter104.py",
+    "/app/test_reports/pytest/site_notifications_iter104.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin_site_notifications.py creates its own AsyncIOMotorClient at module import (lines 31-32). Acceptable but duplicates the global client used elsewhere in server.py — consider sharing a single client to avoid extra connection pools.",
+    "SiteNotificationsBell does polling every 60s with no AbortController — if the user navigates Caisse heavily, multiple intervals may stack across mounts. Currently mitigated by useEffect cleanup, OK.",
+    "TYPE_META tab label mapping uses fragile string concatenation (k + 's', special-cased 'wallet'). Refactor to explicit map { booking: 'bookings', promo_order: 'promo_orders', ... } for clarity.",
+    "BookingPage.jsx still 1073+ lines (carried over from iter103). Splitting Step1/Step2/Step3 components recommended.",
+    "Notifications dropdown is non-scrollable when 60+ items (max-h-[60vh] on TabsContent works, fine)."
+  ],
+  "updated_files": ["/app/backend/tests/test_site_notifications_iter104.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100%"},
+  "test_credentials": "Admin tab on /caisse → password-only field, use 'Nikeland2026' (no username). Source: /app/memory/test_credentials.md noted username 'Admin' but UI implements password-only authentication for admin login.",
+  "seed_data_creation": "Created and cleaned up 'Test Notif iter104' (×2 in pytest) and 'Test Notif UI' (×1 via curl) promo_vacances_orders + corresponding admin_notif_reads docs. All removed at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin login is password-only ('Nikeland2026') not username/password despite credentials.md mentioning 'admin' username. Bell uses data-testid='site-notifications-bell'; mark-all button data-testid='site-notifications-mark-all' is conditional on unread>0; type tabs use data-testid='site-notif-tab-{booking|promo_order|review|wallet|join}'; item rows use data-testid='site-notif-item-{type}-{id}'. Unread items have class 'bg-emerald-500/10 border-emerald-500/30'; read items have 'bg-slate-800/40'. Backend aggregator reads collections: bookings, promo_vacances_orders, customer_reviews, wallet_transactions (filter kind in [provision/deposit/credit]), join_requests. Default since_hours=168 (7d). Excludes Mongo _id properly via projection {_id:0}.",
+  "rca_of_the_issue": "N/A — no defects found. All requested features verified working end-to-end."
+}

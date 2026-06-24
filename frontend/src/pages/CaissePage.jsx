@@ -30,6 +30,7 @@ import QRCode from "qrcode";
 import { rememberLogin, tryLocalLogin, isNetworkError } from "./caisse/utils/offlineAuth";
 import { refillIfLow as refillInvoiceNumbers } from "../lib/offlineInvoiceNumbers";
 import OfflinePreallocBadge from "./caisse/components/OfflinePreallocBadge";
+import SiteNotificationsBell from "./caisse/components/SiteNotificationsBell";
 
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
@@ -5177,6 +5178,12 @@ _Responsable Op. & Log - Espace Maxo_
                     role: currentUser?.role,
                   }}
                   className="hidden sm:inline-flex"
+                />
+              )}
+              {/* Cloche unifiée — notifications du site public (Admin only) */}
+              {currentUser?.role === "admin" && (
+                <SiteNotificationsBell
+                  actorName={currentUser?.full_name || currentUser?.username || "Admin"}
                 />
               )}
               {/* Badge si l'utilisateur s'est connecté en mode hors-ligne */}
