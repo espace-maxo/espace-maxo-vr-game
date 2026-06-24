@@ -103,6 +103,15 @@ class CaisseProduct(BaseModel):
     unit: str = "unité"
     category: str = ""
     is_available: bool = True
+    # Workflow d'approbation : "approved" (admin ou validé) ou "pending" (créé par non-admin)
+    status: str = "approved"
+    created_by: str = ""
+    created_by_role: str = ""
+    approved_by: str = ""
+    approved_at: str = ""
+    rejected_by: str = ""
+    rejected_at: str = ""
+    rejection_reason: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 

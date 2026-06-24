@@ -64,6 +64,7 @@ from routers.public_ticket import router as public_ticket_router, set_db as set_
 from routers.maintenance import router as maintenance_router, set_db as set_maintenance_db
 from routers.period_assignment import router as period_assignment_router, set_db as set_period_assignment_db
 from routers.offline_prealloc import router as offline_prealloc_router
+from routers.products import router as caisse_products_router, set_db as set_caisse_products_db
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -105,6 +106,7 @@ set_receipt_scan_db(db)
 set_public_ticket_db(db)
 set_maintenance_db(db)
 set_period_assignment_db(db)
+set_caisse_products_db(db)
 
 # Kkiapay configuration (MTN, Moov, Celtiis)
 KKIAPAY_PUBLIC_KEY = os.environ.get('KKIAPAY_PUBLIC_KEY', '')
@@ -192,6 +194,10 @@ api_router.include_router(public_ticket_router)
 api_router.include_router(maintenance_router)
 api_router.include_router(period_assignment_router)
 api_router.include_router(offline_prealloc_router)
+# Caisse products workflow (pending/approve/reject/duplicates/deduplicate) — DOIT être inclus
+# AVANT les routes inline /caisse/products de server.py pour que les chemins statiques
+# /caisse/products/pending et /caisse/products/duplicates aient la priorité sur /caisse/products/{id}.
+api_router.include_router(caisse_products_router)
 
 # Configure logging
 logging.basicConfig(
@@ -3238,17 +3244,32 @@ async def delete_table_reservation(reservation_id: str, has_write_access: bool =
 
 @api_router.post("/caisse/products")
 async def create_caisse_product(product_data: CaisseProductCreate, modified_by: str = "", modified_by_role: str = ""):
-    """Create a new caisse product"""
+    """Create a new caisse product.
+
+    Workflow d'approbation : si l'auteur n'est pas Admin, le produit est créé
+    avec status="pending" et reste invisible aux serveurs (Caisse/POS) tant qu'il
+    n'a pas été validé par l'Admin via POST /caisse/products/{id}/approve.
+    """
     try:
         product = CaisseProduct(**product_data.model_dump())
         product_dict = product.model_dump()
+        is_admin = (modified_by_role or "").strip().lower() == "admin"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        product_dict["created_by"] = (modified_by or "").strip()
+        product_dict["created_by_role"] = (modified_by_role or "").strip()
+        if is_admin:
+            product_dict["status"] = "approved"
+            product_dict["approved_by"] = (modified_by or "Admin").strip() or "Admin"
+            product_dict["approved_at"] = now_iso
+        else:
+            product_dict["status"] = "pending"
         await db.caisse_products.insert_one(product_dict)
-        
-        # Create notification for admin
+
+        # Create notification for admin (always, but flag pending in action label)
         if modified_by and modified_by_role:
             notification = {
                 "id": str(uuid.uuid4()),
-                "action": "created",
+                "action": "created_pending" if product_dict["status"] == "pending" else "created",
                 "product_name": product_dict.get("name", ""),
                 "product_id": product_dict.get("id", ""),
                 "department": product_dict.get("department", ""),
@@ -3257,20 +3278,35 @@ async def create_caisse_product(product_data: CaisseProductCreate, modified_by: 
                 "modified_by": modified_by,
                 "modified_by_role": modified_by_role,
                 "is_read": False,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": now_iso
             }
             await db.menu_notifications.insert_one(notification)
-        
-        return {"success": True, "product": {k: v for k, v in product_dict.items() if k != "_id"}}
+
+        return {
+            "success": True,
+            "pending": product_dict["status"] == "pending",
+            "product": {k: v for k, v in product_dict.items() if k != "_id"},
+        }
     except Exception as e:
         logger.error(f"Error creating caisse product: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/caisse/products")
-async def get_caisse_products():
-    """Get all caisse products"""
+async def get_caisse_products(include_pending: bool = False, status: Optional[str] = None):
+    """Get caisse products. Par défaut : uniquement les produits approuvés.
+
+    - `?include_pending=true` ou `?status=all` : renvoie aussi les produits en attente.
+    - `?status=pending` : uniquement les produits en attente.
+    """
     try:
-        products = await db.caisse_products.find({}, {"_id": 0}).to_list(500)
+        if status == "all" or include_pending:
+            query = {}
+        elif status == "pending":
+            query = {"status": "pending"}
+        else:
+            # Compat : produits legacy sans champ status sont considérés approved
+            query = {"$or": [{"status": "approved"}, {"status": {"$exists": False}}]}
+        products = await db.caisse_products.find(query, {"_id": 0}).to_list(1000)
         return {"products": products}
     except Exception as e:
         logger.error(f"Error fetching caisse products: {e}")

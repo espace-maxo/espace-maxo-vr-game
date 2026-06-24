@@ -4903,8 +4903,15 @@ _Responsable Op. & Log - Espace Maxo_
         });
         toast.success("Produit modifié");
       } else {
-        await axios.post(`${API}/caisse/products?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`, formData);
-        toast.success("Produit ajouté");
+        const r = await axios.post(`${API}/caisse/products?modified_by=${encodeURIComponent(modifierInfo.modified_by)}&modified_by_role=${modifierInfo.modified_by_role}`, formData);
+        if (r.data?.pending) {
+          toast.warning(
+            "Produit créé · en attente d'approbation par l'administrateur",
+            { description: "Il sera visible dans la facturation une fois validé.", duration: 5500 }
+          );
+        } else {
+          toast.success("Produit ajouté");
+        }
       }
       setShowProductModal(false);
       setEditProduct(null);
@@ -6068,6 +6075,8 @@ _Responsable Op. & Log - Espace Maxo_
               catalog={catalog}
               departmentConfig={DEPARTMENT_CONFIG}
               canManage={currentUser?.role === 'manager' || currentUser?.role === 'admin'}
+              isAdmin={currentUser?.role === 'admin'}
+              currentUserName={currentUser?.full_name || currentUser?.username || ""}
               onAddProduct={() => {
                 setEditProduct(null);
                 setProductForm({ name: "", price: 0, department: "bar", unit: "unité", category: "" });
