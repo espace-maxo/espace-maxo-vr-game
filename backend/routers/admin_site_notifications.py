@@ -55,6 +55,21 @@ async def _enrich_read_status(items: List[dict], item_type: str) -> List[dict]:
     return items
 
 
+async def _filter_deleted(items: List[dict], item_type: str) -> List[dict]:
+    """Exclut les notifications soft-deleted par l'Admin (collection `admin_notif_deleted`)."""
+    if not items:
+        return items
+    ids = [i["id"] for i in items if i.get("id")]
+    if not ids:
+        return items
+    deleted = set()
+    async for r in db.admin_notif_deleted.find(
+        {"type": item_type, "id": {"$in": ids}}, {"_id": 0, "id": 1}
+    ):
+        deleted.add(r["id"])
+    return [it for it in items if it.get("id") not in deleted]
+
+
 def _bbox(s: Optional[str], limit: int = 120) -> str:
     s = (s or "").strip()
     return s[: limit - 1] + "…" if len(s) > limit else s
@@ -89,6 +104,7 @@ async def list_site_notifications(
             for b in bookings_raw
         ]
         bookings = await _enrich_read_status(bookings, "booking")
+        bookings = await _filter_deleted(bookings, "booking")
 
         # ─── Commandes packs promo ───
         promo_raw = await db.promo_vacances_orders.find(
@@ -110,6 +126,7 @@ async def list_site_notifications(
             for p in promo_raw
         ]
         promos = await _enrich_read_status(promos, "promo_order")
+        promos = await _filter_deleted(promos, "promo_order")
 
         # ─── Avis clients ───
         reviews_raw = await db.customer_reviews.find(
@@ -128,6 +145,7 @@ async def list_site_notifications(
             for r in reviews_raw
         ]
         reviews = await _enrich_read_status(reviews, "review")
+        reviews = await _filter_deleted(reviews, "review")
 
         # ─── Commandes "Notre carte de menus" (delivery_orders) ───
         delivery_raw = await db.delivery_orders.find(
@@ -151,6 +169,7 @@ async def list_site_notifications(
             for d in delivery_raw
         ]
         deliveries = await _enrich_read_status(deliveries, "delivery_order")
+        deliveries = await _filter_deleted(deliveries, "delivery_order")
 
         # ─── Provisions wallet (Mobile Money) ───
         # Collection réelle = `wallets` (provisions au sens crédit du porte-monnaie)
@@ -172,6 +191,7 @@ async def list_site_notifications(
             for w in wallet_raw
         ]
         wallets = await _enrich_read_status(wallets, "wallet")
+        wallets = await _filter_deleted(wallets, "wallet")
 
         # ─── Candidatures "Nous rejoindre" (collection job_applications) ───
         joins_raw = await db.job_applications.find(
@@ -193,6 +213,7 @@ async def list_site_notifications(
             for j in joins_raw
         ]
         joins = await _enrich_read_status(joins, "join")
+        joins = await _filter_deleted(joins, "join")
 
         # Fusion + tri global pour la cloche
         all_items = bookings + promos + deliveries + reviews + wallets + joins
@@ -277,4 +298,42 @@ async def mark_all_read(body: dict = Body(default={})):
         return {"success": True, "marked": len(operations)}
     except Exception as e:
         logger.error(f"mark_all_read failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DeleteBody(BaseModel):
+    type: str
+    id: str
+    actor_name: Optional[str] = ""
+
+
+@router.post("/admin/site-notifications/delete")
+async def delete_site_notification(body: DeleteBody = Body(...)):
+    """Soft-delete d'une notification : elle disparaît de la cloche/panneau Admin
+    sans toucher au document source (booking/order/review/etc.). Idempotent."""
+    try:
+        await db.admin_notif_deleted.update_one(
+            {"type": body.type, "id": body.id},
+            {"$set": {
+                "type": body.type,
+                "id": body.id,
+                "deleted_at": _now_iso(),
+                "actor_name": body.actor_name or "Admin",
+            }},
+            upsert=True,
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"delete_site_notification failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/site-notifications/restore")
+async def restore_site_notification(body: DeleteBody = Body(...)):
+    """Annule la suppression d'une notification (la réaffiche dans la cloche)."""
+    try:
+        await db.admin_notif_deleted.delete_one({"type": body.type, "id": body.id})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"restore_site_notification failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

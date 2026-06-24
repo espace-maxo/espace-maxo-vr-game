@@ -1,0 +1,48 @@
+{
+  "summary": "Tested soft-delete of admin site notifications (panel + bell). Backend pytest 6/6 PASS. Frontend Playwright E2E PASS for both Bell (site-notif-delete-*) and Panel (site-panel-delete-*). Confirm() auto-accepted, the deleted card / line disappears after refetch. Mark-read regression OK.",
+  "backend_tests": {
+    "file": "/app/backend/tests/test_site_notif_delete_iter109.py",
+    "junit": "/app/test_reports/pytest/site_notif_delete_iter109.xml",
+    "results": "6 passed in 3.03s",
+    "covered": [
+      "GET /api/admin/site-notifications alive (returns summary/items/by_type)",
+      "POST /delete -> success:true and item removed from subsequent GET",
+      "POST /delete idempotent (second call returns success, no crash, still hidden)",
+      "POST /restore -> success:true and item reappears in GET",
+      "mark-read still works after delete/restore round-trip",
+      "delete validates payload (422 on missing id)"
+    ]
+  },
+  "frontend_tests": {
+    "scenario_bell": "Login Admin -> click [data-testid='site-notifications-bell'] -> dropdown opens with 2 items each carrying [data-testid^='site-notif-delete-'] trash button -> click first -> confirm() -> notification line disappears after refetch. stopPropagation works (markOne pas declenche).",
+    "scenario_panel": "Onglet 'Notifs Site' visible dans le header Admin -> SiteNotificationsPanel charge -> cartes affichent bouton corbeille rouge [data-testid^='site-panel-delete-'] en bas a droite -> clic -> confirm() -> la carte disparait apres refetch.",
+    "regression": "Bouton 'Marquer lu' present sur les cartes non lues. Bouton 'Tout marquer comme lu' visible dans le header du panneau quand unread>0. Conditionne par unread>0 = comportement attendu."
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "admin_site_notifications.py uses a module-level AsyncIOMotorClient created at import time without ServerSelectionTimeoutMS - acceptable in this codebase pattern but consider DI for testability.",
+    "Frontend deleteOne in SiteNotificationsBell.jsx correctly uses stopPropagation on the trash button to avoid triggering parent markOne handler. Good.",
+    "Both deleteOne implementations rely on window.confirm() which blocks the page - acceptable for an admin tool but no undo UI is surfaced even though /restore exists. Consider exposing 'Annuler' in the success toast (toast.success with action) for better UX.",
+    "_filter_deleted runs per type (6 sequential round-trips) instead of one bulk query - micro-optimization possible but currently fast enough."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_site_notif_delete_iter109.py",
+    "/app/test_reports/pytest/site_notif_delete_iter109.xml"
+  ],
+  "action_items": [],
+  "updated_files": [
+    "/app/backend/tests/test_site_notif_delete_iter109.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (2/2 flows)"},
+  "test_credentials": "Admin / Nikeland2026 sur /caisse (login via bouton Admin)",
+  "seed_data_creation": "Tests reutilisent les bookings existants si la creation echoue (fallback). En live le panneau contenait 1-2 delivery_orders qui ont servi de cibles.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Soft-delete des notifs Admin OK (endpoint /delete + /restore + filtre _filter_deleted). UI : bouton corbeille rose dans cloche (data-testid='site-notif-delete-{type}-{id}') et dans panneau (data-testid='site-panel-delete-{type}-{id}'). Onglet pour le panneau s'appelle 'Notifs Site' dans le header Admin de /caisse.",
+  "rca_of_the_issue": "N/A - feature addition validee, pas de bug."
+}

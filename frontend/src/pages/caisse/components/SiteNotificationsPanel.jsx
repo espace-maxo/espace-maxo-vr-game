@@ -25,6 +25,7 @@ import {
   Phone,
   MessageCircle,
   Truck,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
@@ -144,6 +145,21 @@ export default function SiteNotificationsPanel({ actorName = "Admin" }) {
       await fetchData();
     } catch (_) {
       /* silent */
+    }
+  };
+
+  const deleteOne = async (item) => {
+    if (!window.confirm("Supprimer cette notification du tableau ?\n(La donnée d'origine reste conservée.)")) return;
+    try {
+      await axios.post(`${API}/admin/site-notifications/delete`, {
+        type: item.type,
+        id: item.id,
+        actor_name: actorName,
+      });
+      toast.success("Notification supprimée");
+      await fetchData();
+    } catch (_) {
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -360,6 +376,16 @@ export default function SiteNotificationsPanel({ actorName = "Admin" }) {
                           Marquer lu
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteOne(it)}
+                        className="h-7 w-7 p-0 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10"
+                        title="Supprimer cette notification"
+                        data-testid={`site-panel-delete-${it.type}-${it.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
                 );

@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Bell, BellRing, Calendar, ShoppingBag, Star, Wallet, UserPlus, Globe, Check, Truck } from "lucide-react";
+import { Bell, BellRing, Calendar, ShoppingBag, Star, Wallet, UserPlus, Globe, Check, Truck, Trash2 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import {
@@ -87,6 +87,22 @@ export default function SiteNotificationsBell({ actorName = "Admin" }) {
       await fetchData();
     } catch (_) {
       toast.error("Erreur lors du marquage");
+    }
+  };
+
+  const deleteOne = async (e, item) => {
+    e.stopPropagation();
+    if (!window.confirm("Supprimer cette notification ?\n(La donnée d'origine reste conservée.)")) return;
+    try {
+      await axios.post(`${API}/admin/site-notifications/delete`, {
+        type: item.type,
+        id: item.id,
+        actor_name: actorName,
+      });
+      toast.success("Notification supprimée");
+      await fetchData();
+    } catch (_) {
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -184,6 +200,15 @@ export default function SiteNotificationsBell({ actorName = "Admin" }) {
                           )}
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => deleteOne(e, it)}
+                        className="flex-shrink-0 p-1 rounded text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 transition-colors"
+                        title="Supprimer cette notification"
+                        data-testid={`site-notif-delete-${it.type}-${it.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
