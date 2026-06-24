@@ -17,6 +17,10 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Fix bouton submit en mode Retrait sur place (DeliveryPage)]**
+  - Bug : sur `/livraison` (Notre carte de menus), le bouton final "Payer / Soumettre" restait DÉSACTIVÉ en mode `pickup` car la condition `disabled` exigeait toujours `orderForm.address` (vide en pickup).
+  - Fix appliqué (DeliveryPage.jsx ligne 994) : `disabled={... || (orderForm.mode !== "pickup" && !orderForm.address)}` — cohérent avec la validation déjà présente dans `handleSubmitOrder` (ligne 371).
+  - Validation testing_agent (iteration 108) : 3/3 PASS — pickup débloqué, régression delivery intacte, totaux corrects (pickup 3 600 F sans frais, delivery 4 600 F = 3 600 + 1 000).
 - **[Mar 2026 — Robustification Promo Vacances + Suppression Combos]**
   - **Fallback en dur** (`FALLBACK_PACKS`) ajouté dans `PromoVacancesSection.jsx` et `PromoTeaserPopup.jsx` : la promo s'affiche **immédiatement** même si l'API `/api/promo-vacances` est indisponible (résout le bug "ca ne s'affiche pas après déploiement").
   - **Bannière annonceur** orange/rose au-dessus du hero sur la HomePage (clic → scroll vers la section promo). Masquée si l'Admin a désactivé la promo.
