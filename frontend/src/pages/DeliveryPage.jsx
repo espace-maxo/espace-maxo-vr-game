@@ -215,7 +215,9 @@ const DeliveryPage = () => {
     address: "",
     notes: "",
     zone: "cotonou", // cotonou or outside
-    mode: "delivery" // "delivery" (livraison à domicile) ou "pickup" (retrait sur place)
+    mode: "delivery", // "delivery" | "pickup" | "dine_in"
+    scheduled_date: "", // YYYY-MM-DD (dine_in uniquement)
+    scheduled_time: "", // HH:mm (dine_in uniquement)
   });
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -325,12 +327,39 @@ const DeliveryPage = () => {
 
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = orderForm.mode === "pickup" ? 0 : (orderForm.zone === "cotonou" ? 1000 : 0); // Pas de frais si retrait sur place
+  // Pas de frais si retrait OU consommation sur place
+  const deliveryFee = (orderForm.mode === "pickup" || orderForm.mode === "dine_in")
+    ? 0
+    : (orderForm.zone === "cotonou" ? 1000 : 0);
   // Réduction -25% appliquée si total ≥ 10 000 FCFA et promo active
   const discountEligible = promoActive && cartTotal >= 10000;
   const discountAmount = discountEligible ? Math.round(cartTotal * 0.25) : 0;
   const subtotalAfterDiscount = cartTotal - discountAmount;
   const totalWithDelivery = subtotalAfterDiscount + deliveryFee;
+
+  // Validation 6h pour dine_in : la date+heure choisie doit être ≥ 6h dans le futur
+  const dineInScheduledMs = (() => {
+    if (orderForm.mode !== "dine_in") return null;
+    if (!orderForm.scheduled_date || !orderForm.scheduled_time) return null;
+    const dt = new Date(`${orderForm.scheduled_date}T${orderForm.scheduled_time}:00`);
+    const ms = dt.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  })();
+  const sixHoursMs = 6 * 60 * 60 * 1000;
+  const dineInTooSoon =
+    orderForm.mode === "dine_in" &&
+    dineInScheduledMs !== null &&
+    dineInScheduledMs - Date.now() < sixHoursMs;
+  const dineInMissingSchedule =
+    orderForm.mode === "dine_in" &&
+    (!orderForm.scheduled_date || !orderForm.scheduled_time);
+
+  // Min datetime-local value = maintenant + 6h, formaté YYYY-MM-DDTHH:mm
+  const minScheduledDate = (() => {
+    const d = new Date(Date.now() + sixHoursMs);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
   
   // Calculate wallet usage
   const walletAmountToUse = useWallet ? Math.min(walletBalance, totalWithDelivery) : 0;
@@ -338,12 +367,21 @@ const DeliveryPage = () => {
 
   // Create order in backend
   const createOrder = async (paymentStatus = "pending", transactionId = null, walletAmount = 0) => {
+    const isPickup = orderForm.mode === "pickup";
+    const isDineIn = orderForm.mode === "dine_in";
     const orderData = {
       customer_name: orderForm.name,
       customer_phone: orderForm.phone,
-      delivery_address: orderForm.mode === "pickup" ? "Retrait sur place" : orderForm.address,
-      delivery_zone: orderForm.mode === "pickup" ? "pickup" : orderForm.zone,
+      delivery_address: isPickup
+        ? "Retrait sur place"
+        : isDineIn
+        ? "Consommation sur place au restaurant"
+        : orderForm.address,
+      delivery_zone: isPickup ? "pickup" : isDineIn ? "dine_in" : orderForm.zone,
       order_mode: orderForm.mode,
+      scheduled_at: isDineIn && orderForm.scheduled_date && orderForm.scheduled_time
+        ? `${orderForm.scheduled_date}T${orderForm.scheduled_time}:00`
+        : null,
       notes: orderForm.notes,
       items: cart.map(item => ({
         name: item.name,
@@ -366,19 +404,32 @@ const DeliveryPage = () => {
 
   // Handle order submission
   const handleSubmitOrder = async () => {
-    // Adresse non requise en mode "Retrait sur place"
-    const addressRequired = orderForm.mode !== "pickup";
+    // Adresse non requise en mode "Retrait" ou "Sur place"
+    const addressRequired = orderForm.mode === "delivery";
     if (!orderForm.name || !orderForm.phone || (addressRequired && !orderForm.address)) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    if (orderForm.zone === "cotonou") {
+    // Validation 6h pour Consommation sur place
+    if (orderForm.mode === "dine_in") {
+      if (dineInMissingSchedule) {
+        toast.error("Veuillez choisir une date et une heure de venue");
+        return;
+      }
+      if (dineInTooSoon) {
+        toast.error("Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.");
+        return;
+      }
+    }
+
+    // Pickup et Dine-in : paiement direct (gratuit hors repas), pas de zone
+    if (orderForm.zone === "cotonou" || orderForm.mode === "pickup" || orderForm.mode === "dine_in") {
       // If wallet covers entire amount
       if (useWallet && amountToPay === 0) {
         await handleWalletOnlyPayment();
       } else {
-        // Cotonou: Payment required via Kkiapay (possibly partial after wallet)
+        // Payment required via Kkiapay (possibly partial after wallet)
         initiatePayment();
       }
     } else {
@@ -700,8 +751,18 @@ const DeliveryPage = () => {
                   </p>
                 )}
                 <div className="flex justify-between text-gray-400">
-                  <span>{orderForm.mode === "pickup" ? "Retrait sur place" : "Frais de livraison (Cotonou)"}</span>
-                  <span>{orderForm.mode === "pickup" ? "Gratuit" : "1 000 FCFA"}</span>
+                  <span>
+                    {orderForm.mode === "pickup"
+                      ? "Retrait sur place"
+                      : orderForm.mode === "dine_in"
+                      ? "Consommation sur place"
+                      : "Frais de livraison (Cotonou)"}
+                  </span>
+                  <span>
+                    {orderForm.mode === "pickup" || orderForm.mode === "dine_in"
+                      ? "Gratuit"
+                      : "1 000 FCFA"}
+                  </span>
                 </div>
                 {orderForm.mode === "delivery" && (
                 <div className="text-xs text-yellow-400">
@@ -759,13 +820,13 @@ const DeliveryPage = () => {
           ) : (
             <>
               <div className="space-y-4">
-                {/* Mode Selection : Livraison ou Retrait sur place */}
+                {/* Mode Selection : Livraison, Retrait sur place ou Consommation sur place */}
                 <div className="space-y-3">
                   <Label className="text-gray-300 font-semibold">Mode de récupération *</Label>
                   <RadioGroup
                     value={orderForm.mode}
                     onValueChange={(value) => setOrderForm({ ...orderForm, mode: value })}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    className="grid grid-cols-1 sm:grid-cols-3 gap-3"
                     data-testid="order-mode-radio"
                   >
                     <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
@@ -790,8 +851,61 @@ const DeliveryPage = () => {
                         <span className="block text-xs text-emerald-300">Aucun frais · à venir chercher</span>
                       </Label>
                     </div>
+                    <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                      orderForm.mode === "dine_in"
+                        ? "border-sky-500 bg-sky-500/10"
+                        : "border-white/20"
+                    }`}>
+                      <RadioGroupItem value="dine_in" id="mode-dine-in" />
+                      <Label htmlFor="mode-dine-in" className="flex-1 cursor-pointer">
+                        <span className="text-white font-semibold">🍽️ Consommation sur place</span>
+                        <span className="block text-xs text-sky-300">Au restaurant · sur réservation</span>
+                      </Label>
+                    </div>
                   </RadioGroup>
                 </div>
+
+                {/* Sélecteur Date + Heure — uniquement pour Consommation sur place (dine_in) */}
+                {orderForm.mode === "dine_in" && (
+                  <div className="space-y-3 p-3 rounded-lg border border-sky-500/40 bg-sky-500/5" data-testid="dine-in-scheduler">
+                    <Label className="text-sky-200 font-semibold flex items-center gap-1">
+                      <Clock className="w-4 h-4" /> Date et heure de venue *
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={orderForm.scheduled_date}
+                        min={minScheduledDate}
+                        onChange={(e) => setOrderForm({ ...orderForm, scheduled_date: e.target.value })}
+                        className="bg-dark-card border-white/20 text-white"
+                        data-testid="dine-in-date"
+                      />
+                      <Input
+                        type="time"
+                        value={orderForm.scheduled_time}
+                        onChange={(e) => setOrderForm({ ...orderForm, scheduled_time: e.target.value })}
+                        className="bg-dark-card border-white/20 text-white"
+                        data-testid="dine-in-time"
+                      />
+                    </div>
+                    {dineInTooSoon && (
+                      <div className="flex items-center gap-2 p-2 rounded bg-red-500/15 border border-red-500/40 text-red-200 text-xs font-semibold" data-testid="dine-in-full-msg">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.
+                      </div>
+                    )}
+                    {!dineInTooSoon && !dineInMissingSchedule && (
+                      <p className="text-[11px] text-emerald-300">
+                        ✓ Créneau valide. Votre table sera réservée pour cette heure.
+                      </p>
+                    )}
+                    {dineInMissingSchedule && (
+                      <p className="text-[11px] text-sky-300/80">
+                        Choisissez une date et une heure (minimum 6h à l'avance).
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Zone Selection — uniquement pour Livraison */}
                 {orderForm.mode === "delivery" && (
@@ -892,8 +1006,18 @@ const DeliveryPage = () => {
                       </div>
                     )}
                     <div className="flex justify-between text-gray-300 text-sm">
-                      <span>{orderForm.mode === "pickup" ? "Retrait sur place" : "Livraison Cotonou"}</span>
-                      <span>{orderForm.mode === "pickup" ? "Gratuit" : "1 000 FCFA"}</span>
+                      <span>
+                        {orderForm.mode === "pickup"
+                          ? "Retrait sur place"
+                          : orderForm.mode === "dine_in"
+                          ? "Consommation sur place"
+                          : "Livraison Cotonou"}
+                      </span>
+                      <span>
+                        {orderForm.mode === "pickup" || orderForm.mode === "dine_in"
+                          ? "Gratuit"
+                          : "1 000 FCFA"}
+                      </span>
                     </div>
                     <div className="flex justify-between text-white text-base font-bold border-t border-white/10 pt-2 mt-1">
                       <span>Total</span>
@@ -991,12 +1115,20 @@ const DeliveryPage = () => {
                 </Button>
                 <Button
                   onClick={handleSubmitOrder}
-                  disabled={submitting || awaitingPayment || !orderForm.name || !orderForm.phone || (orderForm.mode !== "pickup" && !orderForm.address)}
+                  disabled={
+                    submitting ||
+                    awaitingPayment ||
+                    !orderForm.name ||
+                    !orderForm.phone ||
+                    (orderForm.mode === "delivery" && !orderForm.address) ||
+                    (orderForm.mode === "dine_in" && (dineInMissingSchedule || dineInTooSoon))
+                  }
                   className={`font-rajdhani font-bold flex-1 ${
                     orderForm.zone === "cotonou"
                       ? "bg-green-600 hover:bg-green-700"
                       : "bg-yellow-600 hover:bg-yellow-700"
                   }`}
+                  data-testid="delivery-submit-btn"
                 >
                   {submitting || awaitingPayment ? (
                     <>

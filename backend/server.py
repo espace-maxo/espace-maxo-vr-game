@@ -466,7 +466,8 @@ class DeliveryOrder(BaseModel):
     payment_transaction_id: Optional[str] = None
     wallet_amount_used: float = 0.0
     # Mode de récupération et promo -25% (champs persistés pour Caisse Admin)
-    order_mode: str = "delivery"  # "delivery" (livraison) | "pickup" (retrait sur place)
+    order_mode: str = "delivery"  # "delivery" | "pickup" | "dine_in"
+    scheduled_at: Optional[str] = None  # ISO datetime (dine_in uniquement)
     discount_amount: float = 0.0
     promo_25_applied: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -1052,6 +1053,22 @@ async def get_available_slots(date: str):
 @api_router.post("/bookings", response_model=Booking)
 async def create_booking(booking_data: BookingCreate):
     """Create a new booking"""
+    # Règle des 6h : refuser toute réservation à moins de 6h du créneau
+    # Le Bénin est en UTC+1 toute l'année. Le slot YYYY-MM-DD + HH:MM est exprimé en heure locale.
+    try:
+        slot_local = datetime.fromisoformat(f"{booking_data.date}T{booking_data.time_slot}:00")
+        slot_utc = slot_local.replace(tzinfo=timezone(timedelta(hours=1))).astimezone(timezone.utc)
+        if slot_utc - datetime.now(timezone.utc) < timedelta(hours=6):
+            raise HTTPException(
+                status_code=400,
+                detail="Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.",
+            )
+    except HTTPException:
+        raise
+    except (ValueError, AttributeError):
+        # Si parse échoue, on laisse passer (pas de blocage faux positif)
+        pass
+
     existing = await db.bookings.find_one({
         "date": booking_data.date,
         "time_slot": booking_data.time_slot,
@@ -2448,6 +2465,28 @@ async def create_location_request(request_data: LocationRequest):
 @api_router.post("/delivery-orders")
 async def create_delivery_order(order: DeliveryOrder):
     """Create a new delivery order"""
+    # Validation : pour 'dine_in' (consommation sur place), scheduled_at obligatoire et >= 6h
+    if order.order_mode == "dine_in":
+        if not order.scheduled_at:
+            raise HTTPException(
+                status_code=400,
+                detail="Pour une consommation sur place, choisissez une date et une heure de venue.",
+            )
+        try:
+            sched_str = order.scheduled_at.replace("Z", "+00:00")
+            sched_dt = datetime.fromisoformat(sched_str)
+            if sched_dt.tzinfo is None:
+                # Heure locale Bénin (UTC+1)
+                sched_dt = sched_dt.replace(tzinfo=timezone(timedelta(hours=1)))
+            sched_dt_utc = sched_dt.astimezone(timezone.utc)
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="Format de date/heure invalide.")
+        if sched_dt_utc - datetime.now(timezone.utc) < timedelta(hours=6):
+            raise HTTPException(
+                status_code=400,
+                detail="Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.",
+            )
+
     order_dict = order.model_dump()
     await db.delivery_orders.insert_one(order_dict)
     
@@ -2457,13 +2496,19 @@ async def create_delivery_order(order: DeliveryOrder):
         items_text += f"\n  ... et {len(order.items) - 5} autres"
     
     # Determine zone and payment status
-    zone_label = "COTONOU" if order.delivery_zone == "cotonou" else "HORS COTONOU"
+    if order.order_mode == "dine_in":
+        zone_label = "SUR PLACE (RESTO)"
+    elif order.order_mode == "pickup":
+        zone_label = "RETRAIT SUR PLACE"
+    else:
+        zone_label = "COTONOU" if order.delivery_zone == "cotonou" else "HORS COTONOU"
     payment_label = "PAYE" if order.payment_status == "paid" else "A VALIDER"
-    
-    # Send SMS notification to admin
-    notification_message = f"""COMMANDE LIVRAISON [{zone_label}]
+    schedule_line = f"\nCreneau: {order.scheduled_at}" if order.scheduled_at else ""
 
-Statut: {payment_label}
+    # Send SMS notification to admin
+    notification_message = f"""COMMANDE [{zone_label}]
+
+Statut: {payment_label}{schedule_line}
 Client: {order.customer_name}
 Tel: {order.customer_phone}
 

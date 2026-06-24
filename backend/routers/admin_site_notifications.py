@@ -157,10 +157,16 @@ async def list_site_notifications(
                 "type": "delivery_order",
                 "title": d.get("customer_name") or "Commande",
                 "subtitle": (
-                    f"{(d.get('delivery_zone') or 'Sur place')} · "
-                    f"{len(d.get('items') or [])} article(s) · "
-                    f"{d.get('customer_phone', '')}"
-                    + (f" · {d.get('delivery_address')}" if d.get("delivery_address") else "")
+                    (
+                        "Sur place au resto" if d.get("order_mode") == "dine_in"
+                        else "Retrait sur place" if d.get("order_mode") == "pickup"
+                        else (d.get("delivery_zone") or "Livraison")
+                    )
+                    + " · "
+                    + f"{len(d.get('items') or [])} article(s) · "
+                    + f"{d.get('customer_phone', '')}"
+                    + (f" · {d.get('scheduled_at')}" if d.get("scheduled_at") else "")
+                    + (f" · {d.get('delivery_address')}" if d.get("delivery_address") and d.get("order_mode") not in ("pickup", "dine_in") else "")
                 ),
                 "amount": d.get("total") or d.get("subtotal"),
                 "status": d.get("payment_status") or d.get("status") or "pending",

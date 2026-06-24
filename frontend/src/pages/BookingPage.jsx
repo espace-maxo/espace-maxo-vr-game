@@ -147,7 +147,22 @@ const BookingPage = () => {
     setSlotsLoading(true);
     try {
       const response = await axios.get(`${API}/slots/${date}`);
-      setSlots(response.data.slots);
+      // Marque "Complet" (faux) les créneaux à moins de 6h du moment actuel
+      const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+      const now = Date.now();
+      const enriched = (response.data.slots || []).map((s) => {
+        try {
+          const slotDt = new Date(`${date}T${s.time}:00`).getTime();
+          const isTooSoon = Number.isFinite(slotDt) && slotDt - now < SIX_HOURS_MS && !s.is_past;
+          if (isTooSoon) {
+            return { ...s, available: false, is_too_soon: true };
+          }
+        } catch (_) {
+          /* ignore parse errors */
+        }
+        return s;
+      });
+      setSlots(enriched);
     } catch (error) {
       console.error("Error fetching slots:", error);
       toast.error("Erreur lors du chargement des créneaux");
@@ -353,6 +368,16 @@ const BookingPage = () => {
       return;
     }
 
+    // Garde-fou règle des 6h (au cas où l'utilisateur aurait sélectionné un slot puis attendu trop longtemps)
+    try {
+      const slotDt = new Date(`${format(formData.date, "yyyy-MM-dd")}T${formData.timeSlot}:00`).getTime();
+      if (Number.isFinite(slotDt) && slotDt - Date.now() < 6 * 60 * 60 * 1000) {
+        toast.error("Complet pour ce créneau. Veuillez choisir un horaire au moins 6h à l'avance.");
+        return;
+      }
+    } catch (_) {
+      /* ignore */
+    }
     setLoading(true);
     try {
       // Create booking with payment options
@@ -816,12 +841,20 @@ const BookingPage = () => {
                                 ? "bg-surface-highlight text-white hover:bg-neon-blue/20 hover:text-neon-blue border border-white/10"
                                 : slot.is_past
                                 ? "bg-gray-800/50 text-gray-600 cursor-not-allowed border border-gray-700 line-through"
+                                : slot.is_too_soon
+                                ? "bg-rose-900/30 text-rose-300/80 cursor-not-allowed border border-rose-500/40"
                                 : "bg-neon-red/20 text-neon-red/60 cursor-not-allowed border border-neon-red/30"
                             }`}
                             data-testid={`slot-${slot.time.replace(":", "")}`}
+                            title={slot.is_too_soon ? "Complet · réservez au moins 6h à l'avance" : undefined}
                           >
                             {slot.time}
-                            {!slot.available && !slot.is_past && (
+                            {slot.is_too_soon && (
+                              <span className="block text-[9px] uppercase tracking-wider font-bold text-rose-400">
+                                Complet
+                              </span>
+                            )}
+                            {!slot.available && !slot.is_past && !slot.is_too_soon && (
                               <span className="absolute -top-1 -right-1 w-3 h-3 bg-neon-red rounded-full"></span>
                             )}
                           </button>
