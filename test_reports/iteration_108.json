@@ -1,0 +1,59 @@
+{
+  "summary": "Verified bug fix on /livraison (Notre carte de menus): the Payer/Submit button now becomes ACTIVE in 'Retrait sur place' (pickup) mode without requiring an address, while remaining DISABLED in 'Livraison à domicile' mode until address is filled. All three review items PASS.",
+  "tested_url": "https://caisse-mon-point.preview.emergentagent.com/livraison",
+  "note_on_url": "Review mentioned '/delivery' but actual React route in App.js (line 54) is '/livraison'. Used the real route for testing.",
+  "test_scenarios_executed": {
+    "1_pickup_mode_bug_fix": {
+      "steps": "Add product to cart -> open cart -> 'Commander maintenant' -> switch to 'Retrait sur place' -> fill only Nom + Téléphone (no address) -> click Payer",
+      "results": {
+        "address_field_hidden_in_pickup": true,
+        "gratuit_label_shown_in_pickup": true,
+        "submit_button_disabled_after_filling_name_phone": false,
+        "submit_button_text": "Payer 3,600 FCFA (no +1000 fee added)",
+        "champs_obligatoires_error_shown_on_click": false,
+        "kkiapay_payment_widget_opened_after_click": true
+      },
+      "verdict": "PASS - bug fix confirmed working"
+    },
+    "2_delivery_mode_regression": {
+      "steps": "Fresh page -> default mode 'Livraison à domicile' + zone 'Cotonou' -> incrementally fill fields and observe disabled state",
+      "results": {
+        "delivery_empty_disabled": true,
+        "delivery_name_only_disabled": true,
+        "delivery_name_phone_no_address_disabled": true,
+        "delivery_all_three_fields_disabled": false,
+        "submit_button_text_after_full_fill": "Payer 4,600 FCFA",
+        "delivery_fee_1000_included_in_total": true
+      },
+      "verdict": "PASS - regression behaviour intact"
+    },
+    "3_ui_totals_check": {
+      "pickup_total": "3,600 FCFA (subtotal only, no delivery fee)",
+      "delivery_cotonou_total": "4,600 FCFA (3,600 subtotal + 1,000 livraison)",
+      "verdict": "PASS"
+    }
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Order form Dialog", "issues": ["Console warning: Missing `Description` or `aria-describedby={undefined}` for DialogContent (a11y warning, non-blocking)"]}
+    ]
+  },
+  "critical_code_review_comments": [
+    "DeliveryPage.jsx line 994 disabled condition `(orderForm.mode !== 'pickup' && !orderForm.address)` correctly mirrors line 371 server-side validation - both use the same `addressRequired = orderForm.mode !== 'pickup'` rule, so client/server validation stays in sync.",
+    "DeliveryPage.jsx is 1028 lines long - exceeds the 700-line guideline. Consider splitting (e.g. extract OrderFormDialog, CartDialog, MenuList) for maintainability. Not blocking.",
+    "Minor a11y: Dialog components are missing aria-describedby/Description. Add <DialogDescription> inside both Dialogs to silence the React warning and improve screen-reader support."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "Aucun (page publique /livraison)",
+  "seed_data_creation": "Aucune",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Le fix du bug 'submit disabled en pickup' est validé. Route réelle = /livraison (pas /delivery). Le flux Kkiapay s'ouvre correctement après clic 'Payer' en pickup mode. Pas besoin de re-tester.",
+  "rca_of_the_issue": "Avant le fix, la condition `disabled` du bouton submit (ligne 994) utilisait `!orderForm.address` sans tenir compte du mode pickup. Comme `orderForm.address` est toujours vide en mode pickup (champ masqué), le bouton restait disabled. Fix appliqué : `(orderForm.mode !== 'pickup' && !orderForm.address)` - l'adresse n'est requise que si le mode n'est pas pickup. Cohérent avec la validation côté `handleSubmitOrder` (ligne 370-371)."
+}

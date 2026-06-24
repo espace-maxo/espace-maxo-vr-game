@@ -465,6 +465,10 @@ class DeliveryOrder(BaseModel):
     payment_status: str = "pending"  # pending, pending_validation, paid
     payment_transaction_id: Optional[str] = None
     wallet_amount_used: float = 0.0
+    # Mode de récupération et promo -25% (champs persistés pour Caisse Admin)
+    order_mode: str = "delivery"  # "delivery" (livraison) | "pickup" (retrait sur place)
+    discount_amount: float = 0.0
+    promo_25_applied: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 # Job Application Models

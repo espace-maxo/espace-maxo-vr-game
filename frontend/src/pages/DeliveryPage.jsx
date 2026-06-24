@@ -885,9 +885,19 @@ const DeliveryPage = () => {
                       <span>Sous-total</span>
                       <span>{cartTotal.toLocaleString()} FCFA</span>
                     </div>
+                    {discountEligible && (
+                      <div className="flex justify-between text-emerald-400 text-sm font-bold">
+                        <span>🎁 Promo -25%</span>
+                        <span>-{discountAmount.toLocaleString()} FCFA</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-gray-300 text-sm">
-                      <span>Livraison Cotonou</span>
-                      <span>1 000 FCFA</span>
+                      <span>{orderForm.mode === "pickup" ? "Retrait sur place" : "Livraison Cotonou"}</span>
+                      <span>{orderForm.mode === "pickup" ? "Gratuit" : "1 000 FCFA"}</span>
+                    </div>
+                    <div className="flex justify-between text-white text-base font-bold border-t border-white/10 pt-2 mt-1">
+                      <span>Total</span>
+                      <span>{totalWithDelivery.toLocaleString()} FCFA</span>
                     </div>
                     
                     {/* Wallet Option */}
@@ -981,7 +991,7 @@ const DeliveryPage = () => {
                 </Button>
                 <Button
                   onClick={handleSubmitOrder}
-                  disabled={submitting || awaitingPayment || !orderForm.name || !orderForm.phone || !orderForm.address}
+                  disabled={submitting || awaitingPayment || !orderForm.name || !orderForm.phone || (orderForm.mode !== "pickup" && !orderForm.address)}
                   className={`font-rajdhani font-bold flex-1 ${
                     orderForm.zone === "cotonou"
                       ? "bg-green-600 hover:bg-green-700"
