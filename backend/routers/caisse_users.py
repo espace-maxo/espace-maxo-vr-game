@@ -89,10 +89,17 @@ async def create_caisse_user(user_data: CaisseUserCreate):
 
 @router.post("/caisse/login")
 async def caisse_login(credentials: dict = Body(...)):
-    """Login for caisse users - supports PIN or password"""
+    """Login for caisse users - supports PIN or password.
+
+    Robustesse :
+      - .strip() systématique pour ignorer les espaces invisibles
+      - Si le 'password' saisi est en réalité un PIN purement numérique (4-6 chiffres),
+        on tente aussi de le matcher comme PIN — évite les blocages quand l'utilisateur
+        clique par erreur sur l'onglet "Admin" et y saisit son code PIN à 4 chiffres.
+    """
     try:
-        pin = credentials.get("pin", "")
-        password = credentials.get("password", "")
+        pin = (credentials.get("pin") or "").strip()
+        password = (credentials.get("password") or "").strip()
 
         # Master admin password
         if password == "Nikeland2026" or password == "Esp@ceM@xo2026":
@@ -123,7 +130,7 @@ async def caisse_login(credentials: dict = Body(...)):
                 }, JWT_SECRET_KEY, algorithm="HS256")
                 return {"success": True, "user": user, "token": token}
 
-        # Password login
+        # Password login (avec fallback PIN si purement numérique)
         if password:
             password_hash = hashlib.sha256(password.encode()).hexdigest()
             user = await db.caisse_users.find_one({
@@ -139,6 +146,21 @@ async def caisse_login(credentials: dict = Body(...)):
                     "full_name": user.get("full_name", user["username"])
                 }, JWT_SECRET_KEY, algorithm="HS256")
                 return {"success": True, "user": user, "token": token}
+
+            # Fallback : si l'utilisateur a tapé son PIN dans le champ password
+            if password.isdigit() and 3 <= len(password) <= 8:
+                user_pin = await db.caisse_users.find_one({
+                    "pin": password,
+                    "is_active": True
+                }, {"_id": 0, "password_hash": 0})
+                if user_pin:
+                    token = jwt.encode({
+                        "role": user_pin["role"],
+                        "username": user_pin["username"],
+                        "user_id": user_pin["id"],
+                        "full_name": user_pin.get("full_name", user_pin["username"])
+                    }, JWT_SECRET_KEY, algorithm="HS256")
+                    return {"success": True, "user": user_pin, "token": token}
 
         raise HTTPException(status_code=401, detail="PIN ou mot de passe incorrect")
     except HTTPException:

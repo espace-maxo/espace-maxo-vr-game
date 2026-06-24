@@ -553,10 +553,11 @@ const CaissePage = () => {
 
   // ============== AUTH ==============
   const handleLogin = async () => {
-    const enteredPin = loginForm?.pin;
-    const enteredPwd = loginForm?.password;
+    const enteredPin = (loginForm?.pin || "").trim();
+    const enteredPwd = (loginForm?.password || "").trim();
     try {
-      const response = await axios.post(`${API}/caisse/login`, loginForm, { timeout: 8000 });
+      const payload = { pin: enteredPin, password: enteredPwd };
+      const response = await axios.post(`${API}/caisse/login`, payload, { timeout: 8000 });
       if (response.data.success) {
         setIsAuthenticated(true);
         setCurrentUser(response.data.user);
