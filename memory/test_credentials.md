@@ -1,7 +1,7 @@
 # Test Credentials
 
 ## Caisse Pro (https://<preview>/caisse)
-- **Admin** : username `Admin` / password `Caisse2026` (login Admin tab)
+- **Admin** : username `Admin` / password `Nikeland2026` (login Admin tab)  *(ancien : Caisse2026, changé en Mar 2026)*
 - **Resp. Op. & Log (ex-Gérante)** : `Mères AHOUANDJINOU` / PIN `2468`
 - **Cuisinier** : `cuisinier` / PIN `1357`
 - **Coach Jeux** : `coach` / PIN `9876`

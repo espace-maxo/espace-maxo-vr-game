@@ -95,7 +95,7 @@ async def caisse_login(credentials: dict = Body(...)):
         password = credentials.get("password", "")
 
         # Master admin password
-        if password == "Caisse2026" or password == "Esp@ceM@xo2026":
+        if password == "Nikeland2026" or password == "Esp@ceM@xo2026":
             return {
                 "success": True,
                 "user": {

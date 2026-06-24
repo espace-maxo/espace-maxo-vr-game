@@ -13,7 +13,6 @@ const Navbar = () => {
     { label: "Réserver Table", path: "/reserver-table", icon: "table" },
     { label: "Porte-Monnaie", path: "/provision", icon: "wallet" },
     { label: "Nous Rejoindre", path: "/rejoindre", icon: "users" },
-    { label: "Admin", path: "/admin", icon: "lock" },
   ];
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + "/");
@@ -73,6 +72,16 @@ const Navbar = () => {
                 Reprogrammer session
               </Button>
             </Link>
+            <Link
+              to="/admin"
+              className={`font-rajdhani font-semibold text-base uppercase tracking-wide transition-all duration-300 hover:text-neon-blue flex items-center gap-1 ${
+                isActive("/admin") ? "text-neon-blue text-glow-blue" : "text-gray-300"
+              }`}
+              data-testid="nav-admin"
+            >
+              <Lock className="w-4 h-4" />
+              Admin
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -112,6 +121,17 @@ const Navbar = () => {
                   <CalendarClock className="w-4 h-4" />
                   Reprogrammer session de jeu
                 </Button>
+              </Link>
+              <Link
+                to="/admin"
+                onClick={() => setIsOpen(false)}
+                className={`font-rajdhani font-semibold text-lg uppercase tracking-wide py-2 transition-all flex items-center gap-2 ${
+                  isActive("/admin") ? "text-neon-blue" : "text-gray-300"
+                }`}
+                data-testid="mobile-nav-admin"
+              >
+                <Lock className="w-5 h-5" />
+                Admin
               </Link>
               <a
                 href="https://wa.me/2290141470000"

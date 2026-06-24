@@ -802,7 +802,7 @@ def verify_admin_password(password: str) -> str:
 
     # Mot de passe Admin "Caisse Pro" (identique au login /caisse/login).
     # Permet d'utiliser le même mot de passe partout (connexion + actions sensibles).
-    if password == "Caisse2026":
+    if password == "Nikeland2026":
         return "admin_full"
     
     if ADMIN_PASSWORD_HASH:

@@ -30,7 +30,7 @@ async def caisse_login(login_data: CaisseLoginRequest):
             user = await db.caisse_users.find_one({"pin": login_data.pin, "is_active": True}, {"_id": 0})
         elif login_data.password:
             # Admin password check
-            CAISSE_ADMIN_PASSWORD = "Caisse2026"
+            CAISSE_ADMIN_PASSWORD = "Nikeland2026"
             ADMIN_PASSWORD_FULL = "Esp@ceM@xo2026"
             
             if login_data.password in [CAISSE_ADMIN_PASSWORD, ADMIN_PASSWORD_FULL]:
