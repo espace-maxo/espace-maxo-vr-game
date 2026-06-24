@@ -18,8 +18,10 @@ const BookingPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const preselectedGame = searchParams.get("game");
+  const preselectedPack = searchParams.get("pack");
   const [freeGamesAvailable, setFreeGamesAvailable] = useState(0);
   const [useFreeGame, setUseFreeGame] = useState(false);
+  const [promoPack, setPromoPack] = useState(null);
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -56,8 +58,7 @@ const BookingPage = () => {
         setPaymentConfig(response.data);
       } catch (error) {
         console.error("Error fetching payment config:", error);
-        toast.error("Erreur de chargement de la configuration de paiement");
-      }
+        toast.error("Erreur de chargement de la configuration de paiement");      }
     };
     fetchConfig();
 
@@ -84,6 +85,23 @@ const BookingPage = () => {
     
     loadKkiapayScript();
   }, []);
+
+  // Load promo pack info if ?pack= is present in URL
+  useEffect(() => {
+    if (!preselectedPack) return;
+    let cancelled = false;
+    axios
+      .get(`${API}/promo-vacances`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const pack = (data?.packs || []).find((p) => p.booking_param === preselectedPack || p.id === preselectedPack);
+        if (pack) setPromoPack(pack);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [preselectedPack]);
 
   // Fetch wallet balance when phone changes
   useEffect(() => {
@@ -318,7 +336,24 @@ const BookingPage = () => {
 
       const booking = bookingResponse.data;
       setCurrentBookingId(booking.id);
-      
+
+      // Si réservation issue d'un pack promo, on l'enregistre côté promo_vacances_orders
+      if (promoPack) {
+        try {
+          await axios.post(`${API}/promo-vacances/order`, {
+            pack_id: promoPack.id,
+            customer_name: formData.customerName,
+            customer_phone: formData.customerPhone,
+            date: format(formData.date, "yyyy-MM-dd"),
+            time_slot: formData.timeSlot,
+            party_size: formData.numberOfPlayers || 1,
+            notes: `Booking ID associé : ${booking.id}`,
+          });
+        } catch (_) {
+          /* non bloquant — la réservation est déjà créée */
+        }
+      }
+
       // Open payment widget
       openPaymentWidget(booking.id);
       
@@ -349,6 +384,41 @@ const BookingPage = () => {
           </p>
         </div>
       </section>
+
+      {/* Promo Pack Banner (if reservation comes from promo vacances) */}
+      {promoPack && (
+        <section className="py-4 px-4 bg-gradient-to-r from-amber-600/30 via-orange-600/20 to-rose-600/30 border-y border-amber-500/50" data-testid="promo-pack-banner">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-3 sm:gap-5">
+            <img
+              src={promoPack.image}
+              alt={promoPack.title}
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover border border-amber-400/40 flex-shrink-0"
+            />
+            <div className="flex-1 text-center sm:text-left">
+              <p className="text-amber-300 text-[11px] uppercase tracking-widest font-bold">
+                Promo Vacances Maxo — Pack sélectionné
+              </p>
+              <h3 className="font-orbitron font-bold text-white text-lg sm:text-xl mt-0.5">
+                {promoPack.title}
+              </h3>
+              {promoPack.subtitle && (
+                <p className="text-amber-100/90 text-xs sm:text-sm">{promoPack.subtitle}</p>
+              )}
+            </div>
+            {promoPack.price && (
+              <div className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg shadow-lg text-center">
+                <p className="font-orbitron font-black text-2xl sm:text-3xl leading-none">
+                  {new Intl.NumberFormat("fr-FR").format(promoPack.price)}
+                </p>
+                <p className="text-[10px] font-bold">FCFA</p>
+              </div>
+            )}
+          </div>
+          <p className="text-center text-amber-100/80 text-xs mt-2 max-w-2xl mx-auto">
+            Réservez votre créneau ci-dessous. Précisez le nombre de personnes ; nous préparons le pack à votre arrivée. Réservation à régler en ligne (MTN, Moov, Celtiis) ou sur place selon le créneau.
+          </p>
+        </section>
+      )}
 
       {/* Payment Methods Banner */}
       <section className="py-4 px-4 bg-dark-card border-y border-white/10">

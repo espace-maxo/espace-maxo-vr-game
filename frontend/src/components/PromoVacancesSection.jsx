@@ -1,0 +1,221 @@
+/**
+ * PromoVacancesSection — Section de promotion saisonnière "Vacances Maxo".
+ *
+ * Affichée juste après le Hero sur la HomePage. Récupère les packs et le statut
+ * d'activation depuis `/api/promo-vacances`. Si la promo est désactivée par
+ * l'Admin, la section ne s'affiche pas.
+ *
+ * Comportement :
+ *   - Faux compteur "Plus que N/100 places" pour les packs limités (incitatif).
+ *     Stocké en localStorage pour persister la valeur entre les visites.
+ *   - Clic sur "Réserver" → redirige vers /booking?pack={booking_param}.
+ */
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Flame, Sparkles, AlertTriangle } from "lucide-react";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const COUNTER_KEY = "promo_vacances_counters_v1";
+
+/** Renvoie un compteur entre 18 et 42 pour amorcer le faux décompte. */
+function seedCounter() {
+  return 18 + Math.floor(Math.random() * 25); // 18..42
+}
+
+/** Lit (ou initialise) le compteur de places restantes pour un pack. */
+function readCounters(packs) {
+  try {
+    const raw = localStorage.getItem(COUNTER_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    const next = { ...data };
+    let changed = false;
+    for (const p of packs) {
+      if (!p.limit_100_first) continue;
+      if (typeof next[p.id] !== "number" || next[p.id] < 4) {
+        next[p.id] = seedCounter();
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(COUNTER_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function decrementOne(packs, counters) {
+  // Décrémente aléatoirement 1 pack limité (parmi ceux > 4) toutes les 25-60s.
+  const candidates = packs.filter((p) => p.limit_100_first && (counters[p.id] || 0) > 4);
+  if (candidates.length === 0) return counters;
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  const next = { ...counters, [pick.id]: Math.max(4, (counters[pick.id] || 0) - 1) };
+  try {
+    localStorage.setItem(COUNTER_KEY, JSON.stringify(next));
+  } catch {}
+  return next;
+}
+
+const formatFCFA = (n) =>
+  new Intl.NumberFormat("fr-FR").format(n || 0).replace(/\s/g, " ");
+
+export default function PromoVacancesSection() {
+  const [active, setActive] = useState(false);
+  const [packs, setPacks] = useState([]);
+  const [counters, setCounters] = useState({});
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/promo-vacances`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setActive(!!data?.active);
+        setPacks(data?.packs || []);
+        setCounters(readCounters(data?.packs || []));
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!active || packs.length === 0) return undefined;
+    let timer;
+    const schedule = () => {
+      const delay = 25000 + Math.floor(Math.random() * 35000); // 25–60 s
+      timer = setTimeout(() => {
+        setCounters((c) => decrementOne(packs, c));
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => timer && clearTimeout(timer);
+  }, [active, packs]);
+
+  const cards = useMemo(() => packs, [packs]);
+
+  if (!loaded || !active || cards.length === 0) return null;
+
+  return (
+    <section
+      id="promo-vacances"
+      className="relative py-12 sm:py-16 px-3 sm:px-4 bg-gradient-to-b from-[#08102a] via-[#0a1737] to-dark-bg"
+      data-testid="promo-vacances-section"
+    >
+      {/* Fond décoratif */}
+      <div className="absolute inset-0 pointer-events-none opacity-30">
+        <div className="absolute top-10 left-10 w-72 h-72 bg-amber-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 right-10 w-80 h-80 bg-rose-500/20 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative max-w-7xl mx-auto">
+        <div className="flex flex-col items-center text-center mb-8 sm:mb-12">
+          <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 text-xs uppercase tracking-widest mb-3">
+            <Sparkles className="w-3 h-3 mr-1" />
+            Offre limitée vacances
+          </Badge>
+          <h2 className="font-orbitron font-black text-3xl sm:text-4xl lg:text-5xl uppercase tracking-tight">
+            <span className="text-white">Promo</span>{" "}
+            <span className="text-amber-400 text-glow-amber drop-shadow-[0_2px_4px_rgba(255,180,40,0.4)]">
+              Vacances Maxo
+            </span>
+          </h2>
+          <p className="font-outfit text-base sm:text-lg text-slate-300 max-w-2xl mt-3">
+            Réservez vos packs et votre table en ligne avec une réduction réservée aux 100 premières réservations.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">
+          {cards.map((p) => {
+            const remaining = counters[p.id];
+            const isLowStock = p.limit_100_first && remaining !== undefined && remaining <= 15;
+            return (
+              <div
+                key={p.id}
+                className="group relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-b from-slate-900/80 to-slate-950/90 hover:border-amber-400/60 transition-all duration-300 hover:shadow-[0_0_40px_rgba(255,180,40,0.25)]"
+                data-testid={`promo-pack-card-${p.id}`}
+              >
+                {/* Image */}
+                <div className="relative aspect-square overflow-hidden bg-slate-950">
+                  <img
+                    src={p.image}
+                    alt={p.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {/* Badge "100 premières" */}
+                  {p.limit_100_first && (
+                    <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2">
+                      <Badge className="bg-red-600/90 text-white text-[10px] uppercase tracking-wider shadow-lg">
+                        <Flame className="w-3 h-3 mr-1" />
+                        100 premières
+                      </Badge>
+                      {remaining !== undefined && (
+                        <Badge
+                          className={
+                            isLowStock
+                              ? "bg-red-500 text-white animate-pulse text-[10px]"
+                              : "bg-amber-500/90 text-slate-900 text-[10px]"
+                          }
+                          data-testid={`promo-pack-counter-${p.id}`}
+                        >
+                          {isLowStock && <AlertTriangle className="w-3 h-3 mr-0.5" />}
+                          Plus que {remaining}/100
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  {/* Prix flottant */}
+                  {p.price && (
+                    <div className="absolute bottom-2 right-2 bg-amber-500 text-slate-900 font-black px-3 py-1 rounded-lg shadow-lg">
+                      <span className="font-orbitron text-lg leading-none">{formatFCFA(p.price)}</span>
+                      <span className="text-[10px] ml-0.5">FCFA</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="p-3 sm:p-4 space-y-2">
+                  <h3 className="font-orbitron font-bold text-white text-sm sm:text-base leading-tight uppercase line-clamp-2">
+                    {p.title}
+                  </h3>
+                  {p.subtitle && (
+                    <p className="text-amber-200/90 text-xs font-medium line-clamp-2">{p.subtitle}</p>
+                  )}
+                  {p.old_price && (
+                    <p className="text-[11px] text-slate-400">
+                      Prix habituel :{" "}
+                      <span className="line-through">{formatFCFA(p.old_price)} FCFA</span>
+                    </p>
+                  )}
+                  <Link
+                    to={`/booking?pack=${encodeURIComponent(p.booking_param)}`}
+                    data-testid={`promo-pack-cta-${p.id}`}
+                  >
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-slate-900 font-bold uppercase tracking-wide text-xs sm:text-sm mt-1 hover:from-amber-400 hover:to-orange-400 hover:shadow-[0_0_25px_rgba(255,140,0,0.5)] transition-all"
+                    >
+                      {p.cta_label || "Réserver"}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-center text-slate-400 text-xs sm:text-sm mt-8">
+          Réservation en ligne obligatoire ·{" "}
+          <span className="text-amber-300 font-semibold">www.espacemaxo.com</span>
+        </p>
+      </div>
+    </section>
+  );
+}

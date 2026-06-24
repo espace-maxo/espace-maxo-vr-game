@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit2, Trash2, Link2, Link2Off, Wand2, Filter } from 'lucide-react';
 import PendingProductsPanel from "./PendingProductsPanel";
+import PromoVacancesAdminToggle from "./PromoVacancesAdminToggle";
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -71,6 +72,9 @@ const ProductsTab = ({
     <div className="space-y-4" data-testid="products-tab">
       {isAdmin && (
         <PendingProductsPanel actorName={currentUserName || "Admin"} onChange={onProductsRefresh} />
+      )}
+      {isAdmin && (
+        <PromoVacancesAdminToggle actorName={currentUserName || "Admin"} />
       )}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>

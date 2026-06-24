@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Gamepad2, UtensilsCrossed, Calendar, Phone, ChevronRight } from "lucide-react";
 import ImageLightbox from "@/components/ImageLightbox";
+import PromoVacancesSection from "@/components/PromoVacancesSection";
 import { TestimonialsSection } from "@/pages/TestimonialsPage";
 
 const INTERIOR_IMAGES = [
@@ -100,6 +101,9 @@ const HomePage = () => {
           <ChevronRight className="w-8 h-8 text-neon-blue rotate-90" />
         </div>
       </section>
+
+      {/* Promo Vacances Maxo (juste après le hero) */}
+      <PromoVacancesSection />
 
       {/* Features Section */}
       <section className="py-20 px-4 bg-dark-bg" data-testid="features-section">

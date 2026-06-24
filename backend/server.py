@@ -65,6 +65,7 @@ from routers.maintenance import router as maintenance_router, set_db as set_main
 from routers.period_assignment import router as period_assignment_router, set_db as set_period_assignment_db
 from routers.offline_prealloc import router as offline_prealloc_router
 from routers.products import router as caisse_products_router, set_db as set_caisse_products_db
+from routers.promo_vacances import router as promo_vacances_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -198,6 +199,7 @@ api_router.include_router(offline_prealloc_router)
 # AVANT les routes inline /caisse/products de server.py pour que les chemins statiques
 # /caisse/products/pending et /caisse/products/duplicates aient la priorité sur /caisse/products/{id}.
 api_router.include_router(caisse_products_router)
+api_router.include_router(promo_vacances_router)
 
 # Configure logging
 logging.basicConfig(

@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Mar 2026 — Promo Vacances Maxo (site public)]**
+  - Section "Promo Vacances Maxo" affichée sur la HomePage juste après le hero (5 cartes : Promo -25%, Pack Game Fresh 2 000 F, Pack Solo Fun 3 500 F, Pack Duo Snack VR 5 500 F, Pack Fun Maxo 6 500 F).
+  - Faux compteur "Plus que N/100 places" (entre 18 et 42 au démarrage, décrémente aléatoirement toutes les 25-60s en localStorage) pour les 3 packs limités aux 100 premières réservations.
+  - Bouton "Réserver" → `/booking?pack={id}` → BookingPage affiche un bandeau "PACK SÉLECTIONNÉ" avec image + nom + prix + flow de paiement Kkiapay existant.
+  - Enregistrement automatique de la commande promo dans `promo_vacances_orders` lors de la création de la réservation.
+  - Toggle Admin : `PromoVacancesAdminToggle.jsx` dans l'onglet Produits (Admin) pour activer/désactiver la promo en un clic. Statut stocké dans `site_settings` (clé `promo_vacances`).
+  - Endpoints : `GET /api/promo-vacances` · `PUT /api/promo-vacances/toggle` · `POST /api/promo-vacances/order` · `GET /api/promo-vacances/orders`.
 - **[Mar 2026 — Workflow d'approbation produits Caisse]**
   - Modèle `CaisseProduct` étendu : `status` (`approved`|`pending`), `created_by`, `created_by_role`, `approved_by/_at`, `rejected_by/_at`, `rejection_reason`.
   - `POST /api/caisse/products` : si `modified_by_role` ≠ `admin` → produit `pending`, invisible dans `GET /api/caisse/products` par défaut.
