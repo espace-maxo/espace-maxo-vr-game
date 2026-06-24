@@ -129,30 +129,52 @@ async def list_site_notifications(
         ]
         reviews = await _enrich_read_status(reviews, "review")
 
+        # ─── Commandes "Notre carte de menus" (delivery_orders) ───
+        delivery_raw = await db.delivery_orders.find(
+            {"created_at": {"$gte": cutoff}}, {"_id": 0}
+        ).sort("created_at", -1).to_list(limit_per_type)
+        deliveries = [
+            {
+                "id": d.get("id") or str(d.get("order_id") or ""),
+                "type": "delivery_order",
+                "title": d.get("customer_name") or "Commande",
+                "subtitle": (
+                    f"{(d.get('delivery_zone') or 'Sur place')} · "
+                    f"{len(d.get('items') or [])} article(s) · "
+                    f"{d.get('customer_phone', '')}"
+                    + (f" · {d.get('delivery_address')}" if d.get("delivery_address") else "")
+                ),
+                "amount": d.get("total") or d.get("subtotal"),
+                "status": d.get("payment_status") or d.get("status") or "pending",
+                "created_at": d.get("created_at"),
+            }
+            for d in delivery_raw
+        ]
+        deliveries = await _enrich_read_status(deliveries, "delivery_order")
+
         # ─── Provisions wallet (Mobile Money) ───
-        wallet_raw = await db.wallet_transactions.find(
-            {"created_at": {"$gte": cutoff}, "kind": {"$in": ["provision", "deposit", "credit"]}},
-            {"_id": 0},
+        # Collection réelle = `wallets` (provisions au sens crédit du porte-monnaie)
+        wallet_raw = await db.wallets.find(
+            {"created_at": {"$gte": cutoff}}, {"_id": 0}
         ).sort("created_at", -1).to_list(limit_per_type)
         wallets = [
             {
-                "id": w.get("id"),
+                "id": w.get("id") or w.get("phone"),
                 "type": "wallet",
-                "title": w.get("customer_name") or w.get("customer_phone") or "Provision",
+                "title": w.get("customer_name") or w.get("phone") or "Provision",
                 "subtitle": (
-                    f"{w.get('amount', 0)} F · {w.get('provider', 'Mobile Money')} · "
-                    f"{w.get('reference', '')}"
+                    f"Solde: {w.get('balance', 0)} F · {w.get('phone', '')}"
                 ),
-                "amount": w.get("amount"),
-                "status": w.get("status") or "pending",
+                "amount": w.get("balance"),
+                "status": w.get("status") or "active",
                 "created_at": w.get("created_at"),
             }
             for w in wallet_raw
         ]
         wallets = await _enrich_read_status(wallets, "wallet")
 
-        # ─── Candidatures "Nous rejoindre" ───
-        joins_raw = await db.join_requests.find(
+        # ─── Candidatures "Nous rejoindre" (collection job_applications) ───
+        joins_raw = await db.job_applications.find(
             {"created_at": {"$gte": cutoff}}, {"_id": 0}
         ).sort("created_at", -1).to_list(limit_per_type)
         joins = [
@@ -173,7 +195,7 @@ async def list_site_notifications(
         joins = await _enrich_read_status(joins, "join")
 
         # Fusion + tri global pour la cloche
-        all_items = bookings + promos + reviews + wallets + joins
+        all_items = bookings + promos + deliveries + reviews + wallets + joins
         all_items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         unread_total = sum(1 for x in all_items if not x.get("read"))
 
@@ -181,6 +203,7 @@ async def list_site_notifications(
             "summary": {
                 "bookings": {"total": len(bookings), "unread": sum(1 for x in bookings if not x.get("read"))},
                 "promo_orders": {"total": len(promos), "unread": sum(1 for x in promos if not x.get("read"))},
+                "delivery_orders": {"total": len(deliveries), "unread": sum(1 for x in deliveries if not x.get("read"))},
                 "reviews": {"total": len(reviews), "unread": sum(1 for x in reviews if not x.get("read"))},
                 "wallets": {"total": len(wallets), "unread": sum(1 for x in wallets if not x.get("read"))},
                 "joins": {"total": len(joins), "unread": sum(1 for x in joins if not x.get("read"))},
@@ -190,6 +213,7 @@ async def list_site_notifications(
             "by_type": {
                 "bookings": bookings,
                 "promo_orders": promos,
+                "delivery_orders": deliveries,
                 "reviews": reviews,
                 "wallets": wallets,
                 "joins": joins,
@@ -232,9 +256,10 @@ async def mark_all_read(body: dict = Body(default={})):
         collections = {
             "booking": "bookings",
             "promo_order": "promo_vacances_orders",
+            "delivery_order": "delivery_orders",
             "review": "customer_reviews",
-            "wallet": "wallet_transactions",
-            "join": "join_requests",
+            "wallet": "wallets",
+            "join": "job_applications",
         }
         operations = []
         for t, col in collections.items():

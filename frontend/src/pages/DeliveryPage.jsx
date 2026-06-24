@@ -214,7 +214,8 @@ const DeliveryPage = () => {
     phone: "",
     address: "",
     notes: "",
-    zone: "cotonou" // cotonou or outside
+    zone: "cotonou", // cotonou or outside
+    mode: "delivery" // "delivery" (livraison à domicile) ou "pickup" (retrait sur place)
   });
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -324,7 +325,7 @@ const DeliveryPage = () => {
 
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = orderForm.zone === "cotonou" ? 1000 : 0; // Frais uniquement pour Cotonou
+  const deliveryFee = orderForm.mode === "pickup" ? 0 : (orderForm.zone === "cotonou" ? 1000 : 0); // Pas de frais si retrait sur place
   // Réduction -25% appliquée si total ≥ 10 000 FCFA et promo active
   const discountEligible = promoActive && cartTotal >= 10000;
   const discountAmount = discountEligible ? Math.round(cartTotal * 0.25) : 0;
@@ -340,8 +341,9 @@ const DeliveryPage = () => {
     const orderData = {
       customer_name: orderForm.name,
       customer_phone: orderForm.phone,
-      delivery_address: orderForm.address,
-      delivery_zone: orderForm.zone,
+      delivery_address: orderForm.mode === "pickup" ? "Retrait sur place" : orderForm.address,
+      delivery_zone: orderForm.mode === "pickup" ? "pickup" : orderForm.zone,
+      order_mode: orderForm.mode,
       notes: orderForm.notes,
       items: cart.map(item => ({
         name: item.name,
@@ -364,7 +366,9 @@ const DeliveryPage = () => {
 
   // Handle order submission
   const handleSubmitOrder = async () => {
-    if (!orderForm.name || !orderForm.phone || !orderForm.address) {
+    // Adresse non requise en mode "Retrait sur place"
+    const addressRequired = orderForm.mode !== "pickup";
+    if (!orderForm.name || !orderForm.phone || (addressRequired && !orderForm.address)) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
@@ -696,12 +700,14 @@ const DeliveryPage = () => {
                   </p>
                 )}
                 <div className="flex justify-between text-gray-400">
-                  <span>Frais de livraison (Cotonou)</span>
-                  <span>1 000 FCFA</span>
+                  <span>{orderForm.mode === "pickup" ? "Retrait sur place" : "Frais de livraison (Cotonou)"}</span>
+                  <span>{orderForm.mode === "pickup" ? "Gratuit" : "1 000 FCFA"}</span>
                 </div>
+                {orderForm.mode === "delivery" && (
                 <div className="text-xs text-yellow-400">
                   * Hors Cotonou: frais à confirmer
                 </div>
+                )}
                 <div className="flex justify-between text-white font-bold border-t border-white/10 pt-2" data-testid="delivery-total-line">
                   <span>Total</span>
                   <span>{totalWithDelivery.toLocaleString()} FCFA</span>
@@ -753,7 +759,42 @@ const DeliveryPage = () => {
           ) : (
             <>
               <div className="space-y-4">
-                {/* Zone Selection */}
+                {/* Mode Selection : Livraison ou Retrait sur place */}
+                <div className="space-y-3">
+                  <Label className="text-gray-300 font-semibold">Mode de récupération *</Label>
+                  <RadioGroup
+                    value={orderForm.mode}
+                    onValueChange={(value) => setOrderForm({ ...orderForm, mode: value })}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    data-testid="order-mode-radio"
+                  >
+                    <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                      orderForm.mode === "delivery"
+                        ? "border-orange-500 bg-orange-500/10"
+                        : "border-white/20"
+                    }`}>
+                      <RadioGroupItem value="delivery" id="mode-delivery" />
+                      <Label htmlFor="mode-delivery" className="flex-1 cursor-pointer">
+                        <span className="text-white font-semibold">🚚 Livraison à domicile</span>
+                        <span className="block text-xs text-orange-300">Frais selon zone</span>
+                      </Label>
+                    </div>
+                    <div className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                      orderForm.mode === "pickup"
+                        ? "border-emerald-500 bg-emerald-500/10"
+                        : "border-white/20"
+                    }`}>
+                      <RadioGroupItem value="pickup" id="mode-pickup" />
+                      <Label htmlFor="mode-pickup" className="flex-1 cursor-pointer">
+                        <span className="text-white font-semibold">🏠 Retrait sur place</span>
+                        <span className="block text-xs text-emerald-300">Aucun frais · à venir chercher</span>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* Zone Selection — uniquement pour Livraison */}
+                {orderForm.mode === "delivery" && (
                 <div className="space-y-3">
                   <Label className="text-gray-300 font-semibold">Zone de livraison *</Label>
                   <RadioGroup
@@ -785,6 +826,7 @@ const DeliveryPage = () => {
                     </div>
                   </RadioGroup>
                 </div>
+                )}
 
                 <div>
                   <Label htmlFor="name" className="text-gray-300">Nom complet *</Label>
@@ -806,6 +848,7 @@ const DeliveryPage = () => {
                     placeholder="97 XX XX XX"
                   />
                 </div>
+                {orderForm.mode === "delivery" && (
                 <div>
                   <Label htmlFor="address" className="text-gray-300">Adresse de livraison *</Label>
                   <Textarea
@@ -817,6 +860,7 @@ const DeliveryPage = () => {
                     rows={3}
                   />
                 </div>
+                )}
                 <div>
                   <Label htmlFor="notes" className="text-gray-300">Instructions (optionnel)</Label>
                   <Input

@@ -24,6 +24,7 @@ import {
   Search,
   Phone,
   MessageCircle,
+  Truck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
@@ -46,6 +47,13 @@ const TYPE_META = {
     color: "amber",
     tw: "from-amber-500/15 to-amber-900/10 border-amber-500/40 text-amber-300",
     badge: "bg-amber-500/20 text-amber-200 border-amber-500/40",
+  },
+  delivery_order: {
+    label: "Commande",
+    icon: Truck,
+    color: "orange",
+    tw: "from-orange-500/15 to-orange-900/10 border-orange-500/40 text-orange-300",
+    badge: "bg-orange-500/20 text-orange-200 border-orange-500/40",
   },
   review: {
     label: "Avis client",
@@ -73,6 +81,7 @@ const TYPE_META = {
 const SUMMARY_KEY_BY_TYPE = {
   booking: "bookings",
   promo_order: "promo_orders",
+  delivery_order: "delivery_orders",
   review: "reviews",
   wallet: "wallets",
   join: "joins",

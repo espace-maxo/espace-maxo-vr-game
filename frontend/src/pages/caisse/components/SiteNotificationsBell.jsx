@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Bell, BellRing, Calendar, ShoppingBag, Star, Wallet, UserPlus, Globe, Check } from "lucide-react";
+import { Bell, BellRing, Calendar, ShoppingBag, Star, Wallet, UserPlus, Globe, Check, Truck } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import {
@@ -27,6 +27,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const TYPE_META = {
   booking: { label: "Réservations", icon: Calendar, color: "text-sky-300" },
   promo_order: { label: "Packs Promo", icon: ShoppingBag, color: "text-amber-300" },
+  delivery_order: { label: "Commandes", icon: Truck, color: "text-orange-300" },
   review: { label: "Avis", icon: Star, color: "text-yellow-300" },
   wallet: { label: "Mobile Money", icon: Wallet, color: "text-emerald-300" },
   join: { label: "Candidatures", icon: UserPlus, color: "text-violet-300" },

@@ -1,0 +1,46 @@
+{
+  "summary": "Tests iter107 — Backend: nouvelle clé delivery_orders dans /api/admin/site-notifications (summary + by_type) + collections corrigées (wallets/job_applications) — VALIDÉ. POST /api/delivery-orders accepte order_mode (champ extra ignoré grâce à ConfigDict(extra='ignore') sur DeliveryOrder). Frontend DeliveryPage : RadioGroup 'Mode de récupération' avec data-testid='order-mode-radio' présent, 'Livraison à domicile' par défaut, switch vers 'Retrait sur place' masque Zone + Adresse correctement. UN BUG VISUEL trouvé : le récap dans la modale 'Informations de livraison' (showOrderForm) affiche encore 'Livraison Cotonou 1 000 FCFA' au lieu de 'Retrait sur place / Gratuit' quand pickup est sélectionné. Le Total final est juste (8 100 FCFA = 10 800 − 2 700 promo, frais=0 OK), seul l'affichage du breakdown est incorrect.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DeliveryPage > Modal 'Informations de livraison' (showOrderForm)",
+        "issue": "Le bloc 'Order Summary' (lignes ~882-891 de DeliveryPage.jsx) affiche en dur 'Livraison Cotonou' / '1 000 FCFA' sans tenir compte de orderForm.mode==='pickup'. Quand l'utilisateur sélectionne 'Retrait sur place', le récap doit afficher 'Retrait sur place' / 'Gratuit' (comme c'est déjà fait correctement dans la modale Panier lignes 703-704). Conséquence : breakdown trompeur (mais Total correct car deliveryFee=0 réellement).",
+        "selector": "[role='dialog'] .bg-green-500\\/10 > div:nth-child(2)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_site_notifications_iter107.py",
+    "/app/test_reports/pytest/site_notifications_iter107.xml"
+  ],
+  "action_items": [
+    "Dans DeliveryPage.jsx (modal showOrderForm, env. ligne 888-891), ajouter une condition sur orderForm.mode : afficher 'Retrait sur place' / 'Gratuit' quand mode==='pickup', sinon 'Livraison Cotonou' / '1 000 FCFA'. Optionnellement masquer toute la ligne en mode pickup. Le calcul du total est déjà correct (deliveryFee=0 si pickup, ligne 328) — c'est uniquement l'affichage du breakdown à corriger.",
+    "(Optionnel) Aligner la wording du récap entre la modale Panier ('Frais de livraison (Cotonou)') et la modale OrderForm ('Livraison Cotonou') pour cohérence."
+  ],
+  "critical_code_review_comments": [
+    "admin_site_notifications.py : la requête pour wallets et job_applications utilise correctement les nouvelles collections — OK. Le filtre {'created_at': {'$gte': cutoff}} suppose que tous les documents ont un champ created_at en ISO string ; si certains anciens documents wallets n'ont pas ce champ, ils seront exclus silencieusement (acceptable car la cloche est pour notifications récentes).",
+    "DeliveryOrder model a ConfigDict(extra='ignore') — bon choix, accepte order_mode/discount_amount/promo_25_applied sans planter. ⚠️ Cependant les champs extra sont IGNORÉS (pas persistés). Si on veut garder une trace de order_mode dans delivery_orders, il faut ajouter explicitement order_mode: Optional[str]='delivery' au modèle Pydantic. Sinon la collection ne saura pas distinguer pickup vs delivery côté Caisse Admin.",
+    "Cohérence Caisse Admin : la SiteNotificationsPanel reçoit type='delivery_order' mais le titre ne distingue pas pickup vs delivery (subtitle utilise delivery_zone='pickup' ce qui est bien). Pour pickup le subtitle affichera 'pickup · X article(s) · phone · Retrait sur place' — ça marche fonctionnellement.",
+    "DeliveryPage.jsx OrderForm recap : duplication de logique avec la modale Panier (lignes 703-704 vs 882-891). Refactorer en un sous-composant <OrderRecap /> partagé éviterait ce type d'incohérence."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_site_notifications_iter107.py (nouveau, 4 tests pytest)"
+  ],
+  "success_rate": {
+    "backend": "100% (4/4 tests pytest pass)",
+    "frontend": "90% (4/5 assertions OK — bug visuel récap pickup)"
+  },
+  "test_credentials": "admin / Nikeland2026 (lu depuis /app/memory/test_credentials.md). Non re-testé login Admin car flow notifs aggregator + DeliveryPage publique testés directement.",
+  "seed_data_creation": "2 delivery_orders créés via POST puis SUPPRIMÉS (cleanup OK via motor : db.delivery_orders.delete_many({'customer_name': {'$in': ['Test Livraison','Test Livraison Pickup']}}) → 2 deleted).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Tout le backend (delivery_orders dans aggregator + collections wallets/job_applications + POST accepting order_mode) est validé à 100%. Seul reste à corriger le récap visuel du formulaire OrderForm (DeliveryPage.jsx ~ligne 882-891) qui n'a pas la conditionnelle pickup. Sélecteurs validés : [data-testid='order-mode-radio'], #mode-delivery, #mode-pickup, [data-testid='floating-cart-btn'], [data-testid='delivery-promo-banner']. Flow pour reproduire : ajouter 3x 'Salade niçoise' (3 600 × 3 = 10 800), cliquer floating-cart-btn, cliquer 'Commander', le formulaire s'ouvre avec mode-delivery checked.",
+  "rca of the issue": "Le composant DeliveryPage.jsx a 2 récaps : (1) celui de la modale Panier (lignes 703-704) qui possède DÉJÀ la conditionnelle pickup/delivery — OK, (2) celui de la modale Informations de livraison/OrderForm (lignes ~882-891) qui hardcode 'Livraison Cotonou 1 000 FCFA'. Ce 2ème récap n'a pas été mis à jour lors de l'ajout du mode pickup. Fix minimal : remplacer la ligne 889-890 par {orderForm.mode === 'pickup' ? <><span>Retrait sur place</span><span>Gratuit</span></> : <><span>Livraison Cotonou</span><span>1 000 FCFA</span></>}. Aucune régression promo détectée : -25% affichée correctement (10 800 → -2 700, total 9 100 en delivery, 8 100 en pickup)."
+}
