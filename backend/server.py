@@ -141,12 +141,46 @@ security = HTTPBearer(auto_error=False)
 app = FastAPI()
 
 
+# ─────────────── Liveness / readiness endpoints (Kubernetes probes) ───────────────
+# Réponses ultra-légères (pas d'accès DB) pour que le health-check passe
+# AVANT et PENDANT que les 47 routers se finissent d'initialiser.
+
+@app.get("/")
+async def root_probe():
+    return {"status": "ok", "service": "espace-maxo-api"}
+
+
+@app.get("/health")
+async def health_probe():
+    return {"status": "healthy"}
+
+
+@app.get("/api")
+async def api_root_probe():
+    return {"status": "ok", "service": "espace-maxo-api"}
+
+
+@app.get("/api/health")
+async def api_health_probe():
+    return {"status": "healthy"}
+
+
 @app.on_event("startup")
 async def _seed_initial_data():
+    # Le seed est lancé en arrière-plan pour ne pas bloquer le startup
+    # (Kubernetes attend que startup termine avant de marquer le pod ready).
+    import asyncio
+
+    async def _bg_seed():
+        try:
+            await seed_quick_products()
+        except Exception as e:
+            logger.error(f"Background seed failed: {e}")
+
     try:
-        await seed_quick_products()
+        asyncio.create_task(_bg_seed())
     except Exception as e:
-        logger.error(f"Startup seed failed: {e}")
+        logger.error(f"Could not schedule background seed: {e}")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
