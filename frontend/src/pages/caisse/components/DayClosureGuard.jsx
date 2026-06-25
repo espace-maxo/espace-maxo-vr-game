@@ -16,7 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Unlock, CheckCircle2, Clock, AlertTriangle, UserCheck, RefreshCw, Calendar, ChevronRight } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Lock, Unlock, CheckCircle2, Clock, AlertTriangle, UserCheck, RefreshCw, Calendar, ChevronRight, Loader2, WifiOff } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -29,6 +31,9 @@ export default function DayClosureGuard({ currentUser, children }) {
   const [serverStatus, setServerStatus] = useState({ servers: [], validated_count: 0, total_servers: 0, all_validated: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  // Dialog "mot de passe Journée" (remplace window.prompt)
+  const [pwDialog, setPwDialog] = useState({ open: false, value: "", force: false });
 
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
@@ -36,6 +41,7 @@ export default function DayClosureGuard({ currentUser, children }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [closureRes, serversRes] = await Promise.all([
         axios.get(`${API}/day-closures/${date}`),
@@ -45,6 +51,10 @@ export default function DayClosureGuard({ currentUser, children }) {
       setServerStatus(serversRes.data);
     } catch (e) {
       console.error(e);
+      const msg = e?.response?.data?.detail
+        || (e?.message?.includes("Network") ? "Connexion réseau indisponible" : "Impossible de charger le statut de la journée");
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -79,24 +89,29 @@ export default function DayClosureGuard({ currentUser, children }) {
       if (password) payload.password = password;
       await axios.post(`${API}/day-closures/${date}/close`, payload);
       toast.success("Journée fermée");
+      setPwDialog({ open: false, value: "", force: false });
       refresh();
     } catch (e) {
       const detail = e.response?.data?.detail || "Erreur de fermeture";
-      const status = e.response?.status;
-      // Si non-admin et mot de passe requis → demander
-      if ((status === 401 || status === 403) && !isAdmin) {
-        if (status === 403) {
-          toast.error(detail);
-        } else {
-          const pw = window.prompt("Saisissez le mot de passe Journée pour fermer :");
-          if (pw) {
-            return closeDayHandler(force, pw);
-          }
-        }
+      const httpStatus = e.response?.status;
+      // Si non-admin et mot de passe requis → afficher le Dialog (au lieu du window.prompt)
+      if (httpStatus === 401 && !isAdmin) {
+        setPwDialog({ open: true, value: "", force });
+      } else if (httpStatus === 403 && !isAdmin) {
+        toast.error(detail);
       } else {
         toast.error(detail);
       }
     } finally { setBusy(false); }
+  };
+
+  const submitPasswordDialog = () => {
+    const pw = (pwDialog.value || "").trim();
+    if (!pw) {
+      toast.error("Le mot de passe ne peut pas être vide");
+      return;
+    }
+    closeDayHandler(pwDialog.force, pw);
   };
 
   const reopenDay = async () => {
@@ -114,6 +129,58 @@ export default function DayClosureGuard({ currentUser, children }) {
       toast.error(e.response?.data?.detail || "Erreur");
     } finally { setBusy(false); }
   };
+
+  // Skeleton / loader pendant le premier chargement
+  if (loading && !status?.closure && serverStatus.servers.length === 0) {
+    return (
+      <div className="space-y-4" data-testid="day-closure-loading">
+        <Card className="bg-slate-900/60 border-slate-700">
+          <CardContent className="p-6 flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+            <p className="text-slate-300 text-sm">Chargement du statut de la journée…</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // État d'erreur de chargement : on offre un Réessayer plutôt que rester bloqué silencieusement
+  if (loadError && !status?.closure) {
+    return (
+      <div className="space-y-4" data-testid="day-closure-error">
+        <Card className="bg-rose-900/20 border-rose-500/40">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 text-rose-300">
+              <WifiOff className="w-5 h-5" />
+              <p className="font-semibold">Impossible de charger la journée</p>
+            </div>
+            <p className="text-rose-200/80 text-sm">{loadError}</p>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                onClick={refresh}
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                data-testid="day-closure-retry-btn"
+              >
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Réessayer
+              </Button>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white h-9 w-[160px]"
+                data-testid="day-closure-date-retry"
+              />
+            </div>
+            <p className="text-slate-500 text-xs">
+              Si le problème persiste : vérifie ta connexion Internet ou contacte l'Admin.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Si journée FERMÉE → on rend les enfants (l'écran "Faire le point")
   // avec un bandeau de statut "verrouillée" + bouton de réouverture admin.
@@ -281,6 +348,57 @@ export default function DayClosureGuard({ currentUser, children }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog mot de passe (remplace window.prompt — UX cohérente avec le reste de l'app) */}
+      <Dialog
+        open={pwDialog.open}
+        onOpenChange={(o) => !o && setPwDialog({ open: false, value: "", force: false })}
+      >
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-400" />
+              Mot de passe Journée requis
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Pour fermer la journée du <strong className="text-slate-200">{format(new Date(date), "d MMMM yyyy", { locale: fr })}</strong>, saisis le mot de passe de fermeture défini par l'Administrateur.
+            </p>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="day-pw-input" className="text-slate-300 text-sm">Mot de passe</Label>
+            <Input
+              id="day-pw-input"
+              type="password"
+              autoFocus
+              value={pwDialog.value}
+              onChange={(e) => setPwDialog((s) => ({ ...s, value: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && submitPasswordDialog()}
+              className="bg-slate-800 border-slate-700 text-white"
+              placeholder="••••••••"
+              data-testid="day-closure-pw-input"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setPwDialog({ open: false, value: "", force: false })}
+              disabled={busy}
+              className="text-slate-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={submitPasswordDialog}
+              disabled={busy || !pwDialog.value}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              data-testid="day-closure-pw-submit"
+            >
+              {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Lock className="w-4 h-4 mr-1" />}
+              Confirmer la fermeture
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -481,8 +481,8 @@ const CaissePage = () => {
   // ============== FAIRE LE POINT (Rapport période : jour / semaine / personnalisé) ==============
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [weekStartDate, setWeekStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
-  // Sub-tab active inside the "Faire le point" tab ("point-hebdo" | "reversement" | "point-history")
-  const [hebdoSubTab, setHebdoSubTab] = useState("point-hebdo");
+  // Sub-tab active inside the "Faire le point" tab ("reversement" | "point-history")
+  const [hebdoSubTab, setHebdoSubTab] = useState("reversement");
   // Sub-sub-tab active inside the "Reversement" sub-menu ("bar" | "menu_combos" | "jeux" | "locations")
   const [reversementSubTab, setReversementSubTab] = useState("bar");
   // Date du billettage global (par défaut : aujourd'hui)
@@ -5765,7 +5765,7 @@ _Responsable Op. & Log - Espace Maxo_
             )}
             {/* 9. HEBDO */}
             {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3">
+              <TabsTrigger value="hebdo" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="caisse-tab-hebdo">
                 <BarChart3 className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Faire le point</span>
               </TabsTrigger>
             )}
@@ -6694,16 +6694,26 @@ _Responsable Op. & Log - Espace Maxo_
           {/* ==================== POINT HEBDOMADAIRE TAB ==================== */}
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="hebdo">
-            <Tabs value={hebdoSubTab === "point-hebdo" ? "reversement" : hebdoSubTab} onValueChange={setHebdoSubTab} className="w-full">
-              <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto">
-                <TabsTrigger value="reversement" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-reversement">
-                  <Coins className="w-4 h-4 mr-2" />
-                  Reversement
+            <Tabs value={hebdoSubTab} onValueChange={setHebdoSubTab} className="w-full">
+              <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1">
+                <TabsTrigger
+                  value="reversement"
+                  className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-3 py-2 text-sm font-medium gap-2"
+                  data-testid="tab-reversement"
+                >
+                  <Coins className="w-4 h-4" />
+                  <span>Reversement</span>
+                  <span className="hidden sm:inline text-[10px] opacity-70 ml-1">· Billettage + clôture</span>
                 </TabsTrigger>
                 {currentUser?.role === 'admin' && (
-                  <TabsTrigger value="point-history" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-point-history">
-                    <History className="w-4 h-4 mr-2" />
-                    Historique
+                  <TabsTrigger
+                    value="point-history"
+                    className="data-[state=active]:bg-slate-600 data-[state=active]:text-white px-3 py-2 text-sm font-medium gap-2"
+                    data-testid="tab-point-history"
+                  >
+                    <History className="w-4 h-4" />
+                    <span>Historique</span>
+                    <span className="hidden sm:inline text-[10px] opacity-70 ml-1">· Archives</span>
                   </TabsTrigger>
                 )}
               </TabsList>
