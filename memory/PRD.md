@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Libellés personnalisables du modal "Ajouter un produit" (Caisse)]**
+  - Nouveau router backend `/app/backend/routers/admin_ui_labels.py` avec endpoints `GET/PUT/DELETE /api/admin/ui-labels/{key}` (clé `caisse_product_add` pour démarrer).
+  - L'admin Caisse peut désormais modifier inline le **titre création**, **titre modification** et **description optionnelle** du modal "Ajouter un produit" via un bouton ✏️ "Libellés" visible uniquement pour `role === "admin"`.
+  - Aperçu temps réel + bouton "Restaurer les défauts" si custom actif.
+  - Stockage global MongoDB (collection `admin_ui_labels`) — visible par tous les utilisateurs Caisse.
+  - data-testid : `product-modal-title`, `product-modal-description`, `open-labels-editor-btn`, `labels-title-create`, `labels-title-edit`, `labels-description`, `labels-save-btn`, `labels-reset-btn`.
+  - Tests : 7/7 pytest + 12/12 critères frontend Playwright + contrôle d'accès non-admin (iteration 112). Tous PASS.
 - **[Feb 2026 — Bandeau "Wi-Fi faible" (Caisse)]**
   - Nouveau composant `WeakConnectionBanner` (`/app/frontend/src/components/WeakConnectionBanner.jsx`) : bandeau orange non-bloquant en haut de la Caisse, déclenché par `useOnlineStatus.weakConnection` après 3 pings consécutifs > 1500ms.
   - Affiche la latence courante et invite à basculer sur 4G **avant** une éventuelle bascule offline.
