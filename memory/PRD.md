@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Modale d'arbitrage d'écart dans BillettageGlobalCard (P2)]**
+  - L'arbitrage d'écart (modale `cash-mismatch-modal-global`) est désormais déclenché sur le **vrai widget** utilisé en production (`BillettageGlobalCard`).
+  - Quand l'utilisateur clique "Enregistrer" et que `|compté - attendu| > 0.5 F` → modale s'ouvre avec 3 metric cards (Compté / Attendu / Manque ou Excédent) + textarea **motif obligatoire** (300 char max) + 2 boutons (Vérifier / Enregistrer avec écart).
+  - Bouton "Enregistrer avec écart" désactivé tant que motif vide. Notes enrichies avec `[Écart confirmé] {motif}` pour traçabilité admin.
+  - Régressions OK : si match parfait OU pas de reversement attendu → enregistrement direct sans modale.
+  - Tests : 4/4 pytest + tous scénarios frontend e2e PASS (iter 116). Cleanup TEST_iter116 marker effectué via curl.
+  - data-testid : `cash-mismatch-modal-global`, `billettage-mismatch-reason`, `billettage-mismatch-cancel`, `billettage-mismatch-confirm`.
 - **[Feb 2026 — Fix LockScreen : reconnaissance du mot de passe Admin]**
   - Cause : `LockScreen` envoyait `{pin: value, password: ""}` au backend → le password Admin `Nikeland2026` saisi dans le champ était envoyé en `pin` uniquement, jamais matché en tant que `password`.
   - Fix : envoi de la valeur saisie **simultanément en `pin` ET `password`** → le backend `/api/caisse/login` essaie les deux et l'admin master `Nikeland2026` ouvre bien la session admin.
