@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe, Pencil
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe, Pencil, Lock
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,8 @@ import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
 import OfflineIndicator from "../components/OfflineIndicator";
 import WeakConnectionBanner from "../components/WeakConnectionBanner";
+import LockScreen from "../components/LockScreen";
+import useInactivityLock from "../hooks/useInactivityLock";
 import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
 import RecoupementPanel from "./caisse/components/RecoupementPanel";
@@ -253,6 +255,18 @@ const CaissePage = () => {
   const [loginForm, setLoginForm] = useState({ pin: "", password: "" });
   const [loginMode, setLoginMode] = useState("pin"); // pin or admin
   const [showForgotCodeModal, setShowForgotCodeModal] = useState(false);
+
+  // ============== VERROUILLAGE CAISSE (auto 5min + bouton manuel + override admin) ==============
+  const inactivityLock = useInactivityLock({ disabled: !isAuthenticated });
+  const { locked: caisseLocked, lock: lockCaisse, unlock: unlockCaisse } = inactivityLock;
+  // Handler de déverrouillage : si admin override → met à jour la session
+  const handleUnlock = (newUser) => {
+    if (newUser && currentUser && newUser.id !== currentUser.id && newUser.role === "admin") {
+      // Admin a pris la main — on remplace l'utilisateur courant
+      setCurrentUser(newUser);
+    }
+    unlockCaisse();
+  };
 
   // Audit actor query string (added to mutation URLs so the audit log knows
   // which user performed the action — visible only to admins).
@@ -5248,6 +5262,10 @@ _Responsable Op. & Log - Espace Maxo_
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Overlay de verrouillage (z-index 9999, masque tout) */}
+      {caisseLocked && isAuthenticated && (
+        <LockScreen currentUser={currentUser} onUnlock={handleUnlock} />
+      )}
       {/* Bandeau orange "Wi-Fi faible" — visible uniquement si latence > 1500ms x3 */}
       <WeakConnectionBanner />
       {/* Header */}
@@ -5512,6 +5530,16 @@ _Responsable Op. & Log - Espace Maxo_
                   {notifEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
                 </Button>
               )}
+
+              <Button
+                variant="ghost"
+                onClick={() => lockCaisse()}
+                className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10"
+                title="Verrouiller la Caisse (auto après 5 min d'inactivité)"
+                data-testid="caisse-lock-btn"
+              >
+                <Lock className="w-5 h-5" />
+              </Button>
 
               <Button variant="ghost" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                 <LogOut className="w-5 h-5" />
