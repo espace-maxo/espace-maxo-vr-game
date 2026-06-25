@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Stabilité connexion Caisse (anti-faux-positif offline)]**
+  - Refonte `useOnlineStatus.js` avec hystérésis : 3 échecs consécutifs requis avant bascule offline (anciennement 1 seul échec basculait).
+  - Timeout ping passé de 5s → **10s** (tolérance 3G/4G/Wi-Fi MEA).
+  - Retry rapide (2.5s) après chaque échec sous le seuil au lieu d'attendre 15s.
+  - Polling adaptatif : 25s en régime stable, 5s en régime instable (récupération rapide).
+  - `navigator.offline` ne suffit plus à basculer offline → revérification immédiate par ping (les Wi-Fi captifs / réseaux MEA mentent souvent).
+  - Tests pytest backend : ping latency avg=142ms / p95=188ms / 20/20 OK (`/app/backend/tests/test_ping_stability_iter112.py`).
 - **[Feb 2026 — Aération onglet Mouvements (StockPage)]**
   - Header en 2 lignes claires : titre + meta `{N} ligne(s)` + badge synchro auto 60s, puis ligne d'actions séparée (4 boutons : Actualiser / Rattraper tout / Export CSV / Nouveau Mouvement).
   - Toggle catégorie compact : `Tout · N` / `🍹 Boissons · N` / `🍽️ Autres · N` (note italique de classification déplacée en tooltip via `title`).
