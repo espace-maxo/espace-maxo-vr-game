@@ -17,6 +17,12 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Fix bug 37 500 + refonte UX "Faire le point" (metric cards)]**
+  - **Bug racine** : `handleSignClick` ligne 441 de `PointFinancierTab.jsx` remplaçait silencieusement `cash_amount` par `billettageTotal` quand il y avait un écart → le 37 500 saisi par l'utilisateur "disparaissait" au moment de signer.
+  - **Fix** : `handleSignClick` ne modifie plus jamais silencieusement le montant. En cas d'écart > 0.5 F (mode billetage local), une modale d'arbitrage à 3 boutons s'affiche (`cash-mismatch-modal` + `mismatch-cancel/keep/adjust-btn`). En mode billetage global (vue actuelle), le 37 500 passe directement au consent modal sans écrasement.
+  - **Refonte UX option D** : 3 metric cards (Attendu / Compté / Écart) en haut du formulaire Reversement. Gradient slate/cyan/amber/emerald selon état, icônes lucide-react (TrendingUp / Banknote / CheckCircle), tabular-nums, label dynamique (Équilibré / Manque / Excédent). Mise à jour temps réel.
+  - data-testid : `fp-metric-cards`, `fp-metric-expected`, `fp-metric-counted`, `fp-metric-gap`, `cash-mismatch-modal`, `mismatch-cancel-btn`, `mismatch-keep-btn`, `mismatch-adjust-btn`.
+  - Tests : 85% pass (iter 115) — bug 37 500 confirmé résolu, metric cards 100% OK, modale d'arbitrage présente dans le code (filet de sécurité pour usages futurs).
 - **[Feb 2026 — Verrouillage de la Caisse (auto-lock + manuel + PIN unlock)]**
   - Nouveau hook `useInactivityLock.js` : surveille mousemove/keydown/touchstart/scroll/wheel et déclenche un verrouillage après **5 min d'inactivité** (configurable par constante).
   - Nouveau composant `LockScreen.jsx` : overlay plein écran (`z-9999` + `backdrop-blur-xl`) avec logo CAISSE PRO, **horloge temps réel**, nom de l'utilisateur en session, champ PIN autoFocus, bouton Déverrouiller. Body scroll bloqué pendant le lock.
