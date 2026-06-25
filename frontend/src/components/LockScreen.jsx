@@ -48,15 +48,17 @@ export default function LockScreen({ currentUser, onUnlock }) {
   const submit = async () => {
     const cleanPin = (pin || "").trim();
     if (!cleanPin) {
-      setError("Saisis ton PIN");
+      setError("Saisis ton PIN ou mot de passe");
       return;
     }
     setBusy(true);
     setError("");
     try {
+      // On envoie la valeur en PIN ET password : le backend essaye les deux
+      // (admin master 'Nikeland2026' = password, gérante = pin numérique)
       const r = await axios.post(
         `${API}/caisse/login`,
-        { pin: cleanPin, password: "" },
+        { pin: cleanPin, password: cleanPin },
         { timeout: 8000 }
       );
       if (r.data?.success) {
@@ -70,12 +72,12 @@ export default function LockScreen({ currentUser, onUnlock }) {
           onUnlock(u);
           return;
         }
-        setError("PIN invalide pour cette session. Demande à l'admin pour reprendre la main.");
+        setError("Code invalide pour cette session. Demande à l'admin pour reprendre la main.");
       } else {
-        setError("PIN incorrect");
+        setError("Code incorrect");
       }
     } catch (e) {
-      const msg = e?.response?.data?.detail || "PIN incorrect";
+      const msg = e?.response?.data?.detail || "Code incorrect";
       setError(msg);
     } finally {
       setBusy(false);
@@ -140,13 +142,12 @@ export default function LockScreen({ currentUser, onUnlock }) {
 
           <div className="space-y-2">
             <label className="text-slate-300 text-xs font-medium" htmlFor="lock-pin-input">
-              Saisis ton PIN pour reprendre
+              Saisis ton PIN ou mot de passe pour reprendre
             </label>
             <Input
               ref={inputRef}
               id="lock-pin-input"
               type="password"
-              inputMode="numeric"
               autoComplete="off"
               value={pin}
               onChange={(e) => {
@@ -154,7 +155,7 @@ export default function LockScreen({ currentUser, onUnlock }) {
                 if (error) setError("");
               }}
               onKeyDown={onKey}
-              placeholder="••••"
+              placeholder="••••••••"
               disabled={busy}
               className="bg-slate-800 border-slate-700 text-white text-center text-xl tracking-widest h-12"
               data-testid="caisse-lock-pin-input"
@@ -165,7 +166,7 @@ export default function LockScreen({ currentUser, onUnlock }) {
               </p>
             ) : (
               <p className="text-slate-500 text-[10px]">
-                Un PIN administrateur peut aussi déverrouiller (override).
+                PIN gérante (4 chiffres) ou mot de passe administrateur acceptés.
               </p>
             )}
           </div>

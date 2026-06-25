@@ -17,6 +17,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Fix LockScreen : reconnaissance du mot de passe Admin]**
+  - Cause : `LockScreen` envoyait `{pin: value, password: ""}` au backend → le password Admin `Nikeland2026` saisi dans le champ était envoyé en `pin` uniquement, jamais matché en tant que `password`.
+  - Fix : envoi de la valeur saisie **simultanément en `pin` ET `password`** → le backend `/api/caisse/login` essaie les deux et l'admin master `Nikeland2026` ouvre bien la session admin.
+  - Label du champ mis à jour : "PIN ou mot de passe" + indicateur "PIN gérante (4 chiffres) ou mot de passe administrateur acceptés".
+  - Validation backend curl : `Nikeland2026` → `role:"admin"` ✓ · PIN `2468` → `role:"manager"` ✓.
 - **[Feb 2026 — Fix bug 37 500 + refonte UX "Faire le point" (metric cards)]**
   - **Bug racine** : `handleSignClick` ligne 441 de `PointFinancierTab.jsx` remplaçait silencieusement `cash_amount` par `billettageTotal` quand il y avait un écart → le 37 500 saisi par l'utilisateur "disparaissait" au moment de signer.
   - **Fix** : `handleSignClick` ne modifie plus jamais silencieusement le montant. En cas d'écart > 0.5 F (mode billetage local), une modale d'arbitrage à 3 boutons s'affiche (`cash-mismatch-modal` + `mismatch-cancel/keep/adjust-btn`). En mode billetage global (vue actuelle), le 37 500 passe directement au consent modal sans écrasement.
