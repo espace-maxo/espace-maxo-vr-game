@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe, Pencil
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -324,6 +324,16 @@ const CaissePage = () => {
   const [viewInvoice, setViewInvoice] = useState(null);
   const [editInvoice, setEditInvoice] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  // Libellés personnalisables du modal "Ajouter un produit" (Admin uniquement)
+  const [productLabels, setProductLabels] = useState({
+    title_create: "Ajouter un produit",
+    title_edit: "Modifier le produit",
+    description: "",
+    is_custom: false,
+  });
+  const [showLabelsEditor, setShowLabelsEditor] = useState(false);
+  const [labelsForm, setLabelsForm] = useState({ title_create: "", title_edit: "", description: "" });
+  const [savingLabels, setSavingLabels] = useState(false);
   const [stockSuggestions, setStockSuggestions] = useState([]);
   const [showLinkStockModal, setShowLinkStockModal] = useState(false);
   const [linkStockTarget, setLinkStockTarget] = useState(null);
@@ -484,6 +494,85 @@ const CaissePage = () => {
       if (billettageDate !== today) setBillettageDate(today);
     }
   }, [currentUser, billettageDate]);
+
+  // Chargement des libellés personnalisés du modal "Ajouter un produit"
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await axios.get(`${API}/admin/ui-labels/caisse_product_add`);
+        if (!cancelled && r.data) {
+          setProductLabels({
+            title_create: r.data.title_create || "Ajouter un produit",
+            title_edit: r.data.title_edit || "Modifier le produit",
+            description: r.data.description || "",
+            is_custom: !!r.data.is_custom,
+          });
+        }
+      } catch (_) {
+        /* fallback aux défauts déjà en state */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
+  // Ouverture du modal d'édition des libellés (admin uniquement)
+  const openLabelsEditor = () => {
+    setLabelsForm({
+      title_create: productLabels.title_create,
+      title_edit: productLabels.title_edit,
+      description: productLabels.description,
+    });
+    setShowLabelsEditor(true);
+  };
+
+  // Sauvegarde des libellés personnalisés
+  const saveLabels = async () => {
+    setSavingLabels(true);
+    try {
+      const r = await axios.put(`${API}/admin/ui-labels/caisse_product_add`, {
+        key: "caisse_product_add",
+        title_create: labelsForm.title_create,
+        title_edit: labelsForm.title_edit,
+        description: labelsForm.description,
+        actor_name: currentUser?.full_name || currentUser?.username || "Admin",
+      });
+      setProductLabels({
+        title_create: r.data.title_create,
+        title_edit: r.data.title_edit,
+        description: r.data.description || "",
+        is_custom: true,
+      });
+      toast.success("Libellés mis à jour");
+      setShowLabelsEditor(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur lors de l'enregistrement");
+    } finally {
+      setSavingLabels(false);
+    }
+  };
+
+  // Restauration des libellés par défaut
+  const resetLabels = async () => {
+    if (!confirm("Restaurer les libellés par défaut ?")) return;
+    setSavingLabels(true);
+    try {
+      const r = await axios.delete(`${API}/admin/ui-labels/caisse_product_add`);
+      setProductLabels({
+        title_create: r.data.title_create,
+        title_edit: r.data.title_edit,
+        description: r.data.description || "",
+        is_custom: false,
+      });
+      toast.success("Libellés restaurés aux valeurs par défaut");
+      setShowLabelsEditor(false);
+    } catch (_) {
+      toast.error("Erreur lors de la restauration");
+    } finally {
+      setSavingLabels(false);
+    }
+  };
   // End date (inclusive). Par défaut = dimanche de la semaine courante (preset "Cette semaine").
   const [weekEndDate, setWeekEndDate] = useState(() => {
     const d = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -6979,7 +7068,31 @@ _Responsable Op. & Log - Espace Maxo_
       <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>{editProduct ? "Modifier le produit" : "Ajouter un produit"}</DialogTitle>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <DialogTitle data-testid="product-modal-title">
+                  {editProduct ? productLabels.title_edit : productLabels.title_create}
+                </DialogTitle>
+                {productLabels.description ? (
+                  <p className="text-xs text-slate-400 mt-1" data-testid="product-modal-description">
+                    {productLabels.description}
+                  </p>
+                ) : null}
+              </div>
+              {currentUser?.role === "admin" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={openLabelsEditor}
+                  className="h-7 px-2 text-amber-300 hover:bg-amber-500/10 flex-shrink-0"
+                  title="Modifier les libellés (Admin)"
+                  data-testid="open-labels-editor-btn"
+                >
+                  <Pencil className="w-3.5 h-3.5 mr-1" />
+                  <span className="text-[11px]">Libellés</span>
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -7076,6 +7189,103 @@ _Responsable Op. & Log - Espace Maxo_
               </Select>
             </div>
             <Button onClick={saveProduct} className="w-full bg-purple-500 hover:bg-purple-600">Enregistrer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal d'édition des libellés du modal "Ajouter un produit" (Admin uniquement) */}
+      <Dialog open={showLabelsEditor} onOpenChange={setShowLabelsEditor}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-amber-400" />
+              Modifier les libellés du modal "Ajouter un produit"
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Personnalise le titre et la description vus par toutes les caissières lorsqu'elles ouvrent ce formulaire.
+              {productLabels.is_custom && (
+                <span className="ml-2 text-emerald-300">· Libellés personnalisés actifs</span>
+              )}
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Titre — mode création</Label>
+              <Input
+                value={labelsForm.title_create}
+                onChange={(e) => setLabelsForm({ ...labelsForm, title_create: e.target.value })}
+                placeholder="Ex: Ajouter un article au menu"
+                maxLength={80}
+                className="bg-slate-900 border-slate-700"
+                data-testid="labels-title-create"
+              />
+              <p className="text-[10px] text-slate-500">{labelsForm.title_create.length}/80 caractères</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Titre — mode modification</Label>
+              <Input
+                value={labelsForm.title_edit}
+                onChange={(e) => setLabelsForm({ ...labelsForm, title_edit: e.target.value })}
+                placeholder="Ex: Modifier larticle"
+                maxLength={80}
+                className="bg-slate-900 border-slate-700"
+                data-testid="labels-title-edit"
+              />
+              <p className="text-[10px] text-slate-500">{labelsForm.title_edit.length}/80 caractères</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Description (optionnelle)</Label>
+              <Input
+                value={labelsForm.description}
+                onChange={(e) => setLabelsForm({ ...labelsForm, description: e.target.value })}
+                placeholder="Ex: Renseignez nom, catégorie et prix de vente"
+                maxLength={160}
+                className="bg-slate-900 border-slate-700"
+                data-testid="labels-description"
+              />
+              <p className="text-[10px] text-slate-500">{labelsForm.description.length}/160 caractères</p>
+            </div>
+
+            {/* Aperçu temps réel */}
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">Aperçu</p>
+              <p className="text-white font-semibold">
+                {labelsForm.title_create || "Ajouter un produit"}
+              </p>
+              {labelsForm.description ? (
+                <p className="text-xs text-slate-400 mt-1">{labelsForm.description}</p>
+              ) : null}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 flex-wrap">
+              {productLabels.is_custom && (
+                <Button
+                  variant="outline"
+                  onClick={resetLabels}
+                  disabled={savingLabels}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  data-testid="labels-reset-btn"
+                >
+                  Restaurer les défauts
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                onClick={() => setShowLabelsEditor(false)}
+                disabled={savingLabels}
+                className="text-slate-300"
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={saveLabels}
+                disabled={savingLabels || !labelsForm.title_create.trim() || !labelsForm.title_edit.trim()}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                data-testid="labels-save-btn"
+              >
+                {savingLabels ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

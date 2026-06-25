@@ -67,6 +67,7 @@ from routers.offline_prealloc import router as offline_prealloc_router
 from routers.products import router as caisse_products_router, set_db as set_caisse_products_db
 from routers.promo_vacances import router as promo_vacances_router
 from routers.admin_site_notifications import router as admin_site_notifications_router
+from routers.admin_ui_labels import router as admin_ui_labels_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -236,6 +237,7 @@ api_router.include_router(offline_prealloc_router)
 api_router.include_router(caisse_products_router)
 api_router.include_router(promo_vacances_router)
 api_router.include_router(admin_site_notifications_router)
+api_router.include_router(admin_ui_labels_router)
 
 # Configure logging
 logging.basicConfig(

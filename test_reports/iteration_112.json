@@ -1,0 +1,68 @@
+{
+  "summary": "Feature 'Libellés personnalisables du modal Ajouter un produit' (iter 112) — backend + frontend testing. Backend: 7/7 pytest tests passed (GET defaults, PUT custom, GET after PUT, DELETE reset, 404 unknown key on GET, 404 unknown key on PUT, partial update preservation). Frontend: 12/12 critical UI steps passed (login Admin/Nikeland2026, ouverture Produits → 'Ajouter un produit' → titre par défaut → bouton 'Libellés' visible → édition + save → titre custom + description appliqués → reset → titre revient au défaut → toast succès affiché). Contrôle d'accès admin-only validé : avec PIN 2468 (Resp. Op. & Log, role manager), le bouton 'Libellés' est ABSENT du modal alors que le formulaire 'Ajouter un produit' reste fonctionnel.",
+  "backend_tests": {
+    "file": "/app/backend/tests/test_admin_ui_labels_iter112.py",
+    "junit_xml": "/app/test_reports/pytest/admin_ui_labels_iter112.xml",
+    "passed": 7,
+    "failed": 0,
+    "tests": [
+      "test_get_defaults_when_no_custom",
+      "test_put_custom_labels",
+      "test_get_returns_custom_after_put",
+      "test_delete_resets_to_defaults",
+      "test_unknown_key_returns_404",
+      "test_put_unknown_key_returns_404",
+      "test_partial_update_preserves_other_fields"
+    ]
+  },
+  "frontend_tests": {
+    "admin_flow": {
+      "login": "Admin / Nikeland2026 OK (NB: review_request mentionnait Admin2026, mais /app/memory/test_credentials.md indique Nikeland2026 — Nikeland2026 utilisé avec succès)",
+      "product_modal_default_title": "'Ajouter un produit' ✓",
+      "labels_button_visible_for_admin": true,
+      "labels_editor_dialog_fields": "labels-title-create OK, labels-title-edit OK, labels-description OK + aperçu temps réel + boutons Annuler/Enregistrer présents",
+      "save_custom_labels": "Titre 'Ajouter un article au menu' / 'Modifier l'article' / Desc 'Renseignez nom et prix' → toast 'Libellés mis à jour' ✓",
+      "product_modal_after_save": "Title = 'Ajouter un article au menu', description = 'Renseignez nom et prix' (grise en dessous) ✓",
+      "reset_to_defaults": "Confirmation acceptée → toast → titre revient à 'Ajouter un produit' ✓",
+      "regression_form_fields": "Champs Nom / Prix / Unité / Catégorie + bouton Enregistrer présents et inchangés ✓"
+    },
+    "non_admin_flow": {
+      "login": "PIN 2468 (Mères AHOUANDJINOU / Resp. Op. & Log) OK",
+      "product_modal_opens": true,
+      "labels_button_absent_for_non_admin": true,
+      "default_title_still_shown": "'Ajouter un produit' (modal reste fonctionnel pour le manager)"
+    }
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialog 'Modifier les libellés'", "issues": ["Console warning Radix : 'Missing Description or aria-describedby={undefined} for {DialogContent}' — pré-existant sur d'autres modals aussi, non-bloquant mais à corriger pour l'accessibilité en ajoutant <DialogDescription> ou aria-describedby."]}
+    ]
+  },
+  "critical_code_review_comments": [
+    "admin_ui_labels.py L60 : endpoint PUT explicitement sans auth ('pas d'auth ici car déjà gérée à l'entrée caisse') — l'auth admin est uniquement enforced côté frontend (currentUser?.role === 'admin' qui cache le bouton). En théorie n'importe qui connaissant l'URL peut PUT/DELETE les libellés via curl. Non-bloquant car la collection mongo est globale et le risque est limité (libellés UI uniquement), mais idéal serait d'ajouter une vérif via header X-Admin-Username ou JWT.",
+    "CaissePage.jsx fait déjà 9245 lignes — bien au-delà du seuil de 700. Recommandation forte d'extraction en sous-composants (existe déjà partiellement avec ProductsTab.jsx etc.). Le nouveau Dialog d'édition des libellés (L7197-7290) pourrait être extrait en LabelsEditorDialog.jsx.",
+    "admin_ui_labels.py L52 : le merge `{**defaults, **{k: v for k, v in doc.items() if v not in (None, '')}}` filtre les chaînes vides — c'est OK mais signifie qu'une description explicitement vidée par l'admin ne peut pas écraser une description par défaut non vide (pas un problème ici car defaults.description='' mais à garder en tête pour les futures clés).",
+    "Aucun rate-limit / debounce sur PUT — un admin malicieux pourrait spammer mais impact minime."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_admin_ui_labels_iter112.py",
+    "/app/test_reports/pytest/admin_ui_labels_iter112.xml"
+  ],
+  "action_items": [
+    "(Optionnel sécurité) Ajouter une vérification d'auth admin côté backend sur PUT/DELETE /api/admin/ui-labels/{key} (header X-Admin-Username ou session) plutôt que de se reposer uniquement sur le masquage frontend.",
+    "(Optionnel a11y) Ajouter <DialogDescription> ou aria-describedby sur les DialogContent pour supprimer les warnings Radix dans la console."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_ui_labels_iter112.py (nouveau test pytest)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (12/12 critères + contrôle d'accès non-admin)"},
+  "test_credentials": "Caisse Admin : Admin / Nikeland2026 (depuis /app/memory/test_credentials.md). Non-admin : PIN 2468 (Mères AHOUANDJINOU, Resp. Op. & Log). NB : review_request mentionnait 'admin/Admin2026' mais le password réel est Nikeland2026.",
+  "seed_data_creation": "Aucune. La collection mongo 'admin_ui_labels' est nettoyée par fixture pytest après les tests (delete final).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter112 : feature 'Libellés personnalisables du modal Ajouter un produit' validée end-to-end. Backend endpoints : GET/PUT/DELETE /api/admin/ui-labels/{key} avec key='caisse_product_add'. data-testid frontend : product-modal-title, product-modal-description, open-labels-editor-btn (visible admin only), labels-title-create, labels-title-edit, labels-description, labels-save-btn, labels-reset-btn. Le contrôle d'accès est UI-only (frontend), non enforced backend — voir action_items pour amélioration sécurité. Test pytest réutilisable : /app/backend/tests/test_admin_ui_labels_iter112.py.",
+  "rca_of_the_issue": "N/A - feature implémentée correctement, tous les tests passent."
+}
