@@ -1,0 +1,60 @@
+{
+  "summary": "Iter 115 — Frontend-only e2e validation of PointFinancierTab UX refactor (3 metric cards) + cash-mismatch-modal fix in 'Faire le point' > 'Reversement'. Metric cards + 37500 preservation bug fix validated end-to-end. Mismatch modal flow could NOT be exercised live because in production usage (CaissePage.jsx L6774) PointFinancierTab is mounted with hideBillettage={true}, which makes billettageRequired=false → the new cash-mismatch-modal code path is dead in this view (the new code is correct, but unreachable through the production UI).",
+  "backend_tests": {"executed": false, "reason": "Review explicitly frontend-only."},
+  "frontend_tests": {
+    "login_manager_pin_2468": "OK — Authenticated as Mères AHOUANDJINOU (Resp. Op.)",
+    "navigation": "OK — onglet 'Faire le point' → sous-onglet 'Reversement' charge le formulaire (data-testid='point-financier-tab')",
+    "metric_cards_render": {
+      "fp-metric-cards": "OK — grid 3 cards visible",
+      "fp-metric-expected": "OK — '0 FCFA' (aucune facture validée sur 25 juin 2026, cohérent)",
+      "fp-metric-counted": "OK — '0 FCFA' initial, cyan",
+      "fp-metric-gap": "OK — '0FCFA' initial (équilibré)"
+    },
+    "metric_realtime_update": {
+      "cash_37500": "Counted devient '37 500 FCFA' instantanément, Gap devient '+37 500 FCFA' avec couleur AMBRE et label 'Excédent' (cohérent: Counted > Expected=0)",
+      "icon_check": "TrendingUp icon affiché (excédent), couleur amber-200",
+      "card_borders_dynamic": "border-amber-500/40 appliqué dynamiquement — UX pro"
+    },
+    "bug_fix_37500_preservation": {
+      "scenario": "Saisie cash_amount=37500, click Signer",
+      "result": "OK — Modale 'Signature du Reversement' s'ouvre avec 'Total: 37 500 F' INTACT. Aucune modification silencieuse du montant. Le bug racine (handleSignClick remplaçait cash_amount par billettageTotal) est corrigé.",
+      "consent_modal_opens": "OK — Période: Journée du 25 juin 2026, Destination: Remis a l'administrateur, checkbox de consentement présente, boutons 'Annuler' et 'Je signe' visibles."
+    },
+    "mismatch_modal_code_present": "OK — Code source vérifié lignes 1262-1330 de PointFinancierTab.jsx : data-testid='cash-mismatch-modal', 'mismatch-cancel-btn', 'mismatch-keep-btn', 'mismatch-adjust-btn' sont tous présents. handleSignClick L426-446 + resolveMismatch L453-463 correctement câblés.",
+    "mismatch_modal_live_test": "BLOQUÉ — Impossible de déclencher la modale dans l'UI actuelle : PointFinancierTab est monté avec hideBillettage={true} (CaissePage.jsx L6774), donc billettageRequired=false → handleSignClick saute directement à setShowConsentModal sans passer par le check d'écart. La section locale fp-billettage-section et le bouton fp-toggle-billettage ne sont PAS rendus."
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Cash-mismatch-modal arbitration flow",
+        "issue": "La modale d'arbitrage 'cash-mismatch-modal' et ses 3 boutons (cancel/keep/adjust) sont du code mort dans la vue Reversement actuelle parce que CaissePage.jsx L6774 utilise hideBillettage={true}. Le billettage est géré globalement par BillettageGlobalCard, qui n'interagit pas avec le state local de PointFinancierTab. Conséquence : un user qui saisit 37500 en Espèces ET un billetage global de 5000 NE déclenchera PAS la modale d'écart côté formulaire — le 37500 passera directement au consent modal puis au backend. Le bug 'silent override' est bien corrigé, mais l'UX promise (modale d'arbitrage explicite avec 3 boutons) ne sera visible qu'en cas de réutilisation de PointFinancierTab avec hideBillettage=false.",
+        "affected_selectors": ["[data-testid='cash-mismatch-modal']", "[data-testid='mismatch-cancel-btn']", "[data-testid='mismatch-keep-btn']", "[data-testid='mismatch-adjust-btn']"]
+      }
+    ],
+    "design_issues": [
+      {"screen": "Reversement form", "issues": ["RAS — les 3 metric cards (Attendu/Compté/Écart) sont esthétiquement très pro : gradient slate/cyan/amber selon état, icônes Lucide (TrendingUp/Banknote/CheckCircle/TrendingDown), tabular-nums pour alignement, label dynamique (Équilibré/Manque/Excédent). Refonte UX réussie."]}
+    ]
+  },
+  "critical_code_review_comments": [
+    "PointFinancierTab.jsx L421 : billettageRequired = !hideBillettage && parseFloat(form.cash_amount || 0) > 0 — avec hideBillettage=true (mode production actuel), la nouvelle modale cash-mismatch-modal ne sera JAMAIS déclenchée. Si l'intention est de protéger contre les écarts billetage/espèces dans le mode global aussi, il faut soit (a) faire que BillettageGlobalCard partage son total avec PointFinancierTab via context/prop pour réactiver la branche mismatch, soit (b) déplacer la modale d'arbitrage côté BillettageGlobalCard.",
+    "PointFinancierTab.jsx L455 : `setForm(prev => ({ ...prev, cash_amount: billettageTotal }))` dans resolveMismatch('adjust') — bonne pratique, fonctionnel.",
+    "Les 3 metric cards (L920-984) sont rendues INCONDITIONNELLEMENT (avant le bloc `currentPoint && ...` L986). Bien — la gérante voit la cible 'Attendu' AVANT même d'avoir créé un brouillon. UX excellente.",
+    "L952-983 : la card Écart est calculée à la volée via IIFE inline — fonctionne mais 32 lignes inline rendent le JSX un peu chargé. Acceptable.",
+    "PointFinancierTab.jsx reste à 1564 lignes — toujours en-dessous du seuil 700 lignes recommandé pour split (déjà noté précédemment). Pas critique."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Décider si la modale cash-mismatch-modal doit être atteignable depuis la vue Reversement actuelle. Deux options :\n  (a) Réactiver le billetage local (passer hideBillettage={false} dans CaissePage.jsx L6774) — risque doublon avec BillettageGlobalCard.\n  (b) Déplacer la logique de détection d'écart dans BillettageGlobalCard et lui faire afficher la même modale d'arbitrage (recommandé : single source of truth).\n  (c) Statu quo : conserver le fix comme protection défensive pour d'autres usages futurs (admin direct, vue weekly, etc.) — accepter que la modale soit dead-code dans la vue gérante quotidienne.",
+    "Optionnel : ajouter un test e2e couvrant hideBillettage=false (par ex. via une nouvelle prop ou un wrapper de test) pour éviter régression de la branche mismatch."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "85% — 3 metric cards 100% OK + protection 37500 OK + consent modal OK + code mismatch correctement écrit ; mais flow live mismatch modal non atteignable dans la vue prod."},
+  "test_credentials": "Caisse Manager PIN 2468 (Mères AHOUANDJINOU). Source /app/memory/test_credentials.md.",
+  "seed_data_creation": "Aucune.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 115 : le fix du bug 37500 fonctionne — le montant n'est plus silencieusement remplacé. Les 3 metric cards (data-testid='fp-metric-cards' / 'fp-metric-expected' / 'fp-metric-counted' / 'fp-metric-gap') sont en place et fonctionnent en temps réel. PROBLÈME ARCHITECTURAL : la modale d'arbitrage cash-mismatch-modal est inatteignable dans la vue Reversement actuelle parce que hideBillettage={true} dans CaissePage.jsx L6774 fait que billettageRequired=false. Si on veut tester la modale d'arbitrage, il faut soit changer la prop hideBillettage à false (et retirer/désactiver BillettageGlobalCard pour éviter doublon), soit propager le billetage global vers PointFinancierTab. À discuter avec l'utilisateur avant de relancer un test.",
+  "rca_of_the_issue": "RCA bug origine '37500 ne passe pas' : avant ce fix, handleSignClick ligne 441 faisait `setForm({...cash_amount: billettageTotal})` silencieusement quand billettage ≠ cash_amount. RÉSULTAT : Le 37500 saisi était écrasé par la somme du billetage (différente, ou 0 si vide). La gérante voyait son montant 'disparaître' au moment de signer. FIX (validé) : handleSignClick branche désormais sur 3 cas : (1) billetage non saisi → toast warning + scroll, (2) écart > 0.5 F → ouvrir cash-mismatch-modal avec 3 choix explicites, (3) ok → consent modal. CAS PRODUCTION ACTUEL : hideBillettage=true → billettageRequired=false → on tombe direct au cas (3), le 37500 est préservé. Le bug user-facing est résolu. La modale d'arbitrage est du code défensif inactif dans cette vue (voir action_items)."
+}

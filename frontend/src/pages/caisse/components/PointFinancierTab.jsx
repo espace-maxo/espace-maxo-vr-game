@@ -424,7 +424,7 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
     : true; // Pas d'especes -> billetage pas necessaire
 
   const handleSignClick = () => {
-    // 1. Especes > 0 mais aucune saisie de billetage → on ouvre la section et on scrolle dessus.
+    // 1. Espèces > 0 mais aucune saisie de billetage → on ouvre la section et on scrolle dessus.
     if (billettageRequired && billettageTotal === 0) {
       setShowBillettage(true);
       toast.warning("Veuillez d'abord effectuer le billettage des especes avant de signer.");
@@ -434,14 +434,30 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
       }, 250);
       return;
     }
-    // 2. Billetage saisi mais pas applique (ou modifie apres application) → on l'applique automatiquement
-    //    si la difference est claire ; sinon on demande confirmation à l'utilisateur.
+    // 2. Écart entre billetage compté et montant Espèces saisi → ouvrir la modale d'arbitrage
+    //    (au lieu de remplacer silencieusement le montant — cause du bug "37500 ne passe pas").
     if (billettageRequired && Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)) > 0.5) {
-      // Auto-apply le billetage comme nouveau cash_amount → plus besoin de cliquer "Appliquer"
+      setMismatchOpen(true);
+      return;
+    }
+    // 3. Tout est bon → ouvrir la modale de signature
+    setConsentChecked(false);
+    setShowConsentModal(true);
+  };
+
+  // Modale d'arbitrage d'écart entre billetage compté et montant Espèces saisi.
+  // L'utilisateur choisit explicitement :
+  //   - Ajuster au compté (cash_amount := billettageTotal)
+  //   - Garder le montant saisi (cash_amount inchangé) — un motif d'écart sera demandé à la validation admin
+  const [mismatchOpen, setMismatchOpen] = useState(false);
+  const resolveMismatch = (mode) => {
+    if (mode === "adjust") {
       setForm(prev => ({ ...prev, cash_amount: billettageTotal }));
       toast.info(`Espèces ajustées au billetage : ${formatPrice(billettageTotal)} F`);
+    } else if (mode === "keep") {
+      toast.info(`Montant saisi conservé : ${formatPrice(parseFloat(form.cash_amount || 0))} F (motif d'écart demandé à l'admin)`);
     }
-    // 3. Tout est bon (ou ajusté) → ouvrir la modale de signature
+    setMismatchOpen(false);
     setConsentChecked(false);
     setShowConsentModal(true);
   };
@@ -897,6 +913,76 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
 
       {CategorySelector}
 
+      {/* ════════════════════════════════════════════════════════════════════════
+          MÉTRIQUES — Vue pro en 3 cards : Attendu (théorique) · Compté (saisie) · Écart
+          Permet à la gérante de voir en un coup d'oeil l'état du reversement avant signature.
+      ═══════════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="fp-metric-cards">
+        {/* Attendu */}
+        <Card className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Attendu</span>
+              <TrendingUp className="w-4 h-4 text-slate-500" />
+            </div>
+            <p className="text-2xl font-bold text-slate-200 tabular-nums" data-testid="fp-metric-expected">
+              {formatPrice(totalRecorded)} <span className="text-sm text-slate-500 font-normal">FCFA</span>
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">d'après les factures validées</p>
+          </CardContent>
+        </Card>
+
+        {/* Compté (saisi par la gérante) */}
+        <Card className="bg-gradient-to-br from-cyan-900/30 to-blue-900/20 border-cyan-500/40">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-cyan-300">Compté</span>
+              <Banknote className="w-4 h-4 text-cyan-400" />
+            </div>
+            <p className="text-2xl font-bold text-cyan-200 tabular-nums" data-testid="fp-metric-counted">
+              {formatPrice(computedTotal)} <span className="text-sm text-cyan-400/60 font-normal">FCFA</span>
+            </p>
+            <p className="text-[10px] text-cyan-300/70 mt-1">
+              Espèces + Momo + Chèque + Crédit
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Écart (coloré selon signe) */}
+        {(() => {
+          const gap = computedTotal - totalRecorded;
+          const absGap = Math.abs(gap);
+          const isMatched = absGap < 1;
+          const isShort = gap < 0;
+          const gradient = isMatched
+            ? "from-emerald-900/30 to-green-900/20"
+            : isShort
+            ? "from-rose-900/30 to-red-900/20"
+            : "from-amber-900/30 to-orange-900/20";
+          const border = isMatched ? "border-emerald-500/40" : isShort ? "border-rose-500/40" : "border-amber-500/40";
+          const textCol = isMatched ? "text-emerald-200" : isShort ? "text-rose-200" : "text-amber-200";
+          const label = isMatched ? "Équilibré" : isShort ? "Manque" : "Excédent";
+          const Icon = isMatched ? CheckCircle : isShort ? TrendingDown : TrendingUp;
+          return (
+            <Card className={`bg-gradient-to-br ${gradient} border ${border}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-[10px] uppercase tracking-wider font-bold ${textCol}`}>{label}</span>
+                  <Icon className={`w-4 h-4 ${textCol}`} />
+                </div>
+                <p className={`text-2xl font-bold ${textCol} tabular-nums`} data-testid="fp-metric-gap">
+                  {isMatched ? "0" : `${gap > 0 ? "+" : ""}${formatPrice(gap)}`}
+                  <span className="text-sm font-normal opacity-70 ml-1">FCFA</span>
+                </p>
+                <p className="text-[10px] opacity-70 mt-1">
+                  {isMatched ? "Compté = Attendu" : `Écart ${isShort ? "à expliquer" : "supplémentaire"}`}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })()}
+      </div>
+
       {currentPoint && (
         <Card className={`bg-slate-800/40 border ${CATEGORY_BORDER_CLASS[activeCategory]}`}>
           <CardContent className="p-4 flex items-center gap-3 flex-wrap">
@@ -1167,6 +1253,81 @@ export default function PointFinancierTab({ currentUser, onGotoHebdo, fixedCateg
 
       {!currentPoint && (<Card className="bg-slate-800/30 border-slate-700"><CardContent className="p-6 text-center"><AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" /><p className="text-slate-400">Aucun reversement pour cette periode.</p>{canEdit && <p className="text-slate-500 text-sm mt-1">Saisissez les montants et enregistrez.</p>}</CardContent></Card>)}
       <WorkflowGuide step={isPending || !currentPoint ? 1 : (isSigned && !isAdminValidated ? 2 : 3)} />
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          Modale d'arbitrage d'ÉCART entre Billetage compté et Espèces saisies.
+          Remplace l'ancien comportement qui modifiait le montant SANS prévenir
+          (cause du bug "37 500 ne passe pas" rapporté par l'utilisateur).
+      ═══════════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={mismatchOpen} onOpenChange={setMismatchOpen}>
+        <DialogContent className="bg-slate-900 border-amber-500/40 max-w-lg" data-testid="cash-mismatch-modal">
+          <DialogHeader>
+            <DialogTitle className="text-amber-200 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-400" />
+              Écart détecté entre billetage et espèces saisies
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Le montant des espèces que tu as renseigné ne correspond pas à la somme des billets et pièces que tu as comptés.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-slate-800/60 border border-slate-700 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Espèces saisies</p>
+                <p className="text-lg font-bold text-cyan-300 tabular-nums">
+                  {formatPrice(parseFloat(form.cash_amount || 0))} F
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 border border-slate-700 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Billetage compté</p>
+                <p className="text-lg font-bold text-emerald-300 tabular-nums">
+                  {formatPrice(billettageTotal)} F
+                </p>
+              </div>
+              <div className={`rounded-lg border p-3 ${
+                Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)) > 0.5
+                  ? "bg-rose-500/10 border-rose-500/40"
+                  : "bg-emerald-500/10 border-emerald-500/40"
+              }`}>
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Écart</p>
+                <p className="text-lg font-bold text-rose-200 tabular-nums">
+                  {formatPrice(Math.abs(billettageTotal - parseFloat(form.cash_amount || 0)))} F
+                </p>
+              </div>
+            </div>
+            <div className="rounded bg-slate-800/40 p-3 text-xs text-slate-400 space-y-1">
+              <p><strong className="text-slate-200">Que faire ?</strong></p>
+              <p>• <strong className="text-cyan-300">Ajuster au compté</strong> : Le montant Espèces sera remplacé par le total du billetage ({formatPrice(billettageTotal)} F). Recommandé si tu fais confiance à ton décompte.</p>
+              <p>• <strong className="text-amber-300">Garder ce que j'ai saisi</strong> : Le montant {formatPrice(parseFloat(form.cash_amount || 0))} F reste tel quel. Un motif d'écart sera demandé par l'administrateur lors de la validation.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end flex-wrap">
+            <Button
+              variant="ghost"
+              onClick={() => setMismatchOpen(false)}
+              className="text-slate-300"
+              data-testid="mismatch-cancel-btn"
+            >
+              Retour
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => resolveMismatch("keep")}
+              className="border-amber-500/50 text-amber-200 hover:bg-amber-500/10"
+              data-testid="mismatch-keep-btn"
+            >
+              Garder ce que j'ai saisi
+            </Button>
+            <Button
+              onClick={() => resolveMismatch("adjust")}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              data-testid="mismatch-adjust-btn"
+            >
+              Ajuster au compté ({formatPrice(billettageTotal)} F)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Consent Modal */}
       <Dialog open={showConsentModal} onOpenChange={setShowConsentModal}>
