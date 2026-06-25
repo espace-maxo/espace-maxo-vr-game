@@ -16,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Coins, Save, RefreshCw, CheckCircle2, AlertTriangle, Banknote } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Coins, Save, RefreshCw, CheckCircle2, AlertTriangle, Banknote, AlertCircle } from "lucide-react";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND}/api`;
@@ -36,6 +38,11 @@ const BillettageGlobalCard = ({ date, currentUser }) => {
   const [reconciliation, setReconciliation] = useState(null);
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [savedBy, setSavedBy] = useState("");
+  // ── Modale d'arbitrage d'écart (cash-mismatch-modal-global) ───────────────
+  // Quand le compté ≠ attendu, on demande à l'utilisateur de confirmer
+  // explicitement l'enregistrement avec un motif d'écart obligatoire.
+  const [mismatchOpen, setMismatchOpen] = useState(false);
+  const [mismatchReason, setMismatchReason] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!date) return;
@@ -74,7 +81,8 @@ const BillettageGlobalCard = ({ date, currentUser }) => {
     setDenoms((p) => ({ ...p, [String(denom)]: cleaned === "" ? "" : parseInt(cleaned, 10) }));
   };
 
-  const handleSave = async () => {
+  // Logique pure d'enregistrement — utilisée par handleSave et par la modale d'arbitrage
+  const doSave = async (extraNote = "") => {
     setSaving(true);
     try {
       const cleanDenoms = {};
@@ -82,14 +90,24 @@ const BillettageGlobalCard = ({ date, currentUser }) => {
         const v = parseInt(denoms[String(d)] || 0, 10) || 0;
         if (v > 0) cleanDenoms[String(d)] = v;
       }
+      // Enrichit les notes avec le motif d'écart si présent
+      const finalNotes = extraNote
+        ? (notes ? `${notes}\n[Écart confirmé] ${extraNote}` : `[Écart confirmé] ${extraNote}`)
+        : notes;
       const res = await axios.post(`${API}/billettage`, {
         date,
         denominations: cleanDenoms,
-        notes,
+        notes: finalNotes,
         actor_name: currentUser?.full_name || currentUser?.username || "Caisse",
       });
       if (res.data?.success) {
-        toast.success(`Billettage enregistré : ${fmt(total)} F`);
+        if (extraNote) {
+          toast.success(`Billettage enregistré avec écart : ${fmt(total)} F`);
+        } else {
+          toast.success(`Billettage enregistré : ${fmt(total)} F`);
+        }
+        setMismatchOpen(false);
+        setMismatchReason("");
         await fetchData();
       }
     } catch (e) {
@@ -97,6 +115,24 @@ const BillettageGlobalCard = ({ date, currentUser }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    // Si écart > 0.5 F entre compté et attendu → on demande confirmation explicite
+    if (hasExpected && Math.abs(difference) > 0.5) {
+      setMismatchOpen(true);
+      return;
+    }
+    await doSave("");
+  };
+
+  const confirmSaveWithGap = async () => {
+    const motif = (mismatchReason || "").trim();
+    if (!motif) {
+      toast.error("Motif d'écart obligatoire pour enregistrer.");
+      return;
+    }
+    await doSave(motif);
   };
 
   return (
@@ -222,6 +258,88 @@ const BillettageGlobalCard = ({ date, currentUser }) => {
           </p>
         )}
       </CardContent>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          Modale d'arbitrage d'écart Billettage Global (cash-mismatch-modal-global)
+          S'ouvre quand le total compté ≠ total attendu. Demande un motif
+          obligatoire avant d'autoriser l'enregistrement.
+      ═══════════════════════════════════════════════════════════════════════════ */}
+      <Dialog
+        open={mismatchOpen}
+        onOpenChange={(o) => {
+          if (!o) { setMismatchOpen(false); setMismatchReason(""); }
+        }}
+      >
+        <DialogContent className="bg-slate-900 border-amber-500/40 max-w-lg" data-testid="cash-mismatch-modal-global">
+          <DialogHeader>
+            <DialogTitle className="text-amber-200 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-400" />
+              Écart entre billetage et attendu
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Le total compté ne correspond pas au total attendu des reversements du jour.
+              Indique un motif clair avant d'enregistrer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-slate-800/60 border border-slate-700 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Compté</p>
+                <p className="text-lg font-bold text-cyan-300 tabular-nums">{fmt(total)} F</p>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 border border-slate-700 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Attendu</p>
+                <p className="text-lg font-bold text-emerald-300 tabular-nums">{fmt(expected)} F</p>
+              </div>
+              <div className={`rounded-lg border p-3 ${difference < 0 ? "bg-rose-500/10 border-rose-500/40" : "bg-blue-500/10 border-blue-500/40"}`}>
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">{difference < 0 ? "Manque" : "Excédent"}</p>
+                <p className={`text-lg font-bold tabular-nums ${difference < 0 ? "text-rose-200" : "text-blue-200"}`}>
+                  {difference > 0 ? "+" : ""}{fmt(difference)} F
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-300 text-sm">Motif de l'écart (obligatoire)</Label>
+              <Textarea
+                value={mismatchReason}
+                onChange={(e) => setMismatchReason(e.target.value)}
+                placeholder="Ex: Pourboire client non comptabilisé · Erreur de dénomination · Manquant à vérifier avec serveuse Aïcha…"
+                className="bg-slate-800 border-slate-700 text-white min-h-[80px]"
+                maxLength={300}
+                data-testid="billettage-mismatch-reason"
+              />
+              <p className="text-[10px] text-slate-500 text-right">{mismatchReason.length}/300</p>
+            </div>
+
+            <div className="rounded bg-amber-500/5 border border-amber-500/20 p-2.5 text-xs text-amber-200/90">
+              <strong>⚠️ Attention :</strong> Cet écart sera enregistré dans les notes du billetage et visible
+              par l'admin lors de la validation des reversements. Si tu veux corriger, clique sur "Vérifier"
+              et recompte tes billets/pièces.
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end flex-wrap">
+            <Button
+              variant="ghost"
+              onClick={() => { setMismatchOpen(false); setMismatchReason(""); }}
+              disabled={saving}
+              className="text-slate-300"
+              data-testid="billettage-mismatch-cancel"
+            >
+              Vérifier le billettage
+            </Button>
+            <Button
+              onClick={confirmSaveWithGap}
+              disabled={saving || !mismatchReason.trim()}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              data-testid="billettage-mismatch-confirm"
+            >
+              <Save className="w-4 h-4 mr-1" />
+              {saving ? "Enregistrement…" : "Enregistrer avec écart"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
