@@ -17,6 +17,10 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Amélioration UX "Faire le point" + DayClosureGuard]**
+  - `CaissePage.jsx` : suppression du state orphelin `point-hebdo` (état initial direct `reversement`), simplification de la logique des `TabsTrigger`, ajout d'icônes + sous-labels descriptifs (`· Billettage + clôture` / `· Archives`).
+  - `DayClosureGuard.jsx` : **skeleton de chargement** (data-testid `day-closure-loading`), **panneau d'erreur réseau** avec bouton "Réessayer" + date-picker (data-testid `day-closure-error` / `day-closure-retry-btn`), **Dialog mot de passe Shadcn** (`day-closure-pw-input` / `day-closure-pw-submit`) qui remplace l'horrible `window.prompt()` natif. Toast d'erreur explicite sur tous les échecs réseau.
+  - Tests : 8/8 critères Playwright PASS (iteration 113). Aucune régression sur le formulaire PointFinancier ou le contenu Reversement.
 - **[Feb 2026 — Libellés personnalisables du modal "Ajouter un produit" (Caisse)]**
   - Nouveau router backend `/app/backend/routers/admin_ui_labels.py` avec endpoints `GET/PUT/DELETE /api/admin/ui-labels/{key}` (clé `caisse_product_add` pour démarrer).
   - L'admin Caisse peut désormais modifier inline le **titre création**, **titre modification** et **description optionnelle** du modal "Ajouter un produit" via un bouton ✏️ "Libellés" visible uniquement pour `role === "admin"`.
