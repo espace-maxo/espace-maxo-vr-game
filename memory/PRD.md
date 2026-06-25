@@ -17,6 +17,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Verrouillage de la Caisse (auto-lock + manuel + PIN unlock)]**
+  - Nouveau hook `useInactivityLock.js` : surveille mousemove/keydown/touchstart/scroll/wheel et déclenche un verrouillage après **5 min d'inactivité** (configurable par constante).
+  - Nouveau composant `LockScreen.jsx` : overlay plein écran (`z-9999` + `backdrop-blur-xl`) avec logo CAISSE PRO, **horloge temps réel**, nom de l'utilisateur en session, champ PIN autoFocus, bouton Déverrouiller. Body scroll bloqué pendant le lock.
+  - Bouton 🔒 **Verrouiller** (couleur ambre) ajouté dans le header Caisse à côté du Logout.
+  - Déverrouillage autorisé pour : (a) PIN de l'utilisateur en session, OU (c) PIN admin override (relais en cas de besoin).
+  - Réutilise l'endpoint `POST /api/caisse/login` existant — pas de nouveau backend.
+  - data-testid : `caisse-lock-btn`, `caisse-lock-screen`, `caisse-lock-pin-input`, `caisse-lock-unlock-btn`, `caisse-lock-error`.
+  - Tests : 7/7 critères Playwright PASS (iteration 114). Aucune régression Logout.
 - **[Feb 2026 — Amélioration UX "Faire le point" + DayClosureGuard]**
   - `CaissePage.jsx` : suppression du state orphelin `point-hebdo` (état initial direct `reversement`), simplification de la logique des `TabsTrigger`, ajout d'icônes + sous-labels descriptifs (`· Billettage + clôture` / `· Archives`).
   - `DayClosureGuard.jsx` : **skeleton de chargement** (data-testid `day-closure-loading`), **panneau d'erreur réseau** avec bouton "Réessayer" + date-picker (data-testid `day-closure-error` / `day-closure-retry-btn`), **Dialog mot de passe Shadcn** (`day-closure-pw-input` / `day-closure-pw-submit`) qui remplace l'horrible `window.prompt()` natif. Toast d'erreur explicite sur tous les échecs réseau.
