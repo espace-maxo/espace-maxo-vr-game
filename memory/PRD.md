@@ -17,6 +17,11 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Bandeau "Wi-Fi faible" (Caisse)]**
+  - Nouveau composant `WeakConnectionBanner` (`/app/frontend/src/components/WeakConnectionBanner.jsx`) : bandeau orange non-bloquant en haut de la Caisse, déclenché par `useOnlineStatus.weakConnection` après 3 pings consécutifs > 1500ms.
+  - Affiche la latence courante et invite à basculer sur 4G **avant** une éventuelle bascule offline.
+  - Bouton `×` pour masquer ; réapparition automatique quand la situation se reproduit (reset au retour à une bonne connexion).
+  - data-testid : `weak-connection-banner` + `weak-connection-dismiss`.
 - **[Feb 2026 — Stabilité connexion Caisse (anti-faux-positif offline)]**
   - Refonte `useOnlineStatus.js` avec hystérésis : 3 échecs consécutifs requis avant bascule offline (anciennement 1 seul échec basculait).
   - Timeout ping passé de 5s → **10s** (tolérance 3G/4G/Wi-Fi MEA).

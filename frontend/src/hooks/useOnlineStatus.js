@@ -24,6 +24,8 @@ const PING_INTERVAL_UNSTABLE_MS = 5000; // 5s tant qu'on a au moins un échec r�
 const PING_TIMEOUT_MS = 10000; // 10s (tolérant 3G/4G)
 const FAILURE_THRESHOLD = 3; // 3 échecs consécutifs avant offline
 const QUICK_RETRY_DELAY_MS = 2500; // retry rapide après un échec
+const WEAK_LATENCY_THRESHOLD_MS = 1500; // au-delà : ping "lent"
+const WEAK_CONSECUTIVE_THRESHOLD = 3; // 3 lents d'affilée → bandeau "Wi-Fi faible"
 
 export default function useOnlineStatus() {
   const initialOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
@@ -31,9 +33,11 @@ export default function useOnlineStatus() {
   const [lastSeen, setLastSeen] = useState(null);
   const [latency, setLatency] = useState(null);
   const [source, setSource] = useState("navigator");
+  const [weakConnection, setWeakConnection] = useState(false);
 
   // Refs pour éviter stale closure dans setInterval
   const failureCountRef = useRef(0);
+  const slowCountRef = useRef(0);
   const onlineRef = useRef(initialOnline);
   const timerRef = useRef(null);
   const quickRetryRef = useRef(null);
@@ -64,6 +68,16 @@ export default function useOnlineStatus() {
         setLastSeen(new Date().toISOString());
         setLatency(dt);
         setSource("ping");
+        // Détection Wi-Fi faible : 3 latences lentes consécutives → bandeau orange
+        if (dt > WEAK_LATENCY_THRESHOLD_MS) {
+          slowCountRef.current += 1;
+          if (slowCountRef.current >= WEAK_CONSECUTIVE_THRESHOLD) {
+            setWeakConnection(true);
+          }
+        } else {
+          slowCountRef.current = 0;
+          setWeakConnection(false);
+        }
         scheduleNextPing(false);
         return;
       }
@@ -121,5 +135,5 @@ export default function useOnlineStatus() {
     };
   }, []);
 
-  return { online, lastSeen, latency, source };
+  return { online, lastSeen, latency, source, weakConnection };
 }

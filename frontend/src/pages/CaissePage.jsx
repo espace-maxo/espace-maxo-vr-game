@@ -64,6 +64,7 @@ import StatsTab from "./caisse/components/StatsTab";
 import ForecastsTab from "./caisse/components/ForecastsTab";
 import JournalTab from "./caisse/components/JournalTab";
 import OfflineIndicator from "../components/OfflineIndicator";
+import WeakConnectionBanner from "../components/WeakConnectionBanner";
 import { trySync } from "../lib/offlineSync";
 import RegularizationModal from "../components/RegularizationModal";
 import RecoupementPanel from "./caisse/components/RecoupementPanel";
@@ -5158,6 +5159,8 @@ _Responsable Op. & Log - Espace Maxo_
   }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Bandeau orange "Wi-Fi faible" — visible uniquement si latence > 1500ms x3 */}
+      <WeakConnectionBanner />
       {/* Header */}
       <header className="bg-slate-800/90 border-b border-slate-700 sticky top-0 z-50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
