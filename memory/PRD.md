@@ -17,6 +17,13 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Édition admin des produits Caisse en attente d'approbation]**
+  - Nouveau bouton ✏️ **Modifier** dans `PendingProductsPanel.jsx` à côté de Approuver / Rejeter.
+  - Modale d'édition (data-testid `edit-pending-product-dialog`) avec 5 champs : Nom (obligatoire) / Prix (>=0 obligatoire) / Unité / Département / Catégorie. Pré-remplie avec les valeurs actuelles + info "Créé par {user} ({role})".
+  - 2 actions de sortie : **Enregistrer** (le produit reste pending) ou **Enregistrer et approuver** (PUT puis POST /approve enchaînés).
+  - Backend : réutilisation du `PUT /api/caisse/products/{id}` existant (le `$set` partiel préserve `status='pending_approval'`).
+  - Tests : 4/4 pytest backend + tous scénarios frontend e2e PASS (iter 118). Cleanup vérifié.
+  - data-testid : `edit-product-{id}`, `edit-pending-product-dialog`, `edit-pending-name/price/unit/department/category`, `edit-pending-save-only`, `edit-pending-save-approve`.
 - **[Feb 2026 — Édition admin des packs Promo Vacances]**
   - Architecture : catalogue statique `PROMO_PACKS` côté serveur + **collection MongoDB `promo_pack_overrides`** qui supplante les valeurs par défaut champ par champ. La GET `/api/promo-vacances` merge automatiquement les deux + ajoute `is_customized` par pack.
   - Nouveaux endpoints :
