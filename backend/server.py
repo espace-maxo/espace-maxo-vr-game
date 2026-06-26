@@ -5586,7 +5586,7 @@ async def create_monsieur_order(
                     "unit": sp.get("unit", ""),
                     "unit_price": sp.get("purchase_price", 0),
                     "total_value": qty * sp.get("purchase_price", 0),
-                    "reason": f"Mme la Directrice Générale - Commande #{order_id[:8]} (stock auto)",
+                    "reason": f"la Direction - Commande #{order_id[:8]} (stock auto)",
                     "user_name": created_by,
                     "monsieur_order_id": order_id,
                     "created_at": now_iso,
@@ -5644,7 +5644,7 @@ async def update_monsieur_order(
                         "validation_status": "cancelled",
                         "status": "cancelled",
                         "cancelled_at": datetime.now(timezone.utc).isoformat(),
-                        "cancellation_reason": f"Annulation règlement Mme la Directrice Générale #{order_id[:8]}",
+                        "cancellation_reason": f"Annulation règlement la Direction #{order_id[:8]}",
                     }}
                 )
             update_data["status"] = "non_regle"
@@ -5674,8 +5674,8 @@ async def update_monsieur_order(
             invoice_doc = {
                 "id": inv_id,
                 "invoice_number": inv_number,
-                "customer_name": "Mme la Directrice Générale",
-                "client_name": "Mme la Directrice Générale",
+                "customer_name": "la Direction",
+                "client_name": "la Direction",
                 "items": inv_items,
                 "subtotal": order.get("total", 0),
                 "total": order.get("total", 0),
@@ -6126,7 +6126,7 @@ async def authorize_employee_order(
             new_status = "pending_director"
         else:  # director
             if current_status != "pending_director":
-                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit autoriser AVANT la Directrice Générale")
+                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit autoriser AVANT la Direction")
             auths["director"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "authorized"
 
@@ -6571,7 +6571,7 @@ async def authorize_manager_order(
             new_status = "pending_director"
         else:
             if current_status != "pending_director":
-                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit confirmer AVANT la Directrice Générale")
+                raise HTTPException(status_code=409, detail="La Responsable Op. & Log doit confirmer AVANT la Direction")
             auths["director"] = {"name": signer_name.strip(), "at": now_iso}
             new_status = "authorized"
         update = {"authorizations": auths, "status": new_status, "updated_at": now_iso}

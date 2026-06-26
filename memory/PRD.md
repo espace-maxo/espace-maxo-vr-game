@@ -17,6 +17,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Seuils bons à crédit configurables + Renommage "la Direction" + Remise 50%]**
+  - **Backend** : nouveau router `admin_thresholds.py` avec endpoints `GET/PUT/DELETE /api/admin/caisse-thresholds`. Stockage MongoDB (collection `caisse_thresholds`, singleton key='current'). 6 paramètres modifiables : manager_monthly_cap (défaut 15 000 F), manager_discount_rate (50%), director_monthly_cap (0=pas de plafond), director_discount_rate (50%), employee_monthly_cap (10 000 F), employee_discount_rate (50%). Validation : caps≥0, rates∈[0,1].
+  - **MANAGER_MONTHLY_CAP par défaut 25 000 → 15 000 F**. Lecture dynamique des seuils via `_get_caisse_thresholds()` dans `manager-orders/cap-status`, POST/PUT manager-orders et employee-orders.
+  - **POST /api/monsieur-orders** applique automatiquement la remise Direction (50% par défaut) : retour `{subtotal, discount_amount, discount_rate, total}`. Plafond optionnel via `director_monthly_cap`.
+  - **Frontend** : nouveau `CaisseThresholdsAdminCard.jsx` rendu dans `ProductsTab` (admin only) avec 3 lignes (Responsable Op. / la Direction / Employés) × 2 inputs (plafond + remise%). Badge "Personnalisé" + bouton "Défauts" + persistance + horodatage.
+  - **Renommage "Mme la D.G." / "Mme la Directrice Générale" / "Directrice Générale" / "MME LA D.G." → "la Direction"** dans 8 fichiers frontend + 5 strings backend (customer_name, client_name, cancellation_reason, stock movement reason, HTTPException details). 0 résidu user-facing.
+  - Tests : 9/9 pytest backend + 100% frontend e2e (iter 119 après fix des 2 résidus de renommage). Cleanup commandes test effectué.
+  - data-testid : `caisse-thresholds-card`, `threshold-row-{field}`, `threshold-input-{field}`, `threshold-save`, `threshold-reset`.
 - **[Feb 2026 — Édition admin des produits Caisse en attente d'approbation]**
   - Nouveau bouton ✏️ **Modifier** dans `PendingProductsPanel.jsx` à côté de Approuver / Rejeter.
   - Modale d'édition (data-testid `edit-pending-product-dialog`) avec 5 champs : Nom (obligatoire) / Prix (>=0 obligatoire) / Unité / Département / Catégorie. Pré-remplie avec les valeurs actuelles + info "Créé par {user} ({role})".

@@ -70,7 +70,7 @@ const BonsTab = ({
         {canManage && (
           <TabsTrigger value="bons-monsieur" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white" data-testid="tab-bons-dg">
             <UserCircle className="w-4 h-4 mr-2" />
-            MME LA D.G.
+            LA DIRECTION
           </TabsTrigger>
         )}
         {canManage && (
