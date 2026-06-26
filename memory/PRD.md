@@ -17,6 +17,14 @@ Application POS ("Caisse Pro") + module Gestion de Stock avec stricte séparatio
 - Répertoire historique des prix d'achat.
 
 ## What's Implemented (Stable)
+- **[Feb 2026 — Édition admin des packs Promo Vacances]**
+  - Architecture : catalogue statique `PROMO_PACKS` côté serveur + **collection MongoDB `promo_pack_overrides`** qui supplante les valeurs par défaut champ par champ. La GET `/api/promo-vacances` merge automatiquement les deux + ajoute `is_customized` par pack.
+  - Nouveaux endpoints :
+    - `PUT /api/promo-vacances/pack/{pack_id}` — upsert d'un override (12 champs : title, subtitle, highlight, description, price, old_price, regular_promo_price, image URL, cta_label, included_games, included_players, limit_100_first). Les champs non fournis ne sont pas écrasés.
+    - `DELETE /api/promo-vacances/pack/{pack_id}` — restaure les défauts (suppression de l'override).
+  - Frontend : nouveau composant `PromoPackEditDialog.jsx` (modale d'édition aérée 11 champs + aperçu image + switch limit_100_first + bouton "Restaurer défauts" conditionnel). Bouton ✏️ Pencil (`promo-pack-edit-{id}`) sur chaque row de pack avec hover opacity. Badge **"MODIFIÉ"** émeraude sur les packs personnalisés.
+  - Tests : 5/5 pytest + 100% frontend e2e (iter 117). Cleanup vérifié.
+  - data-testid : `promo-pack-row-{id}`, `promo-pack-edit-{id}`, `promo-pack-edit-dialog`, `pack-edit-{field}`, `pack-edit-save`, `pack-edit-reset`, `pack-edit-limit-100-first`.
 - **[Feb 2026 — Modale d'arbitrage d'écart dans BillettageGlobalCard (P2)]**
   - L'arbitrage d'écart (modale `cash-mismatch-modal-global`) est désormais déclenché sur le **vrai widget** utilisé en production (`BillettageGlobalCard`).
   - Quand l'utilisateur clique "Enregistrer" et que `|compté - attendu| > 0.5 F` → modale s'ouvre avec 3 metric cards (Compté / Attendu / Manque ou Excédent) + textarea **motif obligatoire** (300 char max) + 2 boutons (Vérifier / Enregistrer avec écart).
