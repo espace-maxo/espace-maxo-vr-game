@@ -1,0 +1,65 @@
+{
+  "summary": "Iter 117 — Édition des packs Promo Vacances par l'Admin (override MongoDB + modale d'édition). Backend pytest 5/5 PASS (GET is_customized, PUT partiel non-écrasant, DELETE reset, 404 unknown, PUT all-fields). Frontend e2e Playwright FULL PASS (login Admin → onglet Produits → promo-vacances-admin-card → 5 rows + 5 boutons ✏️ → modale d'édition pré-remplie → save → badge 'Modifié' + nouveau titre → ré-ouverture modale → bouton 'Restaurer défauts' visible → reset → badge disparu). Cleanup OK — tous les packs sont is_customized=false en fin de test.",
+  "backend_tests": {
+    "executed": true,
+    "file": "/app/backend/tests/test_promo_pack_iter117.py",
+    "results": "5/5 passed in 1.25s",
+    "scenarios": [
+      "GET /api/promo-vacances retourne is_customized=false par défaut sur tous les packs",
+      "PUT /api/promo-vacances/pack/{id} avec {title, price} ne modifie QUE ces champs (subtitle/image préservés), is_customized=true",
+      "DELETE /api/promo-vacances/pack/{id} restaure les défauts (title='Pack Game Fresh Maxo', price=2000, is_customized=false)",
+      "PUT sur pack inconnu → 404 'Pack inconnu'",
+      "PUT all-fields (12 champs) + verify each + DELETE cleanup"
+    ]
+  },
+  "frontend_tests": {
+    "login_admin": "OK — Admin / Nikeland2026 → Administrateur authentifié (badge visible)",
+    "navigation_produits": "OK — clic onglet 'Produits' charge le panneau",
+    "promo_vacances_admin_card_visible": "OK — data-testid='promo-vacances-admin-card' rendu",
+    "pack_rows_count": "OK — 5 rows (data-testid='promo-pack-row-{id}') : promo_vacances_25, pack_game_fresh, pack_solo_fun, pack_duo_snack_vr, pack_fun_maxo_vacances",
+    "edit_buttons_count": "OK — 5 boutons ✏️ (data-testid='promo-pack-edit-{id}') visibles avec hover opacity",
+    "edit_dialog_opens": "OK — clic ✏️ sur pack_game_fresh → data-testid='promo-pack-edit-dialog' s'ouvre",
+    "dialog_prefilled": "OK — Titre='Pack Game Fresh Maxo', Sous-titre='1 jeu au choix + 1 jus', Badge='2 000 FCFA', Prix=2000, Old=3000, image URL visible, CTA='Réserver le Pack Game Fresh', Jeux=1, Joueurs=1, switch limit_100_first présent",
+    "image_preview": "OK — vignette 16x16 affichée en haut de la modale",
+    "reset_btn_hidden_before_customization": "OK — data-testid='pack-edit-reset' ABSENT quand is_customized=false (conformément à la condition L178)",
+    "save_modifies_pack": "OK — title modifié 'Pack Game Fresh Maxo TEST_iter117' → clic data-testid='pack-edit-save' → toast 'Pack mis à jour' → modale ferme → refetch",
+    "modifie_badge_appears": "OK — row affiche 'TEST_iter117 MODIFIÉ' (badge emerald-300 avec uppercase tracking)",
+    "reset_btn_visible_after_customization": "OK — ré-ouverture modale → data-testid='pack-edit-reset' visible (bouton rose 'Restaurer défauts')",
+    "reset_restores_defaults": "OK — clic 'Restaurer défauts' → window.confirm accepté → DELETE /api/promo-vacances/pack/pack_game_fresh → refetch → badge 'Modifié' disparu, titre revenu à 'Pack Game Fresh Maxo'",
+    "regression_toggle": "OK — data-testid='promo-vacances-toggle' visible + badge 'Affichée sur le site' (emerald)",
+    "regression_orders_count": "OK — '0 commandes' badge affiché correctement",
+    "cleanup_verified": "OK — curl GET /api/promo-vacances en fin de test : tous les 5 packs ont is_customized=false (aucun TEST_iter117 résiduel en base)"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PromoPackEditDialog", "issues": ["UX très claire — header amber avec icône Pencil, aperçu image visible en haut, 11 champs labelisés (Titre/Sous-titre/Badge/Description/Prix/Prix barré/Prix après 100/URL/CTA/Jeux/Joueurs), switch 'Limite 100 premières' bien isolé en bas, 3 boutons en footer (Restaurer défauts rose conditionnel, Annuler ghost, Enregistrer amber). Max-h-[90vh] overflow-y-auto correct pour petits écrans."]},
+      {"screen": "PromoVacancesAdminToggle (row)", "issues": ["Badge 'MODIFIÉ' en emerald-300 sur fond emerald-500/15 bien visible + uppercase tracking-wider très lisible. Bouton ✏️ avec opacity 70 → 100 au hover : feedback subtle mais clair."]}
+    ]
+  },
+  "critical_code_review_comments": [
+    "promo_vacances.py L141 : le filtre 'v not in (None, \"\")' lors du chargement des overrides est correct — empêche qu'un champ explicitement vidé écrase la valeur par défaut. Cohérent avec la logique 'champs non-fournis = non-écrasés'.",
+    "promo_vacances.py L189 : 'v.strip() if isinstance(v, str) else v' — bon pattern pour normaliser les inputs string sans casser les types numériques/bool.",
+    "PromoPackEditDialog.jsx L70-75 : la conversion 'champs numériques vides → omis du payload' est juste — évite d'envoyer price=0 par accident. Idem pour les strings : seuls les champs non-vides sont envoyés.",
+    "PromoPackEditDialog.jsx L76 : 'payload.limit_100_first = !!form.limit_100_first' — TOUJOURS envoyé même si non modifié. Risque mineur : si l'admin clique save sans toucher au switch, ce champ va dans l'override (et écrasera la valeur par défaut s'il diffère). Acceptable car la valeur initiale est seedée depuis pack.limit_100_first L54.",
+    "PromoPackEditDialog.jsx L116-118 : badge 'Personnalisé' dans la description du dialog en plus du badge dans la row = bonne redondance UX.",
+    "PromoVacancesAdminToggle.jsx 163 lignes, PromoPackEditDialog.jsx 212 lignes — bien sous le seuil 700.",
+    "Pas de check de rôle côté composant — comme noté dans la review request, c'est le parent (CaissePage) qui gère le check. Acceptable si le parent garantit la condition.",
+    "Suggestion mineure (non-bloquant) : le bouton DELETE /api/promo-vacances/pack/{id} n'effectue aucune vérification de l'existence du pack avant de delete (le code ligne 200-207 tente toujours le delete_one). Mais c'est volontairement idempotent → OK."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_promo_pack_iter117.py",
+    "/app/test_reports/pytest/promo_pack_iter117.xml"
+  ],
+  "action_items": [],
+  "updated_files": ["/app/backend/tests/test_promo_pack_iter117.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% — tous les scénarios e2e validés"},
+  "test_credentials": "Admin Caisse : Admin / Nikeland2026 (source /app/memory/test_credentials.md)",
+  "seed_data_creation": "Aucune donnée résiduelle — le test a customisé pack_game_fresh puis reset via UI. Cleanup verifié par curl GET final (is_customized=false sur tous les 5 packs).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 117 feature complète et validée e2e. Backend route promo_vacances.py expose 3 endpoints clés : GET (merge defaults + overrides), PUT partiel (upsert override), DELETE (reset). Frontend PromoPackEditDialog est rendu dans PromoVacancesAdminToggle qui est dans CaissePage onglet 'Produits' (visible Admin uniquement via parent guard). Le badge 'Modifié' (emerald) sur la row pack confirme is_customized=true ; le bouton 'Restaurer défauts' (rose) n'apparaît que si is_customized=true (condition L178 du dialog).",
+  "rca_of_the_issue": "N/A — feature addition (édition admin de produits). Implémentation propre avec séparation des concerns : catalogue statique (PROMO_PACKS) + overrides MongoDB (db.promo_pack_overrides) + merge à la lecture (GET) + non-écrasement à l'écriture (champs Optional). UX validée."
+}

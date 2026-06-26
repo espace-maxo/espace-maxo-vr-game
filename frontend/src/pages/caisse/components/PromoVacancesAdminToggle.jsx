@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import { Switch } from "../../../components/ui/switch";
-import { Sparkles, Flame, ShoppingBag } from "lucide-react";
+import { Sparkles, Flame, ShoppingBag, Pencil } from "lucide-react";
+import PromoPackEditDialog from "./PromoPackEditDialog";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -20,6 +21,7 @@ export default function PromoVacancesAdminToggle({ actorName = "Admin" }) {
   const [busy, setBusy] = useState(false);
   const [ordersCount, setOrdersCount] = useState(0);
   const [packs, setPacks] = useState([]);
+  const [editingPack, setEditingPack] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -105,16 +107,34 @@ export default function PromoVacancesAdminToggle({ actorName = "Admin" }) {
           {packs.map((p) => (
             <div
               key={p.id}
-              className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-lg p-2"
+              className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-lg p-2 group hover:border-amber-500/40 transition-colors"
+              data-testid={`promo-pack-row-${p.id}`}
             >
               <img src={p.image} alt={p.title} className="w-10 h-10 rounded object-cover" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-white font-semibold truncate">{p.title}</p>
+                <p className="text-xs text-white font-semibold truncate flex items-center gap-1">
+                  {p.title}
+                  {p.is_customized && (
+                    <span className="text-[8px] uppercase tracking-wider text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded px-1 py-px font-bold">
+                      Modifié
+                    </span>
+                  )}
+                </p>
                 <p className="text-[10px] text-slate-400">
                   {p.price ? `${new Intl.NumberFormat("fr-FR").format(p.price)} F` : "—"}
                   {p.limit_100_first && " · 100 premières"}
                 </p>
               </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditingPack(p)}
+                className="h-7 w-7 p-0 text-amber-300 hover:bg-amber-500/15 opacity-70 group-hover:opacity-100"
+                title="Modifier ce pack"
+                data-testid={`promo-pack-edit-${p.id}`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
             </div>
           ))}
         </div>
@@ -129,6 +149,15 @@ export default function PromoVacancesAdminToggle({ actorName = "Admin" }) {
           Actualiser
         </Button>
       </CardContent>
+
+      {/* Modale d'édition pack */}
+      <PromoPackEditDialog
+        open={!!editingPack}
+        onOpenChange={(o) => !o && setEditingPack(null)}
+        pack={editingPack}
+        onSaved={fetchData}
+        actorName={actorName}
+      />
     </Card>
   );
 }

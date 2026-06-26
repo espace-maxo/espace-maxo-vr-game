@@ -129,17 +129,81 @@ async def _get_settings() -> dict:
 
 @router.get("/promo-vacances")
 async def get_promo_vacances():
-    """Renvoie la liste des packs et le flag d'activation."""
+    """Renvoie la liste des packs (avec overrides admin appliqués) et le flag d'activation."""
     try:
         settings = await _get_settings()
+        # Charge les overrides admin par pack_id
+        overrides = {}
+        async for doc in db.promo_pack_overrides.find({}, {"_id": 0}):
+            pid = doc.get("pack_id")
+            if pid:
+                # Retire les champs meta avant de merger
+                clean = {k: v for k, v in doc.items() if k not in ("pack_id", "updated_at", "updated_by") and v not in (None, "")}
+                overrides[pid] = clean
+        # Merge : valeurs par défaut puis overrides (overrides priment sur les défauts)
+        merged_packs = []
+        for p in PROMO_PACKS:
+            ov = overrides.get(p["id"], {})
+            merged_packs.append({**p, **ov, "is_customized": p["id"] in overrides})
         return {
             "active": bool(settings.get("active", True)),
             "updated_by": settings.get("updated_by", ""),
             "updated_at": settings.get("updated_at", ""),
-            "packs": PROMO_PACKS,
+            "packs": merged_packs,
         }
     except Exception as e:
         logger.error(f"get_promo_vacances failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PackUpdateBody(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    highlight: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[int] = None
+    old_price: Optional[int] = None
+    regular_promo_price: Optional[int] = None
+    image: Optional[str] = None
+    limit_100_first: Optional[bool] = None
+    included_games: Optional[int] = None
+    included_players: Optional[int] = None
+    cta_label: Optional[str] = None
+    actor_name: Optional[str] = ""
+
+
+@router.put("/promo-vacances/pack/{pack_id}")
+async def update_promo_pack(pack_id: str, body: PackUpdateBody = Body(...)):
+    """Met à jour un pack (admin uniquement — UI réservée). Les champs non-fournis ne sont pas modifiés."""
+    try:
+        if not any(p["id"] == pack_id for p in PROMO_PACKS):
+            raise HTTPException(status_code=404, detail="Pack inconnu")
+        update_doc = {"pack_id": pack_id, "updated_at": datetime.now(timezone.utc).isoformat(),
+                      "updated_by": (body.actor_name or "").strip() or "Admin"}
+        # Garder uniquement les champs renseignés explicitement
+        for field in ("title", "subtitle", "highlight", "description", "price", "old_price",
+                      "regular_promo_price", "image", "limit_100_first", "included_games",
+                      "included_players", "cta_label"):
+            v = getattr(body, field, None)
+            if v is not None:
+                update_doc[field] = v.strip() if isinstance(v, str) else v
+        await db.promo_pack_overrides.update_one({"pack_id": pack_id}, {"$set": update_doc}, upsert=True)
+        return {"success": True, "pack_id": pack_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"update_promo_pack failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/promo-vacances/pack/{pack_id}")
+async def reset_promo_pack(pack_id: str):
+    """Restaure les valeurs par défaut d'un pack."""
+    try:
+        await db.promo_pack_overrides.delete_one({"pack_id": pack_id})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"reset_promo_pack failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
