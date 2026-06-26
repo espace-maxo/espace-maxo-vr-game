@@ -68,6 +68,7 @@ from routers.products import router as caisse_products_router, set_db as set_cai
 from routers.promo_vacances import router as promo_vacances_router
 from routers.admin_site_notifications import router as admin_site_notifications_router
 from routers.admin_ui_labels import router as admin_ui_labels_router
+from routers.admin_thresholds import router as admin_thresholds_router, get_thresholds as _get_caisse_thresholds
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -238,6 +239,7 @@ api_router.include_router(caisse_products_router)
 api_router.include_router(promo_vacances_router)
 api_router.include_router(admin_site_notifications_router)
 api_router.include_router(admin_ui_labels_router)
+api_router.include_router(admin_thresholds_router)
 
 # Configure logging
 logging.basicConfig(
@@ -5493,13 +5495,49 @@ async def create_monsieur_order(
     notes: str = Body(None),
     created_by: str = Body(...)
 ):
-    """Create a new owner meal order. Stock is deducted IMMEDIATELY (regardless of payment)."""
+    """Create a new owner meal order. Stock is deducted IMMEDIATELY (regardless of payment).
+    Applies the configured Direction discount rate (default 50%) on the provided subtotal/total."""
     try:
+        # Recompute subtotal from items to be safe (the `total` body field is treated as subtotal here)
+        subtotal_raw = 0.0
+        for it in items or []:
+            qty = float(it.get("quantity", 0) or 0)
+            price = float(it.get("price", 0) or 0)
+            subtotal_raw += qty * price
+        # Fallback to passed total if items computation gives 0 (legacy callers)
+        subtotal = subtotal_raw if subtotal_raw > 0 else float(total or 0)
+        th_d = await _get_caisse_thresholds()
+        d_rate = float(th_d.get("director_discount_rate") or 0.50)
+        d_cap = float(th_d.get("director_monthly_cap") or 0.0)
+        discount_amount = round(subtotal * d_rate, 2)
+        total_after_discount = round(subtotal - discount_amount, 2)
+
+        # Plafond optionnel (0 = pas de plafond)
+        if d_cap > 0:
+            month_key = _employee_month_key()
+            used = 0.0
+            async for o in db.monsieur_orders.find(
+                {"month_period": month_key, "status": {"$ne": "cancelled"}},
+                {"_id": 0, "total": 1},
+            ):
+                used += float(o.get("total", 0) or 0)
+            if used + total_after_discount > d_cap + 0.01:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(f"Plafond mensuel Direction dépassé. Déjà utilisé : {used:.0f} F. "
+                            f"Cette commande : {total_after_discount:.0f} F. "
+                            f"Maximum : {int(d_cap)} F après remise."),
+                )
+
         order_id = str(uuid.uuid4())
         order = {
             "id": order_id,
             "items": items,
-            "total": total,
+            "subtotal": round(subtotal, 2),
+            "discount_rate": int(d_rate * 100),
+            "discount_amount": discount_amount,
+            "total": total_after_discount,
+            "month_period": _employee_month_key(),
             "notes": notes,
             "status": "non_regle",  # non_regle or regle
             "created_by": created_by,
@@ -5901,13 +5939,15 @@ async def get_employee_cap_status(employee_name: str, month: Optional[str] = Non
             raise HTTPException(status_code=400, detail="employee_name requis")
         month_key = month or _employee_month_key()
         used = await _employee_month_used(employee_name.strip(), month_key)
+        th = await _get_caisse_thresholds()
+        cap = float(th.get("employee_monthly_cap") or EMPLOYEE_MONTHLY_CAP)
         return {
             "employee_name": employee_name.strip(),
             "month": month_key,
-            "max": EMPLOYEE_MONTHLY_CAP,
+            "max": cap,
             "used": round(used, 2),
-            "remaining": round(EMPLOYEE_MONTHLY_CAP - used, 2),
-            "is_capped": used >= EMPLOYEE_MONTHLY_CAP,
+            "remaining": round(cap - used, 2),
+            "is_capped": used >= cap,
         }
     except HTTPException:
         raise
@@ -5942,19 +5982,22 @@ async def create_employee_order(
             subtotal += qty * price
         if subtotal <= 0:
             raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
-        discount_amount = round(subtotal * EMPLOYEE_DISCOUNT_RATE, 2)
+        th = await _get_caisse_thresholds()
+        emp_rate = float(th.get("employee_discount_rate") or EMPLOYEE_DISCOUNT_RATE)
+        emp_cap = float(th.get("employee_monthly_cap") or EMPLOYEE_MONTHLY_CAP)
+        discount_amount = round(subtotal * emp_rate, 2)
         total_after_discount = round(subtotal - discount_amount, 2)
 
         # Plafond mensuel — toutes commandes non annulées du mois
         month_key = _employee_month_key()
         used = await _employee_month_used(employee_name.strip(), month_key)
-        if used + total_after_discount > EMPLOYEE_MONTHLY_CAP + 0.01:  # tolérance flottante
+        if used + total_after_discount > emp_cap + 0.01:  # tolérance flottante
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Plafond mensuel dépassé. Déjà utilisé : {used:.0f} F. "
                     f"Cette commande : {total_after_discount:.0f} F. "
-                    f"Maximum : {int(EMPLOYEE_MONTHLY_CAP)} F après remise."
+                    f"Maximum : {int(emp_cap)} F après remise."
                 ),
             )
 
@@ -5966,7 +6009,7 @@ async def create_employee_order(
             "employee_position": employee_position.strip(),
             "items": items,
             "subtotal": round(subtotal, 2),
-            "discount_rate": int(EMPLOYEE_DISCOUNT_RATE * 100),
+            "discount_rate": int(emp_rate * 100),
             "discount_amount": discount_amount,
             "total": total_after_discount,  # montant qui sera retenu sur le salaire
             "month_period": month_key,
@@ -6024,17 +6067,20 @@ async def update_employee_order(
             subtotal = sum(float(it.get("quantity", 0) or 0) * float(it.get("price", 0) or 0) for it in items)
             if subtotal <= 0:
                 raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
-            discount_amount = round(subtotal * EMPLOYEE_DISCOUNT_RATE, 2)
+            th_e = await _get_caisse_thresholds()
+            emp_rate_e = float(th_e.get("employee_discount_rate") or EMPLOYEE_DISCOUNT_RATE)
+            emp_cap_e = float(th_e.get("employee_monthly_cap") or EMPLOYEE_MONTHLY_CAP)
+            discount_amount = round(subtotal * emp_rate_e, 2)
             total_after_discount = round(subtotal - discount_amount, 2)
             # Re-check cap (excluding this order)
             target_employee = update_data.get("employee_name") or order.get("employee_name")
             month_key = order.get("month_period") or _employee_month_key()
             used_excl = await _employee_month_used(target_employee, month_key, exclude_id=order_id)
-            if used_excl + total_after_discount > EMPLOYEE_MONTHLY_CAP + 0.01:
+            if used_excl + total_after_discount > emp_cap_e + 0.01:
                 raise HTTPException(
                     status_code=400,
                     detail=(f"Plafond mensuel dépassé. Déjà utilisé (hors cette commande) : {used_excl:.0f} F. "
-                            f"Modification : {total_after_discount:.0f} F. Maximum : {int(EMPLOYEE_MONTHLY_CAP)} F."),
+                            f"Modification : {total_after_discount:.0f} F. Maximum : {int(emp_cap_e)} F."),
                 )
             update_data["items"] = items
             update_data["subtotal"] = round(subtotal, 2)
@@ -6315,7 +6361,7 @@ async def get_employee_closure_pdf(month: str):
 # Même workflow que les bons EMPLOYÉS, plafond mensuel = 25 000 F (après remise 50%).
 # Collection MongoDB : `manager_orders`. Endpoints sous /api/manager-orders.
 
-MANAGER_MONTHLY_CAP = 25000.0
+MANAGER_MONTHLY_CAP = 15000.0   # Default (overridable via /api/admin/caisse-thresholds)
 MANAGER_DISCOUNT_RATE = 0.50
 
 async def _manager_month_used(employee_name: str, month_key: str, exclude_id: Optional[str] = None) -> float:
@@ -6358,13 +6404,15 @@ async def get_manager_cap_status(employee_name: str, month: Optional[str] = None
             raise HTTPException(status_code=400, detail="employee_name requis")
         month_key = month or _employee_month_key()
         used = await _manager_month_used(employee_name.strip(), month_key)
+        th_m = await _get_caisse_thresholds()
+        cap = float(th_m.get("manager_monthly_cap") or MANAGER_MONTHLY_CAP)
         return {
             "employee_name": employee_name.strip(),
             "month": month_key,
-            "max": MANAGER_MONTHLY_CAP,
+            "max": cap,
             "used": round(used, 2),
-            "remaining": round(MANAGER_MONTHLY_CAP - used, 2),
-            "is_capped": used >= MANAGER_MONTHLY_CAP,
+            "remaining": round(cap - used, 2),
+            "is_capped": used >= cap,
         }
     except HTTPException:
         raise
@@ -6394,17 +6442,20 @@ async def create_manager_order(
             subtotal += qty * price
         if subtotal <= 0:
             raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
-        discount_amount = round(subtotal * MANAGER_DISCOUNT_RATE, 2)
+        th_mg = await _get_caisse_thresholds()
+        mg_rate = float(th_mg.get("manager_discount_rate") or MANAGER_DISCOUNT_RATE)
+        mg_cap = float(th_mg.get("manager_monthly_cap") or MANAGER_MONTHLY_CAP)
+        discount_amount = round(subtotal * mg_rate, 2)
         total_after_discount = round(subtotal - discount_amount, 2)
 
         month_key = _employee_month_key()
         used = await _manager_month_used(employee_name.strip(), month_key)
-        if used + total_after_discount > MANAGER_MONTHLY_CAP + 0.01:
+        if used + total_after_discount > mg_cap + 0.01:
             raise HTTPException(
                 status_code=400,
                 detail=(f"Plafond mensuel dépassé. Déjà utilisé : {used:.0f} F. "
                         f"Cette commande : {total_after_discount:.0f} F. "
-                        f"Maximum : {int(MANAGER_MONTHLY_CAP)} F après remise."),
+                        f"Maximum : {int(mg_cap)} F après remise."),
             )
 
         order_id = str(uuid.uuid4())
@@ -6415,7 +6466,7 @@ async def create_manager_order(
             "employee_position": (employee_position or "Responsable Op. & Log").strip(),
             "items": items,
             "subtotal": round(subtotal, 2),
-            "discount_rate": int(MANAGER_DISCOUNT_RATE * 100),
+            "discount_rate": int(mg_rate * 100),
             "discount_amount": discount_amount,
             "total": total_after_discount,
             "month_period": month_key,
@@ -6469,13 +6520,16 @@ async def update_manager_order(
             subtotal = sum(float(it.get("quantity", 0) or 0) * float(it.get("price", 0) or 0) for it in items)
             if subtotal <= 0:
                 raise HTTPException(status_code=400, detail="Le sous-total doit être supérieur à 0")
-            discount_amount = round(subtotal * MANAGER_DISCOUNT_RATE, 2)
+            th_mu = await _get_caisse_thresholds()
+            mu_rate = float(th_mu.get("manager_discount_rate") or MANAGER_DISCOUNT_RATE)
+            mu_cap = float(th_mu.get("manager_monthly_cap") or MANAGER_MONTHLY_CAP)
+            discount_amount = round(subtotal * mu_rate, 2)
             total_after_discount = round(subtotal - discount_amount, 2)
             target = update_data.get("employee_name") or order.get("employee_name")
             month_key = order.get("month_period") or _employee_month_key()
             used_excl = await _manager_month_used(target, month_key, exclude_id=order_id)
-            if used_excl + total_after_discount > MANAGER_MONTHLY_CAP + 0.01:
-                raise HTTPException(status_code=400, detail=(f"Plafond mensuel dépassé. Déjà utilisé (hors cette commande) : {used_excl:.0f} F. Modification : {total_after_discount:.0f} F. Maximum : {int(MANAGER_MONTHLY_CAP)} F."))
+            if used_excl + total_after_discount > mu_cap + 0.01:
+                raise HTTPException(status_code=400, detail=(f"Plafond mensuel dépassé. Déjà utilisé (hors cette commande) : {used_excl:.0f} F. Modification : {total_after_discount:.0f} F. Maximum : {int(mu_cap)} F."))
             update_data["items"] = items
             update_data["subtotal"] = round(subtotal, 2)
             update_data["discount_amount"] = discount_amount

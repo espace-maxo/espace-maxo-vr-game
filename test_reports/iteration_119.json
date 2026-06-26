@@ -1,0 +1,46 @@
+{
+  "summary": "Iter 119 - Caisse thresholds (manager/direction/employee) GET/PUT/DELETE + UI admin panel + 50% discount on monsieur-orders + 'la Direction' rename. Backend 9/9 pytest PASS. Frontend UI flow PASS (save/badge/reset). REGRESSION DETECTED: 2 leftover 'D.G.'/'Directrice Générale' strings still present (1 frontend, 1 backend).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/monsieur-orders",
+        "issue": "stock_movements.reason still hardcoded 'Mme la Directrice Générale - Commande #...' at /app/backend/server.py:5589 — should be 'la Direction' per spec."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BonsTab",
+        "issue": "Sub-tab label still shows 'MME LA D.G.' (uppercase) — at /app/frontend/src/pages/caisse/components/BonsTab.jsx line 73. Should be 'LA DIRECTION' to match the renaming spec.",
+        "selector": "BonsTab.jsx:73 button:has-text('MME LA D.G.')",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_caisse_thresholds_iter119.py",
+    "/app/test_reports/pytest/iter119_thresholds.xml"
+  ],
+  "action_items": [
+    "Rename label 'MME LA D.G.' to 'LA DIRECTION' in /app/frontend/src/pages/caisse/components/BonsTab.jsx line 73.",
+    "Update stock_movements reason text in /app/backend/server.py:5589 from 'Mme la Directrice Générale - Commande #...' to 'la Direction - Commande #...' (or similar)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 8328 lines — should be split (DRY). Beyond scope of this iter but flag for future.",
+    "manager-orders/cap-status response field name should be standardized; tests had to probe 'max' OR 'cap'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_caisse_thresholds_iter119.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "90%"},
+  "test_credentials": "Admin / Nikeland2026 (caisse admin login). PIN is wrong via auto-fill; you must click Admin tab first.",
+  "seed_data_creation": "Created transient monsieur_order (TEST_Item x2 = 10000F subtotal, 5000F total) and 1 manager_order (TEST_Mgr_* employee, 30000F subtotal=15000F total) via tests. No cleanup endpoint deleted them; minor noise in DB. Thresholds reset to defaults at end of test module (autouse fixture).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints fully verified by pytest /app/backend/tests/test_caisse_thresholds_iter119.py. UI flow (save/badge/reset/toast 'Seuils mis à jour') verified end-to-end via Playwright. Two residual rename leftovers must be fixed by main agent: BonsTab.jsx:73 ('MME LA D.G.') and server.py:5589 (stock movement reason). After fixes, re-run the backend pytest + a quick grep `grep -rni 'mme la d\\.g\\|directrice générale' /app/frontend/src /app/backend` should return zero results.",
+  "rca_of_the_issue": "Renaming task missed 2 occurrences because: (1) BonsTab.jsx:73 uses uppercase 'MME LA D.G.' which wasn't covered by case-sensitive replace; (2) server.py line 5589 is a string deep inside stock_movements creation that wasn't grep-replaced. Both confirmed by `grep -rni` after the fact."
+}

@@ -382,7 +382,7 @@ const BonsTab = ({
         </div>
       </TabsContent>
 
-      {/* Mme la D.G. (groupé : Actives + Archivées) */}
+      {/* la Direction (groupé : Actives + Archivées) */}
       {canManage && (
         <TabsContent value="bons-monsieur">
           <DGGroupedTab

@@ -155,7 +155,7 @@ const ManagerOrdersTab = ({ currentUser, formatPrice, products = [] }) => {
   };
 
   const authorize = async (order, role) => {
-    const label = role === "manager" ? "Responsable Op. & Log (auto-confirmation)" : "Directrice Générale";
+    const label = role === "manager" ? "Responsable Op. & Log (auto-confirmation)" : "la Direction";
     if (!window.confirm(`Autoriser cette commande responsable op. & log en tant que ${label} ?\n\nMontant à retenir : ${formatPrice(order.total)} F`)) return;
     try {
       await axios.put(`${API}/manager-orders/${order.id}/authorize`, {

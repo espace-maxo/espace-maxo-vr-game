@@ -5,7 +5,7 @@ import MonsieurTab from './MonsieurTab';
 import ArchivedDGTab from './ArchivedDGTab';
 
 /**
- * Onglet groupé "Mme la D.G." :
+ * Onglet groupé "la Direction" :
  *  - Actives : MonsieurTab (commandes D.G. en attente de paiement)
  *  - Archivées : ArchivedDGTab (admin only, commandes archivées post-signature)
  */

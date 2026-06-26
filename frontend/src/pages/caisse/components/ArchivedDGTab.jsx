@@ -13,11 +13,11 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 /**
  * Sous-onglet ADMIN-ONLY : Factures impayées D.G.
  *
- * Liste les commandes de Mme la Directrice Générale qui :
+ * Liste les commandes de la Direction qui :
  *  - étaient en statut "non_regle"
  *  - au moment où la responsable op. & log a signé un point financier couvrant leur date.
  *
- * Elles sont automatiquement archivées de la vue principale "Mme la D.G."
+ * Elles sont automatiquement archivées de la vue principale "la Direction"
  * et apparaissent ici pour suivi/relance par l'administrateur.
  */
 const ArchivedDGTab = ({ formatPrice }) => {
@@ -41,7 +41,7 @@ const ArchivedDGTab = ({ formatPrice }) => {
   useEffect(() => { fetch(); }, []);
 
   const unarchive = async (order) => {
-    if (!window.confirm(`Renvoyer cette commande (${formatPrice(order.total)} F) dans la vue active "Mme la Directrice Générale" pour règlement ?`)) return;
+    if (!window.confirm(`Renvoyer cette commande (${formatPrice(order.total)} F) dans la vue active "la Direction" pour règlement ?`)) return;
     try {
       await axios.post(`${API}/monsieur-orders/${order.id}/unarchive`);
       toast.success("Commande remise en actif");
@@ -99,7 +99,7 @@ const ArchivedDGTab = ({ formatPrice }) => {
         <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
         <span>
           Ces commandes étaient impayées au moment où la responsable op. & log a signé un point financier les couvrant.
-          Elles sont retirées de l'onglet "Mme la Directrice Générale" pour ne pas polluer la vue opérationnelle.
+          Elles sont retirées de l'onglet "la Direction" pour ne pas polluer la vue opérationnelle.
           Vous pouvez les renvoyer en actif via le bouton <strong>« Remettre en actif »</strong> pour relancer le règlement.
         </span>
       </div>
@@ -121,7 +121,7 @@ const ArchivedDGTab = ({ formatPrice }) => {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex-1 min-w-[250px]">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-purple-300 font-bold">{order.client_name || order.customer_name || "Mme la Directrice Générale"}</span>
+                      <span className="text-purple-300 font-bold">{order.client_name || order.customer_name || "la Direction"}</span>
                       <Badge className="bg-red-500/20 text-red-300 border border-red-500/40 text-[10px]">✗ Non réglé</Badge>
                       <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px]">Archivée</Badge>
                       <span className="text-slate-500 text-xs">

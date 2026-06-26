@@ -615,13 +615,13 @@ const HebdoReport = ({
             </div>
           </div>
 
-          {/* Mme la D.G. — affichée uniquement si activité */}
+          {/* la Direction — affichée uniquement si activité */}
           {weeklyReport.manager_general && (weeklyReport.manager_general.orders_count > 0 || weeklyReport.manager_general.purchases_count > 0) && (
             <Card className="bg-gradient-to-br from-violet-900/20 to-purple-900/10 border-violet-500/40">
               <CardContent className="p-3 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <UserCircle className="w-5 h-5 text-violet-400" />
-                  <span className="text-slate-300 text-sm">Mme la Directrice Générale</span>
+                  <span className="text-slate-300 text-sm">la Direction</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-violet-300 font-bold">{formatPrice((weeklyReport.manager_general?.orders_total || 0) + (weeklyReport.manager_general?.purchases_total || 0))} F</span>
@@ -653,7 +653,7 @@ const HebdoReport = ({
                       <th className="px-3 py-1 text-right text-purple-400">Locations</th>
                       <th className="px-3 py-1 text-right text-red-400">Dépenses</th>
                       <th className="px-3 py-1 text-right">Résultat</th>
-                      <th className="px-3 py-1 text-right text-violet-400">Mme la D.G.</th>
+                      <th className="px-3 py-1 text-right text-violet-400">la Direction</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -806,7 +806,7 @@ const HebdoReport = ({
                           {/* Manager General detail */}
                           {((data.manager_general?.orders_count || 0) > 0 || (data.manager_general?.purchases_count || 0) > 0) && (
                             <div>
-                              <p className="text-violet-400 text-xs font-medium mb-1">Mme la Directrice Générale</p>
+                              <p className="text-violet-400 text-xs font-medium mb-1">la Direction</p>
                               {data.manager_general?.orders_count > 0 && (
                                 <p className="text-slate-300 text-xs bg-violet-900/20 rounded px-3 py-1.5 mb-1">
                                   Commandes repas : {data.manager_general.orders_count} - <span className="text-violet-400 font-bold">{formatPrice(data.manager_general.orders_total)} F</span>
@@ -874,7 +874,7 @@ const HebdoReport = ({
               <CardHeader className="pb-2">
                 <CardTitle className="text-violet-400 flex items-center gap-2">
                   <UserCircle className="w-5 h-5" />
-                  Situation Mme la Directrice Générale
+                  Situation la Direction
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">

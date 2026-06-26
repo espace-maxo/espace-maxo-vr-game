@@ -12,6 +12,7 @@ import { Plus, Edit2, Trash2, Link2, Link2Off, Wand2, Filter } from 'lucide-reac
 import PendingProductsPanel from "./PendingProductsPanel";
 import PromoVacancesAdminToggle from "./PromoVacancesAdminToggle";
 import PromoOrdersDashboard from "./PromoOrdersDashboard";
+import CaisseThresholdsAdminCard from "./CaisseThresholdsAdminCard";
 
 const formatPrice = (p) => new Intl.NumberFormat('fr-FR').format(p || 0);
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -76,6 +77,9 @@ const ProductsTab = ({
       )}
       {isAdmin && (
         <PromoVacancesAdminToggle actorName={currentUserName || "Admin"} />
+      )}
+      {isAdmin && (
+        <CaisseThresholdsAdminCard actorName={currentUserName || "Admin"} />
       )}
       {isAdmin && (
         <PromoOrdersDashboard />
