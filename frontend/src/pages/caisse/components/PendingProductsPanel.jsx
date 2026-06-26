@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import { Textarea } from "../../../components/ui/textarea";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog";
-import { ShieldCheck, X, Clock, AlertTriangle, Trash } from "lucide-react";
+import { ShieldCheck, X, Clock, AlertTriangle, Trash, Pencil, Save, Loader2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const formatPrice = (p) => new Intl.NumberFormat("fr-FR").format(p || 0);
@@ -31,6 +33,10 @@ export default function PendingProductsPanel({ actorName = "Admin", onChange }) 
   const [duplicates, setDuplicates] = useState(null);
   const [showDedupModal, setShowDedupModal] = useState(false);
   const [dedupBusy, setDedupBusy] = useState(false);
+  // Edition d'un produit en attente avant approbation (corriger nom/prix/catégorie/unité)
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", price: "", unit: "", category: "", department: "" });
+  const [editBusy, setEditBusy] = useState(false);
 
   const fetchPending = useCallback(async () => {
     setLoading(true);
@@ -77,6 +83,57 @@ export default function PendingProductsPanel({ actorName = "Admin", onChange }) 
   const openReject = (item) => {
     setRejectTarget(item);
     setRejectReason("");
+  };
+
+  // Ouvre la modale d'édition d'un produit en attente
+  const openEdit = (item) => {
+    setEditTarget(item);
+    setEditForm({
+      name: item.name || "",
+      price: String(item.price ?? ""),
+      unit: item.unit || "",
+      category: item.category || "",
+      department: item.department || "",
+    });
+  };
+
+  // Sauvegarde les modifications (PUT) sans changer le statut pending_approval
+  const saveEdit = async (alsoApprove = false) => {
+    if (!editTarget) return;
+    const cleanName = (editForm.name || "").trim();
+    if (!cleanName) {
+      toast.error("Le nom du produit est obligatoire");
+      return;
+    }
+    const priceNum = parseFloat(editForm.price);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      toast.error("Prix invalide");
+      return;
+    }
+    setEditBusy(true);
+    try {
+      // PUT met à jour le produit. Les champs non fournis restent inchangés côté backend.
+      await axios.put(`${API}/caisse/products/${editTarget.id}`, {
+        name: cleanName,
+        price: priceNum,
+        unit: (editForm.unit || "").trim() || "unité",
+        category: (editForm.category || "").trim(),
+        department: (editForm.department || "").trim(),
+      });
+      toast.success("Produit mis à jour");
+      // Si l'admin clique "Enregistrer et approuver", on enchaîne l'approbation
+      if (alsoApprove) {
+        await axios.post(`${API}/caisse/products/${editTarget.id}/approve`, { actor_name: actorName });
+        toast.success("Produit approuvé");
+      }
+      setEditTarget(null);
+      await fetchPending();
+      if (onChange) onChange();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur de mise à jour");
+    } finally {
+      setEditBusy(false);
+    }
   };
 
   const confirmReject = async () => {
@@ -174,7 +231,17 @@ export default function PendingProductsPanel({ actorName = "Admin", onChange }) 
                     )}
                   </p>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openEdit(p)}
+                    className="border-amber-500/60 text-amber-300 hover:bg-amber-500/10"
+                    data-testid={`edit-product-${p.id}`}
+                    title="Corriger nom, prix, catégorie ou unité avant approbation"
+                  >
+                    <Pencil className="w-4 h-4 mr-1" /> Modifier
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() => approve(p.id)}
@@ -322,6 +389,116 @@ export default function PendingProductsPanel({ actorName = "Admin", onChange }) 
             <Button onClick={runDedup} disabled={dedupBusy} className="bg-red-600 hover:bg-red-700">
               <Trash className="w-4 h-4 mr-1" />
               {dedupBusy ? "Suppression…" : `Supprimer les ${duplicates?.groups?.reduce((s, g) => s + (g.items.length - 1), 0) || 0} doublon(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* EDIT PENDING PRODUCT MODAL */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent className="bg-slate-900 border-amber-500/40 text-white max-w-md" data-testid="edit-pending-product-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-300">
+              <Pencil className="w-4 h-4" />
+              Modifier le produit avant approbation
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Corrige les informations avant validation. Le produit reste en attente jusqu'à ce que tu cliques "Approuver".
+            </p>
+          </DialogHeader>
+          {editTarget && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Nom du produit *</Label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  maxLength={120}
+                  autoFocus
+                  data-testid="edit-pending-name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">Prix (FCFA) *</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    data-testid="edit-pending-price"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">Unité</Label>
+                  <Input
+                    value={editForm.unit}
+                    onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
+                    placeholder="unité, kg, litre…"
+                    className="bg-slate-800 border-slate-700 text-white"
+                    maxLength={20}
+                    data-testid="edit-pending-unit"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">Département</Label>
+                  <Input
+                    value={editForm.department}
+                    onChange={(e) => setEditForm((p) => ({ ...p, department: e.target.value }))}
+                    placeholder="bar, cuisine…"
+                    className="bg-slate-800 border-slate-700 text-white"
+                    maxLength={40}
+                    data-testid="edit-pending-department"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">Catégorie</Label>
+                  <Input
+                    value={editForm.category}
+                    onChange={(e) => setEditForm((p) => ({ ...p, category: e.target.value }))}
+                    placeholder="Boissons, Plats…"
+                    className="bg-slate-800 border-slate-700 text-white"
+                    maxLength={40}
+                    data-testid="edit-pending-category"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Créé par <strong className="text-amber-200">{editTarget.created_by}</strong>
+                {editTarget.created_by_role && ` (${editTarget.created_by_role})`}
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button
+              variant="ghost"
+              onClick={() => setEditTarget(null)}
+              disabled={editBusy}
+              className="text-slate-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => saveEdit(false)}
+              disabled={editBusy}
+              variant="outline"
+              className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10"
+              data-testid="edit-pending-save-only"
+            >
+              {editBusy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+              Enregistrer
+            </Button>
+            <Button
+              onClick={() => saveEdit(true)}
+              disabled={editBusy}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="edit-pending-save-approve"
+            >
+              <ShieldCheck className="w-4 h-4 mr-1" />
+              Enregistrer et approuver
             </Button>
           </DialogFooter>
         </DialogContent>
