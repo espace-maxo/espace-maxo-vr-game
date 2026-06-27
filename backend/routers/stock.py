@@ -535,8 +535,8 @@ async def get_stock_forecast(window_days: int = 30, top: int = 0):
     # 1. Charger tous les produits avec quantité positive
     products = await db.stock_products.find(
         {"is_active": {"$ne": False}},
-        {"_id": 0, "id": 1, "name": 1, "current_quantity": 1, "unit": 1, "category_id": 1,
-         "min_quantity": 1, "daily_consumption_manual": 1, "department": 1}
+        {"_id": 0, "id": 1, "name": 1, "quantity": 1, "unit": 1, "category_id": 1,
+         "stock_min": 1, "daily_consumption_manual": 1, "department": 1}
     ).to_list(5000)
 
     # 2. Agréger les mouvements de consommation sur la fenêtre
@@ -576,7 +576,7 @@ async def get_stock_forecast(window_days: int = 30, top: int = 0):
             daily_avg = 0.0
             source = "none"
 
-        current_qty = float(p.get("current_quantity") or 0)
+        current_qty = float(p.get("quantity") or 0)
         if daily_avg > 0:
             days_remaining = round(current_qty / daily_avg, 1)
         else:
@@ -597,7 +597,7 @@ async def get_stock_forecast(window_days: int = 30, top: int = 0):
             "current_quantity": current_qty,
             "unit": p.get("unit") or "",
             "department": p.get("department") or "",
-            "min_quantity": float(p.get("min_quantity") or 0),
+            "min_quantity": float(p.get("stock_min") or 0),
             "daily_avg": daily_avg,
             "daily_avg_movements": daily_avg_movements,
             "daily_consumption_manual": daily_manual or None,
