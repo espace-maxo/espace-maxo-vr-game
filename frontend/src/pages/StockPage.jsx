@@ -850,6 +850,8 @@ export default function StockPage() {
     return c;
   }, [filterZone, filterSupplier, filterRenseigned]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // Menu "Outils" sur la page Mouvements (regroupe Rattraper tout + Export CSV)
+  const [showMovementsToolsMenu, setShowMovementsToolsMenu] = useState(false);
 
   const resetAllFilters = () => {
     setSearchQuery("");
@@ -1482,40 +1484,76 @@ export default function StockPage() {
 
             {dashboard && (
               <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4">
-                  {[
-                    { label: "Produits", value: dashboard.total_products, icon: Package, color: "blue" },
-                    { label: "Critiques", value: dashboard.critical_products, icon: AlertTriangle, color: "red" },
-                    { label: "Valeur Stock", value: `${formatPrice(dashboard.total_value)} F`, icon: TrendingUp, color: "emerald", small: true },
-                    { label: "Entrees Auj.", value: dashboard.entrees_today, icon: ArrowDown, color: "green" },
-                    { label: "Sorties Auj.", value: dashboard.sorties_today, icon: ArrowUp, color: "orange",
-                      onClick: () => {
-                        const next = !showSortiesDetail;
-                        setShowSortiesDetail(next);
-                        if (next) fetchSortiesDetail();
-                      },
-                      testid: "sorties-today-card",
-                    },
-                  ].map((c, i) => (
-                    <Card
-                      key={i}
-                      className={`bg-slate-900/80 border-slate-800 ${c.onClick ? 'cursor-pointer hover:border-orange-500/50 transition' : ''}`}
-                      onClick={c.onClick}
-                      data-testid={c.testid}
-                    >
-                      <CardContent className="p-3 md:p-4">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-slate-400 text-[11px] md:text-xs leading-tight">{c.label}</span>
-                          <c.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 text-${c.color}-400 flex-shrink-0`} />
-                        </div>
-                        <p className={`${c.small ? 'text-sm md:text-lg' : 'text-lg md:text-2xl'} font-bold text-white truncate`}>{c.value}</p>
-                        {c.onClick && (
-                          <p className="text-orange-300/70 text-[9px] md:text-[10px] mt-1 leading-tight">{showSortiesDetail ? "Masquer" : "Voir détail"}</p>
+                {/* Summary Cards — épuré : 3 cartes (Catalogue / Valeur / Activité du jour) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="dashboard-kpi-cards">
+                  {/* Catalogue + Critiques fusionnés */}
+                  <Card className="bg-slate-900/80 border-slate-800">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-slate-400 text-xs uppercase tracking-wider">Catalogue</span>
+                        <Package className="w-4 h-4 text-blue-400" />
+                      </div>
+                      <p className="text-2xl md:text-3xl font-bold text-white" data-testid="dash-kpi-products">{dashboard.total_products}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {dashboard.critical_products > 0 ? (
+                          <span className="text-red-400 font-semibold" data-testid="dash-kpi-critical">
+                            <AlertTriangle className="inline w-3 h-3 mr-0.5" />
+                            {dashboard.critical_products} critique{dashboard.critical_products > 1 ? "s" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400">Aucun produit critique</span>
                         )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Valeur stock */}
+                  <Card className="bg-gradient-to-br from-emerald-900/30 to-slate-900/80 border-emerald-700/30">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-emerald-300 text-xs uppercase tracking-wider">Valeur du stock</span>
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <p className="text-2xl md:text-3xl font-bold text-white truncate" data-testid="dash-kpi-value">
+                        {formatPrice(dashboard.total_value)} <span className="text-base font-normal text-slate-400">F</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">au prix d'achat</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Activité du jour (Entrées + Sorties combinés, clic = détail sorties) */}
+                  <Card
+                    className="bg-slate-900/80 border-slate-800 cursor-pointer hover:border-orange-500/50 transition"
+                    onClick={() => {
+                      const next = !showSortiesDetail;
+                      setShowSortiesDetail(next);
+                      if (next) fetchSortiesDetail();
+                    }}
+                    data-testid="sorties-today-card"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-slate-400 text-xs uppercase tracking-wider">Activité du jour</span>
+                        <Activity className="w-4 h-4 text-orange-400" />
+                      </div>
+                      <div className="flex items-baseline gap-4">
+                        <div>
+                          <p className="text-2xl md:text-3xl font-bold text-emerald-400" data-testid="dash-kpi-entrees">
+                            <ArrowDown className="inline w-4 h-4 mb-1" /> {dashboard.entrees_today}
+                          </p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Entrées</p>
+                        </div>
+                        <span className="text-slate-700">·</span>
+                        <div>
+                          <p className="text-2xl md:text-3xl font-bold text-orange-400" data-testid="dash-kpi-sorties">
+                            <ArrowUp className="inline w-4 h-4 mb-1" /> {dashboard.sorties_today}
+                          </p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Sorties</p>
+                        </div>
+                      </div>
+                      <p className="text-orange-300/70 text-[10px] mt-1">{showSortiesDetail ? "Masquer le détail" : "Cliquer pour voir le détail"}</p>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* === DÉTAIL DES SORTIES === */}
@@ -2770,64 +2808,85 @@ export default function StockPage() {
                 >
                   <Activity className="w-4 h-4 mr-1.5" /> Actualiser
                 </Button>
-                <Button
-                  onClick={async () => {
-                    if (!confirm("⚠️ Re-déstocker TOUTES les factures validées passées qui n'ont pas été synchronisées ?\n\nUtile après avoir créé/corrigé des recettes. Les factures déjà déstockées sont ignorées automatiquement.")) return;
-                    try {
-                      toast.info("Re-sync complet en cours...");
-                      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage?all_past=true`);
-                      await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
-                      const d = r.data || {};
-                      toast.success(
-                        `Re-sync complet ✅ ${d.processed} factures rattrapées (${d.skipped_already_destocked} déjà OK, ${d.errors} erreurs)`,
-                        { duration: 8000 }
-                      );
-                      if (d.errors > 0 && d.error_details?.length) {
-                        console.warn("Resync errors:", d.error_details);
-                      }
-                    } catch (e) {
-                      toast.error(e?.response?.data?.detail || "Erreur");
-                    }
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
-                  data-testid="movements-resync-all-btn"
-                  title="Rattrape toutes les factures passées non-déstockées (utile après avoir créé des recettes)"
-                >
-                  ↺ Rattraper tout
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
-                  onClick={() => {
-                    // Export CSV of current view
-                    const headers = ["Date", "Produit", "Type", "Quantité", "Unité", "Avant", "Après", "Motif", "Utilisateur"];
-                    const rows = visibleMovements.map(m => [
-                      new Date(m.created_at).toLocaleString('fr-FR'),
-                      m.product_name || "",
-                      MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type,
-                      m.quantity,
-                      m.unit || "",
-                      m.previous_quantity,
-                      m.new_quantity,
-                      (m.reason || "").replace(/[\n\r,;]/g, " "),
-                      m.user_name || "",
-                    ]);
-                    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
-                    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `mouvements_stock_${new Date().toISOString().slice(0,10)}.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  data-testid="movements-export-csv"
-                >
-                  <FileText className="w-4 h-4 mr-1.5" /> Export CSV
-                </Button>
+
+                {/* Menu "Outils" : regroupe Rattraper tout + Export CSV pour épurer la barre */}
+                <div className="relative">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                    onClick={() => setShowMovementsToolsMenu(v => !v)}
+                    data-testid="movements-tools-toggle"
+                  >
+                    <Settings className="w-4 h-4 mr-1.5" /> Outils
+                    <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showMovementsToolsMenu ? "rotate-180" : ""}`} />
+                  </Button>
+                  {showMovementsToolsMenu && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowMovementsToolsMenu(false)} />
+                      <div className="absolute right-0 mt-1 z-40 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl py-1" data-testid="movements-tools-menu">
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-slate-800 text-amber-300 text-sm flex items-center gap-2"
+                          onClick={async () => {
+                            setShowMovementsToolsMenu(false);
+                            if (!confirm("⚠️ Re-déstocker TOUTES les factures validées passées qui n'ont pas été synchronisées ?\n\nUtile après avoir créé/corrigé des recettes. Les factures déjà déstockées sont ignorées automatiquement.")) return;
+                            try {
+                              toast.info("Re-sync complet en cours...");
+                              const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/invoices/resync-destockage?all_past=true`);
+                              await Promise.all([fetchMovements(), fetchProducts(), fetchDashboard()]);
+                              const d = r.data || {};
+                              toast.success(
+                                `Re-sync complet ✅ ${d.processed} factures rattrapées (${d.skipped_already_destocked} déjà OK, ${d.errors} erreurs)`,
+                                { duration: 8000 }
+                              );
+                              if (d.errors > 0 && d.error_details?.length) {
+                                console.warn("Resync errors:", d.error_details);
+                              }
+                            } catch (e) {
+                              toast.error(e?.response?.data?.detail || "Erreur");
+                            }
+                          }}
+                          data-testid="movements-resync-all-btn"
+                          title="Rattrape toutes les factures passées non-déstockées"
+                        >
+                          <RefreshCw className="w-4 h-4" /> Rattraper toutes les factures
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-300 text-sm flex items-center gap-2"
+                          onClick={() => {
+                            setShowMovementsToolsMenu(false);
+                            const headers = ["Date", "Produit", "Type", "Quantité", "Unité", "Avant", "Après", "Motif", "Utilisateur"];
+                            const rows = visibleMovements.map(m => [
+                              new Date(m.created_at).toLocaleString('fr-FR'),
+                              m.product_name || "",
+                              MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type,
+                              m.quantity,
+                              m.unit || "",
+                              m.previous_quantity,
+                              m.new_quantity,
+                              (m.reason || "").replace(/[\n\r,;]/g, " "),
+                              m.user_name || "",
+                            ]);
+                            const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+                            const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `mouvements_stock_${new Date().toISOString().slice(0,10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          data-testid="movements-export-csv"
+                        >
+                          <Download className="w-4 h-4" /> Exporter en CSV
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <Button
                   size="sm"
                   onClick={() => { setMovementForm({ product_id: "", movement_type: "entree", quantity: 0, unit_price: 0, reason: "" }); setMovementProductSearch(""); setShowMovementModal(true); }}
