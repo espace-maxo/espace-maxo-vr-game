@@ -1,0 +1,51 @@
+{
+  "summary": "Iter 120 — Stock menu reorg + Prévisions épuisement: backend endpoint reachable & structure valid, frontend menu/sub-nav/panel/filter all working. 1 CRITICAL backend bug found: forecast endpoint reads wrong product field names (current_quantity/min_quantity) instead of actual schema (quantity/stock_min), causing every item to display stock=0 and inflating 'critical' counts.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/stock/forecast",
+        "issue": "Reads product.current_quantity but stock_products schema uses 'quantity'. Same problem for min_quantity vs stock_min. Result: items[].current_quantity is always 0.0 in the API response, days_remaining = 0/daily_avg = 0 for every product with movements (always flagged 'critical'). Test test_current_quantity_field_present_and_correct FAILED: real product with quantity=1.0 returned current_quantity=0.0 in forecast. Fix in /app/backend/routers/stock.py: line 538-539 projection {'current_quantity':1,'min_quantity':1} → {'quantity':1,'stock_min':1}; line 579 p.get('current_quantity') → p.get('quantity'); line 600 p.get('min_quantity') → p.get('stock_min').",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Forecast panel — Stock Actuel column",
+        "issue": "All 4 'critical' products show '0 portion' as Stock Actuel even when they have real stock. Root cause is the backend bug above (current_quantity field). The UI itself renders the value correctly; the API just returns 0.",
+        "affected_selectors": ["[data-testid='forecast-table'] tbody tr"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stock_forecast.py",
+    "/app/test_reports/pytest/forecast_iter120_results.xml"
+  ],
+  "action_items": [
+    "FIX (backend): In /app/backend/routers/stock.py inside get_stock_forecast, replace 'current_quantity' with 'quantity' (projection line ~538-540 and reader line ~579) and 'min_quantity' with 'stock_min' (projection + line ~600). Without this fix, the new feature is non-functional in practice — every product appears at 0 stock and computations are wrong.",
+    "After fix: re-run pytest /app/backend/tests/test_stock_forecast.py — all 6 tests must pass."
+  ],
+  "critical_code_review_comments": [
+    "stock.py contains a large dead-code duplicate block lines 1383-1455 (after the first 'return' of destock_live_dashboard) — copy of summary/recent_sales logic; should be deleted.",
+    "_CONSUMPTION_TYPES includes 'destockage_caisse' (line 514) which is not in the spec ('sortie|perte|casse|transfert_sortie|destockage_recette'). Confirm intent or remove.",
+    "stock.py is now >1500 lines — split into stock_products.py, stock_movements.py, stock_forecast.py, stock_drinks.py for maintainability.",
+    "Forecast aggregation does no filter on storage_zone — products in 'magasin' (manual-only) are mixed with 'cuisine'. Consider adding a storage_zone param like other endpoints."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_stock_forecast.py (new)"
+  ],
+  "success_rate": {
+    "backend": "83% (5/6 pytest passing — 1 failure exposes the critical field-name bug)",
+    "frontend": "100% (menu, sub-nav, panel, summary cards, filter, table, manual inputs all render and respond)"
+  },
+  "test_credentials": "Stock Admin: admin / Admin2026 (Admin2026 per memory/test_credentials.md — original review request had wrong 'Admin' username with capital A)",
+  "seed_data_creation": "None. Manual-consumption tests clean up by setting daily_consumption_manual back to null.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the field-name bug in stock.py forecast endpoint, re-run: REACT_APP_BACKEND_URL=https://caisse-mon-point.preview.emergentagent.com python -m pytest /app/backend/tests/test_stock_forecast.py -v . All 6 tests should pass. Frontend has no remaining issues — Approvisionnement removed, sub-nav 'Prévisions épuisement' present with testid 'subnav-forecast'; panel testid 'stock-forecast-panel'; cards forecast-filter-{critical|warning|ok|no_data} all work; filter badge appears on click; table testid 'forecast-table'. Login uses admin/Admin2026.",
+  "rca of the issue": "RCA — Forecast endpoint MongoDB projection on stock_products selects fields 'current_quantity' and 'min_quantity' (lines 538-540) but the actual stock_products documents have 'quantity' and 'stock_min' (cf. create_product line 296-297). p.get('current_quantity') returns None → float(None or 0) = 0.0 for every product. Reproduction: GET /api/stock/forecast → any item.current_quantity is 0 even when GET /api/stock/products/{id} shows quantity>0. Mitigation: rename fields in the projection AND in the two .get() lookups inside the loop (current_quantity → quantity, min_quantity → stock_min). Estimated fix: 4 lines."
+}

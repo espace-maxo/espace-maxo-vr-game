@@ -508,6 +508,125 @@ async def get_movements(product_id: str = None, movement_type: str = None, date_
     return {"movements": movements}
 
 
+# ==================== PRÉVISIONS ÉPUISEMENT (FORECAST) ====================
+
+# Types de mouvements considérés comme "consommation" (sortie de stock)
+_CONSUMPTION_TYPES = ("sortie", "perte", "casse", "transfert_sortie", "destockage_recette", "destockage_caisse")
+
+
+@router.get("/forecast")
+async def get_stock_forecast(window_days: int = 30, top: int = 0):
+    """Calcule la consommation moyenne quotidienne par produit sur les `window_days` derniers jours
+    (par défaut 30), à partir des mouvements de stock de type sortie/perte/casse/transfert_sortie.
+
+    Pour chaque produit :
+      - daily_avg_movements = total consommé sur la fenêtre / window_days
+      - daily_avg = max(daily_avg_movements, daily_consumption_manual or 0)  (fallback manuel)
+      - source = "movements" si historique > 0, sinon "manual" si daily_consumption_manual défini, sinon "none"
+      - days_remaining = current_quantity / daily_avg  (None si daily_avg=0)
+      - urgency = "critical" si < 3j, "warning" si < 7j, "ok" si >= 7j, "no_data" sinon
+
+    Le résultat est trié par urgence croissante (les plus urgents en haut).
+    """
+    if window_days < 1:
+        window_days = 30
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+
+    # 1. Charger tous les produits avec quantité positive
+    products = await db.stock_products.find(
+        {"is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "current_quantity": 1, "unit": 1, "category_id": 1,
+         "min_quantity": 1, "daily_consumption_manual": 1, "department": 1}
+    ).to_list(5000)
+
+    # 2. Agréger les mouvements de consommation sur la fenêtre
+    consumption_by_product = {}
+    pipeline = [
+        {"$match": {
+            "movement_type": {"$in": list(_CONSUMPTION_TYPES)},
+            "created_at": {"$gte": cutoff},
+        }},
+        {"$group": {
+            "_id": "$product_id",
+            "total_quantity": {"$sum": "$quantity"},
+            "movement_count": {"$sum": 1},
+        }},
+    ]
+    async for agg in db.stock_movements.aggregate(pipeline):
+        consumption_by_product[agg["_id"]] = {
+            "total_qty": float(agg.get("total_quantity", 0) or 0),
+            "count": int(agg.get("movement_count", 0) or 0),
+        }
+
+    # 3. Composer la réponse par produit
+    items = []
+    for p in products:
+        pid = p["id"]
+        agg = consumption_by_product.get(pid)
+        daily_avg_movements = round((agg["total_qty"] / window_days), 4) if agg else 0.0
+        daily_manual = float(p.get("daily_consumption_manual") or 0)
+        # Priorité à l'historique mouvements s'il existe, sinon fallback manuel
+        if daily_avg_movements > 0:
+            daily_avg = daily_avg_movements
+            source = "movements"
+        elif daily_manual > 0:
+            daily_avg = daily_manual
+            source = "manual"
+        else:
+            daily_avg = 0.0
+            source = "none"
+
+        current_qty = float(p.get("current_quantity") or 0)
+        if daily_avg > 0:
+            days_remaining = round(current_qty / daily_avg, 1)
+        else:
+            days_remaining = None
+
+        if days_remaining is None:
+            urgency = "no_data"
+        elif days_remaining < 3:
+            urgency = "critical"
+        elif days_remaining < 7:
+            urgency = "warning"
+        else:
+            urgency = "ok"
+
+        items.append({
+            "product_id": pid,
+            "name": p.get("name", ""),
+            "current_quantity": current_qty,
+            "unit": p.get("unit") or "",
+            "department": p.get("department") or "",
+            "min_quantity": float(p.get("min_quantity") or 0),
+            "daily_avg": daily_avg,
+            "daily_avg_movements": daily_avg_movements,
+            "daily_consumption_manual": daily_manual or None,
+            "source": source,
+            "movement_count": (agg or {}).get("count", 0),
+            "days_remaining": days_remaining,
+            "urgency": urgency,
+            "window_days": window_days,
+        })
+
+    # 4. Tri par urgence ascendante (critical d'abord)
+    urgency_order = {"critical": 0, "warning": 1, "ok": 2, "no_data": 3}
+    items.sort(key=lambda x: (urgency_order.get(x["urgency"], 99),
+                              x["days_remaining"] if x["days_remaining"] is not None else 9999,
+                              x["name"]))
+
+    summary = {
+        "total_products": len(items),
+        "critical": sum(1 for i in items if i["urgency"] == "critical"),
+        "warning": sum(1 for i in items if i["urgency"] == "warning"),
+        "ok": sum(1 for i in items if i["urgency"] == "ok"),
+        "no_data": sum(1 for i in items if i["urgency"] == "no_data"),
+        "window_days": window_days,
+    }
+    if top and top > 0:
+        items = items[:top]
+    return {"summary": summary, "items": items}
+
+
 # ==================== STOCK À UNE DATE DONNÉE (BOISSONS) ====================
 
 def _is_drinks_category(cat: dict) -> bool:

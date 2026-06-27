@@ -20,6 +20,7 @@ import { Toaster } from "@/components/ui/sonner";
 import CaisseStockLinksOverview from "./stock/components/CaisseStockLinksOverview";
 import PortionnementTab from "./stock/components/PortionnementTab";
 import ProductAnalysisView from "./stock/components/ProductAnalysisView";
+import StockForecastPanel from "./stock/components/StockForecastPanel";
 import DrinksRestockTab from "./stock/DrinksRestockTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/stock`;
@@ -117,15 +118,7 @@ const NAV_GROUPS = [
       { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
       { id: "snapshot", label: "Stock à une date", icon: Clock },
       { id: "drinks_restock", label: "Appro. Boissons", icon: PackageCheck },
-    ],
-  },
-  {
-    id: "approvisionnement",
-    label: "Approvisionnement",
-    icon: ShoppingCart,
-    subtabs: [
-      { id: "purchases", label: "Achats", icon: ShoppingCart },
-      { id: "suppliers", label: "Fournisseurs", icon: Truck },
+      { id: "forecast", label: "Prévisions épuisement", icon: TrendingDown },
     ],
   },
   {
@@ -1332,28 +1325,34 @@ export default function StockPage() {
           </span>
         </div>
 
-        {/* Sub-navigation : affichée pour tout groupe qui a 2+ sous-onglets visibles */}
+        {/* Sub-navigation : affichée pour tout groupe qui a 2+ sous-onglets visibles
+            Aération : flex-wrap (multi-lignes au lieu de scroll), padding+gap plus généreux, icônes plus visibles. */}
         {(() => {
           const g = findGroupForSection(activeSection);
           if (!g) return null;
           const visibleSubtabs = g.subtabs.filter((s) => !s.adminOnly || isAdmin);
           if (visibleSubtabs.length < 2) return null;
           return (
-            <div className="mb-4 flex items-center gap-2 flex-wrap border-b border-slate-800 pb-2 overflow-x-auto" data-testid={`subnav-${g.id}`}>
-              {visibleSubtabs.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => { setActiveSection(t.id); clearSelection(); }}
-                  data-testid={`subnav-${t.id}`}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors whitespace-nowrap ${
-                    activeSection === t.id
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/50'
-                  }`}
-                >
-                  <t.icon className="w-4 h-4" /> {t.label}
-                </button>
-              ))}
+            <div className="mb-6" data-testid={`subnav-${g.id}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                <g.icon className="w-3.5 h-3.5" /> {g.label}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap border-b border-slate-800 pb-3">
+                {visibleSubtabs.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setActiveSection(t.id); clearSelection(); }}
+                    data-testid={`subnav-${t.id}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                      activeSection === t.id
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/30'
+                        : 'bg-slate-800/40 text-slate-300 hover:text-white hover:bg-slate-700/60 border border-slate-700/40'
+                    }`}
+                  >
+                    <t.icon className="w-4 h-4" /> {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         })()}
@@ -3573,6 +3572,11 @@ export default function StockPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* FORECAST — Prévisions d'épuisement des stocks */}
+        {activeSection === "forecast" && (
+          <StockForecastPanel />
         )}
 
         {/* SNAPSHOT — Stock à une date donnée (Boissons) */}
