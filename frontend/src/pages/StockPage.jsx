@@ -84,58 +84,108 @@ const MOVEMENT_TYPES = [
 ];
 
 // ============================================================================
-// NAVIGATION : 5 groupes principaux avec sous-onglets (refonte Phase 1)
+// NAVIGATION (refonte Phase 2 - épuration) :
+// - 4 groupes principaux (sidebar)
+// - 2 à 3 "buckets" par groupe (sous-nav top) — au lieu de 5/6 onglets
+// - Chaque bucket peut contenir 1 ou plusieurs sections (segmented control interne)
+// Les ids de section (children) restent INCHANGÉS pour préserver toute la logique
+// de rendu `activeSection === "..."` déjà en place.
 // ============================================================================
 const NAV_GROUPS = [
   {
     id: "dashboard_group",
     label: "Tableau de bord",
     icon: BarChart3,
-    subtabs: [
-      { id: "dashboard", label: "Vue d'ensemble", icon: BarChart3 },
-      { id: "destock_live", label: "Déstockage live", icon: Activity },
+    buckets: [
+      { id: "dashboard", label: "Vue d'ensemble", icon: BarChart3, children: [{ id: "dashboard", label: "Vue d'ensemble", icon: BarChart3 }] },
+      { id: "destock_live", label: "Déstockage live", icon: Activity, children: [{ id: "destock_live", label: "Déstockage live", icon: Activity }] },
     ],
   },
   {
     id: "catalogue",
     label: "Catalogue",
     icon: Package,
-    subtabs: [
-      { id: "products", label: "Produits", icon: Package },
-      { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
-      { id: "portionnement", label: "Portionnement", icon: Scale },
-      { id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 },
-      { id: "categories", label: "Catégories", icon: ClipboardList },
+    buckets: [
+      {
+        id: "bk_products",
+        label: "Produits & Catégories",
+        icon: Package,
+        children: [
+          { id: "products", label: "Produits", icon: Package },
+          { id: "categories", label: "Catégories", icon: ClipboardList },
+        ],
+      },
+      {
+        id: "bk_recipes",
+        label: "Recettes & Portions",
+        icon: BookOpen,
+        children: [
+          { id: "recipes", label: "Fiches Techniques", icon: BookOpen },
+          { id: "portionnement", label: "Portionnement", icon: Scale },
+        ],
+      },
+      {
+        id: "bk_caisse_links",
+        label: "Liaisons Caisse↔Stock",
+        icon: Link2,
+        children: [{ id: "caisse_links", label: "Liaisons Caisse↔Stock", icon: Link2 }],
+      },
     ],
   },
   {
     id: "stocks",
     label: "Stocks",
     icon: Warehouse,
-    subtabs: [
-      { id: "magasin", label: "Stock Magasin", icon: Warehouse },
-      { id: "movements", label: "Mouvements", icon: ArrowUpDown },
-      { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
-      { id: "snapshot", label: "Stock à une date", icon: Clock },
-      { id: "drinks_restock", label: "Appro. Boissons", icon: PackageCheck },
-      { id: "forecast", label: "Prévisions épuisement", icon: TrendingDown },
+    buckets: [
+      {
+        id: "bk_magasin",
+        label: "Stock & Mouvements",
+        icon: Warehouse,
+        children: [
+          { id: "magasin", label: "Stock Magasin", icon: Warehouse },
+          { id: "movements", label: "Mouvements", icon: ArrowUpDown },
+          { id: "snapshot", label: "Stock à une date", icon: Clock },
+        ],
+      },
+      {
+        id: "bk_inventory",
+        label: "Inventaire & Appro",
+        icon: ClipboardCheck,
+        children: [
+          { id: "inventory", label: "Inventaire", icon: ClipboardCheck },
+          { id: "drinks_restock", label: "Appro. Boissons", icon: PackageCheck },
+        ],
+      },
+      {
+        id: "bk_forecast",
+        label: "Prévisions épuisement",
+        icon: TrendingDown,
+        children: [{ id: "forecast", label: "Prévisions épuisement", icon: TrendingDown }],
+      },
     ],
   },
   {
     id: "admin_group",
     label: "Rapports & Admin",
     icon: FileText,
-    subtabs: [
-      { id: "reports", label: "Rapports", icon: FileText },
-      { id: "product_analysis", label: "Analyse produit", icon: BarChart3 },
-      { id: "users", label: "Utilisateurs", icon: Users, adminOnly: true },
+    buckets: [
+      { id: "reports", label: "Rapports", icon: FileText, children: [{ id: "reports", label: "Rapports", icon: FileText }] },
+      { id: "product_analysis", label: "Analyse produit", icon: BarChart3, children: [{ id: "product_analysis", label: "Analyse produit", icon: BarChart3 }] },
+      { id: "users", label: "Utilisateurs", icon: Users, adminOnly: true, children: [{ id: "users", label: "Utilisateurs", icon: Users }] },
     ],
   },
 ];
 
-// Helper : retrouve le groupe qui contient une section donnée
-const findGroupForSection = (sectionId) =>
-  NAV_GROUPS.find((g) => g.subtabs.some((s) => s.id === sectionId));
+// Helper : retrouve le groupe + bucket qui contient une section donnée
+const findLocationForSection = (sectionId) => {
+  for (const g of NAV_GROUPS) {
+    for (const b of g.buckets) {
+      if (b.children.some((c) => c.id === sectionId)) return { group: g, bucket: b };
+    }
+  }
+  return null;
+};
+const findGroupForSection = (sectionId) => findLocationForSection(sectionId)?.group || null;
 
 const ROLES = [
   { value: "administrateur", label: "Administrateur", desc: "Acces complet" },
@@ -791,6 +841,16 @@ export default function StockPage() {
     return c;
   }, [searchQuery, filterCategory, filterAlert, filterZone, filterSupplier, filterRenseigned]);
 
+  // Compteur des filtres "avancés" (repliés sous "Plus de filtres")
+  const advancedFiltersCount = useMemo(() => {
+    let c = 0;
+    if (filterZone !== "all") c++;
+    if (filterSupplier !== "all") c++;
+    if (filterRenseigned !== "all") c++;
+    return c;
+  }, [filterZone, filterSupplier, filterRenseigned]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   const resetAllFilters = () => {
     setSearchQuery("");
     setFilterCategory("all");
@@ -1270,17 +1330,17 @@ export default function StockPage() {
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {NAV_GROUPS.map((group) => {
-            // Si le groupe ne contient que des onglets admin-only et qu'on n'est pas admin, on le filtre
-            const visibleSubtabs = group.subtabs.filter((s) => !s.adminOnly || isAdmin);
-            if (visibleSubtabs.length === 0) return null;
+            // Filtre les buckets admin-only quand on n'est pas admin
+            const visibleBuckets = group.buckets.filter((b) => !b.adminOnly || isAdmin);
+            if (visibleBuckets.length === 0) return null;
 
-            const isActiveGroup = visibleSubtabs.some((s) => s.id === activeSection);
+            const isActiveGroup = visibleBuckets.some((b) => b.children.some((c) => c.id === activeSection));
             return (
               <button
                 key={group.id}
                 onClick={() => {
-                  // Aller au premier sous-onglet visible du groupe
-                  setActiveSection(visibleSubtabs[0].id);
+                  // Aller au premier child du premier bucket visible
+                  setActiveSection(visibleBuckets[0].children[0].id);
                   clearSelection();
                   setMobileMenuOpen(false);
                 }}
@@ -1318,40 +1378,76 @@ export default function StockPage() {
           </button>
           <span className="text-emerald-400 text-sm font-medium">
             {(() => {
-              const g = findGroupForSection(activeSection);
-              const s = g?.subtabs.find((x) => x.id === activeSection);
-              return g && s ? `${g.label} · ${s.label}` : (s?.label || activeSection);
+              const loc = findLocationForSection(activeSection);
+              if (!loc) return activeSection;
+              const child = loc.bucket.children.find((c) => c.id === activeSection);
+              return `${loc.group.label} · ${child?.label || loc.bucket.label}`;
             })()}
           </span>
         </div>
 
-        {/* Sub-navigation : affichée pour tout groupe qui a 2+ sous-onglets visibles
-            Aération : flex-wrap (multi-lignes au lieu de scroll), padding+gap plus généreux, icônes plus visibles. */}
+        {/* Sous-nav (buckets) : niveau 1 — affichée pour tout groupe ayant 2+ buckets visibles */}
         {(() => {
-          const g = findGroupForSection(activeSection);
-          if (!g) return null;
-          const visibleSubtabs = g.subtabs.filter((s) => !s.adminOnly || isAdmin);
-          if (visibleSubtabs.length < 2) return null;
+          const loc = findLocationForSection(activeSection);
+          if (!loc) return null;
+          const g = loc.group;
+          const visibleBuckets = g.buckets.filter((b) => !b.adminOnly || isAdmin);
+          if (visibleBuckets.length < 2) return null;
+          const currentBucket = loc.bucket;
           return (
-            <div className="mb-6" data-testid={`subnav-${g.id}`}>
+            <div className="mb-4" data-testid={`subnav-${g.id}`}>
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2 flex items-center gap-1.5">
                 <g.icon className="w-3.5 h-3.5" /> {g.label}
               </p>
               <div className="flex items-center gap-2 flex-wrap border-b border-slate-800 pb-3">
-                {visibleSubtabs.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => { setActiveSection(t.id); clearSelection(); }}
-                    data-testid={`subnav-${t.id}`}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                      activeSection === t.id
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/30'
-                        : 'bg-slate-800/40 text-slate-300 hover:text-white hover:bg-slate-700/60 border border-slate-700/40'
-                    }`}
-                  >
-                    <t.icon className="w-4 h-4" /> {t.label}
-                  </button>
-                ))}
+                {visibleBuckets.map((b) => {
+                  const isActive = b.id === currentBucket.id;
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => { setActiveSection(b.children[0].id); clearSelection(); }}
+                      data-testid={`subnav-${b.id}`}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/30'
+                          : 'bg-slate-800/40 text-slate-300 hover:text-white hover:bg-slate-700/60 border border-slate-700/40'
+                      }`}
+                    >
+                      <b.icon className="w-4 h-4" /> {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Sous-nav (children du bucket courant) : niveau 2 — affichée seulement si le bucket a 2+ children */}
+        {(() => {
+          const loc = findLocationForSection(activeSection);
+          if (!loc) return null;
+          const children = loc.bucket.children;
+          if (children.length < 2) return null;
+          return (
+            <div className="mb-6" data-testid={`subnav-children-${loc.bucket.id}`}>
+              <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-900/60 border border-slate-800">
+                {children.map((c) => {
+                  const isActive = c.id === activeSection;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => { setActiveSection(c.id); clearSelection(); }}
+                      data-testid={`subnav-child-${c.id}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
+                        isActive
+                          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <c.icon className="w-3.5 h-3.5" /> {c.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );
@@ -1957,7 +2053,7 @@ export default function StockPage() {
               </div>
             </div>
 
-            {/* KPI Summary Cards */}
+            {/* KPI Summary Cards — épuré : 3 cartes (Catalogue / Valeur / Alertes) */}
             {products.length > 0 && (() => {
               const totalProducts = products.length;
               const renseigned = products.filter(p => p.quantity > 0 || p.purchase_price > 0).length;
@@ -1966,74 +2062,59 @@ export default function StockPage() {
               const margin = totalValueVente - totalValue;
               const rupture = products.filter(p => p.quantity <= 0).length;
               const faible = products.filter(p => p.quantity > 0 && p.quantity <= p.stock_min).length;
+              const pctRenseigned = totalProducts > 0 ? Math.round(renseigned / totalProducts * 100) : 0;
               return (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="products-kpi-cards">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="products-kpi-cards">
+                  {/* Catalogue */}
                   <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/80 border-slate-700">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-slate-400 text-xs uppercase tracking-wider">Total produits</p>
+                          <p className="text-slate-400 text-xs uppercase tracking-wider">Catalogue</p>
                           <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-total">{totalProducts}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5" data-testid="kpi-renseigned">
+                            <span className="text-emerald-400 font-semibold">{renseigned}</span> renseignés ({pctRenseigned}%)
+                          </p>
                         </div>
                         <Package className="w-8 h-8 text-slate-500" />
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 border-emerald-700/40">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-emerald-300 text-xs uppercase tracking-wider">Renseignés</p>
-                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-renseigned">{renseigned}</p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">sur {totalProducts} ({totalProducts > 0 ? Math.round(renseigned / totalProducts * 100) : 0}%)</p>
-                        </div>
-                        <CheckSquare className="w-8 h-8 text-emerald-400/60" />
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Valeur (achat + vente combinés) */}
                   <Card className="bg-gradient-to-br from-cyan-900/40 to-slate-900/80 border-cyan-700/40">
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-cyan-300 text-xs uppercase tracking-wider">Valeur achat</p>
-                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value">{formatPrice(totalValue)}</p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA · au coût</p>
-                        </div>
-                        <TrendingUp className="w-8 h-8 text-cyan-400/60" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 border-emerald-700/40">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-emerald-300 text-xs uppercase tracking-wider">Valeur vente</p>
-                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value-vente">{formatPrice(totalValueVente)}</p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">F CFA · au prix de vente</p>
-                          {margin !== 0 && (
-                            <p className={`text-[11px] mt-0.5 font-semibold ${margin >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                              {margin >= 0 ? "+" : ""}{formatPrice(margin)} F · marge potentielle
-                            </p>
-                          )}
-                        </div>
-                        <TrendingUp className="w-8 h-8 text-emerald-400/60" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className={`bg-gradient-to-br ${rupture > 0 ? 'from-red-900/50 to-slate-900/80 border-red-600/50' : 'from-amber-900/30 to-slate-900/80 border-amber-700/40'}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className={`${rupture > 0 ? 'text-red-300' : 'text-amber-300'} text-xs uppercase tracking-wider`}>Alertes</p>
-                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-alerts">{rupture + faible}</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-cyan-300 text-xs uppercase tracking-wider">Valeur du stock</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-value">{formatPrice(totalValue)} <span className="text-sm font-normal text-slate-400">F</span></p>
                           <p className="text-slate-500 text-[11px] mt-0.5">
-                            {rupture > 0 && <span className="text-red-400">{rupture} rupture</span>}
-                            {rupture > 0 && faible > 0 && <span> · </span>}
-                            {faible > 0 && <span className="text-orange-400">{faible} faible</span>}
-                            {rupture === 0 && faible === 0 && <span className="text-emerald-400">Aucune</span>}
+                            Vente <span data-testid="kpi-value-vente" className="text-emerald-300 font-semibold">{formatPrice(totalValueVente)} F</span>
+                            {margin !== 0 && (
+                              <span className={`ml-2 font-semibold ${margin >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                · marge {margin >= 0 ? "+" : ""}{formatPrice(margin)} F
+                              </span>
+                            )}
                           </p>
                         </div>
-                        <AlertTriangle className={`w-8 h-8 ${rupture > 0 ? 'text-red-400/70' : 'text-amber-400/60'}`} />
+                        <TrendingUp className="w-8 h-8 text-cyan-400/60 shrink-0" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Alertes */}
+                  <Card className={`bg-gradient-to-br ${rupture > 0 ? 'from-red-900/50 to-slate-900/80 border-red-600/50' : (faible > 0 ? 'from-amber-900/30 to-slate-900/80 border-amber-700/40' : 'from-emerald-900/20 to-slate-900/80 border-emerald-700/30')}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={`${rupture > 0 ? 'text-red-300' : (faible > 0 ? 'text-amber-300' : 'text-emerald-300')} text-xs uppercase tracking-wider`}>Alertes</p>
+                          <p className="text-2xl font-bold text-white mt-1" data-testid="kpi-alerts">{rupture + faible}</p>
+                          <p className="text-slate-500 text-[11px] mt-0.5">
+                            {rupture > 0 && <span className="text-red-400">{rupture} rupture{rupture > 1 ? 's' : ''}</span>}
+                            {rupture > 0 && faible > 0 && <span> · </span>}
+                            {faible > 0 && <span className="text-orange-400">{faible} faible{faible > 1 ? 's' : ''}</span>}
+                            {rupture === 0 && faible === 0 && <span className="text-emerald-400">Aucune alerte</span>}
+                          </p>
+                        </div>
+                        <AlertTriangle className={`w-8 h-8 ${rupture > 0 ? 'text-red-400/70' : (faible > 0 ? 'text-amber-400/60' : 'text-emerald-400/50')}`} />
                       </div>
                     </CardContent>
                   </Card>
@@ -2041,62 +2122,82 @@ export default function StockPage() {
               );
             })()}
 
-            {/* Filters */}
-            <div className="flex gap-2 flex-wrap items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un produit..."
-                  className="bg-slate-900 border-slate-700 text-white pl-9" data-testid="product-search" />
-              </div>
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-category"><SelectValue placeholder="Categorie" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">Toutes catégories</SelectItem>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterAlert} onValueChange={setFilterAlert}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[160px]" data-testid="filter-alert"><SelectValue placeholder="Alerte" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">Tous niveaux</SelectItem>
-                  <SelectItem value="rupture" className="text-red-400">Rupture</SelectItem>
-                  <SelectItem value="faible" className="text-orange-400">Stock faible</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterZone} onValueChange={setFilterZone}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[140px]" data-testid="filter-zone"><SelectValue placeholder="Zone" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">Toutes zones</SelectItem>
-                  <SelectItem value="cuisine" className="text-emerald-400">Restau</SelectItem>
-                  <SelectItem value="magasin" className="text-cyan-400">Magasin</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterSupplier} onValueChange={setFilterSupplier}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-supplier"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
-                  <SelectItem value="all" className="text-white">Tous fournisseurs</SelectItem>
-                  {suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-white">{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterRenseigned} onValueChange={setFilterRenseigned}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[150px]" data-testid="filter-renseigned"><SelectValue placeholder="État" /></SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">Tous</SelectItem>
-                  <SelectItem value="yes" className="text-emerald-400">Renseignés</SelectItem>
-                  <SelectItem value="no" className="text-slate-400">Non renseignés</SelectItem>
-                </SelectContent>
-              </Select>
-              {activeFiltersCount > 0 && (
+            {/* Filtres — vue compacte : search + Catégorie + Alerte visibles. Zone/Fournisseur/État repliés. */}
+            <div className="space-y-2">
+              <div className="flex gap-2 flex-wrap items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un produit..."
+                    className="bg-slate-900 border-slate-700 text-white pl-9" data-testid="product-search" />
+                </div>
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-category"><SelectValue placeholder="Categorie" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all" className="text-white">Toutes catégories</SelectItem>
+                    {categories.map(c => <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterAlert} onValueChange={setFilterAlert}>
+                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[160px]" data-testid="filter-alert"><SelectValue placeholder="Alerte" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all" className="text-white">Tous niveaux</SelectItem>
+                    <SelectItem value="rupture" className="text-red-400">Rupture</SelectItem>
+                    <SelectItem value="faible" className="text-orange-400">Stock faible</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={resetAllFilters}
-                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
-                  data-testid="filter-reset"
+                  onClick={() => setShowAdvancedFilters(v => !v)}
+                  className={`border-slate-700 ${showAdvancedFilters ? 'bg-slate-800 text-white' : 'text-slate-300 hover:text-white'}`}
+                  data-testid="filter-advanced-toggle"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Réinitialiser
-                  <Badge className="ml-1.5 bg-amber-500/20 text-amber-300 text-[10px]">{activeFiltersCount}</Badge>
+                  <Filter className="w-3.5 h-3.5 mr-1.5" />
+                  Plus de filtres
+                  {advancedFiltersCount > 0 && (
+                    <Badge className="ml-1.5 bg-emerald-500/20 text-emerald-300 text-[10px]">{advancedFiltersCount}</Badge>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
                 </Button>
+                {activeFiltersCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetAllFilters}
+                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                    data-testid="filter-reset"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1" /> Réinitialiser
+                    <Badge className="ml-1.5 bg-amber-500/20 text-amber-300 text-[10px]">{activeFiltersCount}</Badge>
+                  </Button>
+                )}
+              </div>
+              {showAdvancedFilters && (
+                <div className="flex gap-2 flex-wrap items-center pt-1" data-testid="filter-advanced-panel">
+                  <Select value={filterZone} onValueChange={setFilterZone}>
+                    <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[140px]" data-testid="filter-zone"><SelectValue placeholder="Zone" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="all" className="text-white">Toutes zones</SelectItem>
+                      <SelectItem value="cuisine" className="text-emerald-400">Restau</SelectItem>
+                      <SelectItem value="magasin" className="text-cyan-400">Magasin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                    <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[180px]" data-testid="filter-supplier"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 max-h-[300px]">
+                      <SelectItem value="all" className="text-white">Tous fournisseurs</SelectItem>
+                      {suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-white">{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterRenseigned} onValueChange={setFilterRenseigned}>
+                    <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-[150px]" data-testid="filter-renseigned"><SelectValue placeholder="État" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="all" className="text-white">Tous</SelectItem>
+                      <SelectItem value="yes" className="text-emerald-400">Renseignés</SelectItem>
+                      <SelectItem value="no" className="text-slate-400">Non renseignés</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             </div>
 
