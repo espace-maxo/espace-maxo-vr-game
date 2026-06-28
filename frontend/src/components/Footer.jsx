@@ -122,6 +122,18 @@ const Footer = () => {
               Staff
             </a>
           </p>
+          {/* Mention discrète — origine de la plateforme */}
+          <p className="text-[10px] text-gray-500/70 mt-3 font-outfit tracking-wider" data-testid="footer-made-with">
+            Made with{" "}
+            <a
+              href="https://emergent.sh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-500/80 hover:text-neon-blue transition-colors underline-offset-2 hover:underline"
+            >
+              emergent
+            </a>
+          </p>
         </div>
       </div>
       
