@@ -1,0 +1,578 @@
+/**
+ * FieldStockReportModal — Modal de "Point de stock terrain" pour le Resp. Op.
+ *
+ * Workflow :
+ *  - Le Resp Op crée un nouveau relevé : choisit des catégories, saisit ses qty comptées,
+ *    ajoute des notes, et soumet.
+ *  - Tous les rôles (manager + admin) peuvent voir l'historique des relevés.
+ *    Manager : ses propres relevés. Admin : tous.
+ *  - Admin peut "Rapprocher" un relevé (ajuste le stock système).
+ *
+ * Le stock système n'est PAS impacté par la création/soumission. Seul le bouton
+ * "Rapprocher" (Admin) déclenche des mouvements d'ajustement.
+ */
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Textarea } from "../../../components/ui/textarea";
+import { Badge } from "../../../components/ui/badge";
+import { Card, CardContent } from "../../../components/ui/card";
+import {
+  X, Plus, ClipboardCheck, Search, Save, AlertTriangle, CheckCircle2, FileText,
+  Trash2, RefreshCw, Loader2, ChevronRight, ChevronLeft, Layers, BadgeCheck,
+} from "lucide-react";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+export default function FieldStockReportModal({ open, onClose, currentUser }) {
+  const isAdmin = currentUser?.role === "admin";
+  const userId = currentUser?.id || currentUser?.username || "unknown";
+  const userName = currentUser?.full_name || currentUser?.username || "Resp. Op.";
+
+  const [tab, setTab] = useState("new"); // "new" | "history" | "detail"
+  const [categories, setCategories] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // ----- Nouveau relevé -----
+  const [selectedCats, setSelectedCats] = useState([]);
+  const [search, setSearch] = useState("");
+  const [counts, setCounts] = useState({}); // { product_id: counted_qty }
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // ----- Historique -----
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reconciling, setReconciling] = useState(false);
+
+  // ----------------------------------------------------------------
+  // Chargement initial
+  // ----------------------------------------------------------------
+  const fetchCategories = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/stock/categories`);
+      setCategories(r.data?.categories || r.data || []);
+    } catch {
+      setCategories([]);
+    }
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
+    setLoadingProducts(true);
+    try {
+      const r = await axios.get(`${API}/stock/products`);
+      const prods = r.data?.products || r.data || [];
+      // Tri alphabétique pour faciliter la saisie
+      prods.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setAllProducts(prods);
+    } catch {
+      setAllProducts([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, []);
+
+  const fetchReports = useCallback(async () => {
+    setReportsLoading(true);
+    try {
+      const params = isAdmin ? "" : `?role=manager&user_id=${encodeURIComponent(userId)}`;
+      const r = await axios.get(`${API}/field-stock/reports${params}`);
+      setReports(r.data?.reports || []);
+    } catch {
+      setReports([]);
+    } finally {
+      setReportsLoading(false);
+    }
+  }, [isAdmin, userId]);
+
+  useEffect(() => {
+    if (!open) return;
+    fetchCategories();
+    fetchProducts();
+    fetchReports();
+  }, [open, fetchCategories, fetchProducts, fetchReports]);
+
+  // ----------------------------------------------------------------
+  // Catégories sélectionnées → produits filtrés affichés
+  // ----------------------------------------------------------------
+  const visibleProducts = useMemo(() => {
+    let list = allProducts;
+    if (selectedCats.length > 0) {
+      list = list.filter((p) => selectedCats.includes(p.category_id));
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) => (p.name || "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [allProducts, selectedCats, search]);
+
+  const countedItems = useMemo(() => {
+    return Object.entries(counts)
+      .filter(([, v]) => v !== "" && !Number.isNaN(parseFloat(v)))
+      .map(([product_id, v]) => ({ product_id, counted_qty: parseFloat(v) }));
+  }, [counts]);
+
+  const totalLignes = countedItems.length;
+
+  // ----------------------------------------------------------------
+  // Actions
+  // ----------------------------------------------------------------
+  const toggleCategory = (catId) => {
+    setSelectedCats((prev) => prev.includes(catId) ? prev.filter((c) => c !== catId) : [...prev, catId]);
+  };
+
+  const updateCount = (productId, value) => {
+    setCounts((prev) => ({ ...prev, [productId]: value }));
+  };
+
+  const resetForm = () => {
+    setSelectedCats([]);
+    setSearch("");
+    setCounts({});
+    setNotes("");
+  };
+
+  const submitReport = async () => {
+    if (countedItems.length === 0) {
+      toast.error("Saisissez au moins une quantité comptée");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const params = new URLSearchParams({ x_user_id: userId, x_user_name: userName }).toString();
+      await axios.post(`${API}/field-stock/reports?${params}`, {
+        category_ids: selectedCats,
+        items: countedItems,
+        notes: notes.trim(),
+      });
+      toast.success(`Point de stock soumis (${countedItems.length} ligne${countedItems.length > 1 ? "s" : ""}) ✅`);
+      resetForm();
+      await fetchReports();
+      setTab("history");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la soumission");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openReport = async (reportId) => {
+    try {
+      const r = await axios.get(`${API}/field-stock/reports/${reportId}`);
+      setSelectedReport(r.data);
+      setTab("detail");
+    } catch {
+      toast.error("Impossible de charger le rapport");
+    }
+  };
+
+  const deleteReport = async (reportId) => {
+    if (!confirm("Supprimer ce rapport ?")) return;
+    try {
+      const params = new URLSearchParams({
+        x_user_id: userId,
+        x_user_role: isAdmin ? "admin" : "manager",
+      }).toString();
+      await axios.delete(`${API}/field-stock/reports/${reportId}?${params}`);
+      toast.success("Rapport supprimé");
+      await fetchReports();
+      if (selectedReport?.id === reportId) { setSelectedReport(null); setTab("history"); }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    }
+  };
+
+  const reconcile = async (reportId) => {
+    if (!isAdmin) return;
+    if (!confirm("Rapprocher ce point de stock au stock système ?\n\nUn mouvement d'ajustement sera créé pour chaque écart non nul.")) return;
+    setReconciling(true);
+    try {
+      const params = new URLSearchParams({ x_user_name: userName }).toString();
+      const r = await axios.post(`${API}/field-stock/reports/${reportId}/reconcile?${params}`);
+      toast.success(`Rapprochement effectué — ${r.data.movements_count} mouvement(s) créé(s) ✅`);
+      await fetchReports();
+      if (selectedReport?.id === reportId) {
+        const refreshed = await axios.get(`${API}/field-stock/reports/${reportId}`);
+        setSelectedReport(refreshed.data);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  // ----------------------------------------------------------------
+  // Rendu
+  // ----------------------------------------------------------------
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" data-testid="field-stock-modal">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-800/60 to-slate-900/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30">
+              <ClipboardCheck className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-white font-semibold text-lg leading-tight">Point de stock terrain</h2>
+              <p className="text-slate-400 text-xs">
+                {isAdmin ? "Supervisor view — tous les rapports" : "Saisie libre · indépendant du stock système"}
+              </p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-400 hover:text-white" data-testid="field-stock-close">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Tabs */}
+        <div className="px-5 pt-3 border-b border-slate-800 flex gap-1">
+          {[
+            { id: "new", label: "Nouveau relevé", icon: Plus, hidden: isAdmin && tab !== "new" && selectedReport },
+            { id: "history", label: isAdmin ? "Tous les rapports" : "Mes rapports", icon: FileText },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setTab(t.id); setSelectedReport(null); }}
+              data-testid={`field-stock-tab-${t.id}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-t-md text-sm font-medium transition-all ${
+                tab === t.id
+                  ? "bg-slate-800 text-emerald-300 border-x border-t border-slate-700"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              <t.icon className="w-4 h-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-5">
+          {/* === Nouveau relevé === */}
+          {tab === "new" && (
+            <div className="space-y-4">
+              {/* Catégories */}
+              <div>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" /> 1. Sélectionnez les catégories à compter (facultatif)
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto p-2 bg-slate-950/40 border border-slate-800 rounded-md" data-testid="field-stock-categories">
+                  {categories.length === 0 && <span className="text-slate-500 text-xs">Aucune catégorie chargée</span>}
+                  {categories.map((c) => {
+                    const active = selectedCats.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => toggleCategory(c.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full transition border ${
+                          active
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            : "bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500"
+                        }`}
+                        data-testid={`field-stock-cat-${c.id}`}
+                      >
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                  {selectedCats.length > 0 && (
+                    <button
+                      onClick={() => setSelectedCats([])}
+                      className="text-[11px] px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/20"
+                    >
+                      <X className="inline w-3 h-3 mr-0.5" /> Réinitialiser
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Recherche */}
+              <div>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">2. Saisissez les quantités comptées</p>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Rechercher un produit..."
+                    className="bg-slate-950 border-slate-700 text-white pl-9 h-9"
+                    data-testid="field-stock-search"
+                  />
+                </div>
+
+                {/* Liste produits */}
+                <div className="border border-slate-800 rounded-md max-h-[40vh] overflow-auto bg-slate-950/40">
+                  {loadingProducts ? (
+                    <div className="p-6 text-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+                  ) : visibleProducts.length === 0 ? (
+                    <div className="p-6 text-center text-slate-500 text-sm">Aucun produit ne correspond aux filtres</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-slate-900 z-10">
+                        <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
+                          <th className="px-3 py-2 text-left">Produit</th>
+                          <th className="px-3 py-2 text-right hidden md:table-cell">Stock système</th>
+                          <th className="px-3 py-2 text-right">Compté</th>
+                          <th className="px-3 py-2 text-right hidden md:table-cell">Unité</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleProducts.slice(0, 250).map((p) => {
+                          const val = counts[p.id] ?? "";
+                          const hasValue = val !== "" && !Number.isNaN(parseFloat(val));
+                          return (
+                            <tr key={p.id} className={`border-b border-slate-800/60 hover:bg-slate-800/30 ${hasValue ? 'bg-emerald-500/5' : ''}`}>
+                              <td className="px-3 py-2 text-slate-200 truncate max-w-[280px]">{p.name}</td>
+                              <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.quantity ?? 0}</td>
+                              <td className="px-3 py-2 text-right">
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.01"
+                                  min="0"
+                                  value={val}
+                                  onChange={(e) => updateCount(p.id, e.target.value)}
+                                  className="bg-slate-900 border-slate-700 text-white h-7 w-24 text-right ml-auto"
+                                  placeholder="—"
+                                  data-testid={`field-stock-input-${p.id}`}
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.unit || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                  {visibleProducts.length > 250 && (
+                    <div className="p-2 text-center text-amber-300 text-xs bg-amber-500/5">
+                      ⚠️ Affichage limité à 250 lignes — affinez avec la recherche ou les catégories
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">3. Notes (justification pour l&apos;Admin)</p>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ex: Justif appro — boissons en rupture vendredi soir, contrôle frigo cave..."
+                  rows={2}
+                  className="bg-slate-950 border-slate-700 text-white text-sm resize-none"
+                  data-testid="field-stock-notes"
+                />
+              </div>
+
+              {/* Footer actions */}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 sticky bottom-0 bg-slate-900/95 -mx-5 px-5 pb-1">
+                <div className="text-slate-400 text-sm">
+                  <Badge className="bg-emerald-500/15 text-emerald-300 mr-2">{totalLignes}</Badge>
+                  ligne{totalLignes > 1 ? "s" : ""} saisie{totalLignes > 1 ? "s" : ""}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={resetForm} className="border-slate-700 text-slate-300" data-testid="field-stock-reset">
+                    <RefreshCw className="w-4 h-4 mr-1" /> Réinitialiser
+                  </Button>
+                  <Button
+                    onClick={submitReport}
+                    disabled={submitting || totalLignes === 0}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    data-testid="field-stock-submit"
+                  >
+                    {submitting
+                      ? <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                      : <Save className="w-4 h-4 mr-1" />}
+                    Soumettre le relevé
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* === Historique === */}
+          {tab === "history" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-slate-300 text-sm">
+                  {reports.length} rapport{reports.length > 1 ? "s" : ""}
+                </p>
+                <Button variant="outline" size="sm" onClick={fetchReports} className="border-slate-700 text-slate-300" data-testid="field-stock-refresh">
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Actualiser
+                </Button>
+              </div>
+
+              {reportsLoading ? (
+                <div className="p-8 text-center text-slate-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+              ) : reports.length === 0 ? (
+                <Card className="bg-slate-950/40 border-slate-800">
+                  <CardContent className="p-8 text-center">
+                    <ClipboardCheck className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-400 text-sm">Aucun rapport pour le moment.</p>
+                    <Button onClick={() => setTab("new")} className="mt-3 bg-emerald-600 hover:bg-emerald-700" data-testid="field-stock-create-cta">
+                      <Plus className="w-4 h-4 mr-1" /> Créer un relevé
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2" data-testid="field-stock-reports-list">
+                  {reports.map((r) => (
+                    <Card key={r.id} className="bg-slate-950/40 border-slate-800 hover:border-slate-700 transition cursor-pointer" onClick={() => openReport(r.id)} data-testid={`field-stock-report-${r.id}`}>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${r.status === "reconciled" ? "bg-emerald-500/15" : "bg-amber-500/15"}`}>
+                          {r.status === "reconciled"
+                            ? <BadgeCheck className="w-5 h-5 text-emerald-400" />
+                            : <ClipboardCheck className="w-5 h-5 text-amber-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-medium text-sm">{r.created_by_name}</span>
+                            <Badge className={`text-[10px] ${r.status === "reconciled" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                              {r.status === "reconciled" ? "Rapproché" : "Soumis"}
+                            </Badge>
+                            <span className="text-slate-500 text-xs">
+                              {new Date(r.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-slate-400 flex-wrap">
+                            <span>{r.items_count} ligne{r.items_count > 1 ? "s" : ""}</span>
+                            {r.rupture_count > 0 && <span className="text-rose-400">• {r.rupture_count} rupture(s) constatées</span>}
+                            {r.total_ecart_positif > 0 && <span className="text-emerald-400">• +{r.total_ecart_positif}</span>}
+                            {r.total_ecart_negatif < 0 && <span className="text-rose-400">• {r.total_ecart_negatif}</span>}
+                            {r.notes && <span className="text-slate-500 truncate max-w-[260px]">— {r.notes}</span>}
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* === Detail === */}
+          {tab === "detail" && selectedReport && (
+            <div className="space-y-3">
+              {/* Header detail */}
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(null); setTab("history"); }} className="text-slate-400" data-testid="field-stock-back">
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Retour
+                  </Button>
+                  <div>
+                    <p className="text-white font-medium text-sm">{selectedReport.created_by_name}</p>
+                    <p className="text-slate-500 text-xs">
+                      {new Date(selectedReport.created_at).toLocaleString("fr-FR")}
+                      {selectedReport.reconciled_at && (
+                        <span className="text-emerald-400 ml-2">• Rapproché par {selectedReport.reconciled_by} le {new Date(selectedReport.reconciled_at).toLocaleString("fr-FR")}</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedReport.status === "submitted" && isAdmin && (
+                    <Button
+                      onClick={() => reconcile(selectedReport.id)}
+                      disabled={reconciling}
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      data-testid="field-stock-reconcile"
+                    >
+                      {reconciling ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <BadgeCheck className="w-4 h-4 mr-1" />}
+                      Rapprocher au stock système
+                    </Button>
+                  )}
+                  {selectedReport.status === "submitted" && (
+                    <Button onClick={() => deleteReport(selectedReport.id)} variant="outline" size="sm" className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10" data-testid="field-stock-delete">
+                      <Trash2 className="w-4 h-4 mr-1" /> Supprimer
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {selectedReport.notes && (
+                <Card className="bg-slate-950/40 border-slate-800">
+                  <CardContent className="p-3">
+                    <p className="text-slate-300 text-xs uppercase mb-1">Notes</p>
+                    <p className="text-slate-200 text-sm whitespace-pre-wrap">{selectedReport.notes}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Card className="bg-slate-950/40 border-slate-800">
+                  <CardContent className="p-3">
+                    <p className="text-slate-400 text-[10px] uppercase">Lignes</p>
+                    <p className="text-white font-bold text-lg">{selectedReport.items_count}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-rose-500/5 border-rose-500/20">
+                  <CardContent className="p-3">
+                    <p className="text-rose-300 text-[10px] uppercase">Ruptures constatées</p>
+                    <p className="text-white font-bold text-lg">{selectedReport.rupture_count || 0}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-emerald-500/5 border-emerald-500/20">
+                  <CardContent className="p-3">
+                    <p className="text-emerald-300 text-[10px] uppercase">Écart positif</p>
+                    <p className="text-white font-bold text-lg">+{selectedReport.total_ecart_positif || 0}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-amber-500/5 border-amber-500/20">
+                  <CardContent className="p-3">
+                    <p className="text-amber-300 text-[10px] uppercase">Écart négatif</p>
+                    <p className="text-white font-bold text-lg">{selectedReport.total_ecart_negatif || 0}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Items */}
+              <div className="border border-slate-800 rounded-md max-h-[50vh] overflow-auto bg-slate-950/40">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-900 z-10">
+                    <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
+                      <th className="px-3 py-2 text-left">Produit</th>
+                      <th className="px-3 py-2 text-right">Sys. au moment</th>
+                      <th className="px-3 py-2 text-right">Compté</th>
+                      <th className="px-3 py-2 text-right">Écart</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedReport.items.map((it) => {
+                      const e = it.ecart || 0;
+                      const cls = e > 0 ? "text-emerald-400" : e < 0 ? "text-rose-400" : "text-slate-500";
+                      return (
+                        <tr key={it.product_id} className="border-b border-slate-800/60">
+                          <td className="px-3 py-2 text-slate-200">
+                            {it.product_name}
+                            {it.counted_qty <= 0 && <Badge className="ml-2 bg-rose-500/15 text-rose-300 text-[10px]">Rupture</Badge>}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-400 text-xs">{it.system_qty_at_submit} <span className="text-slate-600">{it.unit}</span></td>
+                          <td className="px-3 py-2 text-right text-white">{it.counted_qty} <span className="text-slate-500 text-xs">{it.unit}</span></td>
+                          <td className={`px-3 py-2 text-right font-bold ${cls}`}>
+                            {e > 0 ? "+" : ""}{e}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

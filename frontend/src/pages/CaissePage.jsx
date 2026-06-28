@@ -9,7 +9,7 @@ import {
   DollarSign, Banknote, Smartphone, ChevronsUpDown, UserPlus, RefreshCw,
   MessageCircle, Send, PieChart as PieChartIcon, UtensilsCrossed,
   ShoppingCart, AlertCircle, AlertTriangle, Image, ArrowUpDown, Activity, LayoutGrid, Timer,
-  Building2, MessageSquare, Bell, BellOff, ClipboardList, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe, Pencil, Lock
+  Building2, MessageSquare, Bell, BellOff, ClipboardList, ClipboardCheck, QrCode, Share2, Truck, Coins, History, BookOpen, Sunrise, CalendarClock, Sparkles, ChefHat, Globe, Pencil, Lock
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import SiteNotificationsPanel from "./caisse/components/SiteNotificationsPanel";
 // Extracted components
 import TablesTab from "./caisse/components/TablesTab";
 import RespOpWelcome from "./caisse/components/RespOpWelcome";
+import FieldStockReportModal from "./caisse/components/FieldStockReportModal";
 import MomoDailyRecap from "./caisse/components/MomoDailyRecap";
 import CustomerReviewsTab from "./caisse/components/CustomerReviewsTab";
 import BillettageGlobalCard from "./caisse/components/BillettageGlobalCard";
@@ -427,6 +428,12 @@ const CaissePage = () => {
   const [showJeuxBonsModal, setShowJeuxBonsModal] = useState(false);
   const [jeuxPendingCount, setJeuxPendingCount] = useState(0);
   const jeuxLastIdsRef = useRef(new Set());
+
+  // ============== FIELD STOCK REPORT MODAL (Resp. Op./Admin) ==============
+  // Point de stock terrain indépendant du stock système — Resp Op saisit librement
+  // et Admin peut consulter / rapprocher.
+  const [showFieldStockModal, setShowFieldStockModal] = useState(false);
+  const [fieldStockPendingCount, setFieldStockPendingCount] = useState(0);
   
   // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
   const [unreadNotesCount, setUnreadNotesCount] = useState(0);
@@ -1463,6 +1470,25 @@ const CaissePage = () => {
     const id = setInterval(tick, 8000);
     return () => { cancelled = true; clearInterval(id); };
   }, [isAuthenticated, currentUser?.role, showJeuxBonsModal]);
+
+  // ============== FIELD STOCK pending poll (admin only) ==============
+  useEffect(() => {
+    if (!isAuthenticated || currentUser?.role !== 'admin') {
+      setFieldStockPendingCount(0);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const r = await axios.get(`${API}/field-stock/reports/summary`);
+        if (!cancelled) setFieldStockPendingCount(r.data?.pending || 0);
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 20000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isAuthenticated, currentUser?.role]);
 
   // ============== SERVER DAILY REPORT FUNCTIONS ==============
   
@@ -5515,6 +5541,24 @@ _Responsable Op. & Log - Espace Maxo_
                 </Button>
               )}
 
+              {/* POINT DE STOCK TERRAIN — Resp. Op. & Admin only */}
+              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowFieldStockModal(true)}
+                  className="text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 relative"
+                  title="Point de stock terrain (boissons, accessoires...)"
+                  data-testid="open-field-stock-btn"
+                >
+                  <ClipboardCheck className="w-5 h-5" />
+                  {fieldStockPendingCount > 0 && currentUser?.role === 'admin' && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold animate-pulse">
+                      {fieldStockPendingCount}
+                    </span>
+                  )}
+                </Button>
+              )}
+
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
 
@@ -9262,6 +9306,15 @@ _Responsable Op. & Log - Espace Maxo_
           onOpenChange={setShowJeuxBonsModal}
           currentUser={currentUser}
           openTables={openTables}
+        />
+      )}
+
+      {/* Point de stock terrain — Resp. Op. & Admin */}
+      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+        <FieldStockReportModal
+          open={showFieldStockModal}
+          onClose={() => setShowFieldStockModal(false)}
+          currentUser={currentUser}
         />
       )}
 

@@ -25,6 +25,7 @@ from twilio.rest import Client as TwilioClient
 from routers.service_reports import router as service_reports_router, set_db as set_service_reports_db
 from routers.subscriptions import router as subscriptions_router, set_db as set_subscriptions_db
 from routers.stock import router as stock_router, set_db as set_stock_db
+from routers.field_stock import router as field_stock_router, set_db as set_field_stock_db
 from routers.financial_points import router as financial_points_router, set_db as set_financial_points_db
 from routers.caisse_users import router as caisse_users_router, set_db as set_caisse_users_db
 from routers.reports import router as reports_router, set_db as set_reports_db
@@ -82,6 +83,7 @@ db = client[os.environ['DB_NAME']]
 set_service_reports_db(db)
 set_subscriptions_db(db)
 set_stock_db(db)
+set_field_stock_db(db)
 set_financial_points_db(db)
 set_caisse_users_db(db)
 set_reports_db(db)
@@ -206,6 +208,7 @@ api_router.include_router(financial_points_router)
 api_router.include_router(service_reports_router)
 api_router.include_router(subscriptions_router)
 api_router.include_router(stock_router)
+api_router.include_router(field_stock_router)
 api_router.include_router(cash_closures_router)
 api_router.include_router(gerante_advances_router)
 api_router.include_router(journal_router)

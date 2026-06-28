@@ -11,6 +11,7 @@ L'application POS ("Caisse Pro") et le module de Gestion de Stock (Espace Maxo) 
 - Pilotage fin des statistiques et de l'historique
 
 ## Recent changes (Feb 2026)
+- **Point de stock terrain (Resp Op)** : nouveau bouton 📋 dans la top bar de Caisse Pro (manager + admin). Modal avec 3 onglets : Nouveau relevé (catégories sélectionnables · saisie qty libre · notes justificatives), Mes/Tous les rapports, Détail. Backend `routers/field_stock.py` avec création, listing filtré par rôle, détail, suppression, et `POST /reconcile` (Admin) créant des mouvements d'ajustement pour rapprocher le stock système.
 - **Suivi sélectif des Prévisions d'épuisement** : nouveau champ `is_tracked` sur stock_products. Endpoints `PATCH /api/stock/products/{id}/track` et `GET /api/stock/products/tracked-count`. Le forecast filtre `is_tracked=True`. Bouton Target dans Produits & Mouvements, empty state + CTA dans Prévisions.
 - **Fix bug stock forecast** : mapping `quantity` / `stock_min` corrigé dans `GET /api/stock/forecast`
 - **Refonte navigation Stock** (Feb 2026) :
