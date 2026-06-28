@@ -337,7 +337,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                       <thead className="sticky top-0 bg-slate-900 z-10">
                         <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
                           <th className="px-3 py-2 text-left">Produit</th>
-                          <th className="px-3 py-2 text-right hidden md:table-cell">Stock système</th>
+                          {isAdmin && <th className="px-3 py-2 text-right hidden md:table-cell">Stock système</th>}
                           <th className="px-3 py-2 text-right">Compté</th>
                           <th className="px-3 py-2 text-right hidden md:table-cell">Unité</th>
                         </tr>
@@ -349,7 +349,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                           return (
                             <tr key={p.id} className={`border-b border-slate-800/60 hover:bg-slate-800/30 ${hasValue ? 'bg-emerald-500/5' : ''}`}>
                               <td className="px-3 py-2 text-slate-200 truncate max-w-[280px]">{p.name}</td>
-                              <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.quantity ?? 0}</td>
+                              {isAdmin && <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.quantity ?? 0}</td>}
                               <td className="px-3 py-2 text-right">
                                 <Input
                                   type="number"
@@ -464,8 +464,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-slate-400 flex-wrap">
                             <span>{r.items_count} ligne{r.items_count > 1 ? "s" : ""}</span>
                             {r.rupture_count > 0 && <span className="text-rose-400">• {r.rupture_count} rupture(s) constatées</span>}
-                            {r.total_ecart_positif > 0 && <span className="text-emerald-400">• +{r.total_ecart_positif}</span>}
-                            {r.total_ecart_negatif < 0 && <span className="text-rose-400">• {r.total_ecart_negatif}</span>}
+                            {isAdmin && r.total_ecart_positif > 0 && <span className="text-emerald-400">• +{r.total_ecart_positif}</span>}
+                            {isAdmin && r.total_ecart_negatif < 0 && <span className="text-rose-400">• {r.total_ecart_negatif}</span>}
                             {r.notes && <span className="text-slate-500 truncate max-w-[260px]">— {r.notes}</span>}
                           </div>
                         </div>
@@ -528,7 +528,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
               )}
 
               {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-2`}>
                 <Card className="bg-slate-950/40 border-slate-800">
                   <CardContent className="p-3">
                     <p className="text-slate-400 text-[10px] uppercase">Lignes</p>
@@ -541,18 +541,22 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                     <p className="text-white font-bold text-lg">{selectedReport.rupture_count || 0}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-emerald-500/5 border-emerald-500/20">
-                  <CardContent className="p-3">
-                    <p className="text-emerald-300 text-[10px] uppercase">Écart positif</p>
-                    <p className="text-white font-bold text-lg">+{selectedReport.total_ecart_positif || 0}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-amber-500/5 border-amber-500/20">
-                  <CardContent className="p-3">
-                    <p className="text-amber-300 text-[10px] uppercase">Écart négatif</p>
-                    <p className="text-white font-bold text-lg">{selectedReport.total_ecart_negatif || 0}</p>
-                  </CardContent>
-                </Card>
+                {isAdmin && (
+                  <Card className="bg-emerald-500/5 border-emerald-500/20">
+                    <CardContent className="p-3">
+                      <p className="text-emerald-300 text-[10px] uppercase">Écart positif</p>
+                      <p className="text-white font-bold text-lg">+{selectedReport.total_ecart_positif || 0}</p>
+                    </CardContent>
+                  </Card>
+                )}
+                {isAdmin && (
+                  <Card className="bg-amber-500/5 border-amber-500/20">
+                    <CardContent className="p-3">
+                      <p className="text-amber-300 text-[10px] uppercase">Écart négatif</p>
+                      <p className="text-white font-bold text-lg">{selectedReport.total_ecart_negatif || 0}</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Items */}
@@ -561,9 +565,9 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                   <thead className="sticky top-0 bg-slate-900 z-10">
                     <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
                       <th className="px-3 py-2 text-left">Produit</th>
-                      <th className="px-3 py-2 text-right">Sys. au moment</th>
+                      {isAdmin && <th className="px-3 py-2 text-right">Sys. au moment</th>}
                       <th className="px-3 py-2 text-right">Compté</th>
-                      <th className="px-3 py-2 text-right">Écart</th>
+                      {isAdmin && <th className="px-3 py-2 text-right">Écart</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -576,11 +580,13 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                             {it.product_name}
                             {it.counted_qty <= 0 && <Badge className="ml-2 bg-rose-500/15 text-rose-300 text-[10px]">Rupture</Badge>}
                           </td>
-                          <td className="px-3 py-2 text-right text-slate-400 text-xs">{it.system_qty_at_submit} <span className="text-slate-600">{it.unit}</span></td>
+                          {isAdmin && <td className="px-3 py-2 text-right text-slate-400 text-xs">{it.system_qty_at_submit} <span className="text-slate-600">{it.unit}</span></td>}
                           <td className="px-3 py-2 text-right text-white">{it.counted_qty} <span className="text-slate-500 text-xs">{it.unit}</span></td>
-                          <td className={`px-3 py-2 text-right font-bold ${cls}`}>
-                            {e > 0 ? "+" : ""}{e}
-                          </td>
+                          {isAdmin && (
+                            <td className={`px-3 py-2 text-right font-bold ${cls}`}>
+                              {e > 0 ? "+" : ""}{e}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
