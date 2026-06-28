@@ -26,7 +26,7 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function FieldStockReportModal({ open, onClose, currentUser }) {
+export default function FieldStockReportModal({ open, onClose, currentUser, inline = false }) {
   const isAdmin = currentUser?.role === "admin";
   const userId = currentUser?.id || currentUser?.username || "unknown";
   const userName = currentUser?.full_name || currentUser?.username || "Resp. Op.";
@@ -90,11 +90,11 @@ export default function FieldStockReportModal({ open, onClose, currentUser }) {
   }, [isAdmin, userId]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !inline) return;
     fetchCategories();
     fetchProducts();
     fetchReports();
-  }, [open, fetchCategories, fetchProducts, fetchReports]);
+  }, [open, inline, fetchCategories, fetchProducts, fetchReports]);
 
   // ----------------------------------------------------------------
   // Catégories sélectionnées → produits filtrés affichés
@@ -210,33 +210,51 @@ export default function FieldStockReportModal({ open, onClose, currentUser }) {
   // ----------------------------------------------------------------
   // Rendu
   // ----------------------------------------------------------------
-  if (!open) return null;
+  if (!inline && !open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" data-testid="field-stock-modal">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-800/60 to-slate-900/40">
-          <div className="flex items-center gap-3">
+  const body = (
+    <>
+        {/* Header (modal mode only) */}
+        {!inline && (
+          <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-800/60 to-slate-900/40">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30">
+                <ClipboardCheck className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-semibold text-lg leading-tight">Point de stock terrain</h2>
+                <p className="text-slate-400 text-xs">
+                  {isAdmin ? "Supervisor view — tous les rapports" : "Saisie libre · indépendant du stock système"}
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-400 hover:text-white" data-testid="field-stock-close">
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+        )}
+
+        {/* Inline header */}
+        {inline && (
+          <div className="flex items-center gap-3 mb-3">
             <div className="p-2 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30">
               <ClipboardCheck className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
               <h2 className="text-white font-semibold text-lg leading-tight">Point de stock terrain</h2>
               <p className="text-slate-400 text-xs">
-                {isAdmin ? "Supervisor view — tous les rapports" : "Saisie libre · indépendant du stock système"}
+                {isAdmin
+                  ? "Supervisor view — tous les rapports soumis par le Resp. Op."
+                  : "Saisie libre du stock physique · indépendant du stock système · soumets à l'Admin comme justificatif"}
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-400 hover:text-white" data-testid="field-stock-close">
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+        )}
 
         {/* Tabs */}
-        <div className="px-5 pt-3 border-b border-slate-800 flex gap-1">
+        <div className={`${inline ? '' : 'px-5'} pt-1 border-b border-slate-800 flex gap-1`}>
           {[
-            { id: "new", label: "Nouveau relevé", icon: Plus, hidden: isAdmin && tab !== "new" && selectedReport },
+            { id: "new", label: "Nouveau relevé", icon: Plus },
             { id: "history", label: isAdmin ? "Tous les rapports" : "Mes rapports", icon: FileText },
           ].map((t) => (
             <button
@@ -255,7 +273,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-5">
+        <div className={`${inline ? 'p-3' : 'flex-1 overflow-auto p-5'}`}>
           {/* === Nouveau relevé === */}
           {tab === "new" && (
             <div className="space-y-4">
@@ -572,6 +590,21 @@ export default function FieldStockReportModal({ open, onClose, currentUser }) {
             </div>
           )}
         </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden" data-testid="field-stock-inline">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" data-testid="field-stock-modal">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
+        {body}
       </div>
     </div>
   );

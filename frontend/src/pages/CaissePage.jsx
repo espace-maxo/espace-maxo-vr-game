@@ -429,10 +429,9 @@ const CaissePage = () => {
   const [jeuxPendingCount, setJeuxPendingCount] = useState(0);
   const jeuxLastIdsRef = useRef(new Set());
 
-  // ============== FIELD STOCK REPORT MODAL (Resp. Op./Admin) ==============
-  // Point de stock terrain indépendant du stock système — Resp Op saisit librement
-  // et Admin peut consulter / rapprocher.
-  const [showFieldStockModal, setShowFieldStockModal] = useState(false);
+  // ============== FIELD STOCK REPORT (Resp. Op./Admin) ==============
+  // Point de stock terrain indépendant du stock système — accessible via l'onglet
+  // "Point de stock". L'admin reçoit un badge avec le nombre de rapports en attente.
   const [fieldStockPendingCount, setFieldStockPendingCount] = useState(0);
   
   // ============== NOTES/INSTRUCTIONS NOTIFICATIONS ==============
@@ -5541,24 +5540,6 @@ _Responsable Op. & Log - Espace Maxo_
                 </Button>
               )}
 
-              {/* POINT DE STOCK TERRAIN — Resp. Op. & Admin only */}
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowFieldStockModal(true)}
-                  className="text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 relative"
-                  title="Point de stock terrain (boissons, accessoires...)"
-                  data-testid="open-field-stock-btn"
-                >
-                  <ClipboardCheck className="w-5 h-5" />
-                  {fieldStockPendingCount > 0 && currentUser?.role === 'admin' && (
-                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-bold animate-pulse">
-                      {fieldStockPendingCount}
-                    </span>
-                  )}
-                </Button>
-              )}
-
               {/* Share QR Code Button */}
               <ShareButton onClick={() => setShowShareModal(true)} />
 
@@ -5793,6 +5774,15 @@ _Responsable Op. & Log - Espace Maxo_
                 <ClipboardList className="w-4 h-4 mr-2" />Besoins
                 {currentUser?.role === 'admin' && (
                   <NotifBadge count={effectiveCounts.needs} color="red" testid="badge-needs" />
+                )}
+              </TabsTrigger>
+            )}
+            {/* 5.5b POINT DE STOCK TERRAIN — Resp. Op. + Admin (saisie libre, indépendant du stock système) */}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+              <TabsTrigger value="field_stock" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-field-stock">
+                <ClipboardCheck className="w-4 h-4 mr-1 sm:mr-2" /><span className="inline text-[11px] sm:text-sm">Point de stock</span>
+                {currentUser?.role === 'admin' && fieldStockPendingCount > 0 && (
+                  <NotifBadge count={fieldStockPendingCount} color="emerald" testid="badge-field-stock" />
                 )}
               </TabsTrigger>
             )}
@@ -6916,6 +6906,13 @@ _Responsable Op. & Log - Espace Maxo_
           {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
           <TabsContent value="needs">
             <NeedsTab currentUser={currentUser} />
+          </TabsContent>
+          )}
+
+          {/* ==================== POINT DE STOCK TERRAIN — Resp. Op. + Admin ==================== */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
+          <TabsContent value="field_stock">
+            <FieldStockReportModal inline currentUser={currentUser} />
           </TabsContent>
           )}
 
@@ -9306,15 +9303,6 @@ _Responsable Op. & Log - Espace Maxo_
           onOpenChange={setShowJeuxBonsModal}
           currentUser={currentUser}
           openTables={openTables}
-        />
-      )}
-
-      {/* Point de stock terrain — Resp. Op. & Admin */}
-      {(currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-        <FieldStockReportModal
-          open={showFieldStockModal}
-          onClose={() => setShowFieldStockModal(false)}
-          currentUser={currentUser}
         />
       )}
 
