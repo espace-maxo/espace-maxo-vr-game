@@ -21,7 +21,7 @@ import { Badge } from "../../../components/ui/badge";
 import { Card, CardContent } from "../../../components/ui/card";
 import {
   X, Plus, ClipboardCheck, Search, Save, AlertTriangle, CheckCircle2, FileText,
-  Trash2, RefreshCw, Loader2, ChevronRight, ChevronLeft, Layers, BadgeCheck,
+  Trash2, RefreshCw, Loader2, ChevronRight, ChevronLeft, Layers, BadgeCheck, ArrowUpDown,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -42,6 +42,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   const [counts, setCounts] = useState({}); // { product_id: counted_qty }
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Tri (Admin uniquement — pour repérer rapidement les stocks importants/faibles)
+  const [sortMode, setSortMode] = useState("name_asc"); // name_asc | qty_desc | qty_asc | category
 
   // ----- Historique -----
   const [reports, setReports] = useState([]);
@@ -108,8 +110,17 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
       const q = search.trim().toLowerCase();
       list = list.filter((p) => (p.name || "").toLowerCase().includes(q));
     }
+    // Tri (Admin uniquement — Resp Op reste en alphabétique pour ne pas révéler les qty)
+    if (isAdmin) {
+      const sorted = [...list];
+      if (sortMode === "qty_desc") sorted.sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
+      else if (sortMode === "qty_asc") sorted.sort((a, b) => (a.quantity || 0) - (b.quantity || 0));
+      else if (sortMode === "category") sorted.sort((a, b) => (a.category_id || "").localeCompare(b.category_id || "") || (a.name || "").localeCompare(b.name || ""));
+      else sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return sorted;
+    }
     return list;
-  }, [allProducts, selectedCats, search]);
+  }, [allProducts, selectedCats, search, isAdmin, sortMode]);
 
   const countedItems = useMemo(() => {
     return Object.entries(counts)
@@ -315,15 +326,44 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
               {/* Recherche */}
               <div>
                 <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">2. Saisissez les quantités comptées</p>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Rechercher un produit..."
-                    className="bg-slate-950 border-slate-700 text-white pl-9 h-9"
-                    data-testid="field-stock-search"
-                  />
+                <div className="relative mb-2 flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Rechercher un produit..."
+                      className="bg-slate-950 border-slate-700 text-white pl-9 h-9"
+                      data-testid="field-stock-search"
+                    />
+                  </div>
+                  {/* Bouton de tri — Admin uniquement (le Resp Op ne voit pas les qty système) */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-700 rounded-md px-1 h-9" data-testid="field-stock-sort-group">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 ml-1" />
+                      {[
+                        { id: "name_asc", label: "A→Z", title: "Trier par nom" },
+                        { id: "qty_desc", label: "Stock ↓", title: "Stock système — du plus grand au plus petit" },
+                        { id: "qty_asc", label: "Stock ↑", title: "Stock système — du plus petit au plus grand" },
+                        { id: "category", label: "Catég.", title: "Regrouper par catégorie" },
+                      ].map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSortMode(s.id)}
+                          title={s.title}
+                          data-testid={`field-stock-sort-${s.id}`}
+                          className={`text-[11px] px-2 py-1 rounded transition ${
+                            sortMode === s.id
+                              ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800"
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Liste produits */}
