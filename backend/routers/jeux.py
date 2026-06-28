@@ -284,7 +284,11 @@ async def make_standalone_invoice(bon_id: str, body: StandaloneBody):
         "items": inv_items,
         "subtotal": round(subtotal, 2),
         "discount": 0,
+        "discount_amount": 0,
         "total": round(subtotal, 2),
+        # totals_by_department est INDISPENSABLE : c'est ce que /api/invoices/stats lit pour
+        # construire le CA Jeux du jour. Une facture standalone issue d'un bon = 100% jeux.
+        "totals_by_department": {"jeux": round(subtotal, 2)},
         "payment_method": body.payment_method,
         "validation_status": "pending",
         "created_by": body.actor_name,

@@ -104,6 +104,10 @@ async def _build_coach_summary(date_str: str, actor_name: str) -> dict:
         items = b.get("items") or []
         if not items and b.get("jeu_product_id"):
             items = [{"jeu_name": b.get("jeu_name"), "parties": b.get("parties", 0), "total": b.get("total", 0)}]
+        # On exclut systématiquement les bons rejetés des agrégats par jeu et du
+        # total revenu (sinon : la somme des lignes affichées ≠ total revenu)
+        if status == "rejected":
+            continue
         for it in items:
             name = (it.get("jeu_name") or "").strip()
             if not name:
@@ -111,8 +115,7 @@ async def _build_coach_summary(date_str: str, actor_name: str) -> dict:
             entry = by_jeu.setdefault(name, {"name": name, "quantity": 0, "total": 0.0})
             entry["quantity"] += int(it.get("parties") or 0)
             entry["total"] += float(it.get("total") or 0)
-            if status != "rejected":
-                total_revenue += float(it.get("total") or 0)
+            total_revenue += float(it.get("total") or 0)
     items_list = [
         {"name": v["name"], "quantity": v["quantity"], "total": round(v["total"], 2)}
         for v in sorted(by_jeu.values(), key=lambda x: -x["quantity"])

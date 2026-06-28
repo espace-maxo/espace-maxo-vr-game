@@ -67,6 +67,67 @@ def extract_revenue_groups(invoice: dict) -> dict:
 
 # ==================== ENDPOINTS ====================
 
+@router.post("/admin/backfill-totals-by-department")
+async def backfill_totals_by_department(date: str = Query(None), dry_run: bool = Query(False)):
+    """Recalcule `totals_by_department` à partir des items pour les factures qui n'ont
+    pas ce champ ou qui ont un total à 0 alors que des items ont un département défini.
+
+    Indispensable pour corriger les écarts du CA Jeux/Bar/etc. dans Statistiques & Rapports
+    quand les factures historiques ont été créées avant l'ajout du champ (ex: factures
+    issues d'un Jeux Bon standalone ou d'un Proforma).
+
+    - date: filtre optionnel "YYYY-MM-DD"
+    - dry_run: True = renvoie ce qui SERAIT modifié sans appliquer
+    """
+    q = {}
+    if date:
+        q["created_at"] = {"$regex": f"^{date}"}
+    invoices = await db.invoices.find(q, {"_id": 0}).to_list(10000)
+    fixed = []
+    skipped = 0
+    for inv in invoices:
+        items = inv.get("items") or []
+        if not items:
+            skipped += 1
+            continue
+        # Calcul fresh
+        new_totals = {}
+        for it in items:
+            dep = (it.get("department") or "autres").strip() or "autres"
+            line = float(it.get("price", 0) or 0) * float(it.get("quantity", 1) or 1)
+            new_totals[dep] = round(new_totals.get(dep, 0) + line, 2)
+        # Compare avec l'existant
+        existing = inv.get("totals_by_department") or {}
+        # On considère qu'il faut fixer si :
+        #   - le champ est absent / vide
+        #   - OU si un department présent dans items n'est pas reflété dans totals (ex: jeux=0)
+        needs_fix = (not existing) or any(
+            existing.get(k, 0) != v for k, v in new_totals.items()
+        )
+        if not needs_fix:
+            skipped += 1
+            continue
+        fixed.append({
+            "invoice_id": inv.get("id"),
+            "invoice_number": inv.get("invoice_number"),
+            "created_at": inv.get("created_at"),
+            "before": existing,
+            "after": new_totals,
+        })
+        if not dry_run:
+            await db.invoices.update_one(
+                {"id": inv.get("id")},
+                {"$set": {"totals_by_department": new_totals}}
+            )
+    return {
+        "dry_run": dry_run,
+        "fixed_count": len(fixed),
+        "skipped_count": skipped,
+        "total_scanned": len(invoices),
+        "fixed_invoices": fixed[:50],  # cap output
+    }
+
+
 @router.get("/invoices/stats")
 async def get_invoice_stats(date: str = Query(None), include_pending: bool = Query(False)):
     """Get invoice statistics by date, respecting assigned_week transfers.

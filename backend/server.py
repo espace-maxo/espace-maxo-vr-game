@@ -7638,6 +7638,13 @@ async def convert_proforma_to_invoice(proforma_id: str, converted_by: str = ""):
         invoice_number = f"EM-{date_prefix}-{str(count + 1).zfill(4)}"
         
         # Create invoice from proforma
+        # Calcul de totals_by_department depuis les items (indispensable pour
+        # le CA Jeux/Bar/etc. dans /api/invoices/stats)
+        prof_totals_by_dept = {}
+        for it in proforma.get("items", []):
+            dep = it.get("department") or "autres"
+            line = float(it.get("price", 0) or 0) * float(it.get("quantity", 1) or 1)
+            prof_totals_by_dept[dep] = prof_totals_by_dept.get(dep, 0) + line
         invoice = {
             "id": str(uuid.uuid4()),
             "invoice_number": invoice_number,
@@ -7647,6 +7654,7 @@ async def convert_proforma_to_invoice(proforma_id: str, converted_by: str = ""):
             "subtotal": proforma["subtotal"],
             "discount": proforma.get("discount", 0),
             "total": proforma["total"],
+            "totals_by_department": prof_totals_by_dept,
             "payment_method": "especes",
             "validation_status": "pending",
             "created_by": converted_by or proforma.get("created_by", ""),
