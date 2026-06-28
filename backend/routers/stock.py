@@ -272,6 +272,14 @@ async def get_products(category_id: str = None, status: str = None, search: str 
     
     return {"products": products}
 
+@router.get("/products/tracked-count")
+async def get_tracked_count():
+    """Retourne le nombre de produits suivis actuellement (pour les badges UI).
+    Placée AVANT /products/{product_id} pour éviter le shadowing de route.
+    """
+    count = await db.stock_products.count_documents({"is_active": {"$ne": False}, "is_tracked": True})
+    return {"count": count}
+
 @router.get("/products/{product_id}")
 async def get_product(product_id: str):
     p = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
@@ -532,9 +540,9 @@ async def get_stock_forecast(window_days: int = 30, top: int = 0):
         window_days = 30
     cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
 
-    # 1. Charger tous les produits avec quantité positive
+    # 1. Charger les produits SUIVIS uniquement (is_tracked=True, set manuellement par admin)
     products = await db.stock_products.find(
-        {"is_active": {"$ne": False}},
+        {"is_active": {"$ne": False}, "is_tracked": True},
         {"_id": 0, "id": 1, "name": 1, "quantity": 1, "unit": 1, "category_id": 1,
          "stock_min": 1, "daily_consumption_manual": 1, "department": 1}
     ).to_list(5000)
@@ -625,6 +633,31 @@ async def get_stock_forecast(window_days: int = 30, top: int = 0):
     if top and top > 0:
         items = items[:top]
     return {"summary": summary, "items": items}
+
+
+# ==================== TRACK / UNTRACK PRODUITS (suivi prévision épuisement) ====================
+
+@router.patch("/products/{product_id}/track")
+async def toggle_product_tracking(product_id: str, payload: dict = None):
+    """Active/désactive le suivi prévisionnel d'un produit.
+
+    Body optionnel : {"is_tracked": true/false}. Si absent, bascule l'état actuel.
+    Le produit doit exister et être actif. Renvoie le nouvel état.
+    """
+    product = await db.stock_products.find_one({"id": product_id}, {"_id": 0, "id": 1, "is_tracked": 1, "name": 1})
+    if not product:
+        raise HTTPException(404, "Produit introuvable")
+    current = bool(product.get("is_tracked", False))
+    new_state = (payload or {}).get("is_tracked")
+    if new_state is None:
+        new_state = not current
+    else:
+        new_state = bool(new_state)
+    await db.stock_products.update_one(
+        {"id": product_id},
+        {"$set": {"is_tracked": new_state, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"product_id": product_id, "is_tracked": new_state, "name": product.get("name", "")}
 
 
 # ==================== STOCK À UNE DATE DONNÉE (BOISSONS) ====================

@@ -23,7 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { TrendingDown, RefreshCw, AlertTriangle, Search, Save, Loader2, CheckCircle, Clock } from "lucide-react";
+import { TrendingDown, RefreshCw, AlertTriangle, Search, Save, Loader2, CheckCircle, Clock, Target, ExternalLink } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -36,13 +36,14 @@ const URGENCY_META = {
   no_data: { label: "Sans donnée", color: "slate", icon: TrendingDown, ring: "ring-slate-500/40", bg: "bg-slate-700/30", text: "text-slate-300", border: "border-slate-600/40" },
 };
 
-export default function StockForecastPanel() {
+export default function StockForecastPanel({ onNavigateToProducts } = {}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterUrgency, setFilterUrgency] = useState("all"); // all|critical|warning|ok|no_data
   const [savingId, setSavingId] = useState(null);
   const [manualEdits, setManualEdits] = useState({});
+  const [untrackingId, setUntrackingId] = useState(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -57,6 +58,20 @@ export default function StockForecastPanel() {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  // Retire un produit du suivi prévisionnel (geste rapide depuis ce panneau)
+  const untrack = async (productId, productName) => {
+    setUntrackingId(productId);
+    try {
+      await axios.patch(`${API}/stock/products/${productId}/track`, { is_tracked: false });
+      toast.success(`« ${productName} » retiré du suivi`);
+      await refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erreur");
+    } finally {
+      setUntrackingId(null);
+    }
+  };
 
   // Sauvegarde le champ manuel daily_consumption_manual sur le produit
   const saveManual = async (item, value) => {
@@ -120,6 +135,31 @@ export default function StockForecastPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Empty state — aucun produit suivi */}
+        {!loading && summary.total_products === 0 ? (
+          <div className="text-center py-10 px-4" data-testid="forecast-empty-state">
+            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/30 flex items-center justify-center mb-4">
+              <Target className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h3 className="text-white text-lg font-semibold mb-2">Aucun produit suivi pour l'instant</h3>
+            <p className="text-slate-400 text-sm max-w-md mx-auto mb-5">
+              Les Prévisions d'épuisement affichent uniquement les produits que vous décidez de suivre.
+              Activez le suivi depuis l'onglet <span className="text-emerald-300 font-semibold">Produits</span> ou
+              <span className="text-emerald-300 font-semibold"> Mouvements</span> en cliquant sur l'icône
+              <Target className="inline w-3.5 h-3.5 text-emerald-400 mx-1" /> à côté d'un produit.
+            </p>
+            {onNavigateToProducts && (
+              <Button
+                onClick={onNavigateToProducts}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                data-testid="forecast-empty-cta"
+              >
+                <ExternalLink className="w-4 h-4 mr-1.5" /> Aller à la liste des Produits
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
         {/* Cartes résumé urgences */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="forecast-summary">
           {["critical", "warning", "ok", "no_data"].map((k) => {
@@ -207,6 +247,18 @@ export default function StockForecastPanel() {
                     >
                       <td className="p-3 text-white">
                         <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => untrack(i.product_id, i.name)}
+                            disabled={untrackingId === i.product_id}
+                            title="Retirer du suivi prévisionnel"
+                            className="shrink-0 p-1 rounded text-emerald-400 hover:text-rose-400 hover:bg-rose-500/10 transition disabled:opacity-50"
+                            data-testid={`forecast-untrack-${i.product_id}`}
+                          >
+                            {untrackingId === i.product_id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Target className="w-3.5 h-3.5 fill-current" />}
+                          </button>
                           <span className={`w-2 h-2 rounded-full ${meta.bg.replace("/10", "/60")}`} />
                           <span className="truncate max-w-[200px]">{i.name}</span>
                           {i.department && (
@@ -269,6 +321,8 @@ export default function StockForecastPanel() {
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
       </CardContent>
     </Card>

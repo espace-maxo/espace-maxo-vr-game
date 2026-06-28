@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Edit2, Trash2, ArrowUpDown, ShoppingCart,
   Truck, ClipboardList, Settings, LogOut, Warehouse, ArrowDown, ArrowUp,
   RefreshCw, X, Save, Eye, ChevronDown, Users, BookOpen, FileText, Download, ClipboardCheck, CheckSquare,
-  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck, AlertCircle, Sparkles
+  Activity, Link2, Zap, Scale, Image as ImageIcon, Upload, Clock, PackageCheck, AlertCircle, Sparkles, Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,6 +208,8 @@ export default function StockPage() {
   // Fiche Technique et Mouvement qui doivent pouvoir lister TOUS les ingrédients
   // même quand un filtre est actif dans l'onglet Produits.
   const [allProducts, setAllProducts] = useState([]);
+  // Nb de produits suivis (Prévisions d'épuisement) — utilisé pour les badges UI
+  const [trackedCount, setTrackedCount] = useState(0);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -548,6 +550,11 @@ export default function StockPage() {
     try { const r = await axios.get(`${API}/dashboard`); setDashboard(r.data); } catch {}
   }, []);
 
+  // Compteur de produits suivis (badge sur l'onglet Prévisions d'épuisement)
+  const fetchTrackedCount = useCallback(async () => {
+    try { const r = await axios.get(`${API}/products/tracked-count`); setTrackedCount(r.data?.count || 0); } catch {}
+  }, []);
+
   const fetchProducts = useCallback(async () => {
     try {
       const params = {};
@@ -701,8 +708,8 @@ export default function StockPage() {
   }, []);
 
   const fetchAll = useCallback(() => {
-    fetchDashboard(); fetchProducts(); fetchAllProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories(); fetchMagasinProducts();
-  }, [fetchDashboard, fetchProducts, fetchAllProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories]);
+    fetchDashboard(); fetchProducts(); fetchAllProducts(); fetchCategories(); fetchSuppliers(); fetchMovements(); fetchPurchases(); fetchUsers(); fetchRecipes(); fetchInventories(); fetchMagasinProducts(); fetchTrackedCount();
+  }, [fetchDashboard, fetchProducts, fetchAllProducts, fetchCategories, fetchSuppliers, fetchMovements, fetchPurchases, fetchUsers, fetchRecipes, fetchInventories, fetchTrackedCount]);
 
   // Enhanced refresh with loading state, last-refreshed timestamp, and toast feedback
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -950,6 +957,20 @@ export default function StockPage() {
     setEditingItem(p);
     setProductForm({ code: p.code, name: p.name, category_id: p.category_id, subcategory: p.subcategory || "", unit: p.unit, quantity: p.quantity, stock_min: p.stock_min, stock_max: p.stock_max, purchase_price: p.purchase_price, sale_price: p.sale_price || 0, supplier_id: p.supplier_id || "", storage_location: p.storage_location || "", storage_zone: p.storage_zone || "cuisine", date_achat: p.date_achat || "", date_peremption: p.date_peremption || "", observation: p.observation || "", photo_url: p.photo_url || "" });
     setShowProductModal(true);
+  };
+
+  // Active/désactive le suivi prévisionnel d'un produit (Prévisions d'épuisement)
+  const toggleProductTracking = async (productId, currentlyTracked) => {
+    try {
+      const { data } = await axios.patch(`${API}/products/${productId}/track`, { is_tracked: !currentlyTracked });
+      toast.success(data.is_tracked ? `« ${data.name} » est maintenant suivi` : `« ${data.name} » n'est plus suivi`);
+      // Mise à jour locale optimiste pour Produits et Mouvements
+      setProducts((prev) => prev.map(p => p.id === productId ? { ...p, is_tracked: data.is_tracked } : p));
+      setAllProducts((prev) => prev.map(p => p.id === productId ? { ...p, is_tracked: data.is_tracked } : p));
+      setTrackedCount((c) => c + (data.is_tracked ? 1 : -1));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors du basculement du suivi");
+    }
   };
 
   // Movement
@@ -2407,6 +2428,16 @@ export default function StockPage() {
                             <td className="p-3 text-slate-500 text-xs">{p.storage_location || '—'}</td>
                             <td className="p-3">
                               <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-7 w-7 p-0 ${p.is_tracked ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10' : 'text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/10'}`}
+                                  onClick={() => toggleProductTracking(p.id, p.is_tracked)}
+                                  title={p.is_tracked ? "Retirer du suivi prévisionnel" : "Suivre pour Prévisions d'épuisement"}
+                                  data-testid={`product-track-${p.id}`}
+                                >
+                                  <Target className={`w-3.5 h-3.5 ${p.is_tracked ? 'fill-current' : ''}`} />
+                                </Button>
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10" onClick={() => openEditProduct(p)} title="Modifier"><Edit2 className="w-3.5 h-3.5" /></Button>
                                 {isAdmin && p.quantity > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10" onClick={() => resetSingleProduct(p.id)} title="RAZ quantité"><RefreshCw className="w-3.5 h-3.5" /></Button>}
                                 {isAdmin && p.purchase_price > 0 && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => resetSinglePrice(p.id)} title="RAZ prix"><X className="w-3.5 h-3.5" /></Button>}
@@ -3103,11 +3134,29 @@ export default function StockPage() {
                   {isAdmin && <th className="p-4 w-10"></th>}
                 </tr></thead>
                 <tbody>
-                  {visibleMovements.map(m => (
+                  {visibleMovements.map(m => {
+                    const trackedProd = (allProducts.find(p => p.id === m.product_id) || products.find(p => p.id === m.product_id));
+                    const isTracked = !!trackedProd?.is_tracked;
+                    return (
                     <tr key={m.id} className={`border-b border-slate-800/50 hover:bg-slate-800/30 ${selectedItems.includes(m.id) ? 'bg-slate-800/50' : ''}`}>
                       {isAdmin && <td className="p-4"><input type="checkbox" className="rounded bg-slate-800 border-slate-600" checked={selectedItems.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>}
                       <td className="p-4 text-slate-400 text-xs whitespace-nowrap">{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className="p-4 text-white">{m.product_name}</td>
+                      <td className="p-4 text-white">
+                        <div className="flex items-center gap-1.5">
+                          {trackedProd && (
+                            <button
+                              type="button"
+                              onClick={() => toggleProductTracking(m.product_id, isTracked)}
+                              title={isTracked ? "Retirer du suivi prévisionnel" : "Suivre pour Prévisions d'épuisement"}
+                              className={`shrink-0 p-1 rounded hover:bg-emerald-500/10 transition ${isTracked ? 'text-emerald-400' : 'text-slate-600 hover:text-emerald-300'}`}
+                              data-testid={`movement-track-${m.id}`}
+                            >
+                              <Target className={`w-3.5 h-3.5 ${isTracked ? 'fill-current' : ''}`} />
+                            </button>
+                          )}
+                          <span>{m.product_name}</span>
+                        </div>
+                      </td>
                       <td className="p-4"><Badge className={`text-xs ${m.movement_type === 'entree' || m.movement_type === 'retour_fournisseur' || m.movement_type === 'transfert_entree' ? 'bg-emerald-500/20 text-emerald-400' : m.movement_type === 'ajustement' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>{MOVEMENT_TYPES.find(t => t.value === m.movement_type)?.label || m.movement_type}</Badge></td>
                       <td className="p-4 text-right text-white font-medium whitespace-nowrap">{m.quantity} {m.unit}</td>
                       <td className="p-4 text-right text-slate-500 hidden lg:table-cell">{typeof m.previous_quantity === 'number' ? parseFloat(m.previous_quantity.toFixed(2)) : m.previous_quantity}</td>
@@ -3116,7 +3165,8 @@ export default function StockPage() {
                       <td className="p-4 text-slate-500 text-xs hidden xl:table-cell">{m.user_name}</td>
                       {isAdmin && <td className="p-4"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-400" onClick={() => deleteMovement(m.id)}><Trash2 className="w-3.5 h-3.5" /></Button></td>}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div></CardContent></Card>
@@ -3736,7 +3786,7 @@ export default function StockPage() {
 
         {/* FORECAST — Prévisions d'épuisement des stocks */}
         {activeSection === "forecast" && (
-          <StockForecastPanel />
+          <StockForecastPanel onNavigateToProducts={() => { setActiveSection("products"); clearSelection(); }} />
         )}
 
         {/* SNAPSHOT — Stock à une date donnée (Boissons) */}
