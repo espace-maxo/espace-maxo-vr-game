@@ -137,6 +137,24 @@ const Footer = () => {
         </div>
       </div>
       
+      {/* Réduction du badge plateforme Emergent — discret mais visible (cf. ChatGPT request)
+          Le badge utilise des styles inline !important, on contre avec une spécificité forte (#emergent-badge).
+          Visible : pastille minuscule en bas-droite. Au survol : taille normale. */}
+      <style>{`
+        #emergent-badge {
+          transform: scale(0.55) !important;
+          transform-origin: bottom right !important;
+          opacity: 0.55 !important;
+          transition: transform 0.25s ease, opacity 0.25s ease !important;
+          bottom: 4px !important;
+          right: 4px !important;
+        }
+        #emergent-badge:hover {
+          transform: scale(1) !important;
+          opacity: 1 !important;
+        }
+      `}</style>
+
       {/* Hide Emergent branding (NB: a[href*="emergent"] retiré car cassait le lien Staff vers attendance-gps-test.preview.emergentagent.com) */}
       <style>{`
         [class*="emergent"], 
