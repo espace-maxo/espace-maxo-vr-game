@@ -5718,7 +5718,59 @@ _Responsable Op. & Log - Espace Maxo_
               onOpenPointCaisse={() => setActiveTab('point_caisse')}
             />
           )}
-          <TabsList className="bg-slate-800/50 border border-slate-700 mb-4 flex-wrap h-auto p-1 gap-1 justify-start text-xs sm:text-sm">
+          {/* Caisse Pro Navigation — Système de menu refondu avec couleurs signature par
+              onglet, état actif avec barre d'accent, padding généreux et badges absolus.
+              CSS scoped à .caisse-pro-menu pour appliquer à TOUS les TabsTrigger sans
+              modifier chaque trigger individuellement. */}
+          <style>{`
+            .caisse-pro-menu {
+              background: transparent !important;
+              border: 0 !important;
+              gap: 0.375rem !important;
+              padding: 0 !important;
+              margin-bottom: 1.25rem !important;
+            }
+            .caisse-pro-menu [role="tab"] {
+              border-radius: 0.625rem !important;
+              border: 1.5px solid rgb(30 41 59) !important;
+              background: rgba(15, 23, 42, 0.7) !important;
+              color: rgb(148 163 184) !important;
+              font-weight: 600 !important;
+              padding: 0.5rem 0.75rem !important;
+              min-height: 38px !important;
+              font-size: 0.78rem !important;
+              transition: all 0.18s ease !important;
+              position: relative !important;
+              overflow: hidden !important;
+            }
+            .caisse-pro-menu [role="tab"]:hover {
+              background: rgba(30, 41, 59, 0.9) !important;
+              color: #fff !important;
+              border-color: rgba(71, 85, 105, 0.8) !important;
+              transform: translateY(-1px);
+            }
+            .caisse-pro-menu [role="tab"]:active {
+              transform: scale(0.97);
+            }
+            .caisse-pro-menu [role="tab"][data-state="active"] {
+              border-color: transparent !important;
+              color: rgb(2 6 23) !important;
+              font-weight: 800 !important;
+              box-shadow: 0 8px 20px -8px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) inset !important;
+              padding-bottom: 0.6rem !important;
+            }
+            .caisse-pro-menu [role="tab"][data-state="active"]::after {
+              content: "";
+              position: absolute;
+              left: 0; right: 0; bottom: 0;
+              height: 3px;
+              background: rgba(2,6,23,0.35);
+            }
+            .caisse-pro-menu [role="tab"] svg {
+              width: 1rem !important; height: 1rem !important;
+            }
+          `}</style>
+          <TabsList className="caisse-pro-menu mb-4 flex-wrap h-auto justify-start text-xs sm:text-sm">
             {/* 0. JOURNÉE (Ouverture / Fermeture / Historique) — Admin + Responsable Op. & Log, en PREMIER */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
               <TabsTrigger value="journee" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-2 sm:px-3" data-testid="tab-journee">
