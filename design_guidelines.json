@@ -1,132 +1,85 @@
 {
-  "project_name": "Espace Maxo",
-  "theme_strategy": "Dark Mode (Cyberpunk/Neon Gaming Aesthetic)",
-  "design_philosophy": {
-    "core_concept": "Immersive Digital Playground",
-    "visual_style": "High-contrast dark mode with neon accents, glassmorphism, and smooth motion.",
-    "emotional_tone": "Energetic, Futuristic, Premium, Appetizing",
-    "key_principles": [
-      "Dark by Default: No light mode toggles. The atmosphere is always 'Night'.",
-      "Neon Guiding Lines: Use colored borders and glows to guide the eye.",
-      "Appetizing Darkness: Food photos must pop against matte black backgrounds.",
-      "Motion is Feedback: Interactive elements must glow or scale on hover."
-    ]
+  "theme": "Dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) + Kitchen Industrial",
+  "identity": "The Kitchen Command Center. High-contrast, highly functional, designed for dirty hands and 1-meter reading distances. No delicate SaaS components. Think physical machinery and industrial displays.",
+  "colors": {
+    "backgrounds": {
+      "page": "#020617",
+      "card_default": "#0f172a",
+      "card_urgent": "#4c0519",
+      "tab_active": "#f59e0b"
+    },
+    "accents": {
+      "kitchen_primary": "#f59e0b",
+      "success_ready": "#10b981",
+      "danger_urgent": "#f43f5e",
+      "info_cyan": "#06b6d4"
+    },
+    "text": {
+      "primary": "#f8fafc",
+      "secondary": "#94a3b8",
+      "amber_highlight": "#fcd34d",
+      "rose_highlight": "#fda4af"
+    }
   },
   "typography": {
-    "font_family": {
-      "headings": "Orbitron, sans-serif",
-      "body": "Outfit, sans-serif",
-      "accents": "Rajdhani, sans-serif"
+    "family": "Outfit, sans-serif",
+    "hierarchy": {
+      "h1_kpi": "text-5xl font-black tracking-tighter",
+      "h2_ticket_table": "text-4xl font-bold",
+      "h3_ticket_item": "text-2xl font-semibold leading-tight",
+      "body_large": "text-xl font-medium",
+      "badges": "text-lg font-bold tracking-widest uppercase"
     },
-    "installation_instructions": "Import fonts from Google Fonts: https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Outfit:wght@300;400;500;700&family=Rajdhani:wght@500;600;700&display=swap",
-    "usage_rules": {
-      "headings": "Use 'Orbitron' for H1-H3. Uppercase for H1. Tracking-wide for 'Espace Maxo'.",
-      "body": "Use 'Outfit' for all paragraphs, menu descriptions, and form inputs.",
-      "ui_labels": "Use 'Rajdhani' for buttons, badges, and pricing.",
-      "scale": {
-        "h1": "text-4xl md:text-6xl font-black tracking-tight",
-        "h2": "text-3xl md:text-5xl font-bold",
-        "h3": "text-2xl font-bold text-primary",
-        "body": "text-base md:text-lg text-gray-300"
-      }
-    }
+    "rules": "Text must be legible from 1 meter away. No lightweight fonts for critical data. Use font-black for metric numbers."
   },
-  "colors": {
-    "palette": {
-      "background": "#050505",
-      "surface": "#121212",
-      "surface_highlight": "#1E1E1E",
-      "primary": "#00f0ff",
-      "secondary": "#ff003c",
-      "accent_food": "#ffbf00",
-      "text_main": "#ffffff",
-      "text_muted": "#9ca3af",
-      "border_subtle": "#333333",
-      "border_glow": "rgba(0, 240, 255, 0.5)"
-    },
-    "tailwind_extension": {
-      "colors": {
-        "neon-blue": "#00f0ff",
-        "neon-red": "#ff003c",
-        "neon-purple": "#bc13fe",
-        "food-gold": "#ffbf00",
-        "dark-bg": "#050505",
-        "dark-card": "#121212"
-      }
-    }
-  },
-  "layout_strategies": {
-    "spacing": "Generous. Use p-8 to p-12 for section padding. Gap-6 or Gap-8 for grids.",
-    "containers": "Max-width-7xl for main content. Full width for Hero sections.",
-    "grids": {
-      "menu": "Grid-cols-1 md:grid-cols-2 lg:grid-cols-3. Cards with image top, text bottom.",
-      "games": "Asymmetric bento grid. One large feature (VR), two smaller (Simulators)."
-    }
+  "layout_and_spacing": {
+    "touch_targets": "MINIMUM 64px height/width for any interactive element (buttons, checkboxes).",
+    "padding": "Generous. p-6 or p-8 inside cards to space out food items.",
+    "grid_tablet": "grid-cols-2 lg:grid-cols-3 gap-6. Masonry preferred if tickets vary heavily in height.",
+    "grid_mobile": "grid-cols-1 gap-4"
   },
   "components": {
-    "buttons": {
-      "primary": "bg-neon-blue text-black font-bold hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all uppercase font-rajdhani rounded-none skew-x-[-10deg]",
-      "secondary": "border border-neon-blue text-neon-blue hover:bg-neon-blue/10 transition-all uppercase font-rajdhani rounded-none skew-x-[-10deg]",
-      "booking": "bg-neon-red text-white font-bold hover:shadow-[0_0_20px_rgba(255,0,60,0.5)] transition-all uppercase rounded-md"
+    "header_dashboard": {
+      "description": "Top bar replaced by a KPI dashboard for immediate situational awareness.",
+      "layout": "Grid cols-1 md:grid-cols-3 gap-4 mb-8",
+      "kpis": [
+        {"label": "En attente", "color": "amber", "icon": "Flame", "data_testid": "kpi-waiting"},
+        {"label": "Temps Moyen", "color": "cyan", "icon": "Clock", "data_testid": "kpi-avg-time"},
+        {"label": "Servis (Auj)", "color": "emerald", "icon": "CheckCircle2", "data_testid": "kpi-served-today"}
+      ]
     },
-    "cards": {
-      "style": "bg-dark-card border border-white/10 hover:border-neon-blue/50 transition-colors duration-300",
-      "glass": "bg-black/40 backdrop-blur-md border border-white/10"
+    "navigation_tabs": {
+      "style": "Chunky, massive segmented controls acting as primary navigation.",
+      "active_state": "bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20",
+      "inactive_state": "bg-slate-900 text-slate-400 border-2 border-slate-800",
+      "badges": "Absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4. min-h-[32px] min-w-[32px] px-2 rounded-full bg-rose-500 text-white flex items-center justify-center text-sm font-bold border-4 border-slate-950 shadow-md."
     },
-    "inputs": {
-      "style": "bg-black/50 border-white/20 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue text-white placeholder:text-gray-600 rounded-md"
+    "ticket_card": {
+      "base": "border-4 rounded-2xl p-6 transition-all duration-300 shadow-xl flex flex-col gap-4",
+      "states": {
+        "new": "border-slate-800 bg-slate-900 text-slate-100",
+        "warning": "border-amber-500 bg-slate-900 text-amber-400 animate-pulse-slow",
+        "urgent": "border-rose-600 bg-rose-950/40 text-rose-500"
+      },
+      "interactions": "Whole row for a food item MUST be clickable to toggle 'checked' state. Use massive custom checkboxes (lucide-react Square / CheckSquare with w-12 h-12 stroke-width-3).",
+      "actions": "Massive 'Tout Prêt' CTA at bottom of card. bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white py-6 rounded-xl text-3xl font-black w-full mt-auto."
+    },
+    "empty_states": {
+      "visuals": "Massive lucide icons (e.g., ChefHat, Coffee, UtensilsCrossed) w-64 h-64 mx-auto mb-8 text-slate-800/50.",
+      "copy": "Large, reassuring text: 'Cuisine Calme' or 'Service Terminé'. text-4xl font-bold text-slate-500.",
+      "action": "Optional 'Rafraîchir' secondary button with h-16 px-8 text-xl."
+    },
+    "field_stock_report_modal": {
+      "theme_override": "When kind='kitchen', enforce Amber/Orange accents instead of default Emerald. Input fields must be height-16 text-2xl to allow typing with messy hands."
     }
   },
-  "visual_enhancers": {
-    "gradients": "Use radial gradients for background glow: 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neon-blue/20 via-transparent to-transparent'",
-    "borders": "1px solid with low opacity white. Active states get neon color.",
-    "shadows": "Colored shadows for neon effect: 'shadow-[0_0_15px_rgba(0,240,255,0.3)]'",
-    "motion": {
-      "hover": "Scale 1.02 + Brightness 1.1",
-      "entrance": "Fade in Up with stagger for lists."
-    }
+  "micro_interactions": {
+    "sound": "High-pitch short bell for 'New Order'. Low double-beep for 'New Message'.",
+    "visual_feedback": "active:scale-95 transition-transform duration-75 for all big buttons to give tactile feedback without delay."
   },
-  "image_urls": {
-    "hero": {
-      "url": "https://images.pexels.com/photos/7773978/pexels-photo-7773978.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "alt": "Immersive VR Experience at Espace Maxo",
-      "desc": "Main hero background, dark overlay needed."
-    },
-    "games": {
-      "vr_main": "https://images.pexels.com/photos/8728558/pexels-photo-8728558.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "racing_sim": "https://images.pexels.com/photos/13251222/pexels-photo-13251222.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "racing_action": "https://images.pexels.com/photos/28993071/pexels-photo-28993071.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "vr_action": "https://images.unsplash.com/photo-1621886289714-384b89bcff3c?crop=entropy&cs=srgb&fm=jpg"
-    },
-    "food": {
-      "burger_hero": "https://images.pexels.com/photos/35832466/pexels-photo-35832466.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "burger_plate": "https://images.unsplash.com/photo-1662452883375-9226ea22c765?crop=entropy&cs=srgb&fm=jpg",
-      "cocktail_neon": "https://images.pexels.com/photos/33826046/pexels-photo-33826046.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "cocktail_red": "https://images.unsplash.com/photo-1570204865352-934c744d682c?crop=entropy&cs=srgb&fm=jpg"
-    }
-  },
-  "navigation_structure": [
-    { "label": "Accueil", "path": "/" },
-    { "label": "Menu", "path": "/menu" },
-    { "label": "Jeux & VR", "path": "/games" },
-    { "label": "Réserver", "path": "/booking", "highlight": true }
-  ],
-  "technical_instructions": {
-    "images": "Use the 'object-cover' class for all images. Ensure aspect ratios are consistent (e.g., aspect-video for games, aspect-square for food).",
-    "mobile": "Ensure the booking form is fully usable on mobile (no small touch targets). Use a sticky bottom bar for the 'Book Now' CTA on mobile.",
-    "testing": "All interactive elements must have 'data-testid' attributes."
-  },
-  "universal_guidelines": {
-    "do_not": [
-      "Use white backgrounds.",
-      "Use generic 'Inter' font for headings.",
-      "Use default browser scrollbars (customize them to be thin and dark).",
-      "Use standard 'blue' link colors."
-    ],
-    "must": [
-      "Use a global dark background class on the body tag.",
-      "Ensure text contrast meets accessibility standards (light grey on black).",
-      "Add hover states to ALL interactive elements."
-    ]
+  "testing_requirements": {
+    "attributes": "All interactive elements MUST have data-testid attributes.",
+    "examples": ["kitchen-tab-commandes", "ticket-{id}-ready-btn", "item-{id}-checkbox", "header-sound-toggle"]
   }
 }
