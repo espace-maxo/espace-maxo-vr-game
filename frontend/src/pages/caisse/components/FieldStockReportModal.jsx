@@ -26,6 +26,11 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Échappe le HTML pour éviter les injections dans la fenêtre PDF
+const escapeHtml = (s) => String(s ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 export default function FieldStockReportModal({ open, onClose, currentUser, inline = false, kind = "ops" }) {
   const isAdmin = currentUser?.role === "admin";
   const userId = currentUser?.id || currentUser?.username || "unknown";
@@ -62,6 +67,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   const [reconciling, setReconciling] = useState(false);
   // Filtre kind dans l'historique (Admin uniquement)
   const [historyKindFilter, setHistoryKindFilter] = useState(kind); // ops | kitchen | all
+  // Filtre des items dans la vue détail (Admin uniquement)
+  const [detailEcartFilter, setDetailEcartFilter] = useState("all"); // all | zero | non_zero
 
   // ----------------------------------------------------------------
   // Chargement initial
@@ -281,6 +288,90 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
       setReconciling(false);
     }
   };
+
+  // Imprime / exporte en PDF le rapport courant (ouvre une fenêtre dédiée, propre, sans navigation)
+  const printReport = () => {
+    if (!selectedReport) return;
+    const r = selectedReport;
+    const kindLab = r.kind === "kitchen" ? "Cuisine" : "Resp. Op.";
+    const dateLab = new Date(r.created_at).toLocaleString("fr-FR");
+    const items = (r.items || []);
+    const rows = items.map((it) => {
+      const e = it.ecart || 0;
+      const sign = e > 0 ? "+" : "";
+      const cls = e > 0 ? "pos" : e < 0 ? "neg" : "zero";
+      const rupture = it.counted_qty <= 0 ? '<span class="badge">Rupture</span>' : '';
+      return `<tr>
+        <td>${escapeHtml(it.product_name || "")} ${rupture}</td>
+        <td class="num">${it.system_qty_at_submit ?? 0} ${escapeHtml(it.unit || "")}</td>
+        <td class="num">${it.counted_qty} ${escapeHtml(it.unit || "")}</td>
+        <td class="num ${cls}"><b>${sign}${e}</b></td>
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"/>
+<title>Point de stock — ${escapeHtml(r.created_by_name)} (${dateLab})</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2937; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 18px; }
+  .sub { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+  .meta { display: flex; gap: 12px; margin-bottom: 12px; font-size: 12px; }
+  .meta .item { padding: 8px 12px; background: #f3f4f6; border-radius: 6px; }
+  .meta b { display: block; font-size: 16px; color: #111; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border-bottom: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; }
+  th { background: #f9fafb; font-weight: 600; color: #374151; text-transform: uppercase; font-size: 10px; letter-spacing: .03em; }
+  .num { text-align: right; }
+  .pos { color: #059669; }
+  .neg { color: #dc2626; }
+  .zero { color: #9ca3af; }
+  .badge { background: #fee2e2; color: #b91c1c; padding: 1px 6px; border-radius: 9999px; font-size: 10px; margin-left: 4px; }
+  .notes { background: #fef3c7; padding: 8px 10px; border-radius: 6px; margin: 12px 0; font-size: 12px; }
+  .footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #6b7280; display: flex; justify-content: space-between; }
+  @media print { .no-print { display: none; } body { padding: 12px; } }
+</style></head>
+<body>
+  <div class="no-print" style="text-align:right;margin-bottom:8px;">
+    <button onclick="window.print()" style="padding:6px 14px;background:#059669;color:#fff;border:0;border-radius:6px;cursor:pointer;">Imprimer / PDF</button>
+  </div>
+  <h1>Point de stock — ${escapeHtml(kindLab)}</h1>
+  <p class="sub">Soumis par <b>${escapeHtml(r.created_by_name)}</b> le ${dateLab}
+  ${r.status === "reconciled" ? `· <span style="color:#059669;">Rapproché par ${escapeHtml(r.reconciled_by || "")} le ${new Date(r.reconciled_at).toLocaleString("fr-FR")}</span>` : ''}
+  </p>
+  <div class="meta">
+    <div class="item">Lignes <b>${r.items_count || items.length}</b></div>
+    <div class="item">Ruptures <b style="color:#dc2626;">${r.rupture_count || 0}</b></div>
+    <div class="item">Écart positif <b style="color:#059669;">+${r.total_ecart_positif || 0}</b></div>
+    <div class="item">Écart négatif <b style="color:#dc2626;">${r.total_ecart_negatif || 0}</b></div>
+  </div>
+  ${r.notes ? `<div class="notes"><b>Notes :</b> ${escapeHtml(r.notes)}</div>` : ''}
+  <table>
+    <thead><tr><th>Produit</th><th style="text-align:right;">Sys. au moment</th><th style="text-align:right;">Compté</th><th style="text-align:right;">Écart</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">
+    <span>Espace Maxo · Caisse Pro</span>
+    <span>Édité le ${new Date().toLocaleString("fr-FR")}</span>
+  </div>
+</body></html>`;
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (!w) {
+      toast.error("Veuillez autoriser les pop-ups pour exporter en PDF");
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 350);
+  };
+
+  // Items filtrés selon le filtre d'écart (Admin uniquement — non-admin ne voit pas l'écart)
+  const visibleItems = useMemo(() => {
+    const items = selectedReport?.items || [];
+    if (!isAdmin || detailEcartFilter === "all") return items;
+    if (detailEcartFilter === "zero") return items.filter((i) => (i.ecart || 0) === 0);
+    if (detailEcartFilter === "non_zero") return items.filter((i) => (i.ecart || 0) !== 0);
+    return items;
+  }, [selectedReport, detailEcartFilter, isAdmin]);
 
   // ----------------------------------------------------------------
   // Rendu
@@ -609,7 +700,18 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isAdmin && (
+                    <Button
+                      onClick={printReport}
+                      variant="outline"
+                      size="sm"
+                      className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                      data-testid="field-stock-print-pdf"
+                    >
+                      <FileText className="w-4 h-4 mr-1" /> Imprimer / PDF
+                    </Button>
+                  )}
                   {selectedReport.status === "submitted" && isAdmin && (
                     <Button
                       onClick={() => reconcile(selectedReport.id)}
@@ -671,6 +773,31 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                 )}
               </div>
 
+              {/* Filtre Écart (Admin uniquement) */}
+              {isAdmin && (
+                <div className="flex items-center gap-2 flex-wrap" data-testid="field-stock-ecart-filter">
+                  <span className="text-slate-500 text-xs uppercase tracking-wider">Filtrer :</span>
+                  {[
+                    { id: "all", label: `Tous (${selectedReport.items?.length || 0})` },
+                    { id: "zero", label: `Écart nul (${(selectedReport.items || []).filter(i => (i.ecart || 0) === 0).length})` },
+                    { id: "non_zero", label: `Avec écart (${(selectedReport.items || []).filter(i => (i.ecart || 0) !== 0).length})` },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setDetailEcartFilter(f.id)}
+                      data-testid={`field-stock-ecart-${f.id}`}
+                      className={`text-[11px] px-2.5 py-1 rounded-full transition border ${
+                        detailEcartFilter === f.id
+                          ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                          : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Items */}
               <div className="border border-slate-800 rounded-md max-h-[50vh] overflow-auto bg-slate-950/40">
                 <table className="w-full text-sm">
@@ -683,7 +810,9 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedReport.items.map((it) => {
+                    {visibleItems.length === 0 ? (
+                      <tr><td colSpan={isAdmin ? 4 : 2} className="p-4 text-center text-slate-500 text-xs">Aucune ligne ne correspond au filtre</td></tr>
+                    ) : visibleItems.map((it) => {
                       const e = it.ecart || 0;
                       const cls = e > 0 ? "text-emerald-400" : e < 0 ? "text-rose-400" : "text-slate-500";
                       return (
