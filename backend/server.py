@@ -474,7 +474,8 @@ class DeliveryOrder(BaseModel):
     wallet_amount_used: float = 0.0
     # Mode de récupération et promo -25% (champs persistés pour Caisse Admin)
     order_mode: str = "delivery"  # "delivery" | "pickup" | "dine_in"
-    scheduled_at: Optional[str] = None  # ISO datetime (dine_in uniquement)
+    scheduled_at: Optional[str] = None  # ISO datetime (dine_in OU plats locaux sur commande)
+    is_preorder: bool = False  # True si la commande contient des plats locaux sur commande (24h à l'avance)
     discount_amount: float = 0.0
     promo_25_applied: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -2494,6 +2495,27 @@ async def create_delivery_order(order: DeliveryOrder):
                 detail="Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.",
             )
 
+    # Validation : pour les plats locaux sur commande, scheduled_at obligatoire et >= 24h
+    if order.is_preorder and order.order_mode != "dine_in":
+        if not order.scheduled_at:
+            raise HTTPException(
+                status_code=400,
+                detail="Plats locaux : choisissez une date et heure de récupération (24h à l'avance min.).",
+            )
+        try:
+            sched_str = order.scheduled_at.replace("Z", "+00:00")
+            sched_dt = datetime.fromisoformat(sched_str)
+            if sched_dt.tzinfo is None:
+                sched_dt = sched_dt.replace(tzinfo=timezone(timedelta(hours=1)))
+            sched_dt_utc = sched_dt.astimezone(timezone.utc)
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="Format de date/heure invalide.")
+        if sched_dt_utc - datetime.now(timezone.utc) < timedelta(hours=24):
+            raise HTTPException(
+                status_code=400,
+                detail="Plats locaux sur commande : réservation 24h à l'avance minimum.",
+            )
+
     order_dict = order.model_dump()
     await db.delivery_orders.insert_one(order_dict)
     
@@ -2511,10 +2533,11 @@ async def create_delivery_order(order: DeliveryOrder):
         zone_label = "COTONOU" if order.delivery_zone == "cotonou" else "HORS COTONOU"
     payment_label = "PAYE" if order.payment_status == "paid" else "A VALIDER"
     schedule_line = f"\nCreneau: {order.scheduled_at}" if order.scheduled_at else ""
+    preorder_line = "\n>> PRECOMMANDE PLATS LOCAUX (24h) <<" if order.is_preorder else ""
 
     # Send SMS notification to admin
     notification_message = f"""COMMANDE [{zone_label}]
-
+{preorder_line}
 Statut: {payment_label}{schedule_line}
 Client: {order.customer_name}
 Tel: {order.customer_phone}

@@ -88,6 +88,22 @@ const menuData = {
       { id: "div2", name: "Aileron Frit/Braisé/Grillé", price: 4500 }
     ]
   },
+  locaux: {
+    name: "Plats locaux sur commande",
+    icon: ChefHat,
+    color: "text-amber-400",
+    on_demand_category: true,
+    items: [
+      { id: "loc1", name: "Wagasi grillé (fromage peulh)", price: 3600, description: "Servi avec piment & oignon", on_demand: true },
+      { id: "loc2", name: "Tchitchinga (brochettes pimentées de bœuf)", price: 4500, description: "Brochettes épicées à la béninoise", on_demand: true, popular: true },
+      { id: "loc3", name: "Pintade braisée à la béninoise", price: 6800, description: "Pintade entière marinée, braisée au feu de bois", on_demand: true, popular: true },
+      { id: "loc4", name: "Wo (pâte d'igname) + sauce arachide", price: 4900, description: "Pâte d'igname pilée, sauce arachide traditionnelle", on_demand: true },
+      { id: "loc5", name: "Igname pilée + sauce graine", price: 4900, description: "Igname pilée à la main, sauce graine de palme", on_demand: true },
+      { id: "loc6", name: "Watché complet (riz-haricots, poisson, sauce gboma)", price: 4500, description: "Plat complet de la tradition béninoise", on_demand: true },
+      { id: "loc7", name: "Gboma Dessi (sauce épinards locaux)", price: 4500, description: "Sauce épinards GBOMA, viande ou poisson", on_demand: true },
+      { id: "loc8", name: "Akpan local (yaourt traditionnel)", price: 1300, description: "Dessert traditionnel à base de maïs fermenté", on_demand: true }
+    ]
+  },
   sauces: {
     name: "Sauces Traditionnelles",
     icon: ChefHat,
@@ -327,6 +343,9 @@ const DeliveryPage = () => {
 
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  // Détection : panier contient au moins un plat local "sur commande"
+  // → impose une réservation J+1 minimum sur scheduled_date / scheduled_time
+  const cartHasOnDemand = cart.some((c) => c.on_demand);
   // Pas de frais si retrait OU consommation sur place
   const deliveryFee = (orderForm.mode === "pickup" || orderForm.mode === "dine_in")
     ? 0
@@ -360,6 +379,29 @@ const DeliveryPage = () => {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   })();
+
+  // Min date pour les plats locaux "sur commande" = J+1 (24h à l'avance)
+  const minPreorderDate = (() => {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+
+  // Validation 24h pour les plats sur commande : la date+heure choisie doit être ≥ 24h dans le futur
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+  const preorderScheduledMs = (() => {
+    if (!cartHasOnDemand) return null;
+    if (!orderForm.scheduled_date || !orderForm.scheduled_time) return null;
+    const dt = new Date(`${orderForm.scheduled_date}T${orderForm.scheduled_time}:00`);
+    const ms = dt.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  })();
+  const preorderTooSoon =
+    cartHasOnDemand &&
+    preorderScheduledMs !== null &&
+    preorderScheduledMs - Date.now() < twentyFourHoursMs;
+  const preorderMissingSchedule =
+    cartHasOnDemand && (!orderForm.scheduled_date || !orderForm.scheduled_time);
   
   // Calculate wallet usage
   const walletAmountToUse = useWallet ? Math.min(walletBalance, totalWithDelivery) : 0;
@@ -379,9 +421,10 @@ const DeliveryPage = () => {
         : orderForm.address,
       delivery_zone: isPickup ? "pickup" : isDineIn ? "dine_in" : orderForm.zone,
       order_mode: orderForm.mode,
-      scheduled_at: isDineIn && orderForm.scheduled_date && orderForm.scheduled_time
+      scheduled_at: (isDineIn || cartHasOnDemand) && orderForm.scheduled_date && orderForm.scheduled_time
         ? `${orderForm.scheduled_date}T${orderForm.scheduled_time}:00`
         : null,
+      is_preorder: cartHasOnDemand,
       notes: orderForm.notes,
       items: cart.map(item => ({
         name: item.name,
@@ -419,6 +462,18 @@ const DeliveryPage = () => {
       }
       if (dineInTooSoon) {
         toast.error("Complet pour ce créneau. Veuillez réserver au moins 6 heures à l'avance.");
+        return;
+      }
+    }
+
+    // Validation 24h pour plats locaux sur commande
+    if (cartHasOnDemand) {
+      if (preorderMissingSchedule) {
+        toast.error("Plats locaux : veuillez choisir une date et une heure de récupération (24h à l'avance minimum)");
+        return;
+      }
+      if (preorderTooSoon) {
+        toast.error("Plats locaux sur commande : réservation 24h à l'avance minimum.");
         return;
       }
     }
@@ -633,32 +688,67 @@ const DeliveryPage = () => {
                 </h2>
               </div>
 
+              {/* Bandeau d'information "Sur commande" — affiché uniquement pour la catégorie locaux */}
+              {menuData[activeCategory].on_demand_category && (
+                <div className="mb-5 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/10 p-4 flex items-start gap-3" data-testid="locaux-info-banner">
+                  <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 ring-2 ring-amber-500/40 flex items-center justify-center text-xl">
+                    🍲
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-orbitron text-amber-300 font-black uppercase text-sm tracking-wider">
+                      Réservation 24h à l&apos;avance
+                    </p>
+                    <p className="text-amber-100/90 text-xs sm:text-sm mt-1 leading-relaxed">
+                      Nos plats locaux sont préparés à la commande, à la main, dans le respect des traditions béninoises.
+                      Merci de réserver <strong className="text-white">au moins 24 heures à l&apos;avance</strong> en
+                      précisant votre date &amp; heure de récupération au moment du paiement. Livraison, retrait sur place
+                      ou consommation au restaurant — au choix.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {menuData[activeCategory].items.map(item => (
                   <Card 
                     key={item.id} 
-                    className="bg-dark-card border-white/10 hover:border-food-orange/30 transition-colors"
+                    className={`bg-dark-card transition-colors ${item.on_demand ? "border-amber-500/30 hover:border-amber-400/60" : "border-white/10 hover:border-food-orange/30"}`}
+                    data-testid={`menu-card-${item.id}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-outfit font-semibold text-white">{item.name}</h3>
                             {item.popular && (
                               <Badge className="bg-food-gold/20 text-food-gold text-xs">Populaire</Badge>
+                            )}
+                            {item.on_demand && (
+                              <Badge
+                                className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] uppercase tracking-wider font-bold"
+                                data-testid={`on-demand-badge-${item.id}`}
+                              >
+                                🍲 Sur commande
+                              </Badge>
                             )}
                           </div>
                           {item.description && (
                             <p className="text-gray-500 text-sm mt-1">{item.description}</p>
                           )}
-                          <p className="text-food-orange font-rajdhani font-bold text-xl mt-2">
+                          <p className={`font-rajdhani font-bold text-xl mt-2 ${item.on_demand ? "text-amber-300" : "text-food-orange"}`}>
                             {item.price.toLocaleString()} FCFA
                           </p>
+                          {item.on_demand && (
+                            <p className="text-[10px] text-amber-200/70 mt-0.5 italic">
+                              Préparation 24h · choisir date &amp; heure au paiement
+                            </p>
+                          )}
                         </div>
                         <Button
                           onClick={() => addToCart(item)}
                           size="sm"
-                          className="bg-food-orange hover:bg-food-orange/80 text-white"
+                          className={item.on_demand ? "bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold" : "bg-food-orange hover:bg-food-orange/80 text-white"}
+                          data-testid={`add-to-cart-${item.id}`}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
@@ -702,6 +792,15 @@ const DeliveryPage = () => {
             <p className="text-gray-400 text-center py-8">Votre panier est vide</p>
           ) : (
             <>
+              {cartHasOnDemand && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-start gap-2 mb-2" data-testid="cart-on-demand-notice">
+                  <span className="text-base leading-none">🍲</span>
+                  <span>
+                    Votre panier contient des <strong>plats locaux sur commande</strong>. Une date &amp; heure
+                    de récupération (24h à l&apos;avance min.) sera demandée au paiement.
+                  </span>
+                </div>
+              )}
               <div className="space-y-3 max-h-60 overflow-y-auto">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center justify-between bg-white/5 rounded-lg p-3">
@@ -902,6 +1001,51 @@ const DeliveryPage = () => {
                     {dineInMissingSchedule && (
                       <p className="text-[11px] text-sky-300/80">
                         Choisissez une date et une heure (minimum 6h à l'avance).
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Sélecteur Date + Heure — Plats locaux sur commande (24h à l'avance) */}
+                {cartHasOnDemand && orderForm.mode !== "dine_in" && (
+                  <div className="space-y-3 p-3 rounded-lg border border-amber-500/40 bg-amber-500/5" data-testid="preorder-scheduler">
+                    <Label className="text-amber-200 font-semibold flex items-center gap-1">
+                      🍲 Date et heure de récupération de vos plats locaux *
+                    </Label>
+                    <p className="text-[11px] text-amber-100/70">
+                      Vos plats sont préparés à la commande. Choisissez un créneau <strong>au moins 24h à l&apos;avance</strong>.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={orderForm.scheduled_date}
+                        min={minPreorderDate}
+                        onChange={(e) => setOrderForm({ ...orderForm, scheduled_date: e.target.value })}
+                        className="bg-dark-card border-amber-500/40 text-white"
+                        data-testid="preorder-date"
+                      />
+                      <Input
+                        type="time"
+                        value={orderForm.scheduled_time}
+                        onChange={(e) => setOrderForm({ ...orderForm, scheduled_time: e.target.value })}
+                        className="bg-dark-card border-amber-500/40 text-white"
+                        data-testid="preorder-time"
+                      />
+                    </div>
+                    {preorderTooSoon && (
+                      <div className="flex items-center gap-2 p-2 rounded bg-red-500/15 border border-red-500/40 text-red-200 text-xs font-semibold" data-testid="preorder-too-soon-msg">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        Réservation 24h à l&apos;avance minimum. Choisissez un créneau plus tardif.
+                      </div>
+                    )}
+                    {!preorderTooSoon && !preorderMissingSchedule && (
+                      <p className="text-[11px] text-emerald-300">
+                        ✓ Créneau validé. Vos plats seront prêts à cette heure.
+                      </p>
+                    )}
+                    {preorderMissingSchedule && (
+                      <p className="text-[11px] text-amber-300/80">
+                        Choisissez une date et une heure (minimum 24h à l&apos;avance).
                       </p>
                     )}
                   </div>
@@ -1121,7 +1265,8 @@ const DeliveryPage = () => {
                     !orderForm.name ||
                     !orderForm.phone ||
                     (orderForm.mode === "delivery" && !orderForm.address) ||
-                    (orderForm.mode === "dine_in" && (dineInMissingSchedule || dineInTooSoon))
+                    (orderForm.mode === "dine_in" && (dineInMissingSchedule || dineInTooSoon)) ||
+                    (cartHasOnDemand && (preorderMissingSchedule || preorderTooSoon))
                   }
                   className={`font-rajdhani font-bold flex-1 ${
                     orderForm.zone === "cotonou"
