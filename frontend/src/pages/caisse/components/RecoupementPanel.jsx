@@ -25,6 +25,7 @@ import DailyReportsList from "./DailyReportsList";
 import CuisineMessagesAdminList from "./CuisineMessagesAdminList";
 import CuisineNeedsAdminList from "./CuisineNeedsAdminList";
 import CuisineScansAdminList from "./CuisineScansAdminList";
+import CuisineDayClosuresList from "./CuisineDayClosuresList";
 // eslint-disable-next-line no-unused-vars
 const _CSAL = CuisineScansAdminList;
 import RecoupementSyntheseTable from "./RecoupementSyntheseTable";
@@ -766,8 +767,12 @@ const RecoupementPanel = ({ currentUser }) => {
   const refreshHistory = () => setHistoryKey(k => k + 1);
   return (
     <div className="space-y-4" data-testid="recoupement-panel">
-      <Tabs defaultValue="ocr">
+      <Tabs defaultValue="closures">
         <TabsList className="bg-slate-800/60 border border-slate-700">
+          <TabsTrigger value="closures" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                       data-testid="recoupement-tab-closures">
+            <ChefHat className="w-4 h-4 mr-1" /> Clôtures Chef
+          </TabsTrigger>
           <TabsTrigger value="ocr" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white"
                        data-testid="recoupement-tab-ocr">
             <Camera className="w-4 h-4 mr-1" /> OCR Photos
@@ -781,6 +786,20 @@ const RecoupementPanel = ({ currentUser }) => {
             <FileText className="w-4 h-4 mr-1" /> Besoins Cuisine
           </TabsTrigger>
         </TabsList>
+
+        {/* ============= CLÔTURES CUISINE ============= */}
+        <TabsContent value="closures" className="mt-3 space-y-3">
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="p-3 text-xs text-slate-300">
+              <p>
+                <strong className="text-amber-300">Clôtures de journée du Chef</strong> — Vue d&apos;ensemble +
+                détail de chaque clôture transmise par le Chef Cuisinier en fin de service. Inclut le
+                résumé agrégé (bons, plats, CA), le top des plats préparés, et le détail bon par bon.
+              </p>
+            </CardContent>
+          </Card>
+          <CuisineDayClosuresList currentUser={currentUser} />
+        </TabsContent>
 
         <TabsContent value="ocr" className="mt-3 space-y-4">
           <Card className="bg-slate-800/50 border-slate-700">

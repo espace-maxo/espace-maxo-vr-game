@@ -89,6 +89,11 @@ async def list_cuisine_orders(actor_role: str = "", status_filter: str = "active
             continue
         if status_filter == "done" and not is_all_ready:
             continue
+        # Exclure les tables dont la journée cuisine a été clôturée par le Chef
+        # (les onglets Commandes / Historique du Chef se vident après clôture).
+        # L'admin (actor_role="admin") peut continuer à les voir pour consultation.
+        if actor_role == "cuisinier" and t.get("cuisine_day_closed_at"):
+            continue
         # Augment items with status info
         items_out = [{
             "index": idx,
@@ -118,6 +123,196 @@ async def list_cuisine_orders(actor_role: str = "", status_filter: str = "active
             "items": items_out,
         })
     return {"total": len(out), "orders": out}
+
+
+# ─────────────────────────────────────────────────────────
+# CLÔTURE DE JOURNÉE — Chef Cuisinier
+# ─────────────────────────────────────────────────────────
+# Workflow :
+#   1. À la fin de la journée, le Chef appuie sur "Clôturer la journée".
+#   2. On agrège TOUS les bons cuisine du jour (actifs + terminés) en un
+#      snapshot dans la collection `cuisine_day_closures`.
+#   3. On marque ces tables avec `cuisine_day_closed_at` → elles disparaissent
+#      des onglets Commandes & Historique du Chef (qui repartent à zéro).
+#   4. L'Admin retrouve toutes les clôtures dans le menu "Rapports Cuisine & Jeux"
+#      avec stats agrégées + détail par bon.
+#
+# Collection `cuisine_day_closures` :
+#   { id, date, closed_at, closed_by, closed_by_role,
+#     total_orders, total_items, total_quantity, total_revenue,
+#     top_items: [{name, quantity, count}],
+#     orders: [ {table_id, table_number, server_name, client_name, created_at,
+#                all_ready_at, items: [{name, quantity, price, ready_at, served_at}] } ] }
+
+
+@router.post("/cuisine/close-day")
+async def close_kitchen_day(payload: dict):
+    """Le Chef Cuisinier clôture la journée et bascule les bons vers les Rapports Admin.
+
+    Body : { actor_role: "cuisinier"|"admin", actor_name: str, date?: "YYYY-MM-DD" }
+    """
+    actor_role = (payload or {}).get("actor_role") or ""
+    actor_name = (payload or {}).get("actor_name") or "Cuisinier"
+    if actor_role not in ("cuisinier", "admin"):
+        raise HTTPException(403, "Action réservée au Chef Cuisinier")
+    date_str = (payload or {}).get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Récupère TOUS les bons cuisine du jour qui ne sont pas encore clôturés
+    tables = await db.caisse_tables.find(
+        {"cuisine_day_closed_at": {"$exists": False}},
+        {"_id": 0},
+    ).sort("created_at", 1).to_list(5000)
+
+    closure_orders = []
+    table_ids_to_mark = []
+    total_items = 0
+    total_quantity = 0.0
+    total_revenue = 0.0
+    by_item: dict = {}
+
+    for t in tables:
+        items = t.get("items") or []
+        cui_items = [it for it in items if _is_cuisine_item(it)]
+        if not cui_items:
+            continue
+        t_date = (t.get("created_at") or "")[:10] or (t.get("updated_at") or "")[:10]
+        if t_date and t_date != date_str:
+            continue
+        items_out = []
+        for it in cui_items:
+            qty = float(it.get("quantity") or 1)
+            price = float(it.get("price") or 0)
+            name = it.get("name") or "—"
+            total_items += 1
+            total_quantity += qty
+            total_revenue += qty * price
+            entry = by_item.setdefault(name, {"name": name, "quantity": 0.0, "count": 0})
+            entry["quantity"] += qty
+            entry["count"] += 1
+            items_out.append({
+                "name": name,
+                "quantity": qty,
+                "price": price,
+                "department": it.get("department") or it.get("category"),
+                "ready_at": it.get("ready_at"),
+                "served_at": it.get("served_at"),
+                "ready_by": it.get("ready_by"),
+            })
+        closure_orders.append({
+            "table_id": t.get("id"),
+            "table_number": t.get("table_number"),
+            "server_name": t.get("server_name"),
+            "client_name": t.get("client_name"),
+            "created_at": t.get("created_at"),
+            "all_ready_at": t.get("all_ready_at"),
+            "items": items_out,
+        })
+        table_ids_to_mark.append(t.get("id"))
+
+    if not closure_orders:
+        raise HTTPException(400, "Aucun bon cuisine à clôturer pour cette journée.")
+
+    top_items = sorted(by_item.values(), key=lambda x: x["quantity"], reverse=True)[:10]
+
+    closure_doc = {
+        "id": str(uuid.uuid4()),
+        "date": date_str,
+        "closed_at": now_iso,
+        "closed_by": actor_name,
+        "closed_by_role": actor_role,
+        "total_orders": len(closure_orders),
+        "total_items": total_items,
+        "total_quantity": total_quantity,
+        "total_revenue": total_revenue,
+        "top_items": top_items,
+        "orders": closure_orders,
+    }
+    await db.cuisine_day_closures.insert_one(dict(closure_doc))
+
+    # Marque les tables comme clôturées côté Chef
+    if table_ids_to_mark:
+        await db.caisse_tables.update_many(
+            {"id": {"$in": table_ids_to_mark}},
+            {"$set": {"cuisine_day_closed_at": now_iso, "cuisine_closure_id": closure_doc["id"]}},
+        )
+
+    # Trace audit
+    try:
+        await db.cuisine_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "day_closure",
+            "closure_id": closure_doc["id"],
+            "date": date_str,
+            "total_orders": len(closure_orders),
+            "total_items": total_items,
+            "total_revenue": total_revenue,
+            "actor_name": actor_name,
+            "actor_role": actor_role,
+            "created_at": now_iso,
+        })
+    except Exception as e:
+        logger.error(f"cuisine closure audit fail: {e}")
+
+    closure_doc.pop("_id", None)
+    return {"success": True, "closure": closure_doc}
+
+
+@router.get("/cuisine/day-closures")
+async def list_day_closures(actor_role: str = "", date_from: Optional[str] = None,
+                             date_to: Optional[str] = None, limit: int = 60):
+    """Admin : liste des clôtures cuisine (résumé sans le détail des bons)."""
+    if actor_role not in ("admin", "manager"):
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    q: dict = {}
+    if date_from or date_to:
+        q["date"] = {}
+        if date_from:
+            q["date"]["$gte"] = date_from
+        if date_to:
+            q["date"]["$lte"] = date_to
+    closures = await db.cuisine_day_closures.find(
+        q,
+        {"_id": 0, "orders": 0},  # on cache le détail dans la liste
+    ).sort("closed_at", -1).to_list(min(int(limit), 300))
+    return {"total": len(closures), "closures": closures}
+
+
+@router.get("/cuisine/day-closures/{closure_id}")
+async def get_day_closure(closure_id: str, actor_role: str = ""):
+    """Admin : détail complet d'une clôture (avec tous les bons)."""
+    if actor_role not in ("admin", "manager"):
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    doc = await db.cuisine_day_closures.find_one({"id": closure_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Clôture introuvable")
+    return doc
+
+
+@router.delete("/cuisine/day-closures/{closure_id}")
+async def delete_day_closure(closure_id: str, actor_role: str = "", actor_name: str = ""):
+    """Admin uniquement : supprime une clôture (audité)."""
+    if actor_role != "admin":
+        raise HTTPException(403, "Action réservée à l'administrateur")
+    doc = await db.cuisine_day_closures.find_one({"id": closure_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Clôture introuvable")
+    await db.cuisine_day_closures.delete_one({"id": closure_id})
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "cuisine_day_closure",
+            "entity_id": closure_id,
+            "action": "delete",
+            "actor_name": actor_name or "Admin",
+            "actor_role": "admin",
+            "snapshot": {k: v for k, v in doc.items() if k != "orders"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"audit closure delete fail: {e}")
+    return {"success": True}
+
 
 
 # ─────────────────────────────────────────────────────────

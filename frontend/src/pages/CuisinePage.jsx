@@ -23,7 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChefHat, CheckCircle2, Clock, Bell, Camera, Upload, Loader2,
   RefreshCw, LogOut, Hash, Volume2, VolumeX, History, Flame, MessageSquare, Send, BellRing, FileText, Boxes, ClipboardCheck,
+  Lock, Archive,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 import { beepNewOrder, playBeep } from "../lib/notificationBeep";
 import DailyReportPanel from "../components/DailyReportPanel";
 import CuisineStockTab from "./cuisine/CuisineStockTab";
@@ -203,6 +207,11 @@ const CuisinePage = ({ currentUser, onLogout }) => {
   const [sendingMsg, setSendingMsg] = useState(false);
   const lastMsgIdsRef = useRef(new Set());
 
+  // Clôture de journée
+  const [closeDayOpen, setCloseDayOpen] = useState(false);
+  const [closingDay, setClosingDay] = useState(false);
+  const [lastClosure, setLastClosure] = useState(null); // résumé après clôture
+
   // ── Fetch loop ──
   const fetchOrders = useCallback(async (silent = true) => {
     if (!silent) setLoading(true);
@@ -335,6 +344,28 @@ const CuisinePage = ({ currentUser, onLogout }) => {
     }
   };
 
+  // ── Clôture de journée ──
+  const closeDay = async () => {
+    setClosingDay(true);
+    try {
+      const r = await axios.post(`${API}/cuisine/close-day`, {
+        actor_role: currentUser?.role || "cuisinier",
+        actor_name: currentUser?.full_name || currentUser?.username || "Cuisinier",
+      }, { timeout: 30000 });
+      const closure = r.data?.closure || null;
+      setLastClosure(closure);
+      toast.success(`Journée clôturée — ${closure?.total_orders || 0} bon(s) transmis à l'administrateur`);
+      // Rafraîchit les onglets (qui se videront)
+      lastIdsRef.current = new Set();
+      fetchOrders(true);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la clôture");
+    } finally {
+      setClosingDay(false);
+      setCloseDayOpen(false);
+    }
+  };
+
   // ── Scan bon ──
   const fileRef = useRef(null);
   const [scanning, setScanning] = useState(false);
@@ -463,6 +494,20 @@ const CuisinePage = ({ currentUser, onLogout }) => {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => setCloseDayOpen(true)}
+              disabled={closingDay}
+              className="bg-rose-600 hover:bg-rose-700 text-white h-10 px-3 sm:px-4 font-bold text-[11px] sm:text-xs uppercase tracking-wider"
+              data-testid="cuisine-close-day-btn"
+              title="Clôturer la journée et transmettre les bons à l'administrateur"
+            >
+              {closingDay ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <><Lock className="w-4 h-4 sm:mr-1.5" /><span className="hidden sm:inline">Clôturer</span></>
+              )}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setSoundOn((s) => !s)} className={`h-10 w-10 p-0 ${soundOn ? 'text-emerald-300' : 'text-slate-500'}`} title={soundOn ? "Couper le son" : "Activer le son"} data-testid="cuisine-sound-toggle">
               {soundOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </Button>
@@ -516,7 +561,6 @@ const CuisinePage = ({ currentUser, onLogout }) => {
               { id: "scan",        label: "Scanner",       short: "Scan", icon: Camera,          color: "cyan",    testid: "cuisine-tab-scan" },
               { id: "messages",    label: "Messages",      short: "Msg",  icon: MessageSquare,   color: "rose",    testid: "cuisine-tab-messages",     badge: unreadMessages, badgePulse: unreadMessages > 0 },
               { id: "history",     label: "Historique",    short: "Hist", icon: History,         color: "purple",  testid: "cuisine-tab-history" },
-              { id: "report",      label: "Rapport",       short: "Rap",  icon: FileText,        color: "emerald", testid: "cuisine-tab-report" },
               { id: "field_stock", label: "Point de stock",short: "Stock",icon: ClipboardCheck,  color: "amber",   testid: "cuisine-tab-field-stock" },
             ];
             const COLOR_MAP = {
@@ -528,7 +572,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
             };
             return (
               <div className="mb-5 -mx-1 px-1 overflow-x-auto scrollbar-thin">
-                <TabsList className="bg-transparent border-0 grid grid-cols-3 md:grid-cols-6 gap-2 h-auto p-0 w-full">
+                <TabsList className="bg-transparent border-0 grid grid-cols-3 md:grid-cols-5 gap-2 h-auto p-0 w-full">
                   {MENU.map((m) => {
                     const Icon = m.icon;
                     const isActive = activeTab === m.id;
@@ -917,6 +961,100 @@ const CuisinePage = ({ currentUser, onLogout }) => {
             <FieldStockReportModal inline kind="kitchen" currentUser={currentUser} />
           </TabsContent>
         </Tabs>
+
+        {/* MODAL — Clôture de journée */}
+        <Dialog open={closeDayOpen} onOpenChange={setCloseDayOpen}>
+          <DialogContent className="bg-slate-900 border-rose-500/40 text-white max-w-md" data-testid="cuisine-close-day-modal">
+            <DialogHeader>
+              <DialogTitle className="text-lg flex items-center gap-2 text-rose-200">
+                <Lock className="w-5 h-5" />
+                Clôturer la journée
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 text-sm">
+                Tous les bons de la journée seront transmis à l&apos;administrateur dans
+                <span className="text-amber-300 font-semibold"> « Rapports Cuisine &amp; Jeux »</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <div className="bg-slate-800/60 border border-rose-500/30 rounded-lg p-3">
+                <p className="text-slate-300 mb-2">Après clôture :</p>
+                <ul className="text-xs space-y-1 text-slate-400">
+                  <li>• L&apos;onglet <strong className="text-amber-300">Commandes</strong> sera vidé</li>
+                  <li>• L&apos;onglet <strong className="text-purple-300">Historique</strong> sera vidé</li>
+                  <li>• Vous repartirez à zéro pour la prochaine journée</li>
+                  <li>• L&apos;administrateur conservera toutes les données pour ses rapports</li>
+                </ul>
+              </div>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-xs text-amber-200">
+                <Bell className="w-3.5 h-3.5 inline mr-1" />
+                Cette action est <strong>définitive</strong> côté Chef. Confirmez uniquement en fin de service.
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setCloseDayOpen(false)}
+                disabled={closingDay}
+                className="text-slate-300 hover:bg-slate-800 border border-slate-700"
+                data-testid="cuisine-close-day-cancel"
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={closeDay}
+                disabled={closingDay}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                data-testid="cuisine-close-day-confirm"
+              >
+                {closingDay ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Clôture en cours…</>
+                ) : (
+                  <><Lock className="w-4 h-4 mr-2" /> Confirmer la clôture</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* MODAL — Résumé de la dernière clôture */}
+        <Dialog open={!!lastClosure} onOpenChange={(o) => { if (!o) setLastClosure(null); }}>
+          <DialogContent className="bg-slate-900 border-emerald-500/40 text-white max-w-md" data-testid="cuisine-closure-summary-modal">
+            <DialogHeader>
+              <DialogTitle className="text-lg flex items-center gap-2 text-emerald-200">
+                <CheckCircle2 className="w-5 h-5" />
+                Journée clôturée avec succès
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 text-sm">
+                Vos données ont été transmises à l&apos;administrateur.
+              </DialogDescription>
+            </DialogHeader>
+            {lastClosure && (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                  <p className="text-2xl font-black text-amber-300">{lastClosure.total_orders}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Bons</p>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                  <p className="text-2xl font-black text-cyan-300">{lastClosure.total_items}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Lignes</p>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                  <p className="text-2xl font-black text-emerald-300">{Math.round(lastClosure.total_quantity || 0)}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Plats</p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                onClick={() => setLastClosure(null)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+                data-testid="cuisine-closure-summary-close"
+              >
+                Fermer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
