@@ -238,6 +238,38 @@ async def create_invoice(
 
         invoice_dict = invoice.model_dump()
         await db.invoices.insert_one(invoice_dict)
+
+        # ── PATCH BUG (Feb 2026) : assurer la visibilité côté Cuisinier ──
+        # Quand une vente directe (sans table active) contient des items "cuisine",
+        # créer une `caisse_tables` virtuelle pour que GET /api/cuisine/orders
+        # retourne ce bon au profil Chef Cuisinier (sinon il ne voit RIEN).
+        # Si une table existe déjà (table_number présent), on n'agit pas car
+        # le flow saveInvoice côté frontend a déjà appelé PUT /caisse/tables.
+        try:
+            from routers.cuisine import _is_cuisine_item, CUISINE_DEPTS  # noqa
+            has_cuisine_items = any(_is_cuisine_item(it) for it in (invoice_data.items or []))
+            if has_cuisine_items and not invoice_data.table_number:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                virtual_table = {
+                    "id": f"virt-inv-{invoice.id}",
+                    "table_number": invoice_data.table_number or 0,  # 0 = vente directe
+                    "server_name": invoice_data.created_by or "Vente directe",
+                    "client_name": invoice_data.customer_name or "Client",
+                    "items": [dict(it) for it in invoice_data.items],
+                    "status": "ready_to_invoice",
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "from_invoice_id": invoice.id,
+                    "is_virtual_cuisine_table": True,
+                    "all_ready_at": None,
+                    "notes": invoice_data.notes or "",
+                }
+                await db.caisse_tables.insert_one(virtual_table)
+                logger.info(f"Virtual cuisine table created for direct-sale invoice {invoice.invoice_number}")
+        except Exception as _virt_err:
+            # Ne JAMAIS bloquer la facturation pour ce side-effect
+            logger.warning(f"virtual cuisine table creation failed: {_virt_err}")
+
         # Audit : creation
         await _log_audit(
             "invoice",
