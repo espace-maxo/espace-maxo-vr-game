@@ -45,6 +45,14 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   // Tri (Admin uniquement — pour repérer rapidement les stocks importants/faibles)
   const [sortMode, setSortMode] = useState("name_asc"); // name_asc | qty_desc | qty_asc | category
 
+  // ----- Création express de produit -----
+  const [showAddProd, setShowAddProd] = useState(false);
+  const [newProdName, setNewProdName] = useState("");
+  const [newProdCat, setNewProdCat] = useState("");
+  const [newProdUnit, setNewProdUnit] = useState("unite");
+  const [newProdQty, setNewProdQty] = useState("");
+  const [creatingProd, setCreatingProd] = useState(false);
+
   // ----- Historique -----
   const [reports, setReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -146,6 +154,47 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
     setSearch("");
     setCounts({});
     setNotes("");
+  };
+
+  // Création express d'un nouveau produit dans le catalogue Stock (sans prix → pending Admin)
+  const createQuickProduct = async () => {
+    const name = newProdName.trim();
+    if (!name) { toast.error("Saisissez un nom"); return; }
+    if (!newProdCat) { toast.error("Sélectionnez une catégorie"); return; }
+    setCreatingProd(true);
+    try {
+      const params = new URLSearchParams({ x_user_name: userName }).toString();
+      const qty = parseFloat(newProdQty || "0") || 0;
+      const r = await axios.post(`${API}/field-stock/quick-add-product?${params}`, {
+        name,
+        category_id: newProdCat,
+        unit: newProdUnit || "unite",
+        counted_qty: qty,
+      });
+      const created = r.data;
+      // 1. L'ajouter en mémoire pour qu'il apparaisse dans la liste
+      setAllProducts((prev) => {
+        const next = [...prev, created];
+        next.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        return next;
+      });
+      // 2. Pré-remplir la quantité comptée si fournie
+      if (qty > 0) {
+        setCounts((prev) => ({ ...prev, [created.id]: String(qty) }));
+      }
+      // 3. Si une catégorie filtrée est active, l'ajouter pour que le produit reste visible
+      if (selectedCats.length > 0 && !selectedCats.includes(newProdCat)) {
+        setSelectedCats((prev) => [...prev, newProdCat]);
+      }
+      toast.success(`« ${created.name} » créé · à compléter par l'Admin`);
+      setShowAddProd(false);
+      setNewProdName("");
+      setNewProdQty("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Erreur lors de la création");
+    } finally {
+      setCreatingProd(false);
+    }
   };
 
   const submitReport = async () => {
@@ -326,8 +375,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
               {/* Recherche */}
               <div>
                 <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">2. Saisissez les quantités comptées</p>
-                <div className="relative mb-2 flex gap-2 items-center">
-                  <div className="relative flex-1">
+                <div className="relative mb-2 flex gap-2 items-center flex-wrap">
+                  <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
                       value={search}
@@ -364,6 +413,16 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                       ))}
                     </div>
                   )}
+                  {/* Bouton "Nouveau produit" — saisie rapide pour produits manquants au catalogue */}
+                  <Button
+                    type="button"
+                    onClick={() => setShowAddProd(true)}
+                    size="sm"
+                    className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    data-testid="field-stock-add-product"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Nouveau produit
+                  </Button>
                 </div>
 
                 {/* Liste produits */}
@@ -383,7 +442,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleProducts.slice(0, 250).map((p) => {
+                        {visibleProducts.map((p) => {
                           const val = counts[p.id] ?? "";
                           const hasValue = val !== "" && !Number.isNaN(parseFloat(val));
                           return (
@@ -410,9 +469,9 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                       </tbody>
                     </table>
                   )}
-                  {visibleProducts.length > 250 && (
+                  {visibleProducts.length > 500 && (
                     <div className="p-2 text-center text-amber-300 text-xs bg-amber-500/5">
-                      ⚠️ Affichage limité à 250 lignes — affinez avec la recherche ou les catégories
+                      ⚠️ {visibleProducts.length} produits affichés — utilisez la recherche ou les catégories pour affiner
                     </div>
                   )}
                 </div>
@@ -641,16 +700,124 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
 
   if (inline) {
     return (
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden" data-testid="field-stock-inline">
-        {body}
-      </div>
+      <>
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden" data-testid="field-stock-inline">
+          {body}
+        </div>
+        <QuickAddProductDialog
+          open={showAddProd}
+          onClose={() => setShowAddProd(false)}
+          categories={categories}
+          name={newProdName} setName={setNewProdName}
+          cat={newProdCat} setCat={setNewProdCat}
+          unit={newProdUnit} setUnit={setNewProdUnit}
+          qty={newProdQty} setQty={setNewProdQty}
+          loading={creatingProd}
+          onCreate={createQuickProduct}
+        />
+      </>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" data-testid="field-stock-modal">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
-        {body}
+    <>
+      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 md:p-6" data-testid="field-stock-modal">
+        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden">
+          {body}
+        </div>
+      </div>
+      <QuickAddProductDialog
+        open={showAddProd}
+        onClose={() => setShowAddProd(false)}
+        categories={categories}
+        name={newProdName} setName={setNewProdName}
+        cat={newProdCat} setCat={setNewProdCat}
+        unit={newProdUnit} setUnit={setNewProdUnit}
+        qty={newProdQty} setQty={setNewProdQty}
+        loading={creatingProd}
+        onCreate={createQuickProduct}
+      />
+    </>
+  );
+}
+
+// Petit dialog simple pour la création express d'un produit
+function QuickAddProductDialog({ open, onClose, categories, name, setName, cat, setCat, unit, setUnit, qty, setQty, loading, onCreate }) {
+  if (!open) return null;
+  const COMMON_UNITS = ["unite", "piece", "bouteille", "carton", "litre", "kg", "g", "boite", "sachet", "paquet"];
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3" data-testid="quick-add-product-dialog">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30">
+            <Plus className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-semibold">Nouveau produit (rapide)</h3>
+            <p className="text-slate-400 text-xs">Les prix et seuils seront complétés par l'Admin</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-slate-300 text-xs mb-1 block">Nom du produit *</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: YOUZOU"
+              className="bg-slate-950 border-slate-700 text-white"
+              data-testid="quick-prod-name"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-slate-300 text-xs mb-1 block">Catégorie *</label>
+            <select
+              value={cat}
+              onChange={(e) => setCat(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 text-white rounded-md px-3 py-2 text-sm"
+              data-testid="quick-prod-cat"
+            >
+              <option value="">— Sélectionner —</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-300 text-xs mb-1 block">Unité</label>
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 text-white rounded-md px-3 py-2 text-sm"
+                data-testid="quick-prod-unit"
+              >
+                {COMMON_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-300 text-xs mb-1 block">Quantité comptée</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="0"
+                className="bg-slate-950 border-slate-700 text-white"
+                data-testid="quick-prod-qty"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" size="sm" onClick={onClose} className="border-slate-700 text-slate-300" disabled={loading} data-testid="quick-prod-cancel">
+            Annuler
+          </Button>
+          <Button onClick={onCreate} disabled={loading} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="quick-prod-create">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+            Créer
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -40,7 +40,77 @@ class FieldStockReportCreate(BaseModel):
     notes: str = ""
 
 
+class FieldStockQuickAddProduct(BaseModel):
+    name: str
+    category_id: str
+    unit: str = "unite"
+    counted_qty: float = 0
+
+
 # ==================== ENDPOINTS ====================
+
+@router.post("/quick-add-product")
+async def quick_add_product(payload: FieldStockQuickAddProduct, x_user_name: Optional[str] = None):
+    """Création express d'un produit par le Resp. Op. depuis le Point de stock.
+    Le produit est créé avec `pending_admin_approval=True` — l'Admin doit compléter
+    prix d'achat/vente, stock_min/max et lever le drapeau.
+    Le champ `quantity` est initialisé à la valeur comptée pour que la ligne
+    apparaisse immédiatement dans le rapport en cours.
+    """
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Nom du produit obligatoire")
+    if not (payload.category_id or "").strip():
+        raise HTTPException(400, "Catégorie obligatoire")
+
+    # Vérifie qu'aucun produit ne porte déjà ce nom (cas-insensible)
+    existing = await db.stock_products.find_one(
+        {"name": {"$regex": f"^{name}$", "$options": "i"}},
+        {"_id": 0, "id": 1, "name": 1}
+    )
+    if existing:
+        raise HTTPException(409, f"Un produit nommé « {existing.get('name')} » existe déjà")
+
+    # Génère un code court à partir du nom
+    code_base = "".join(c for c in name.upper() if c.isalnum())[:6] or "PROD"
+    # Tentative de code unique
+    code = code_base
+    for i in range(1, 100):
+        if not await db.stock_products.find_one({"code": code}, {"_id": 0, "id": 1}):
+            break
+        code = f"{code_base}{i}"
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    qty = float(payload.counted_qty or 0)
+    new_product = {
+        "id": str(uuid.uuid4()),
+        "code": code,
+        "name": name,
+        "category_id": payload.category_id,
+        "subcategory": "",
+        "unit": payload.unit or "unite",
+        "quantity": qty,
+        "stock_min": 0,
+        "stock_max": 0,
+        "purchase_price": 0,
+        "sale_price": 0,
+        "supplier_id": "",
+        "storage_location": "",
+        "storage_zone": "cuisine",
+        "observation": f"Créé via Point de stock par {x_user_name or 'Resp. Op.'}",
+        "is_active": True,
+        "is_tracked": False,
+        # Drapeau d'attente — Admin doit compléter (prix, seuils)
+        "pending_admin_approval": True,
+        "created_via": "field_stock_quick_add",
+        "created_by": x_user_name or "Resp. Op.",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    await db.stock_products.insert_one(new_product)
+    new_product.pop("_id", None)
+    return new_product
+
 
 @router.post("/reports")
 async def create_report(payload: FieldStockReportCreate, x_user_id: Optional[str] = None, x_user_name: Optional[str] = None):

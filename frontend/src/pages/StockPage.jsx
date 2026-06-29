@@ -2356,7 +2356,17 @@ export default function StockPage() {
                                 <div className="flex flex-col min-w-0">
                                   <span className="text-white font-medium leading-tight truncate">{p.name}</span>
                                   <span className="text-slate-500 font-mono text-[11px] mt-0.5">{p.code}</span>
-                                  {isEmpty && <Badge className="bg-slate-700/60 text-slate-400 text-[9px] mt-1 w-fit border border-slate-600/40">Non renseigné</Badge>}
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {isEmpty && <Badge className="bg-slate-700/60 text-slate-400 text-[9px] w-fit border border-slate-600/40">Non renseigné</Badge>}
+                                    {p.pending_admin_approval && (
+                                      <Badge
+                                        className="bg-amber-500/15 text-amber-300 text-[9px] w-fit border border-amber-500/30 cursor-help"
+                                        title={`Produit créé via Point de stock${p.created_by ? ` par ${p.created_by}` : ''} — Complétez prix et seuils, puis désactivez « à approuver » dans le formulaire d'édition.`}
+                                      >
+                                        <AlertCircle className="inline w-2.5 h-2.5 mr-0.5" /> À approuver
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>
