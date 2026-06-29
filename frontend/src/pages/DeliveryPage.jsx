@@ -221,6 +221,46 @@ const menuData = {
 };
 
 const DeliveryPage = () => {
+  // ── Menu dynamique : items chargés depuis l'API, fallback sur menuData en dur ──
+  // La META des catégories (name, icon, color) reste dans le code car non éditable.
+  const [dynamicItems, setDynamicItems] = useState(null); // null = pas encore chargé
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/delivery-menu`)
+      .then(({ data }) => {
+        if (!cancelled && data?.items_by_category) {
+          setDynamicItems(data.items_by_category);
+        }
+      })
+      .catch(() => {
+        // En cas d'échec, on garde le menuData hardcoded comme fallback
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Construit le menu final = META catégories + items dynamiques (ou hardcoded fallback)
+  const liveMenuData = (() => {
+    const out = {};
+    for (const [key, cat] of Object.entries(menuData)) {
+      const dynItems = dynamicItems && dynamicItems[key];
+      out[key] = {
+        ...cat,
+        items: dynItems
+          ? dynItems.map((it) => ({
+              id: it.id,
+              name: it.name,
+              price: it.price, // peut être null = "Sur devis"
+              description: it.description,
+              popular: it.popular,
+              on_demand: it.on_demand,
+            }))
+          : cat.items,
+      };
+    }
+    return out;
+  })();
+
   const [cart, setCart] = useState([]);
   const [activeCategory, setActiveCategory] = useState("salades");
   const [showCart, setShowCart] = useState(false);
@@ -603,7 +643,7 @@ const DeliveryPage = () => {
     }
   };
 
-  const categories = Object.keys(menuData);
+  const categories = Object.keys(liveMenuData);
 
   return (
     <div className="min-h-screen pt-20 bg-dark-bg" data-testid="delivery-page">
@@ -655,7 +695,7 @@ const DeliveryPage = () => {
                 <h3 className="font-orbitron text-lg text-white mb-4">Catégories</h3>
                 <div className="space-y-2">
                   {categories.map(catKey => {
-                    const cat = menuData[catKey];
+                    const cat = liveMenuData[catKey];
                     const Icon = cat.icon;
                     return (
                       <button
@@ -681,15 +721,15 @@ const DeliveryPage = () => {
               <div className="mb-6">
                 <h2 className="font-orbitron text-2xl text-white flex items-center gap-3">
                   {(() => {
-                    const Icon = menuData[activeCategory].icon;
-                    return <Icon className={`w-7 h-7 ${menuData[activeCategory].color}`} />;
+                    const Icon = liveMenuData[activeCategory].icon;
+                    return <Icon className={`w-7 h-7 ${liveMenuData[activeCategory].color}`} />;
                   })()}
-                  {menuData[activeCategory].name}
+                  {liveMenuData[activeCategory].name}
                 </h2>
               </div>
 
               {/* Bandeau d'information "Sur commande" — affiché uniquement pour la catégorie locaux */}
-              {menuData[activeCategory].on_demand_category && (
+              {liveMenuData[activeCategory].on_demand_category && (
                 <div className="mb-5 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/10 p-4 flex items-start gap-3" data-testid="locaux-info-banner">
                   <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 ring-2 ring-amber-500/40 flex items-center justify-center text-xl">
                     🍲
@@ -709,7 +749,10 @@ const DeliveryPage = () => {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {menuData[activeCategory].items.map(item => (
+                {liveMenuData[activeCategory].items.map(item => {
+                  const noPrice = item.price === null || item.price === undefined;
+                  const quoteUrl = `https://wa.me/2290141470000?text=${encodeURIComponent(`Bonjour Espace Maxo, je souhaite obtenir un devis pour : ${item.name}. Merci.`)}`;
+                  return (
                   <Card 
                     key={item.id} 
                     className={`bg-dark-card transition-colors ${item.on_demand ? "border-amber-500/30 hover:border-amber-400/60" : "border-white/10 hover:border-food-orange/30"}`}
@@ -735,27 +778,48 @@ const DeliveryPage = () => {
                           {item.description && (
                             <p className="text-gray-500 text-sm mt-1">{item.description}</p>
                           )}
-                          <p className={`font-rajdhani font-bold text-xl mt-2 ${item.on_demand ? "text-amber-300" : "text-food-orange"}`}>
-                            {item.price.toLocaleString()} FCFA
-                          </p>
-                          {item.on_demand && (
+                          {noPrice ? (
+                            <p className="text-amber-300 font-rajdhani font-bold text-lg mt-2 italic" data-testid={`price-quote-${item.id}`}>
+                              Sur devis · contactez-nous
+                            </p>
+                          ) : (
+                            <p className={`font-rajdhani font-bold text-xl mt-2 ${item.on_demand ? "text-amber-300" : "text-food-orange"}`}>
+                              {item.price.toLocaleString()} FCFA
+                            </p>
+                          )}
+                          {item.on_demand && !noPrice && (
                             <p className="text-[10px] text-amber-200/70 mt-0.5 italic">
                               Préparation 24h · choisir date &amp; heure au paiement
                             </p>
                           )}
                         </div>
-                        <Button
-                          onClick={() => addToCart(item)}
-                          size="sm"
-                          className={item.on_demand ? "bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold" : "bg-food-orange hover:bg-food-orange/80 text-white"}
-                          data-testid={`add-to-cart-${item.id}`}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
+                        {noPrice ? (
+                          <a
+                            href={quoteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-3 py-2 rounded-md whitespace-nowrap shadow"
+                            data-testid={`quote-btn-${item.id}`}
+                            title="Demander un devis sur WhatsApp"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            Devis
+                          </a>
+                        ) : (
+                          <Button
+                            onClick={() => addToCart(item)}
+                            size="sm"
+                            className={item.on_demand ? "bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold" : "bg-food-orange hover:bg-food-orange/80 text-white"}
+                            data-testid={`add-to-cart-${item.id}`}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

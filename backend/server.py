@@ -58,6 +58,7 @@ from routers.sync_queue import router as sync_queue_router
 from routers.regularization import router as regularization_router
 from routers.recoupement import router as recoupement_router
 from routers.cuisine import router as cuisine_router
+from routers.delivery_menu import router as delivery_menu_router, set_admin_dependency as set_delivery_menu_admin_dep
 from routers.jeux import router as jeux_router
 from routers.daily_reports import router as daily_reports_router
 from routers.coach_sessions import router as coach_sessions_router
@@ -228,6 +229,9 @@ api_router.include_router(sync_queue_router)
 api_router.include_router(regularization_router)
 api_router.include_router(recoupement_router)
 api_router.include_router(cuisine_router)
+api_router.include_router(delivery_menu_router)
+# L'injection de la dépendance admin JWT est faite plus bas, après la définition
+# de get_admin_write_access (lignes ~880).
 api_router.include_router(jeux_router)
 api_router.include_router(daily_reports_router)
 api_router.include_router(coach_sessions_router)
@@ -887,6 +891,10 @@ async def get_admin_write_access(credentials: HTTPAuthorizationCredentials = Dep
         raise HTTPException(status_code=403, detail="Accès en lecture seule - Modification non autorisée")
     
     return True
+
+# Injecte la dépendance write-access dans le router delivery_menu
+# (déclarée plus haut, mais sa vraie implémentation vient d'être définie ici)
+set_delivery_menu_admin_dep(get_admin_write_access)
 
 def generate_whatsapp_link(booking: dict, for_customer: bool = True) -> str:
     """Generate WhatsApp click-to-chat link for booking confirmation"""

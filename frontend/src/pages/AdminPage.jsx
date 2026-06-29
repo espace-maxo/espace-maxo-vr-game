@@ -9,7 +9,7 @@ import {
   RefreshCw, Filter, MessageCircle, TrendingUp, LogOut,
   Star, Gift, Trophy, MessageSquare, Trash2, PartyPopper,
   Mail, Building2, CalendarDays, DollarSign, CalendarClock,
-  Download, FileSpreadsheet, Briefcase, FileText, Eye, Truck, MapPin, Shield, BookOpen
+  Download, FileSpreadsheet, Briefcase, FileText, Eye, Truck, MapPin, Shield, BookOpen, UtensilsCrossed
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import PromoVacancesAdminToggle from "@/pages/caisse/components/PromoVacancesAdminToggle";
+import MenuManagerPanel from "@/components/admin/MenuManagerPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -765,6 +766,10 @@ const AdminPage = () => {
                     {tableReservations.filter(r => r.status === "confirmed").length}
                   </span>
                 )}
+              </TabsTrigger>
+              <TabsTrigger value="menu" className="data-[state=active]:bg-food-orange data-[state=active]:text-white font-rajdhani font-bold" data-testid="admin-tab-menu">
+                <UtensilsCrossed className="w-4 h-4 mr-2" />
+                Carte de menus
               </TabsTrigger>
             </TabsList>
 
@@ -1922,6 +1927,10 @@ const AdminPage = () => {
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="menu">
+              <MenuManagerPanel />
             </TabsContent>
           </Tabs>
         </div>
