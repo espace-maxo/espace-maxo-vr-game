@@ -11,6 +11,13 @@ L'application POS ("Caisse Pro") et le module de Gestion de Stock (Espace Maxo) 
 - Pilotage fin des statistiques et de l'historique
 
 ## Recent changes (Feb 2026)
+- **🆕 Catalogue de menus dynamique + Admin CRUD (Feb 2026)** :
+  - Nouveau backend `routers/delivery_menu.py` : collection MongoDB `delivery_menu_items` (auto-seed 92 items au 1er appel).
+  - Endpoints : `GET /api/delivery-menu` (public), `GET/POST/PATCH/DELETE /api/admin/delivery-menu/items[/{id}]` (JWT Bearer admin write-access).
+  - **Plats locaux sur commande sans prix** : `price=null` → affichage public « Sur devis · contactez-nous » + bouton **Devis WhatsApp** (lien wa.me pré-rempli avec nom du plat).
+  - **Page publique `/livraison`** désormais dynamique : `useEffect` charge `dynamicItems`, fusionne avec META catégories (icônes/couleurs en dur) pour produire `liveMenuData`. Fallback sur menu hardcoded si l'API échoue.
+  - **Nouveau panel Admin** `/admin/dashboard` → onglet « Carte de menus » : composant `MenuManagerPanel.jsx` avec CRUD complet (modifier prix, ajouter plat, masquer/réafficher, supprimer), filtre par catégorie, toggle "Sur devis" via prix vide.
+  - **Tests** : 25/25 pytest backend ✅ (iter122).
 - **🆕 Workflow Cuisine — Clôture de journée Chef (Feb 2026)** :
   - Le Chef Cuisinier dispose désormais d'un bouton **CLÔTURER** dans le header de son dashboard.
   - Modal de confirmation simple → POST `/api/cuisine/close-day` agrège tous les bons cuisine du jour, calcule (total_orders, total_items, total_quantity, total_revenue, top_items), enregistre dans la collection `cuisine_day_closures`, et marque les `caisse_tables` avec `cuisine_day_closed_at`.
