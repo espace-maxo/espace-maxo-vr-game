@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Lock, Loader2, Receipt, User as UserIcon } from "lucide-react";
+import { Lock, Loader2, Receipt, User as UserIcon, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -23,6 +23,7 @@ export default function LockScreen({ currentUser, onUnlock }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(new Date());
+  const [showPin, setShowPin] = useState(false);
   const inputRef = useRef(null);
 
   // Mise à jour de l'horloge chaque seconde
@@ -144,22 +145,35 @@ export default function LockScreen({ currentUser, onUnlock }) {
             <label className="text-slate-300 text-xs font-medium" htmlFor="lock-pin-input">
               Saisis ton PIN ou mot de passe pour reprendre
             </label>
-            <Input
-              ref={inputRef}
-              id="lock-pin-input"
-              type="password"
-              autoComplete="off"
-              value={pin}
-              onChange={(e) => {
-                setPin(e.target.value);
-                if (error) setError("");
-              }}
-              onKeyDown={onKey}
-              placeholder="••••••••"
-              disabled={busy}
-              className="bg-slate-800 border-slate-700 text-white text-center text-xl tracking-widest h-12"
-              data-testid="caisse-lock-pin-input"
-            />
+            <div className="relative">
+              <Input
+                ref={inputRef}
+                id="lock-pin-input"
+                type={showPin ? "text" : "password"}
+                autoComplete="off"
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value);
+                  if (error) setError("");
+                }}
+                onKeyDown={onKey}
+                placeholder="••••••••"
+                disabled={busy}
+                className="bg-slate-800 border-slate-700 text-white text-center text-xl tracking-widest h-12 pr-12"
+                data-testid="caisse-lock-pin-input"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin((v) => !v)}
+                disabled={busy}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-slate-400 hover:text-emerald-300 hover:bg-slate-700/60 transition disabled:opacity-50"
+                aria-label={showPin ? "Masquer le code" : "Afficher le code"}
+                title={showPin ? "Masquer le code" : "Afficher le code"}
+                data-testid="caisse-lock-toggle-show"
+              >
+                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
             {error ? (
               <p className="text-rose-400 text-xs" data-testid="caisse-lock-error">
                 {error}
