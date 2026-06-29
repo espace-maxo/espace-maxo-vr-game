@@ -50,7 +50,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   const [showAddProd, setShowAddProd] = useState(false);
   const [newProdName, setNewProdName] = useState("");
   const [newProdCat, setNewProdCat] = useState("");
-  const [newProdUnit, setNewProdUnit] = useState("unite");
+  // Unité par défaut adaptée au kind : portion pour la cuisine, unite sinon
+  const [newProdUnit, setNewProdUnit] = useState(kind === "kitchen" ? "portion" : "unite");
   const [newProdQty, setNewProdQty] = useState("");
   const [creatingProd, setCreatingProd] = useState(false);
 
@@ -791,7 +792,14 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
 // Petit dialog simple pour la création express d'un produit
 function QuickAddProductDialog({ open, onClose, categories, name, setName, cat, setCat, unit, setUnit, qty, setQty, loading, onCreate }) {
   if (!open) return null;
-  const COMMON_UNITS = ["unite", "piece", "bouteille", "carton", "litre", "kg", "g", "boite", "sachet", "paquet"];
+  const COMMON_UNITS = [
+    "portion", "ration", "unite", "piece",
+    "bouteille", "verre", "gobelet", "casier",
+    "carton", "boite", "sachet", "sac", "paquet",
+    "litre", "centilitre", "millilitre",
+    "kg", "g",
+    "douzaine", "plat",
+  ];
   return (
     <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3" data-testid="quick-add-product-dialog">
       <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-5">
@@ -831,14 +839,17 @@ function QuickAddProductDialog({ open, onClose, categories, name, setName, cat, 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-slate-300 text-xs mb-1 block">Unité</label>
-              <select
+              <Input
+                list="quick-prod-units-list"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 text-white rounded-md px-3 py-2 text-sm"
+                placeholder="portion, bouteille, kg..."
+                className="bg-slate-950 border-slate-700 text-white"
                 data-testid="quick-prod-unit"
-              >
-                {COMMON_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
+              />
+              <datalist id="quick-prod-units-list">
+                {COMMON_UNITS.map((u) => <option key={u} value={u} />)}
+              </datalist>
             </div>
             <div>
               <label className="text-slate-300 text-xs mb-1 block">Quantité comptée</label>
