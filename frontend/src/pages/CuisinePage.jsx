@@ -534,10 +534,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
                   <span className="hidden sm:inline">Rapport</span>
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="stock" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-stock" title="Stock cuisine">
-                <Boxes className="w-4 h-4" />
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">Stock</span>
-              </TabsTrigger>
+              <TabsTrigger value="stock-hidden-deprecated" className="hidden" disabled />
               {/* Point de stock cuisine (saisie physique indépendante, kind=kitchen) */}
               <TabsTrigger value="field_stock" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-field-stock" title="Point de stock physique (cuisine)">
                 <ClipboardCheck className="w-4 h-4" />
@@ -872,10 +869,7 @@ const CuisinePage = ({ currentUser, onLogout }) => {
             <DailyReportPanel currentUser={currentUser} kind="cuisine" />
           </TabsContent>
 
-          {/* STOCK CUISINE — inventaire perso + envoi de besoins à l'admin */}
-          <TabsContent value="stock" className="mt-3">
-            <CuisineStockTab currentUser={currentUser} />
-          </TabsContent>
+          {/* STOCK CUISINE — désactivé (remplacé par Point de stock) */}
 
           {/* POINT DE STOCK CUISINE — saisie physique indépendante (justif appro) */}
           <TabsContent value="field_stock" className="mt-3">

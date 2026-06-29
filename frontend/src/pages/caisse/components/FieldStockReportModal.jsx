@@ -157,6 +157,11 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   }, [counts]);
 
   const totalLignes = countedItems.length;
+  // Compteur de ruptures (qty saisie = 0) — utile pour le bandeau d'aide
+  const ruptureCount = useMemo(
+    () => countedItems.filter((i) => i.counted_qty <= 0).length,
+    [countedItems]
+  );
 
   // ----------------------------------------------------------------
   // Actions
@@ -498,31 +503,107 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                   </Button>
                 </div>
 
-                {/* Liste produits */}
-                <div className="border border-slate-800 rounded-md max-h-[40vh] overflow-auto bg-slate-950/40">
+                {/* Liste produits — vue table sur desktop, vue cards sur mobile */}
+                <div className="border border-slate-800 rounded-md max-h-[55vh] md:max-h-[40vh] overflow-auto bg-slate-950/40">
                   {loadingProducts ? (
                     <div className="p-6 text-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
                   ) : visibleProducts.length === 0 ? (
                     <div className="p-6 text-center text-slate-500 text-sm">Aucun produit ne correspond aux filtres</div>
                   ) : (
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-900 z-10">
-                        <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
-                          <th className="px-3 py-2 text-left">Produit</th>
-                          {isAdmin && <th className="px-3 py-2 text-right hidden md:table-cell">Stock système</th>}
-                          <th className="px-3 py-2 text-right">Compté</th>
-                          <th className="px-3 py-2 text-right hidden md:table-cell">Unité</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <>
+                      {/* Vue desktop (md+) — table compacte */}
+                      <table className="w-full text-sm hidden md:table">
+                        <thead className="sticky top-0 bg-slate-900 z-10">
+                          <tr className="border-b border-slate-800 text-xs uppercase text-slate-500">
+                            <th className="px-3 py-2 text-left">Produit</th>
+                            {isAdmin && <th className="px-3 py-2 text-right">Stock système</th>}
+                            <th className="px-3 py-2 text-right">Compté</th>
+                            <th className="px-3 py-2 text-right">Unité</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleProducts.map((p) => {
+                            const val = counts[p.id] ?? "";
+                            const numVal = parseFloat(val);
+                            const hasValue = val !== "" && !Number.isNaN(numVal);
+                            const isRupture = hasValue && numVal <= 0;
+                            return (
+                              <tr
+                                key={p.id}
+                                className={`border-b border-slate-800/60 transition ${
+                                  isRupture ? "bg-rose-500/10 ring-1 ring-rose-500/30" :
+                                  hasValue ? "bg-emerald-500/5" :
+                                  "hover:bg-slate-800/30"
+                                }`}
+                              >
+                                <td className="px-3 py-2 text-slate-200 max-w-[280px]">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="truncate">{p.name}</span>
+                                    {isRupture && (
+                                      <Badge className="bg-rose-500/20 text-rose-300 text-[10px] border border-rose-500/40 shrink-0">
+                                        <AlertTriangle className="inline w-3 h-3 mr-0.5" /> Rupture
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                {isAdmin && <td className="px-3 py-2 text-right text-slate-500 text-xs">{p.quantity ?? 0}</td>}
+                                <td className="px-3 py-2 text-right">
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    min="0"
+                                    value={val}
+                                    onChange={(e) => updateCount(p.id, e.target.value)}
+                                    className={`bg-slate-900 border-slate-700 text-white h-7 w-24 text-right ml-auto ${isRupture ? "border-rose-500/50" : ""}`}
+                                    placeholder="—"
+                                    data-testid={`field-stock-input-${p.id}`}
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-500 text-xs">{p.unit || "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+
+                      {/* Vue mobile (-md) — cards verticales avec gros input numérique */}
+                      <div className="md:hidden divide-y divide-slate-800/70" data-testid="field-stock-mobile-list">
                         {visibleProducts.map((p) => {
                           const val = counts[p.id] ?? "";
-                          const hasValue = val !== "" && !Number.isNaN(parseFloat(val));
+                          const numVal = parseFloat(val);
+                          const hasValue = val !== "" && !Number.isNaN(numVal);
+                          const isRupture = hasValue && numVal <= 0;
                           return (
-                            <tr key={p.id} className={`border-b border-slate-800/60 hover:bg-slate-800/30 ${hasValue ? 'bg-emerald-500/5' : ''}`}>
-                              <td className="px-3 py-2 text-slate-200 truncate max-w-[280px]">{p.name}</td>
-                              {isAdmin && <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.quantity ?? 0}</td>}
-                              <td className="px-3 py-2 text-right">
+                            <div
+                              key={p.id}
+                              className={`p-3 flex items-center gap-3 transition ${
+                                isRupture ? "bg-rose-500/10 ring-1 ring-rose-500/30" :
+                                hasValue ? "bg-emerald-500/5" : ""
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-medium text-sm leading-tight">{p.name}</p>
+                                <p className="text-slate-500 text-[11px] mt-0.5">
+                                  {p.unit || "—"}
+                                  {isRupture && (
+                                    <span className="ml-2 text-rose-400 font-semibold">
+                                      <AlertTriangle className="inline w-3 h-3 mr-0.5" /> Rupture
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="shrink-0 flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const cur = parseFloat(counts[p.id] || "0") || 0;
+                                    updateCount(p.id, Math.max(0, cur - 1).toString());
+                                  }}
+                                  className="w-10 h-10 rounded-md bg-slate-800 border border-slate-700 text-slate-300 active:bg-slate-700 text-lg leading-none"
+                                  data-testid={`field-stock-mobile-minus-${p.id}`}
+                                  aria-label="Diminuer"
+                                >−</button>
                                 <Input
                                   type="number"
                                   inputMode="decimal"
@@ -530,21 +611,30 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                                   min="0"
                                   value={val}
                                   onChange={(e) => updateCount(p.id, e.target.value)}
-                                  className="bg-slate-900 border-slate-700 text-white h-7 w-24 text-right ml-auto"
+                                  className={`bg-slate-900 border-slate-700 text-white h-10 w-20 text-center text-lg font-semibold ${isRupture ? "border-rose-500/50 text-rose-300" : hasValue ? "border-emerald-500/40" : ""}`}
                                   placeholder="—"
                                   data-testid={`field-stock-input-${p.id}`}
                                 />
-                              </td>
-                              <td className="px-3 py-2 text-right text-slate-500 text-xs hidden md:table-cell">{p.unit || "—"}</td>
-                            </tr>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const cur = parseFloat(counts[p.id] || "0") || 0;
+                                    updateCount(p.id, (cur + 1).toString());
+                                  }}
+                                  className="w-10 h-10 rounded-md bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 active:bg-emerald-600/50 text-lg leading-none"
+                                  data-testid={`field-stock-mobile-plus-${p.id}`}
+                                  aria-label="Augmenter"
+                                >+</button>
+                              </div>
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
+                      </div>
+                    </>
                   )}
                   {visibleProducts.length > 500 && (
                     <div className="p-2 text-center text-amber-300 text-xs bg-amber-500/5">
-                      ⚠️ {visibleProducts.length} produits affichés — utilisez la recherche ou les catégories pour affiner
+                      ⚠️ {visibleProducts.length} produits — utilisez la recherche pour affiner
                     </div>
                   )}
                 </div>
@@ -564,10 +654,18 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
               </div>
 
               {/* Footer actions */}
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 sticky bottom-0 bg-slate-900/95 -mx-5 px-5 pb-1">
-                <div className="text-slate-400 text-sm">
-                  <Badge className="bg-emerald-500/15 text-emerald-300 mr-2">{totalLignes}</Badge>
-                  ligne{totalLignes > 1 ? "s" : ""} saisie{totalLignes > 1 ? "s" : ""}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 sticky bottom-0 bg-slate-900/95 backdrop-blur -mx-3 md:-mx-5 px-3 md:px-5 pb-2 z-20">
+                <div className="text-slate-400 text-sm flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-emerald-500/15 text-emerald-300">{totalLignes}</Badge>
+                  ligne{totalLignes > 1 ? "s" : ""}
+                  {ruptureCount > 0 && (
+                    <>
+                      <span className="text-slate-600">·</span>
+                      <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        <AlertTriangle className="inline w-3 h-3 mr-1" /> {ruptureCount} rupture{ruptureCount > 1 ? "s" : ""}
+                      </Badge>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={resetForm} className="border-slate-700 text-slate-300" data-testid="field-stock-reset">
@@ -576,13 +674,14 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                   <Button
                     onClick={submitReport}
                     disabled={submitting || totalLignes === 0}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    size="default"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-4 text-sm font-semibold"
                     data-testid="field-stock-submit"
                   >
                     {submitting
                       ? <Loader2 className="w-4 h-4 animate-spin mr-1" />
                       : <Save className="w-4 h-4 mr-1" />}
-                    Soumettre le relevé
+                    Valider le relevé
                   </Button>
                 </div>
               </div>
