@@ -38,6 +38,9 @@ class FieldStockReportCreate(BaseModel):
     category_ids: List[str] = Field(default_factory=list)
     items: List[FieldStockReportItemIn]
     notes: str = ""
+    # "ops" = Resp. Op./Log (boissons + accessoires)
+    # "kitchen" = Chef cuisinier (produits de cuisine)
+    kind: str = "ops"
 
 
 class FieldStockQuickAddProduct(BaseModel):
@@ -45,6 +48,7 @@ class FieldStockQuickAddProduct(BaseModel):
     category_id: str
     unit: str = "unite"
     counted_qty: float = 0
+    kind: str = "ops"  # même séparation : positionne storage_zone à "cuisine" pour kitchen
 
 
 # ==================== ENDPOINTS ====================
@@ -82,6 +86,7 @@ async def quick_add_product(payload: FieldStockQuickAddProduct, x_user_name: Opt
 
     now_iso = datetime.now(timezone.utc).isoformat()
     qty = float(payload.counted_qty or 0)
+    storage_zone = "cuisine" if (payload.kind or "").lower() == "kitchen" else "magasin"
     new_product = {
         "id": str(uuid.uuid4()),
         "code": code,
@@ -96,13 +101,13 @@ async def quick_add_product(payload: FieldStockQuickAddProduct, x_user_name: Opt
         "sale_price": 0,
         "supplier_id": "",
         "storage_location": "",
-        "storage_zone": "cuisine",
-        "observation": f"Créé via Point de stock par {x_user_name or 'Resp. Op.'}",
+        "storage_zone": storage_zone,
+        "observation": f"Créé via Point de stock ({payload.kind or 'ops'}) par {x_user_name or 'Resp. Op.'}",
         "is_active": True,
         "is_tracked": False,
         # Drapeau d'attente — Admin doit compléter (prix, seuils)
         "pending_admin_approval": True,
-        "created_via": "field_stock_quick_add",
+        "created_via": f"field_stock_quick_add_{payload.kind or 'ops'}",
         "created_by": x_user_name or "Resp. Op.",
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -152,6 +157,7 @@ async def create_report(payload: FieldStockReportCreate, x_user_id: Optional[str
 
     report = {
         "id": str(uuid.uuid4()),
+        "kind": (payload.kind or "ops").lower(),
         "created_by_id": x_user_id or "unknown",
         "created_by_name": x_user_name or "Resp. Op.",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -173,17 +179,21 @@ async def create_report(payload: FieldStockReportCreate, x_user_id: Optional[str
 
 
 @router.get("/reports")
-async def list_reports(role: Optional[str] = None, user_id: Optional[str] = None, limit: int = 100):
-    """Liste les rapports. Si role=manager + user_id fourni, ne renvoie que les rapports de l'utilisateur.
-    Sinon (admin), renvoie tous les rapports.
+async def list_reports(role: Optional[str] = None, user_id: Optional[str] = None, kind: Optional[str] = None, limit: int = 100):
+    """Liste les rapports. 
+    - role=manager / cuisinier + user_id : filtre par utilisateur (ses propres rapports)
+    - kind=ops|kitchen : filtre par type (boissons/accessoires vs cuisine)
+    - Admin sans filtre : voit tout
     """
     q = {}
-    if role == "manager" and user_id:
+    if role in ("manager", "cuisinier") and user_id:
         q["created_by_id"] = user_id
+    if kind:
+        q["kind"] = kind
     docs = await db.field_stock_reports.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
-    # Allégeons la réponse : on ne renvoie pas tous les items, juste un résumé
     summary = [{
         "id": d["id"],
+        "kind": d.get("kind", "ops"),
         "created_by_id": d.get("created_by_id"),
         "created_by_name": d.get("created_by_name"),
         "created_at": d.get("created_at"),
@@ -200,11 +210,15 @@ async def list_reports(role: Optional[str] = None, user_id: Optional[str] = None
 
 
 @router.get("/reports/summary")
-async def reports_summary():
-    """Compteur global utilisé pour le badge UI (Admin)."""
-    pending = await db.field_stock_reports.count_documents({"status": "submitted"})
-    total = await db.field_stock_reports.count_documents({})
-    return {"pending": pending, "total": total}
+async def reports_summary(kind: Optional[str] = None):
+    """Compteur global utilisé pour le badge UI (Admin). Optionnellement filtré par kind."""
+    q_pending = {"status": "submitted"}
+    if kind:
+        q_pending["kind"] = kind
+    pending = await db.field_stock_reports.count_documents(q_pending)
+    q_total = {"kind": kind} if kind else {}
+    total = await db.field_stock_reports.count_documents(q_total)
+    return {"pending": pending, "total": total, "kind": kind}
 
 
 @router.get("/reports/{report_id}")

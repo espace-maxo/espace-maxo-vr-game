@@ -26,10 +26,11 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function FieldStockReportModal({ open, onClose, currentUser, inline = false }) {
+export default function FieldStockReportModal({ open, onClose, currentUser, inline = false, kind = "ops" }) {
   const isAdmin = currentUser?.role === "admin";
   const userId = currentUser?.id || currentUser?.username || "unknown";
   const userName = currentUser?.full_name || currentUser?.username || "Resp. Op.";
+  const kindLabel = kind === "kitchen" ? "cuisine" : "ops";
 
   const [tab, setTab] = useState("new"); // "new" | "history" | "detail"
   const [categories, setCategories] = useState([]);
@@ -58,6 +59,8 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   const [reportsLoading, setReportsLoading] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [reconciling, setReconciling] = useState(false);
+  // Filtre kind dans l'historique (Admin uniquement)
+  const [historyKindFilter, setHistoryKindFilter] = useState(kind); // ops | kitchen | all
 
   // ----------------------------------------------------------------
   // Chargement initial
@@ -89,15 +92,24 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
   const fetchReports = useCallback(async () => {
     setReportsLoading(true);
     try {
-      const params = isAdmin ? "" : `?role=manager&user_id=${encodeURIComponent(userId)}`;
-      const r = await axios.get(`${API}/field-stock/reports${params}`);
+      const params = new URLSearchParams();
+      // Admin : peut basculer le filtre kind (ops/kitchen/all)
+      // Non-admin : forcé sur le kind du contexte + filtre user_id
+      if (isAdmin) {
+        if (historyKindFilter && historyKindFilter !== "all") params.set("kind", historyKindFilter);
+      } else {
+        params.set("kind", kind);
+        params.set("role", currentUser?.role || "manager");
+        params.set("user_id", userId);
+      }
+      const r = await axios.get(`${API}/field-stock/reports?${params.toString()}`);
       setReports(r.data?.reports || []);
     } catch {
       setReports([]);
     } finally {
       setReportsLoading(false);
     }
-  }, [isAdmin, userId]);
+  }, [isAdmin, userId, kind, currentUser?.role, historyKindFilter]);
 
   useEffect(() => {
     if (!open && !inline) return;
@@ -170,6 +182,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
         category_id: newProdCat,
         unit: newProdUnit || "unite",
         counted_qty: qty,
+        kind,
       });
       const created = r.data;
       // 1. L'ajouter en mémoire pour qu'il apparaisse dans la liste
@@ -209,6 +222,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
         category_ids: selectedCats,
         items: countedItems,
         notes: notes.trim(),
+        kind,
       });
       toast.success(`Point de stock soumis (${countedItems.length} ligne${countedItems.length > 1 ? "s" : ""}) ✅`);
       resetForm();
@@ -297,15 +311,17 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
         {/* Inline header */}
         {inline && (
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/30">
-              <ClipboardCheck className="w-5 h-5 text-emerald-400" />
+            <div className={`p-2 rounded-lg ring-1 ${kind === "kitchen" ? "bg-amber-500/15 ring-amber-500/30" : "bg-emerald-500/15 ring-emerald-500/30"}`}>
+              <ClipboardCheck className={`w-5 h-5 ${kind === "kitchen" ? "text-amber-400" : "text-emerald-400"}`} />
             </div>
             <div>
-              <h2 className="text-white font-semibold text-lg leading-tight">Point de stock terrain</h2>
+              <h2 className="text-white font-semibold text-lg leading-tight">
+                Point de stock {kind === "kitchen" ? "cuisine" : "terrain"}
+              </h2>
               <p className="text-slate-400 text-xs">
                 {isAdmin
-                  ? "Supervisor view — tous les rapports soumis par le Resp. Op."
-                  : "Saisie libre du stock physique · indépendant du stock système · soumets à l'Admin comme justificatif"}
+                  ? `Supervisor view — rapports ${kindLabel}`
+                  : `Saisie libre du stock physique (${kind === "kitchen" ? "produits cuisine" : "boissons + accessoires"}) · indépendant du stock système`}
               </p>
             </div>
           </div>
@@ -519,10 +535,36 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
           {/* === Historique === */}
           {tab === "history" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-slate-300 text-sm">
-                  {reports.length} rapport{reports.length > 1 ? "s" : ""}
-                </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-slate-300 text-sm">
+                    {reports.length} rapport{reports.length > 1 ? "s" : ""}
+                  </p>
+                  {/* Filtre kind — Admin uniquement (Resp Op / Chef voient leur propre kind) */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-700 rounded-md px-1 h-8" data-testid="field-stock-kind-filter">
+                      {[
+                        { id: "all", label: "Tous" },
+                        { id: "ops", label: "Resp. Op." },
+                        { id: "kitchen", label: "Cuisine" },
+                      ].map((k) => (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onClick={() => setHistoryKindFilter(k.id)}
+                          data-testid={`field-stock-kind-${k.id}`}
+                          className={`text-[11px] px-2 py-1 rounded transition ${
+                            historyKindFilter === k.id
+                              ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800"
+                          }`}
+                        >
+                          {k.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Button variant="outline" size="sm" onClick={fetchReports} className="border-slate-700 text-slate-300" data-testid="field-stock-refresh">
                   <RefreshCw className="w-3.5 h-3.5 mr-1" /> Actualiser
                 </Button>
@@ -553,6 +595,11 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-white font-medium text-sm">{r.created_by_name}</span>
+                            {r.kind === "kitchen" ? (
+                              <Badge className="text-[10px] bg-amber-500/15 text-amber-300">🍳 Cuisine</Badge>
+                            ) : (
+                              <Badge className="text-[10px] bg-cyan-500/15 text-cyan-300">📋 Resp. Op.</Badge>
+                            )}
                             <Badge className={`text-[10px] ${r.status === "reconciled" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
                               {r.status === "reconciled" ? "Rapproché" : "Soumis"}
                             </Badge>
