@@ -354,44 +354,9 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
           {/* === Nouveau relevé === */}
           {tab === "new" && (
             <div className="space-y-4">
-              {/* Catégories */}
+              {/* Recherche + saisie quantités */}
               <div>
-                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5" /> 1. Sélectionnez les catégories à compter (facultatif)
-                </p>
-                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto p-2 bg-slate-950/40 border border-slate-800 rounded-md" data-testid="field-stock-categories">
-                  {categories.length === 0 && <span className="text-slate-500 text-xs">Aucune catégorie chargée</span>}
-                  {categories.map((c) => {
-                    const active = selectedCats.includes(c.id);
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => toggleCategory(c.id)}
-                        className={`text-[11px] px-2.5 py-1 rounded-full transition border ${
-                          active
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                            : "bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500"
-                        }`}
-                        data-testid={`field-stock-cat-${c.id}`}
-                      >
-                        {c.name}
-                      </button>
-                    );
-                  })}
-                  {selectedCats.length > 0 && (
-                    <button
-                      onClick={() => setSelectedCats([])}
-                      className="text-[11px] px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/20"
-                    >
-                      <X className="inline w-3 h-3 mr-0.5" /> Réinitialiser
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Recherche */}
-              <div>
-                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">2. Saisissez les quantités comptées</p>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">1. Saisissez les quantités comptées</p>
                 <div className="relative mb-2 flex gap-2 items-center flex-wrap">
                   <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -496,7 +461,7 @@ export default function FieldStockReportModal({ open, onClose, currentUser, inli
 
               {/* Notes */}
               <div>
-                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">3. Notes (justification pour l&apos;Admin)</p>
+                <p className="text-slate-300 text-xs uppercase tracking-wider mb-2">2. Notes (justification pour l&apos;Admin)</p>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
