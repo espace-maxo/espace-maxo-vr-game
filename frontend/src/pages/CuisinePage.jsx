@@ -435,52 +435,74 @@ const CuisinePage = ({ currentUser, onLogout }) => {
 
   // ── UI ──
   const pendingCount = orders.filter((o) => !o.all_ready).length;
+  // KPIs : servis du jour + messages non lus
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const servedTodayCount = orders.filter((o) => {
+    if (!o.all_ready) return false;
+    const ts = o.served_at || o.all_ready_at || o.updated_at || o.created_at || "";
+    return String(ts).startsWith(todayStr);
+  }).length;
+  const unreadMessages = (messages || []).filter((m) => !m.read_by_cuisine && m.author_role !== "cuisinier").length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-amber-950/30 to-slate-900 text-white">
-      <div className="max-w-6xl mx-auto p-3 sm:p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3 sm:mb-5 gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <ChefHat className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 shrink-0" />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="max-w-7xl mx-auto p-3 sm:p-5">
+        {/* Header — Kitchen Command Center */}
+        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2" data-testid="cuisine-header">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 ring-2 ring-amber-500/40 flex items-center justify-center shrink-0">
+              <ChefHat className="w-7 h-7 text-amber-400" />
+            </div>
             <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-bold truncate">
-                <span className="sm:hidden">{currentUser?.full_name || currentUser?.username}</span>
-                <span className="hidden sm:inline">Cuisine — {currentUser?.full_name || currentUser?.username}</span>
+              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-white truncate">
+                {currentUser?.full_name || currentUser?.username}
               </h1>
-              <p className="text-[10px] text-slate-400 truncate">{format(new Date(), "EEE d MMM yyyy", { locale: fr })}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 uppercase tracking-widest font-semibold">
+                Cuisine · {format(new Date(), "EEE d MMM", { locale: fr })}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSoundOn((s) => !s)}
-              className="text-slate-300 h-8 w-8 p-0"
-              title={soundOn ? "Couper le son" : "Activer le son"}
-              data-testid="cuisine-sound-toggle"
-            >
-              {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => setSoundOn((s) => !s)} className={`h-10 w-10 p-0 ${soundOn ? 'text-emerald-300' : 'text-slate-500'}`} title={soundOn ? "Couper le son" : "Activer le son"} data-testid="cuisine-sound-toggle">
+              {soundOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fetchOrders(false)}
-              disabled={loading}
-              className="text-slate-300 h-8 w-8 p-0"
-              data-testid="cuisine-refresh"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <Button variant="ghost" size="sm" onClick={() => fetchOrders(false)} disabled={loading} className="text-slate-400 h-10 w-10 p-0" data-testid="cuisine-refresh">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onLogout}
-              className="text-rose-400 hover:text-rose-300 h-8 w-8 p-0"
-              data-testid="cuisine-logout"
-            >
-              <LogOut className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={onLogout} className="text-rose-400 hover:text-rose-300 h-10 w-10 p-0" data-testid="cuisine-logout">
+              <LogOut className="w-5 h-5" />
             </Button>
+          </div>
+        </div>
+
+        {/* KPI Dashboard — Kitchen Command Center */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5" data-testid="cuisine-kpi-dashboard">
+          {/* En attente */}
+          <div className={`rounded-xl p-3 sm:p-4 border-2 ${pendingCount > 0 ? 'bg-amber-500/10 border-amber-500/40' : 'bg-slate-900 border-slate-800'}`} data-testid="kpi-waiting">
+            <div className="flex items-center justify-between mb-1">
+              <Flame className={`w-4 h-4 sm:w-5 sm:h-5 ${pendingCount > 0 ? 'text-amber-400' : 'text-slate-600'}`} />
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-slate-500">En attente</span>
+            </div>
+            <p className={`text-3xl sm:text-5xl font-black tracking-tighter leading-none ${pendingCount > 0 ? 'text-amber-300' : 'text-slate-600'}`}>{pendingCount}</p>
+            <p className="text-[10px] text-slate-500 mt-1 truncate">bon{pendingCount > 1 ? 's' : ''} actif{pendingCount > 1 ? 's' : ''}</p>
+          </div>
+          {/* Servis aujourd'hui */}
+          <div className="rounded-xl p-3 sm:p-4 border-2 bg-slate-900 border-slate-800" data-testid="kpi-served-today">
+            <div className="flex items-center justify-between mb-1">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-slate-500">Servis</span>
+            </div>
+            <p className="text-3xl sm:text-5xl font-black tracking-tighter leading-none text-emerald-300">{servedTodayCount}</p>
+            <p className="text-[10px] text-slate-500 mt-1 truncate">aujourd&apos;hui</p>
+          </div>
+          {/* Messages non lus */}
+          <div className={`rounded-xl p-3 sm:p-4 border-2 ${unreadMessages > 0 ? 'bg-rose-500/10 border-rose-500/40 animate-pulse' : 'bg-slate-900 border-slate-800'}`} data-testid="kpi-messages">
+            <div className="flex items-center justify-between mb-1">
+              <MessageSquare className={`w-4 h-4 sm:w-5 sm:h-5 ${unreadMessages > 0 ? 'text-rose-400' : 'text-slate-600'}`} />
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-slate-500">Messages</span>
+            </div>
+            <p className={`text-3xl sm:text-5xl font-black tracking-tighter leading-none ${unreadMessages > 0 ? 'text-rose-300' : 'text-slate-600'}`}>{unreadMessages}</p>
+            <p className="text-[10px] text-slate-500 mt-1 truncate">non lu{unreadMessages > 1 ? 's' : ''}</p>
           </div>
         </div>
 
@@ -546,13 +568,26 @@ const CuisinePage = ({ currentUser, onLogout }) => {
           {/* COMMANDES */}
           <TabsContent value="orders" className="mt-3 space-y-3">
             {orders.length === 0 && !loading && (
-              <Card className="bg-slate-800/40 border-slate-700">
-                <CardContent className="p-8 text-center">
-                  <ChefHat className="w-10 h-10 mx-auto text-slate-500 mb-2" />
-                  <p className="text-slate-400 text-sm">Aucun bon cuisine en cours.</p>
-                  <p className="text-slate-500 text-xs mt-1">Les commandes de la salle apparaîtront ici automatiquement.</p>
-                </CardContent>
-              </Card>
+              <div className="text-center py-16 px-4" data-testid="cuisine-orders-empty">
+                <div className="relative mx-auto w-32 h-32 mb-6">
+                  <div className="absolute inset-0 bg-amber-500/5 rounded-full blur-2xl" />
+                  <div className="relative w-full h-full rounded-full bg-slate-900/80 ring-2 ring-amber-500/20 flex items-center justify-center">
+                    <ChefHat className="w-16 h-16 text-amber-400/70" />
+                  </div>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-200 tracking-tight">Cuisine calme</h3>
+                <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto">
+                  Aucun bon en cours. Les commandes apparaîtront automatiquement dès qu&apos;elles arrivent de la salle.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => fetchOrders(true)}
+                  className="mt-6 border-slate-700 text-slate-300 hover:bg-slate-800 h-11 px-6"
+                  data-testid="cuisine-orders-empty-refresh"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" /> Rafraîchir
+                </Button>
+              </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
