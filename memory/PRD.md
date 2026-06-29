@@ -11,6 +11,20 @@ L'application POS ("Caisse Pro") et le module de Gestion de Stock (Espace Maxo) 
 - Pilotage fin des statistiques et de l'historique
 
 ## Recent changes (Feb 2026)
+- **🆕 Workflow Cuisine — Clôture de journée Chef (Feb 2026)** :
+  - Le Chef Cuisinier dispose désormais d'un bouton **CLÔTURER** dans le header de son dashboard.
+  - Modal de confirmation simple → POST `/api/cuisine/close-day` agrège tous les bons cuisine du jour, calcule (total_orders, total_items, total_quantity, total_revenue, top_items), enregistre dans la collection `cuisine_day_closures`, et marque les `caisse_tables` avec `cuisine_day_closed_at`.
+  - Effet côté Chef : onglets **Commandes** et **Historique** se vident automatiquement (filtre `cuisine_day_closed_at` exclu pour `actor_role=cuisinier`). L'Admin conserve la visibilité complète.
+  - Menu Admin renommé **"Rapports Cuisine & Jeux"** (anciennement "Cuisine & Jeux").
+  - Nouvel onglet **"Clôtures Chef"** dans RecoupementPanel (1ère position, defaultValue) avec :
+    - Vue résumé agrégée (bons, lignes, plats préparés, CA cuisine)
+    - Liste des clôtures avec top plats inline
+    - Filtres date_from / date_to
+    - Modal détail : KPIs, top 10 plats préparés, détail bon par bon avec items
+    - Suppression (admin) avec audit_log
+  - Endpoints : `POST /api/cuisine/close-day`, `GET /api/cuisine/day-closures`, `GET /api/cuisine/day-closures/{id}`, `DELETE /api/cuisine/day-closures/{id}`.
+  - Composant frontend : `/app/frontend/src/pages/caisse/components/CuisineDayClosuresList.jsx`
+  - **Tests** : 16/16 pytest passent (iter121).
 - **Point de stock terrain (Resp Op)** : nouveau bouton 📋 dans la top bar de Caisse Pro (manager + admin). Modal avec 3 onglets : Nouveau relevé (catégories sélectionnables · saisie qty libre · notes justificatives), Mes/Tous les rapports, Détail. Backend `routers/field_stock.py` avec création, listing filtré par rôle, détail, suppression, et `POST /reconcile` (Admin) créant des mouvements d'ajustement pour rapprocher le stock système.
 - **Suivi sélectif des Prévisions d'épuisement** : nouveau champ `is_tracked` sur stock_products. Endpoints `PATCH /api/stock/products/{id}/track` et `GET /api/stock/products/tracked-count`. Le forecast filtre `is_tracked=True`. Bouton Target dans Produits & Mouvements, empty state + CTA dans Prévisions.
 - **Fix bug stock forecast** : mapping `quantity` / `stock_min` corrigé dans `GET /api/stock/forecast`
