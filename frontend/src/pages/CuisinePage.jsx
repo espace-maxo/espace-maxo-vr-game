@@ -507,63 +507,69 @@ const CuisinePage = ({ currentUser, onLogout }) => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Onglets : scroll horizontal sur mobile, icône + label minuscule en colonne.
-              Sur ≥sm: layout horizontal classique avec libellé long */}
-          <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
-            <TabsList className="bg-slate-800/60 border border-slate-700 flex w-full h-auto p-1 gap-0.5">
-              <TabsTrigger value="orders" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-orders" title="Commandes">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {pendingCount > 0 && (
-                    <Badge className="bg-rose-500 text-white text-[9px] px-1 py-0 h-3.5">{pendingCount}</Badge>
-                  )}
-                </span>
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
-                  <span className="sm:hidden">Cmd</span>
-                  <span className="hidden sm:inline">Commandes</span>
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="scan" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-scan" title="Scanner un bon">
-                <Camera className="w-4 h-4" />
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
-                  <span className="sm:hidden">Scan</span>
-                  <span className="hidden sm:inline">Scanner</span>
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="messages" className="data-[state=active]:bg-rose-600 data-[state=active]:text-white relative px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-messages" title="Messages">
-                <span className="flex items-center gap-1">
-                  <MessageSquare className="w-4 h-4" />
-                  {unreadMsgs > 0 && (
-                    <Badge className="bg-rose-500 text-white text-[9px] px-1 py-0 h-3.5 animate-pulse">{unreadMsgs}</Badge>
-                  )}
-                </span>
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
-                  <span className="sm:hidden">Msg</span>
-                  <span className="hidden sm:inline">Messages</span>
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-history" title="Mon historique">
-                <History className="w-4 h-4" />
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
-                  <span className="sm:hidden">Hist</span>
-                  <span className="hidden sm:inline">Historique</span>
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="report" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-report" title="Rapport du jour">
-                <FileText className="w-4 h-4" />
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">
-                  <span className="sm:hidden">Rap</span>
-                  <span className="hidden sm:inline">Rapport</span>
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="stock-hidden-deprecated" className="hidden" disabled />
-              {/* Point de stock cuisine (saisie physique indépendante, kind=kitchen) */}
-              <TabsTrigger value="field_stock" className="data-[state=active]:bg-amber-600 data-[state=active]:text-white px-1 sm:px-3 flex-col sm:flex-row gap-0.5 sm:gap-0 py-1.5 sm:py-1.5 h-auto flex-1 min-w-0" data-testid="cuisine-tab-field-stock" title="Point de stock physique (cuisine)">
-                <ClipboardCheck className="w-4 h-4" />
-                <span className="text-[9px] sm:text-sm sm:ml-1 leading-none">Point de stock</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+          {/* Navigation Pro — Kitchen Command Center : segmented control chunky avec
+              icônes proéminentes, badges absolus de notification, états actifs colorés
+              par couleur signature de l'onglet. */}
+          {(() => {
+            const MENU = [
+              { id: "orders",      label: "Commandes",     short: "Cmd",  icon: Clock,           color: "amber",   testid: "cuisine-tab-orders",       badge: pendingCount,   badgePulse: pendingCount > 0 },
+              { id: "scan",        label: "Scanner",       short: "Scan", icon: Camera,          color: "cyan",    testid: "cuisine-tab-scan" },
+              { id: "messages",    label: "Messages",      short: "Msg",  icon: MessageSquare,   color: "rose",    testid: "cuisine-tab-messages",     badge: unreadMessages, badgePulse: unreadMessages > 0 },
+              { id: "history",     label: "Historique",    short: "Hist", icon: History,         color: "purple",  testid: "cuisine-tab-history" },
+              { id: "report",      label: "Rapport",       short: "Rap",  icon: FileText,        color: "emerald", testid: "cuisine-tab-report" },
+              { id: "field_stock", label: "Point de stock",short: "Stock",icon: ClipboardCheck,  color: "amber",   testid: "cuisine-tab-field-stock" },
+            ];
+            const COLOR_MAP = {
+              amber:   { active: "bg-amber-500 text-slate-950 shadow-amber-500/30",     bar: "bg-amber-500"   },
+              cyan:    { active: "bg-cyan-500 text-slate-950 shadow-cyan-500/30",       bar: "bg-cyan-500"    },
+              rose:    { active: "bg-rose-500 text-slate-950 shadow-rose-500/30",       bar: "bg-rose-500"    },
+              purple:  { active: "bg-purple-500 text-slate-50 shadow-purple-500/30",    bar: "bg-purple-500"  },
+              emerald: { active: "bg-emerald-500 text-slate-950 shadow-emerald-500/30", bar: "bg-emerald-500" },
+            };
+            return (
+              <div className="mb-5 -mx-1 px-1 overflow-x-auto scrollbar-thin">
+                <TabsList className="bg-transparent border-0 grid grid-cols-3 md:grid-cols-6 gap-2 h-auto p-0 w-full">
+                  {MENU.map((m) => {
+                    const Icon = m.icon;
+                    const isActive = activeTab === m.id;
+                    const c = COLOR_MAP[m.color];
+                    return (
+                      <TabsTrigger
+                        key={m.id}
+                        value={m.id}
+                        data-testid={m.testid}
+                        className={`
+                          group relative rounded-xl overflow-hidden p-0 h-auto transition-all duration-200
+                          border-2 ${isActive ? `${c.active} font-black shadow-lg border-transparent` : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-white hover:border-slate-700'}
+                          active:scale-95
+                        `}
+                      >
+                        <div className="w-full px-2 py-3 flex flex-col items-center gap-1.5">
+                          <div className="relative">
+                            <Icon className={`w-6 h-6 sm:w-7 sm:h-7 ${isActive ? '' : `text-${m.color}-400/80 group-hover:text-${m.color}-300`}`} strokeWidth={isActive ? 2.5 : 2} />
+                            {!!m.badge && m.badge > 0 && (
+                              <span
+                                data-testid={`${m.testid}-badge`}
+                                className={`absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-black flex items-center justify-center ring-2 ring-slate-950 shadow-lg ${m.badgePulse ? 'animate-pulse' : ''}`}
+                              >
+                                {m.badge > 99 ? '99+' : m.badge}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] sm:text-xs uppercase tracking-wider font-bold leading-none">
+                            <span className="sm:hidden">{m.short}</span>
+                            <span className="hidden sm:inline">{m.label}</span>
+                          </span>
+                        </div>
+                        {/* Barre active en bas — accent visuel */}
+                        {isActive && <div className={`absolute bottom-0 left-0 right-0 h-1 ${c.bar}`} />}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
+            );
+          })()}
 
           {/* COMMANDES */}
           <TabsContent value="orders" className="mt-3 space-y-3">
